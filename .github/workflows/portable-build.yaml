@@ -1,0 +1,57 @@
+name: Portable build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - work
+    paths:
+      - 'SeforimApp/**'
+      - 'SeforimLibrary/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/portable-build.yaml'
+
+jobs:
+  portable-jvm:
+    name: Build portable JVM distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Build ZIP distribution
+        run: ./gradlew --no-daemon :SeforimApp:packageReleaseDistributionForCurrentOS -Pcompose.desktop.currentOS=linux
+
+      - name: Stage portable layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p portable-zayit/data/databases
+          zip_file="$(find SeforimApp/build/compose/binaries/main-release/zip SeforimApp/build/compose/binaries/main/zip -name '*.zip' -print -quit 2>/dev/null)"
+          unzip -q "$zip_file" -d portable-zayit/app
+          touch portable-zayit/app/zayit.portable
+          cat > portable-zayit/README-portable.txt <<'README'
+          זית - מהדורה ניידת
+
+          כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
+          ניתן להפעיל גם עם SEFORIMAPP_PORTABLE=1 או עם ‎-Dseforimapp.portable=true.
+          README
+          (cd portable-zayit && zip -qr ../zayit-portable-linux.zip .)
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zayit-portable-linux
+          path: zayit-portable-linux.zip

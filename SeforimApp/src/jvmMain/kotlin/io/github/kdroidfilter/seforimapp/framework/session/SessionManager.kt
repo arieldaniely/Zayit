@@ -9,6 +9,7 @@ import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
@@ -38,7 +39,7 @@ object SessionManager {
     val isRestoringSession: StateFlow<Boolean> = _isRestoringSession
 
     private fun sessionDir(): File {
-        val root = File(FileKit.databasesDir.path, "session").apply { mkdirs() }
+        val root = File(portableDatabasesDirPath(), "session").apply { mkdirs() }
         return root
     }
 
@@ -243,3 +244,6 @@ object SessionManager {
         return state.copy(snapshots = enrichedSnapshots)
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

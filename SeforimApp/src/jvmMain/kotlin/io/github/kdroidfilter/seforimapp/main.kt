@@ -52,6 +52,7 @@ import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewMod
 import io.github.kdroidfilter.seforimapp.features.update.UpdateDialog
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -129,6 +130,7 @@ private fun initializeSentry() {
 }
 
 fun main(args: Array<String>) {
+    PortablePaths.configureSystemProperties()
     // Headless CLI mode: when the binary is launched as `zayit cli <args...>` (e.g. from the
     // in-app "open CLI in terminal" action), delegate to the SeforimLibrary search CLI and exit
     // BEFORE any Sentry/Nucleus/GUI initialization. This keeps the normal GUI launch path

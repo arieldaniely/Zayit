@@ -15,6 +15,7 @@ import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.io.File
 
 private const val DEFAULT_DB_NAME = "seforim.db"
@@ -67,7 +68,7 @@ private fun resolveDatabasePath(): String {
         }
 
     // 3) Fallback to default location
-    val defaultDbPath = File(FileKit.databasesDir.path, DEFAULT_DB_NAME).absolutePath
+    val defaultDbPath = File(portableDatabasesDirPath(), DEFAULT_DB_NAME).absolutePath
 
     val dbPath = envDbPath ?: settingsPath ?: defaultDbPath
 
@@ -236,3 +237,6 @@ object CatalogCache {
      */
     fun isCatalogAvailable(): Boolean = getCatalog() != null
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

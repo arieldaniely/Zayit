@@ -6,6 +6,7 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
 import java.io.File
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Files
 
 /**
@@ -21,7 +22,7 @@ import java.nio.file.Files
 object PendingDbCleanup {
     const val MARKER_NAME = "pending-db-cleanup.txt"
 
-    private fun markerFile(): File? = runCatching { File(File(FileKit.databasesDir.path), MARKER_NAME) }.getOrNull()
+    private fun markerFile(): File? = runCatching { File(File(portableDatabasesDirPath()), MARKER_NAME) }.getOrNull()
 
     /** Records [files] (merged with any existing entries, de-duplicated) for a retry next launch. */
     fun record(files: List<File>) {
@@ -78,3 +79,6 @@ object PendingDbCleanup {
         }.getOrDefault(!target.exists())
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

@@ -51,7 +51,16 @@ object PortablePaths {
             location.isFile -> location.parentFile
             else -> location
         }
-        return base.absoluteFile
+        return normalizePackagedAppDir(base).absoluteFile
+    }
+
+    private fun normalizePackagedAppDir(base: File): File {
+        val parent = base.parentFile
+        return if (base.name == "lib" && parent != null && File(parent, "bin").isDirectory) {
+            parent
+        } else {
+            base
+        }
     }
 
     private fun String.isEnabledFlag(): Boolean = lowercase() in setOf("1", "true", "yes", "y", "on")

@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
-import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
@@ -55,6 +55,7 @@ import seforimapp.seforimapp.generated.resources.data_import_error
 import seforimapp.seforimapp.generated.resources.data_import_success
 import seforimapp.seforimapp.generated.resources.data_import_title
 import seforimapp.seforimapp.generated.resources.data_importing
+import seforimapp.seforimapp.generated.resources.data_reset_description
 import seforimapp.seforimapp.generated.resources.pdf_download_library
 import seforimapp.seforimapp.generated.resources.pdf_import_archive
 import seforimapp.seforimapp.generated.resources.pdf_install_failed
@@ -62,7 +63,6 @@ import seforimapp.seforimapp.generated.resources.pdf_install_success
 import seforimapp.seforimapp.generated.resources.pdf_installing
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
-import seforimapp.seforimapp.generated.resources.data_reset_description
 import seforimapp.seforimapp.generated.resources.settings_reset_app
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_no
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_yes
@@ -118,7 +118,6 @@ fun DataSettingsScreen() {
                     }
                 },
             )
-
 
             PdfLibrarySettingsCard()
 
@@ -241,9 +240,10 @@ private fun PdfLibrarySettingsCard() {
                 }) { Text(stringResource(if (installing) Res.string.pdf_installing else Res.string.pdf_download_library)) }
                 OutlinedButton(enabled = !installing, onClick = {
                     scope.launch {
-                        val file = withContext(Dispatchers.IO) {
-                            FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
-                        }
+                        val file =
+                            withContext(Dispatchers.IO) {
+                                FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
+                            }
                         if (file != null) {
                             installing = true
                             success = false
@@ -258,7 +258,12 @@ private fun PdfLibrarySettingsCard() {
             }
         }
         if (success) InlineSuccessBanner(text = stringResource(Res.string.pdf_install_success), modifier = Modifier.fillMaxWidth())
-        error?.let { InlineErrorBanner(text = stringResource(Res.string.pdf_install_failed).format(it), modifier = Modifier.fillMaxWidth()) }
+        error?.let {
+            InlineErrorBanner(
+                text = stringResource(Res.string.pdf_install_failed).format(it),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

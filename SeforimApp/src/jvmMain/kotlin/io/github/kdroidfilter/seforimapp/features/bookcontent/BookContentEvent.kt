@@ -116,7 +116,9 @@ sealed interface BookContentEvent {
 
     data object OpenPdfEdition : BookContentEvent
 
-    data class OpenPdfEditionForBook(val book: io.github.kdroidfilter.seforimlibrary.core.models.Book) : BookContentEvent
+    data class OpenPdfEditionForBook(
+        val book: io.github.kdroidfilter.seforimlibrary.core.models.Book,
+    ) : BookContentEvent
 
     data class ContentScrolled(
         val anchorId: Long,

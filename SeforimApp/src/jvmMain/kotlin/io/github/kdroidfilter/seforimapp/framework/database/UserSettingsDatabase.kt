@@ -1,9 +1,9 @@
 package io.github.kdroidfilter.seforimapp.framework.database
 
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.io.File
 
 private const val SETTINGS_DB_DIR = "settings"

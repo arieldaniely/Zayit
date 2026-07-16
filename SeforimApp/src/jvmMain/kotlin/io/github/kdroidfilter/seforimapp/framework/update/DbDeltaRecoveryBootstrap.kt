@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.framework.update
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.deltaupdater.DeltaApplierClient
@@ -8,7 +9,6 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
 import java.io.File
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Path
 
 /**

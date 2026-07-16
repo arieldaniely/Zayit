@@ -11,6 +11,7 @@ import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Files
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -55,7 +56,7 @@ class DatabaseCleanupUseCase {
             // legacy installs) plus the current default databases directory.
             val dirs = LinkedHashSet<File>()
             currentDbPath?.let { File(it).parentFile?.let(dirs::add) }
-            runCatching { File(FileKit.databasesDir.path) }.getOrNull()?.let(dirs::add)
+            runCatching { File(portableDatabasesDirPath()) }.getOrNull()?.let(dirs::add)
 
             var freed = 0L
             val undeletable = mutableListOf<File>()
@@ -145,3 +146,6 @@ class DatabaseCleanupUseCase {
         }
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

@@ -499,6 +499,9 @@ class BookContentViewModel(
                 BookContentEvent.OpenPdfEdition ->
                     openPdfEdition()
 
+                is BookContentEvent.OpenPdfEditionForBook ->
+                    openPdfEdition(event.book.id, null)
+
                 is BookContentEvent.ContentScrolled ->
                     contentUseCase.updateContentScrollPosition(
                         event.anchorId,

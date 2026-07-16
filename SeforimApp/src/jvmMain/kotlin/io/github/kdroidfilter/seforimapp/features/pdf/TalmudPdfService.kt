@@ -1,8 +1,11 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import com.github.luben.zstd.ZstdInputStream
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.net.URI
@@ -10,6 +13,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicReference
 import javax.imageio.ImageIO
 import kotlin.io.path.createTempFile
 
@@ -19,13 +23,17 @@ private const val BAVLI_CATEGORY_TITLE = "בבלי"
 private const val DOWNLOAD_URL = "https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst"
 
 object TalmudPdfService {
+    private val pdfTitleCache = AtomicReference<Set<String>?>(null)
+    private val _libraryVersion = MutableStateFlow(0L)
+    val libraryVersion: StateFlow<Long> = _libraryVersion.asStateFlow()
+
     init {
         ImageIO.scanForPlugins()
     }
 
     fun pdfDirectory(): File = File(File(getDatabasePath()).absoluteFile.parentFile, TALMUD_BAVLI_DIR)
 
-    fun isInstalled(): Boolean = pdfDirectory().walkTopDown().any { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+    fun isInstalled(): Boolean = availablePdfTitles().isNotEmpty()
 
     fun isTalmudBavliTitle(title: String?): Boolean = title == TALMUD_BAVLI_DIR
 
@@ -50,11 +58,33 @@ object TalmudPdfService {
             .firstOrNull { it.isFile }
     }
 
-    fun hasPdfForTitle(title: String): Boolean = pdfForTitle(title) != null
+    fun availablePdfTitles(): Set<String> {
+        pdfTitleCache.get()?.let { return it }
+        val dir = pdfDirectory()
+        val titles =
+            if (dir.isDirectory) {
+                dir.walkTopDown()
+                    .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+                    .map { it.nameWithoutExtension.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            } else {
+                emptySet()
+            }
+        pdfTitleCache.compareAndSet(null, titles)
+        return pdfTitleCache.get().orEmpty()
+    }
 
+    fun hasPdfForTitle(title: String): Boolean = availablePdfTitles().contains(title.trim())
+
+    fun refreshAvailablePdfTitles() {
+        pdfTitleCache.set(null)
+        _libraryVersion.value = _libraryVersion.value + 1
+    }
 
     fun importArchive(archive: File) {
         extractTarZst(archive, pdfDirectory())
+        refreshAvailablePdfTitles()
     }
 
     fun downloadAndInstall(onProgress: (Long, Long) -> Unit = { _, _ -> }) {
@@ -79,6 +109,7 @@ object TalmudPdfService {
                 }
             }
             extractTarZst(tmp.toFile(), pdfDirectory())
+            refreshAvailablePdfTitles()
         } finally {
             Files.deleteIfExists(tmp)
         }

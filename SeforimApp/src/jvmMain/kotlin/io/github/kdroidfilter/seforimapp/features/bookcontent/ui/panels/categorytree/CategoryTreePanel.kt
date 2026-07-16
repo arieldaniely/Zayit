@@ -57,6 +57,7 @@ fun CategoryTreePanel(
                         onEvent(BookContentEvent.BookSelected(it))
                     }
                 },
+                onPdfBookClick = { onEvent(BookContentEvent.OpenPdfEditionForBook(it)) },
                 onScroll = { index, offset -> onEvent(BookContentEvent.BookTreeScrolled(index, offset)) },
             )
         }

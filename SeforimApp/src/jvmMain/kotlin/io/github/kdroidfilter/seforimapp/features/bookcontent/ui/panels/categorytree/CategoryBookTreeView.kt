@@ -364,7 +364,9 @@ private fun buildTreeItems(
         fun addCategory(
             category: Category,
             level: Int,
+            pathTitles: List<String>,
         ) {
+            val currentPathTitles = pathTitles + category.title
             // In search mode, only render categories that contain results
             if (showCounts) {
                 val catCount = categoryCounts[category.id] ?: 0
@@ -424,7 +426,11 @@ private fun buildTreeItems(
                                 },
                             ),
                         )
-                        if (!showCounts && pdfTitles.contains(book.title.trim())) {
+                        if (
+                            !showCounts &&
+                            pdfTitles.contains(book.title.trim()) &&
+                            TalmudPdfService.isTalmudBavliCategoryPath(currentPathTitles)
+                        ) {
                             add(
                                 TreeItem(
                                     id = "pdf_book_${book.id}",
@@ -446,13 +452,13 @@ private fun buildTreeItems(
 
                 // Subcategories
                 categoryChildren[category.id]?.forEach { child ->
-                    addCategory(child, level + 1)
+                    addCategory(child, level + 1, currentPathTitles)
                 }
             }
         }
 
         rootCategories.forEach { category ->
-            addCategory(category, 0)
+            addCategory(category, 0, emptyList())
         }
     }
 

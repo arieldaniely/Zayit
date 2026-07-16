@@ -313,7 +313,10 @@ class SearchHomeViewModel(
                                                             )
                                                         val catPath = buildCategoryPathTitlesCached(book.categoryId)
                                                         val textSuggestion = BookSuggestionDto(book, catPath + book.title)
-                                                        if (pdfTitles.contains(book.title.trim())) {
+                                                        val hasPdfEdition =
+                                                            pdfTitles.contains(book.title.trim()) &&
+                                                                TalmudPdfService.isTalmudBavliCategoryPath(catPath)
+                                                        if (hasPdfEdition) {
                                                             listOf(textSuggestion, textSuggestion.copy(isPdf = true))
                                                         } else {
                                                             listOf(textSuggestion)

@@ -65,7 +65,7 @@ import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.skia.Image as SkiaImage
 import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.open_pdf_edition
+import seforimapp.seforimapp.generated.resources.back_to_text_edition
 import seforimapp.seforimapp.generated.resources.pdf_book_list_hint
 import seforimapp.seforimapp.generated.resources.pdf_commentaries_hint
 import seforimapp.seforimapp.generated.resources.pdf_download_library
@@ -194,8 +194,8 @@ fun PdfContentScreen(bookId: Long, lineId: Long?, tabId: String) {
                     },
                     isSelected = false,
                     icon = Book,
-                    iconDescription = stringResource(Res.string.open_pdf_edition),
-                    label = stringResource(Res.string.open_pdf_edition),
+                    iconDescription = stringResource(Res.string.back_to_text_edition),
+                    label = stringResource(Res.string.back_to_text_edition),
                 )
             },
             bottomContent = {},
@@ -228,7 +228,7 @@ private fun PdfHeader(title: String?, onTextEdition: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(Book, contentDescription = null, modifier = Modifier.size(18.dp))
         Text(if (title == null) stringResource(Res.string.pdf_loading) else stringResource(Res.string.pdf_edition_title).format(title), fontWeight = FontWeight.SemiBold, color = JewelTheme.globalColors.text.normal, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        OutlinedButton(onClick = onTextEdition) { Text(stringResource(Res.string.open_pdf_edition)) }
+        OutlinedButton(onClick = onTextEdition) { Text(stringResource(Res.string.back_to_text_edition)) }
     }
 }
 

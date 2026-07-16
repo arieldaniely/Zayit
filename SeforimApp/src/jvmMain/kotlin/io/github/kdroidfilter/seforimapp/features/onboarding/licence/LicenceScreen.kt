@@ -54,7 +54,7 @@ fun LicenceScreen(
 
             if (dbExists && dbVersionCompatible) {
                 // DB exists and version is compatible - skip install flow and go to user info
-                navController.navigate(OnBoardingDestination.UserProfilScreen)
+                navController.navigate(OnBoardingDestination.PdfLibrarySetupScreen)
             } else {
                 // DB doesn't exist or version is incompatible - continue with installation flow
                 navController.navigate(OnBoardingDestination.AvailableDiskSpaceScreen)

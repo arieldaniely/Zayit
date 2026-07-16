@@ -53,6 +53,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.Star
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
@@ -82,6 +83,7 @@ data class SearchShellActions(
     val onScroll: (anchorId: Long, anchorIndex: Int, index: Int, offset: Int) -> Unit,
     val onCancelSearch: () -> Unit,
     val onOpenResult: (SearchResult, openInNewTab: Boolean) -> Unit,
+    val onOpenPdfResult: (SearchResult, openInNewTab: Boolean) -> Unit,
     val onRequestBreadcrumb: (SearchResult) -> Unit,
     val onLoadMore: () -> Unit,
     val onCategoryCheckedChange: (Long, Boolean) -> Unit,
@@ -570,6 +572,21 @@ private fun SearchResultContentMvi(
                             Pair(it.bookId, Pair(it.lineId, index))
                         }) { idx, result ->
                             val windowInfo = LocalWindowInfo.current
+                            val pdfBreadcrumbs = breadcrumbs[result.lineId]
+                            val hasPdfEdition by produceState(
+                                initialValue = false,
+                                key1 = result.bookTitle,
+                                key2 = pdfBreadcrumbs,
+                            ) {
+                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    val installed = TalmudPdfService.isInstalled()
+                                    if (installed) {
+                                        TalmudPdfService.hasPdfForTitle(result.bookTitle)
+                                    } else {
+                                        pdfBreadcrumbs.orEmpty().any(TalmudPdfService::isTalmudBavliTitle)
+                                    }
+                                }
+                            }
                             SearchResultItemGoogleStyle(
                                 result = result,
                                 textSize = mainTextSize,
@@ -585,6 +602,15 @@ private fun SearchResultContentMvi(
                                 breadcrumbs = breadcrumbs,
                                 onRequestBreadcrumb = actions.onRequestBreadcrumb,
                                 bookFontCode = bookFontCode,
+                                onOpenPdf = if (hasPdfEdition) {
+                                    {
+                                        val mods = windowInfo.keyboardModifiers
+                                        val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
+                                        actions.onOpenPdfResult(result, openInNewTab)
+                                    }
+                                } else {
+                                    null
+                                },
                             )
                         }
                         // Loading indicator at the end of the list (only for lazy loading)
@@ -653,6 +679,7 @@ private fun SearchResultItemGoogleStyle(
     onRequestBreadcrumb: (SearchResult) -> Unit,
     bookFontCode: String,
     currentMatchStart: Int? = null,
+    onOpenPdf: (() -> Unit)? = null,
 ) {
     // Breadcrumb pieces come from state; request on-demand via callback
     val pieces = breadcrumbs[result.lineId]
@@ -748,7 +775,14 @@ private fun SearchResultItemGoogleStyle(
                 textDecoration = TextDecoration.Underline,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            if (onOpenPdf != null) {
+                Spacer(Modifier.width(8.dp))
+                DefaultButton(onClick = onOpenPdf) {
+                    Text(stringResource(Res.string.open_pdf_search_result))
+                }
+            }
         }
         Spacer(Modifier.height(2.dp))
 

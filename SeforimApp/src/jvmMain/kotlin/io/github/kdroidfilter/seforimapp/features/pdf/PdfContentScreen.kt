@@ -1,11 +1,14 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -402,25 +405,32 @@ private fun PdfPages(
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(Res.string.pdf_pages_loading)) }
     } else {
-        LazyColumn(
+        val horizontalScrollState = rememberScrollState()
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .horizontalScroll(horizontalScrollState)
+                .pointerInput(zoom) {
                     detectTransformGestures { _, _, gestureZoom, _ ->
                         if (gestureZoom != 1f) onZoomChange(zoom * gestureZoom)
                     }
                 },
-            state = listState,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp),
         ) {
-            items((0 until count).toList(), key = { it }) { pageIndex ->
-                val page by produceState<RenderedPdfPage?>(null, file, pageIndex) {
-                    value =
-                        withContext(Dispatchers.IO) { renderPdfPage(file, pageIndex) }
+            val contentWidth = maxWidth * zoom.coerceAtLeast(1f)
+            LazyColumn(
+                modifier = Modifier.width(contentWidth).fillMaxHeight(),
+                state = listState,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp),
+            ) {
+                items((0 until count).toList(), key = { it }) { pageIndex ->
+                    val page by produceState<RenderedPdfPage?>(null, file, pageIndex) {
+                        value =
+                            withContext(Dispatchers.IO) { renderPdfPage(file, pageIndex) }
+                    }
+                    PdfPageCard(page, zoom.coerceAtMost(1f))
                 }
-                PdfPageCard(page, zoom)
             }
         }
     }

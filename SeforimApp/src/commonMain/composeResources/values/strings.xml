@@ -622,4 +622,7 @@
     <string name="pdf_install_prompt_body">זוהתה התקנה ללא תיקיית PDF של תלמוד בבלי. ניתן להוריד כעת את המהדורות המודפסות, לבחור קובץ מקומי, או להמשיך בלי התוספת.</string>
     <string name="pdf_install_prompt_later">מאוחר יותר</string>
     <string name="pdf_install_prompt_skip">אל תציג שוב</string>
+    <string name="pdf_install_success">ספרי ה-PDF הותקנו בהצלחה</string>
+    <string name="settings_pdf_library_title">ספרי PDF לתלמוד בבלי</string>
+    <string name="settings_pdf_library_description">הורדה או ייבוא מחדש של תיקיית המהדורות המודפסות לתלמוד בבלי.</string>
 </resources>

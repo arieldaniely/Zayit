@@ -14,6 +14,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentS
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimlibrary.core.models.Book as SeforimBook
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
@@ -153,7 +154,7 @@ fun EndVerticalBar(
                     key1 = selectedBook.id,
                     key2 = selectedBook.title,
                 ) {
-                    val isBavli = TalmudPdfService.isTalmudBavliTitle(CatalogCache.getRootForBook(selectedBook)?.title)
+                    val isBavli = isTalmudBavliBook(selectedBook)
                     val installed = TalmudPdfService.isInstalled()
                     val hasFile = TalmudPdfService.hasPdfForTitle(selectedBook.title)
                     value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && (!installed || hasFile))
@@ -314,3 +315,15 @@ private data class PdfAvailability(
     val isSupported: Boolean = false,
     val isActionAvailable: Boolean = false,
 )
+
+private fun isTalmudBavliBook(book: SeforimBook): Boolean {
+    val categoriesById = CatalogCache.getCategoriesById() ?: return false
+    var currentId: Long? = book.categoryId
+    var safety = 64
+    while (currentId != null && safety-- > 0) {
+        val category = categoriesById[currentId] ?: return false
+        if (TalmudPdfService.isTalmudBavliTitle(category.title)) return true
+        currentId = category.parentId
+    }
+    return false
+}

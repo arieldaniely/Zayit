@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
@@ -54,6 +55,13 @@ import seforimapp.seforimapp.generated.resources.data_import_error
 import seforimapp.seforimapp.generated.resources.data_import_success
 import seforimapp.seforimapp.generated.resources.data_import_title
 import seforimapp.seforimapp.generated.resources.data_importing
+import seforimapp.seforimapp.generated.resources.pdf_download_library
+import seforimapp.seforimapp.generated.resources.pdf_import_archive
+import seforimapp.seforimapp.generated.resources.pdf_install_failed
+import seforimapp.seforimapp.generated.resources.pdf_install_success
+import seforimapp.seforimapp.generated.resources.pdf_installing
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
 import seforimapp.seforimapp.generated.resources.data_reset_description
 import seforimapp.seforimapp.generated.resources.settings_reset_app
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_no
@@ -110,6 +118,9 @@ fun DataSettingsScreen() {
                     }
                 },
             )
+
+
+            PdfLibrarySettingsCard()
 
             state.exportedFileName?.let {
                 InlineSuccessBanner(
@@ -179,6 +190,75 @@ private fun DataActionCard(
         OutlinedButton(onClick = onClick, enabled = enabled) {
             Text(text = stringResource(actionLabel))
         }
+    }
+}
+
+@Composable
+private fun PdfLibrarySettingsCard() {
+    val scope = rememberCoroutineScope()
+    var installing by remember { mutableStateOf(false) }
+    var success by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val shape = RoundedCornerShape(8.dp)
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(text = stringResource(Res.string.settings_pdf_library_title), fontSize = 15.sp)
+                Text(
+                    text = stringResource(Res.string.settings_pdf_library_description),
+                    fontSize = 12.sp,
+                    color = JewelTheme.globalColors.text.info,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !installing, onClick = {
+                    installing = true
+                    success = false
+                    error = null
+                    scope.launch {
+                        runCatching { withContext(Dispatchers.IO) { TalmudPdfService.downloadAndInstall() } }
+                            .onSuccess { success = true }
+                            .onFailure { error = it.message }
+                        installing = false
+                    }
+                }) { Text(stringResource(if (installing) Res.string.pdf_installing else Res.string.pdf_download_library)) }
+                OutlinedButton(enabled = !installing, onClick = {
+                    scope.launch {
+                        val file = withContext(Dispatchers.IO) {
+                            FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
+                        }
+                        if (file != null) {
+                            installing = true
+                            success = false
+                            error = null
+                            runCatching { withContext(Dispatchers.IO) { TalmudPdfService.importArchive(File(file.path)) } }
+                                .onSuccess { success = true }
+                                .onFailure { error = it.message }
+                            installing = false
+                        }
+                    }
+                }) { Text(stringResource(Res.string.pdf_import_archive)) }
+            }
+        }
+        if (success) InlineSuccessBanner(text = stringResource(Res.string.pdf_install_success), modifier = Modifier.fillMaxWidth())
+        error?.let { InlineErrorBanner(text = stringResource(Res.string.pdf_install_failed).format(it), modifier = Modifier.fillMaxWidth()) }
     }
 }
 

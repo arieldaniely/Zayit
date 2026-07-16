@@ -170,6 +170,7 @@ class DesktopManager(
             tabs.map { tabItem ->
                 when (val dest = tabItem.destination) {
                     is TabsDestination.BookContent -> dest.copy(lineId = null)
+                    is TabsDestination.PdfContent -> dest.copy(lineId = null)
                     else -> dest
                 }
             }

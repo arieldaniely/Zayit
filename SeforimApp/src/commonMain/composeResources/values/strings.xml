@@ -608,6 +608,14 @@
     <string name="open_pdf_edition">מהדורה מודפסת</string>
     <string name="pdf_marker_label">PDF</string>
     <string name="back_to_text_edition">חזרה לטקסט</string>
+    <string name="pdf_text_edition_tooltip">פתח מהדורת טקסט</string>
+    <string name="pdf_printed_view">מהדורה מודפסת</string>
+    <string name="pdf_table_of_contents">תוכן העניינים</string>
+    <string name="pdf_book_list_hint">רשימת ספרים</string>
+    <string name="pdf_commentaries_hint">מפרשים לפי הכותרת הנוכחית</string>
+    <string name="pdf_no_outline">לא נמצא תוכן עניינים מובנה בקובץ.</string>
+    <string name="pdf_zoom_in_tooltip">הגדל תצוגת PDF</string>
+    <string name="pdf_zoom_out_tooltip">הקטן תצוגת PDF</string>
     <string name="pdf_edition_title">מהדורת PDF: %s</string>
     <string name="pdf_loading">טוען PDF…</string>
     <string name="pdf_missing">לא נמצא קובץ PDF תואם בתיקיית תלמוד בבלי שליד מסד הנתונים.</string>

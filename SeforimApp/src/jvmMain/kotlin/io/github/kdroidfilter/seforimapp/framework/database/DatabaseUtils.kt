@@ -70,7 +70,9 @@ private fun resolveDatabasePath(): String {
     // 3) Fallback to default location
     val defaultDbPath = File(portableDatabasesDirPath(), DEFAULT_DB_NAME).absolutePath
 
-    val dbPath = envDbPath ?: settingsPath ?: defaultDbPath
+    val portableSettingsPath =
+        settingsPath?.takeIf { !PortablePaths.isPortable || File(it).absoluteFile.startsWith(PortablePaths.dataDir) }
+    val dbPath = envDbPath ?: portableSettingsPath ?: defaultDbPath
 
     infoln { "[DatabaseUtils] Database path resolved: $dbPath (exists: ${File(dbPath).exists()})" }
 

@@ -1,7 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import com.github.luben.zstd.ZstdInputStream
+import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,7 +63,8 @@ object TalmudPdfService {
         val dir = pdfDirectory()
         val titles =
             if (dir.isDirectory) {
-                dir.walkTopDown()
+                dir
+                    .walkTopDown()
                     .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
                     .map { it.nameWithoutExtension.trim() }
                     .filter { it.isNotBlank() }
@@ -115,7 +116,10 @@ object TalmudPdfService {
         }
     }
 
-    private fun extractTarZst(archive: File, targetDir: File) {
+    private fun extractTarZst(
+        archive: File,
+        targetDir: File,
+    ) {
         targetDir.mkdirs()
         val canonicalTarget = targetDir.canonicalFile.toPath()
         TarArchiveInputStream(ZstdInputStream(BufferedInputStream(archive.inputStream()))).use { tar ->

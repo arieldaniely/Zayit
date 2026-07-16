@@ -81,30 +81,45 @@ fun PdfLibrarySetupScreen(
                 modifier = Modifier.fillMaxWidth(0.7f),
             )
             if (installing) Text(stringResource(Res.string.pdf_installing))
-            if (installed) InlineSuccessBanner(text = stringResource(Res.string.pdf_install_success), modifier = Modifier.fillMaxWidth(0.7f))
-            error?.let { InlineErrorBanner(text = stringResource(Res.string.pdf_install_failed).format(it), modifier = Modifier.fillMaxWidth(0.7f)) }
+            if (installed) {
+                InlineSuccessBanner(
+                    text = stringResource(Res.string.pdf_install_success),
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                )
+            }
+            error?.let {
+                InlineErrorBanner(
+                    text = stringResource(Res.string.pdf_install_failed).format(it),
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DefaultButton(enabled = !installing, onClick = {
                     installing = true
                     error = null
                     scope.launch {
                         runCatching { withContext(Dispatchers.IO) { TalmudPdfService.downloadAndInstall() } }
-                            .onSuccess { installed = true; continueToProfile() }
-                            .onFailure { error = it.message }
+                            .onSuccess {
+                                installed = true
+                                continueToProfile()
+                            }.onFailure { error = it.message }
                         installing = false
                     }
                 }) { Text(stringResource(Res.string.pdf_download_library)) }
                 OutlinedButton(enabled = !installing, onClick = {
                     scope.launch {
-                        val selected = withContext(Dispatchers.IO) {
-                            FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
-                        }
+                        val selected =
+                            withContext(Dispatchers.IO) {
+                                FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
+                            }
                         if (selected != null) {
                             installing = true
                             error = null
                             runCatching { withContext(Dispatchers.IO) { TalmudPdfService.importArchive(File(selected.path)) } }
-                                .onSuccess { installed = true; continueToProfile() }
-                                .onFailure { error = it.message }
+                                .onSuccess {
+                                    installed = true
+                                    continueToProfile()
+                                }.onFailure { error = it.message }
                             installing = false
                         }
                     }

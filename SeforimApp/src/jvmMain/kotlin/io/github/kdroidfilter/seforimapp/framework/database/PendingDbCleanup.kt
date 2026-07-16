@@ -1,12 +1,12 @@
 package io.github.kdroidfilter.seforimapp.framework.database
 
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
 import java.io.File
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Files
 
 /**

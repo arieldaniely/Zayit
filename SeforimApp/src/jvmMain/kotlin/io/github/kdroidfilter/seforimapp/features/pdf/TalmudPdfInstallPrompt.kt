@@ -4,16 +4,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,13 +47,14 @@ import java.io.File
 
 @Composable
 fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
+    val currentOnDone by rememberUpdatedState(onDone)
     var installing by remember { mutableStateOf(false) }
     var downloadRequested by remember { mutableStateOf(false) }
     var importRequested by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     Dialog(
-        onDismissRequest = onDone,
+        onDismissRequest = currentOnDone,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Column(
@@ -86,12 +87,12 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(enabled = !installing, onClick = onDone) {
+                OutlinedButton(enabled = !installing, onClick = currentOnDone) {
                     Text(stringResource(Res.string.pdf_install_prompt_later))
                 }
                 OutlinedButton(enabled = !installing, onClick = {
                     AppSettings.setTalmudPdfInstallSkipped(true)
-                    onDone()
+                    currentOnDone()
                 }) { Text(stringResource(Res.string.pdf_install_prompt_skip)) }
             }
         }
@@ -101,7 +102,7 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
         LaunchedEffect(Unit) {
             runCatching { withContext(Dispatchers.IO) { TalmudPdfService.downloadAndInstall() } }
                 .onFailure { error = it.message }
-                .onSuccess { onDone() }
+                .onSuccess { currentOnDone() }
             installing = false
             downloadRequested = false
         }
@@ -110,19 +111,20 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
     val importDialogTitle = stringResource(Res.string.pdf_import_dialog_title)
     LaunchedEffect(importRequested) {
         if (!importRequested) return@LaunchedEffect
-        val selected = FileDialog(null as Frame?, importDialogTitle, FileDialog.LOAD).run {
-            isVisible = true
-            val selectedFile = file?.let { File(directory, it) }
-            dispose()
-            selectedFile
-        }
+        val selected =
+            FileDialog(null as Frame?, importDialogTitle, FileDialog.LOAD).run {
+                isVisible = true
+                val selectedFile = file?.let { File(directory, it) }
+                dispose()
+                selectedFile
+            }
         importRequested = false
         if (selected != null) {
             installing = true
             error = null
             runCatching { withContext(Dispatchers.IO) { TalmudPdfService.importArchive(selected) } }
                 .onFailure { error = it.message }
-                .onSuccess { onDone() }
+                .onSuccess { currentOnDone() }
             installing = false
         }
     }

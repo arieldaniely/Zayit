@@ -9,6 +9,7 @@ import io.github.kdroidfilter.platformtools.appmanager.restartApplication
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
@@ -23,7 +24,6 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.util.Locale
 
 @ContributesIntoMap(AppScope::class)

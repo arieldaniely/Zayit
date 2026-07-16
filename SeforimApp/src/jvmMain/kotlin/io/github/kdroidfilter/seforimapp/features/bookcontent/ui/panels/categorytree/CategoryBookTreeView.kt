@@ -551,7 +551,8 @@ private fun BookItem(
                             if (isSelected) {
                                 JewelTheme.globalColors.text.selected
                             } else {
-                                JewelTheme.globalColors.text.normal.copy(alpha = 0.7f)
+                                JewelTheme.globalColors.text.normal
+                                    .copy(alpha = 0.7f)
                             },
                     )
                 }

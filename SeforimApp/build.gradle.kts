@@ -394,3 +394,7 @@ kover {
         }
     }
 }
+
+tasks.matching { it.name == "stabilityCheck" }.configureEach {
+    dependsOn(tasks.matching { task -> task.name == "compileTestKotlinJvm" })
+}

@@ -52,8 +52,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.Enha
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
-import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
@@ -578,14 +578,15 @@ private fun SearchResultContentMvi(
                                 key1 = result.bookTitle,
                                 key2 = pdfBreadcrumbs,
                             ) {
-                                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    val installed = TalmudPdfService.isInstalled()
-                                    if (installed) {
-                                        TalmudPdfService.hasPdfForTitle(result.bookTitle)
-                                    } else {
-                                        TalmudPdfService.isTalmudBavliCategoryPath(pdfBreadcrumbs.orEmpty())
+                                value =
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val installed = TalmudPdfService.isInstalled()
+                                        if (installed) {
+                                            TalmudPdfService.hasPdfForTitle(result.bookTitle)
+                                        } else {
+                                            TalmudPdfService.isTalmudBavliCategoryPath(pdfBreadcrumbs.orEmpty())
+                                        }
                                     }
-                                }
                             }
                             SearchResultItemGoogleStyle(
                                 result = result,
@@ -602,15 +603,16 @@ private fun SearchResultContentMvi(
                                 breadcrumbs = breadcrumbs,
                                 onRequestBreadcrumb = actions.onRequestBreadcrumb,
                                 bookFontCode = bookFontCode,
-                                onOpenPdf = if (hasPdfEdition) {
-                                    {
-                                        val mods = windowInfo.keyboardModifiers
-                                        val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
-                                        actions.onOpenPdfResult(result, openInNewTab)
-                                    }
-                                } else {
-                                    null
-                                },
+                                onOpenPdf =
+                                    if (hasPdfEdition) {
+                                        {
+                                            val mods = windowInfo.keyboardModifiers
+                                            val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
+                                            actions.onOpenPdfResult(result, openInNewTab)
+                                        }
+                                    } else {
+                                        null
+                                    },
                             )
                         }
                         // Loading indicator at the end of the list (only for lazy loading)

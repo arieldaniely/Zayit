@@ -1,7 +1,9 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +55,7 @@ import io.github.kdroidfilter.seforimapp.icons.TableOfContents
 import io.github.kdroidfilter.seforimapp.icons.ZoomIn
 import io.github.kdroidfilter.seforimapp.icons.ZoomOut
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo
@@ -69,7 +74,6 @@ import seforimapp.seforimapp.generated.resources.back_to_text_edition
 import seforimapp.seforimapp.generated.resources.pdf_book_list_hint
 import seforimapp.seforimapp.generated.resources.pdf_commentaries_hint
 import seforimapp.seforimapp.generated.resources.pdf_download_library
-import seforimapp.seforimapp.generated.resources.pdf_edition_title
 import seforimapp.seforimapp.generated.resources.pdf_import_archive
 import seforimapp.seforimapp.generated.resources.pdf_import_dialog_title
 import seforimapp.seforimapp.generated.resources.pdf_install_failed
@@ -78,7 +82,6 @@ import seforimapp.seforimapp.generated.resources.pdf_loading
 import seforimapp.seforimapp.generated.resources.pdf_missing
 import seforimapp.seforimapp.generated.resources.pdf_no_outline
 import seforimapp.seforimapp.generated.resources.pdf_pages_loading
-import seforimapp.seforimapp.generated.resources.pdf_printed_view
 import seforimapp.seforimapp.generated.resources.pdf_table_of_contents
 import seforimapp.seforimapp.generated.resources.pdf_text_edition_tooltip
 import seforimapp.seforimapp.generated.resources.pdf_zoom_in_tooltip
@@ -110,6 +113,8 @@ fun PdfContentScreen(
     var showLibrary by remember { mutableStateOf(true) }
     var showToc by remember { mutableStateOf(true) }
     var zoom by remember { mutableFloatStateOf(0.78f) }
+    val pageListState = rememberLazyListState()
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     LaunchedEffect(bookId, reloadToken) {
         val book = withContext(Dispatchers.IO) { graph.repository.getBookCore(bookId) }
@@ -143,11 +148,16 @@ fun PdfContentScreen(
             },
             bottomContent = {},
         )
-        if (showLibrary || showToc) PdfSidePane(title, pdf, showLibrary, showToc)
+        if (showLibrary || showToc) {
+            PdfSidePane(
+                title = title,
+                file = pdf,
+                showLibrary = showLibrary,
+                showToc = showToc,
+                onOutlineClick = { pageIndex -> coroutineScope.launch { pageListState.animateScrollToItem(pageIndex) } },
+            )
+        }
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            PdfHeader(title) {
-                graph.tabsViewModel.replaceCurrentTabDestination(TabsDestination.BookContent(bookId, tabId, lineId))
-            }
             val file = pdf
             if (file == null) {
                 MissingPdfPanel(
@@ -170,7 +180,12 @@ fun PdfContentScreen(
                     }
                 }
             } else {
-                PdfPages(file, zoom)
+                PdfPages(
+                    file = file,
+                    zoom = zoom,
+                    listState = pageListState,
+                    onZoomChange = { zoom = it.coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX) },
+                )
             }
         }
         VerticalLateralBar(
@@ -197,7 +212,8 @@ fun PdfContentScreen(
                 SelectableIconButtonWithToolip(
                     toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
                     onClick = {
-                        graph.tabsViewModel.replaceCurrentTabDestination(TabsDestination.BookContent(bookId, tabId, lineId))
+                        val newTabId = java.util.UUID.randomUUID().toString()
+                        graph.tabsViewModel.openTab(TabsDestination.BookContent(bookId, newTabId, lineId))
                     },
                     isSelected = false,
                     icon = Book,
@@ -232,40 +248,12 @@ fun PdfContentScreen(
 }
 
 @Composable
-private fun PdfHeader(
-    title: String?,
-    onTextEdition: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(Book, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(
-            if (title ==
-                null
-            ) {
-                stringResource(Res.string.pdf_loading)
-            } else {
-                stringResource(Res.string.pdf_edition_title).format(title)
-            },
-            fontWeight = FontWeight.SemiBold,
-            color = JewelTheme.globalColors.text.normal,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        OutlinedButton(onClick = onTextEdition) { Text(stringResource(Res.string.back_to_text_edition)) }
-    }
-}
-
-@Composable
 private fun PdfSidePane(
     title: String?,
     file: File?,
     showLibrary: Boolean,
     showToc: Boolean,
+    onOutlineClick: (Int) -> Unit,
 ) {
     val outline by produceState<List<PdfOutlineEntry>>(emptyList(), file) {
         value = file?.let { withContext(Dispatchers.IO) { readPdfOutline(it) } }.orEmpty()
@@ -280,7 +268,7 @@ private fun PdfSidePane(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (showLibrary) {
-            PanelCard(stringResource(Res.string.pdf_printed_view)) {
+            PanelCard(stringResource(Res.string.pdf_book_list_hint)) {
                 Text(
                     text = title ?: stringResource(Res.string.pdf_loading),
                     color = JewelTheme.globalColors.text.normal,
@@ -289,7 +277,7 @@ private fun PdfSidePane(
             }
         }
         if (showToc) {
-            PdfOutlinePanel(outline)
+            PdfOutlinePanel(outline, onOutlineClick)
         }
         PanelCard(stringResource(Res.string.pdf_commentaries_hint)) {
             Text(stringResource(Res.string.pdf_commentaries_hint), color = JewelTheme.globalColors.text.disabled)
@@ -298,7 +286,10 @@ private fun PdfSidePane(
 }
 
 @Composable
-private fun PdfOutlinePanel(outline: List<PdfOutlineEntry>) {
+private fun PdfOutlinePanel(
+    outline: List<PdfOutlineEntry>,
+    onOutlineClick: (Int) -> Unit,
+) {
     Column(
         modifier =
             Modifier
@@ -321,9 +312,16 @@ private fun PdfOutlinePanel(outline: List<PdfOutlineEntry>) {
                 items(outline, key = { entry -> "${entry.level}-${entry.pageIndex}-${entry.title}" }) { entry ->
                     Text(
                         text = "  ".repeat(entry.level) + entry.title,
-                        color = JewelTheme.globalColors.text.normal,
+                        color = if (entry.pageIndex != null) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.disabled,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(enabled = entry.pageIndex != null) {
+                                entry.pageIndex?.let(onOutlineClick)
+                            }
+                            .padding(vertical = 3.dp),
                     )
                 }
             }
@@ -393,6 +391,8 @@ private fun MissingPdfPanel(
 private fun PdfPages(
     file: File,
     zoom: Float,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onZoomChange: (Float) -> Unit,
 ) {
     var pageCount by remember(file) { mutableStateOf<Int?>(null) }
     LaunchedEffect(file) { pageCount = withContext(Dispatchers.IO) { Loader.loadPDF(file).use { it.numberOfPages } } }
@@ -403,7 +403,14 @@ private fun PdfPages(
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(Res.string.pdf_pages_loading)) }
     } else {
         LazyColumn(
-            Modifier.fillMaxSize(),
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, gestureZoom, _ ->
+                        if (gestureZoom != 1f) onZoomChange(zoom * gestureZoom)
+                    }
+                },
+            state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp),
             contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp),
@@ -445,7 +452,7 @@ private fun PdfPageCard(
 }
 
 private const val PDF_ZOOM_MIN = 0.52f
-private const val PDF_ZOOM_MAX = 1f
+private const val PDF_ZOOM_MAX = 1.8f
 private const val PDF_ZOOM_STEP = 0.08f
 
 private data class RenderedPdfPage(

@@ -607,7 +607,7 @@
 
     <string name="open_pdf_edition">מהדורה מודפסת</string>
     <string name="pdf_marker_label">PDF</string>
-    <string name="back_to_text_edition">חזרה לטקסט</string>
+    <string name="back_to_text_edition">מהדורת טקסט</string>
     <string name="pdf_text_edition_tooltip">פתח מהדורת טקסט</string>
     <string name="pdf_printed_view">מהדורה מודפסת</string>
     <string name="pdf_table_of_contents">תוכן העניינים</string>

@@ -9,6 +9,7 @@ import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.deeplink.parseZayitDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -63,6 +64,11 @@ sealed class SearchHomeNavigationEvent {
         val lineId: Long?,
     ) : SearchHomeNavigationEvent()
 
+    data class NavigateToPdfContent(
+        val bookId: Long,
+        val tabId: String,
+    ) : SearchHomeNavigationEvent()
+
     /**
      * Navigate to a destination resolved from a zayit:// deep link pasted into the search bar.
      * @param destination The parsed destination (book/line or search)
@@ -82,6 +88,7 @@ data class CategorySuggestionDto(
 data class BookSuggestionDto(
     val book: Book,
     val path: List<String>,
+    val isPdf: Boolean = false,
 )
 
 @Immutable
@@ -290,10 +297,11 @@ class SearchHomeViewModel(
                                                 emptyList<BookSuggestionDto>()
                                             } else {
                                                 val bookHits = lookup.searchBooksWithScoring(qNorm, limit = maxBookPredictive)
+                                                val pdfTitles = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
                                                 bookHits
                                                     // Already sorted by score in searchBooksWithScoring, no need to re-sort
                                                     .take(maxBookPredictive)
-                                                    .map { hit ->
+                                                    .flatMap { hit ->
                                                         val book =
                                                             Book(
                                                                 id = hit.id,
@@ -304,7 +312,12 @@ class SearchHomeViewModel(
                                                                 isBaseBook = hit.isBaseBook,
                                                             )
                                                         val catPath = buildCategoryPathTitlesCached(book.categoryId)
-                                                        BookSuggestionDto(book, catPath + book.title)
+                                                        val textSuggestion = BookSuggestionDto(book, catPath + book.title)
+                                                        if (pdfTitles.contains(book.title.trim())) {
+                                                            listOf(textSuggestion, textSuggestion.copy(isPdf = true))
+                                                        } else {
+                                                            listOf(textSuggestion)
+                                                        }
                                                     }
                                             }
                                         }

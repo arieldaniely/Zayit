@@ -137,7 +137,14 @@ fun TabsContent() {
                     launchOpenReference(scope, tabId)
                 },
                 onPickCategory = searchHomeViewModel::onPickCategory,
-                onPickBook = searchHomeViewModel::onPickBook,
+                onPickBook = { book, isPdf ->
+                    if (isPdf) {
+                        val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
+                        tabsViewModel.replaceCurrentTabDestination(TabsDestination.PdfContent(bookId = book.id, tabId = tabId))
+                    } else {
+                        searchHomeViewModel.onPickBook(book)
+                    }
+                },
                 onPickToc = searchHomeViewModel::onPickToc,
             )
         }
@@ -169,6 +176,14 @@ fun TabsContent() {
                             bookId = event.bookId,
                             tabId = event.tabId,
                             lineId = event.lineId,
+                        ),
+                    )
+                }
+                is SearchHomeNavigationEvent.NavigateToPdfContent -> {
+                    tabsViewModel.replaceCurrentTabDestination(
+                        TabsDestination.PdfContent(
+                            bookId = event.bookId,
+                            tabId = event.tabId,
                         ),
                     )
                 }

@@ -30,13 +30,17 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.ChevronIco
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.SelectableRow
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.icons.Book_2
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.*
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -55,6 +59,7 @@ fun CategoryBookTreeView(
     navigationState: NavigationState,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
+    onPdfBookClick: (Book) -> Unit,
     onScroll: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
     // Optional search integration: counts + selection override
@@ -68,6 +73,10 @@ fun CategoryBookTreeView(
     /* ---------------------------------------------------------------------
      * Build the flat hierarchical list to display.
      * -------------------------------------------------------------------- */
+    val pdfTitles by produceState<Set<String>>(initialValue = emptySet()) {
+        value = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
+    }
+
     val treeItems =
         remember(
             navigationState.rootCategories,
@@ -83,6 +92,8 @@ fun CategoryBookTreeView(
             selectedCategoryIdOverride,
             selectedBookIdOverride,
             booksForCategoryOverride,
+            onPdfBookClick,
+            pdfTitles,
         ) {
             buildTreeItems(
                 rootCategories = navigationState.rootCategories,
@@ -93,12 +104,14 @@ fun CategoryBookTreeView(
                 selectedBook = navigationState.selectedBook,
                 onCategoryClick = onCategoryClick,
                 onBookClick = onBookClick,
+                onPdfBookClick = onPdfBookClick,
                 categoryCounts = categoryCounts,
                 bookCounts = bookCounts,
                 selectedCategoryIdOverride = selectedCategoryIdOverride,
                 selectedBookIdOverride = selectedBookIdOverride,
                 showCounts = showCounts,
                 booksForCategoryOverride = booksForCategoryOverride,
+                pdfTitles = pdfTitles,
             )
         }
 
@@ -338,12 +351,14 @@ private fun buildTreeItems(
     selectedBook: Book?,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
+    onPdfBookClick: (Book) -> Unit,
     categoryCounts: Map<Long, Int>,
     bookCounts: Map<Long, Int>,
     selectedCategoryIdOverride: Long?,
     selectedBookIdOverride: Long?,
     showCounts: Boolean,
     booksForCategoryOverride: Map<Long, List<Book>>,
+    pdfTitles: Set<String>,
 ): List<TreeItem> =
     buildList {
         fun addCategory(
@@ -409,6 +424,24 @@ private fun buildTreeItems(
                                 },
                             ),
                         )
+                        if (!showCounts && pdfTitles.contains(book.title.trim())) {
+                            add(
+                                TreeItem(
+                                    id = "pdf_book_${book.id}",
+                                    level = level + 1,
+                                    content = {
+                                        BookItem(
+                                            book = book,
+                                            isSelected = false,
+                                            onClick = { onPdfBookClick(book) },
+                                            count = 0,
+                                            showCount = false,
+                                            isPdf = true,
+                                        )
+                                    },
+                                ),
+                            )
+                        }
                     }
 
                 // Subcategories
@@ -485,6 +518,7 @@ private fun BookItem(
     showCount: Boolean,
     checkboxChecked: Boolean? = null,
     onCheckboxToggle: ((Boolean) -> Unit)? = null,
+    isPdf: Boolean = false,
 ) {
     SelectableRow(isSelected = isSelected, onClick = onClick) {
         Row(
@@ -499,18 +533,21 @@ private fun BookItem(
                         onCheckedChange = onCheckboxToggle,
                     )
                 }
-                Icon(
-                    imageVector = Book_2,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint =
-                        if (isSelected) {
-                            JewelTheme.globalColors.text.selected
-                        } else {
-                            JewelTheme.globalColors.text.normal
-                                .copy(alpha = 0.7f)
-                        },
-                )
+                if (isPdf) {
+                    PdfEditionMarker(selected = isSelected)
+                } else {
+                    Icon(
+                        imageVector = Book_2,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint =
+                            if (isSelected) {
+                                JewelTheme.globalColors.text.selected
+                            } else {
+                                JewelTheme.globalColors.text.normal.copy(alpha = 0.7f)
+                            },
+                    )
+                }
                 Text(text = book.title, fontWeight = if (isSelected) Bold else Normal)
             }
             if (showCount && count > 0) CountBadge(count)

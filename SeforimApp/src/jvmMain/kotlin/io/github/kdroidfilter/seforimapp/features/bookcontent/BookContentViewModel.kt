@@ -498,6 +498,9 @@ class BookContentViewModel(
                 BookContentEvent.OpenPdfEdition ->
                     openPdfEdition()
 
+                is BookContentEvent.OpenPdfEditionForBook ->
+                    openPdfEdition(event.book.id, null)
+
                 is BookContentEvent.ContentScrolled ->
                     contentUseCase.updateContentScrollPosition(
                         event.anchorId,
@@ -574,11 +577,15 @@ class BookContentViewModel(
 
     private fun openPdfEdition() {
         val selectedBook = stateManager.state.value.navigation.selectedBook ?: return
+        openPdfEdition(selectedBook.id, stateManager.state.value.content.primaryLine?.id)
+    }
+
+    private fun openPdfEdition(bookId: Long, lineId: Long?) {
         tabsViewModel.replaceCurrentTabDestination(
             TabsDestination.PdfContent(
-                bookId = selectedBook.id,
+                bookId = bookId,
                 tabId = tabId,
-                lineId = stateManager.state.value.content.primaryLine?.id,
+                lineId = lineId,
             ),
         )
     }

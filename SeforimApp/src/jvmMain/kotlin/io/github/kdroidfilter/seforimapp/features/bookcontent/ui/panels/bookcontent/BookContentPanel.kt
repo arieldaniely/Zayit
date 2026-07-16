@@ -59,7 +59,7 @@ fun BookContentPanel(
             onSubmitTextSearch = {},
             onOpenReference = {},
             onPickCategory = {},
-            onPickBook = {},
+            onPickBook = { _, _ -> },
             onPickToc = {},
         ),
     isSelected: Boolean = true,

@@ -79,6 +79,7 @@ import org.jetbrains.skiko.Cursor
 import seforimapp.seforimapp.generated.resources.*
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimlibrary.core.models.Book as BookModel
 
 // Suggestion models for the scope picker
@@ -92,6 +93,7 @@ private data class CategorySuggestion(
 private data class BookSuggestion(
     val book: BookModel,
     val path: List<String>,
+    val isPdf: Boolean = false,
 )
 
 @Immutable
@@ -126,7 +128,7 @@ data class HomeSearchCallbacks(
     val onSubmitTextSearch: (String) -> Unit,
     val onOpenReference: () -> Unit,
     val onPickCategory: (Category) -> Unit,
-    val onPickBook: (BookModel) -> Unit,
+    val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
 )
 
@@ -405,7 +407,7 @@ private fun HomeBody(
                             val mappedBookSuggestionsForBar =
                                 searchUi.bookSuggestions
                                     .map { bs ->
-                                        BookSuggestion(bs.book, bs.path)
+                                        BookSuggestion(bs.book, bs.path, bs.isPdf)
                                     }.toImmutableList()
                             val mappedTocSuggestionsForBar =
                                 searchUi.tocSuggestions.map { ts ->
@@ -475,7 +477,7 @@ private fun HomeBody(
                                 isBookLoading = searchUi.isReferenceLoading && !isTocInTopBar,
                                 isTocLoading = searchUi.isTocLoading && isTocInTopBar,
                                 onPickBook = { picked ->
-                                    searchCallbacks.onPickBook(picked.book)
+                                    searchCallbacks.onPickBook(picked.book, picked.isPdf)
                                     skipNextReferenceQuery = true
                                     referenceSearchState.edit { replace(0, length, "") }
                                     skipNextTocQuery = true
@@ -528,7 +530,7 @@ private fun HomeBody(
                                     val mappedBookSuggestions =
                                         searchUi.bookSuggestions
                                             .map { bs ->
-                                                BookSuggestion(bs.book, bs.path)
+                                                BookSuggestion(bs.book, bs.path, bs.isPdf)
                                             }.toImmutableList()
                                     val mappedTocSuggestions =
                                         searchUi.tocSuggestions.map { ts ->
@@ -560,7 +562,7 @@ private fun HomeBody(
                                             referenceSearchState.edit { replace(0, length, full) }
                                         },
                                         onPickBook = { picked ->
-                                            searchCallbacks.onPickBook(picked.book)
+                                            searchCallbacks.onPickBook(picked.book, picked.isPdf)
                                             skipNextReferenceQuery = true
                                             referenceSearchState.edit { replace(0, length, "") }
                                             skipNextTocQuery = true
@@ -906,6 +908,7 @@ private fun SuggestionsPanel(
                         onClick = { onPickBook(book) },
                         highlighted = rowIndex == focusedIndex,
                         showTabHint = rowIndex == focusedIndex,
+                        isPdf = book.isPdf,
                     )
                 }
             }
@@ -1101,6 +1104,7 @@ private fun SuggestionRow(
     onClick: () -> Unit,
     highlighted: Boolean = false,
     showTabHint: Boolean = false,
+    isPdf: Boolean = false,
 ) {
     val hScroll = rememberScrollState(0)
     val hoverSource = remember { MutableInteractionSource() }
@@ -1154,6 +1158,10 @@ private fun SuggestionRow(
                 .hoverable(hoverSource)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
+        if (isPdf) {
+            PdfEditionMarker()
+            Spacer(Modifier.width(8.dp))
+        }
         Box(
             modifier = Modifier.weight(1f).horizontalScroll(hScroll),
         ) {
@@ -1859,7 +1867,7 @@ private fun HomeViewPreview() {
                 onSubmitTextSearch = {},
                 onOpenReference = {},
                 onPickCategory = {},
-                onPickBook = {},
+                onPickBook = { _, _ -> },
                 onPickToc = {},
             )
         HomeView(

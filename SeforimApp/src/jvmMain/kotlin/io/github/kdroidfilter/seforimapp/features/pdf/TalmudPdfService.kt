@@ -14,6 +14,8 @@ import javax.imageio.ImageIO
 import kotlin.io.path.createTempFile
 
 private const val TALMUD_BAVLI_DIR = "תלמוד בבלי"
+private const val TALMUD_ROOT_TITLE = "תלמוד"
+private const val BAVLI_CATEGORY_TITLE = "בבלי"
 private const val DOWNLOAD_URL = "https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst"
 
 object TalmudPdfService {
@@ -25,7 +27,19 @@ object TalmudPdfService {
 
     fun isInstalled(): Boolean = pdfDirectory().walkTopDown().any { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
 
-    fun isTalmudBavliTitle(title: String?): Boolean = title?.contains(TALMUD_BAVLI_DIR) == true
+    fun isTalmudBavliTitle(title: String?): Boolean = title == TALMUD_BAVLI_DIR
+
+    fun isTalmudBavliCategoryPath(titles: Iterable<String>): Boolean {
+        var hasTalmudRoot = false
+        var hasBavliCategory = false
+        for (title in titles) {
+            when (title.trim()) {
+                TALMUD_ROOT_TITLE -> hasTalmudRoot = true
+                BAVLI_CATEGORY_TITLE, TALMUD_BAVLI_DIR -> hasBavliCategory = true
+            }
+        }
+        return hasTalmudRoot && hasBavliCategory
+    }
 
     fun pdfForTitle(title: String): File? {
         val dir = pdfDirectory()

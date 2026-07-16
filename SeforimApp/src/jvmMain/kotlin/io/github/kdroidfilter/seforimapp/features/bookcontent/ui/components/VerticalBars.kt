@@ -318,12 +318,13 @@ private data class PdfAvailability(
 
 private fun isTalmudBavliBook(book: SeforimBook): Boolean {
     val categoriesById = CatalogCache.getCategoriesById() ?: return false
+    val titles = mutableListOf<String>()
     var currentId: Long? = book.categoryId
     var safety = 64
     while (currentId != null && safety-- > 0) {
         val category = categoriesById[currentId] ?: return false
-        if (TalmudPdfService.isTalmudBavliTitle(category.title)) return true
+        titles += category.title
         currentId = category.parentId
     }
-    return false
+    return TalmudPdfService.isTalmudBavliCategoryPath(titles)
 }

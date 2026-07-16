@@ -583,7 +583,7 @@ private fun SearchResultContentMvi(
                                     if (installed) {
                                         TalmudPdfService.hasPdfForTitle(result.bookTitle)
                                     } else {
-                                        pdfBreadcrumbs.orEmpty().any(TalmudPdfService::isTalmudBavliTitle)
+                                        TalmudPdfService.isTalmudBavliCategoryPath(pdfBreadcrumbs.orEmpty())
                                     }
                                 }
                             }

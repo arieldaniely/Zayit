@@ -605,4 +605,21 @@
     <string name="menu_window">חלון</string>
     <string name="menu_help">עזרה</string>
 
+    <string name="open_pdf_edition">מהדורה מודפסת</string>
+    <string name="back_to_text_edition">חזרה לטקסט</string>
+    <string name="pdf_edition_title">מהדורת PDF: %s</string>
+    <string name="pdf_loading">טוען PDF…</string>
+    <string name="pdf_missing">לא נמצא קובץ PDF תואם בתיקיית תלמוד בבלי שליד מסד הנתונים.</string>
+    <string name="pdf_pages_loading">טוען עמודים…</string>
+    <string name="pdf_download_library">הורד ספרי PDF</string>
+    <string name="pdf_import_archive">בחר קובץ מקומי</string>
+    <string name="pdf_import_dialog_title">בחר קובץ talmud_bavli_latest.tar.zst</string>
+    <string name="pdf_installing">מתקין ספרי PDF…</string>
+    <string name="pdf_install_failed">התקנת ספרי ה-PDF נכשלה: %s</string>
+    <string name="open_pdf_edition_tooltip">פתח מהדורת PDF מודפסת</string>
+    <string name="open_pdf_search_result">פתח PDF</string>
+    <string name="pdf_install_prompt_title">התקנת מהדורות PDF לתלמוד בבלי</string>
+    <string name="pdf_install_prompt_body">זוהתה התקנה ללא תיקיית PDF של תלמוד בבלי. ניתן להוריד כעת את המהדורות המודפסות, לבחור קובץ מקומי, או להמשיך בלי התוספת.</string>
+    <string name="pdf_install_prompt_later">מאוחר יותר</string>
+    <string name="pdf_install_prompt_skip">אל תציג שוב</string>
 </resources>

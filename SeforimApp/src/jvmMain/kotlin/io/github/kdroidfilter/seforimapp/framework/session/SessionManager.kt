@@ -140,6 +140,7 @@ object SessionManager {
                 saved.tabs.map { dest ->
                     when (dest) {
                         is TabsDestination.BookContent -> dest.copy(lineId = null)
+                        is TabsDestination.PdfContent -> dest.copy(lineId = null)
                         else -> dest
                     }
                 }
@@ -198,6 +199,16 @@ object SessionManager {
 
                 is TabsDestination.BookContent -> {
                     val bookId = tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it > 0 } ?: dest.bookId
+                    if (bookId > 0) {
+                        val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
+                        if (book != null) {
+                            titles[tabId] = book.title to TabType.BOOK
+                        }
+                    }
+                }
+
+                is TabsDestination.PdfContent -> {
+                    val bookId = dest.bookId
                     if (bookId > 0) {
                         val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
                         if (book != null) {

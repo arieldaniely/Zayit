@@ -495,6 +495,9 @@ class BookContentViewModel(
                 BookContentEvent.ToggleDiacritics ->
                     toggleShowDiacriticsForCurrentCategory()
 
+                BookContentEvent.OpenPdfEdition ->
+                    openPdfEdition()
+
                 is BookContentEvent.ContentScrolled ->
                     contentUseCase.updateContentScrollPosition(
                         event.anchorId,
@@ -567,6 +570,17 @@ class BookContentViewModel(
                     stateManager.saveAllStates()
             }
         }
+    }
+
+    private fun openPdfEdition() {
+        val selectedBook = stateManager.state.value.navigation.selectedBook ?: return
+        tabsViewModel.replaceCurrentTabDestination(
+            TabsDestination.PdfContent(
+                bookId = selectedBook.id,
+                tabId = tabId,
+                lineId = stateManager.state.value.content.primaryLine?.id,
+            ),
+        )
     }
 
     private suspend fun toggleShowDiacriticsForCurrentCategory() {

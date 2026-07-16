@@ -45,6 +45,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentScreen
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.features.search.SearchShellActions
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -69,6 +70,7 @@ private fun TabsDestination.typeKey(): String =
         is TabsDestination.Home -> "home"
         is TabsDestination.Search -> "search"
         is TabsDestination.BookContent -> "book"
+        is TabsDestination.PdfContent -> "pdf"
     }
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
@@ -290,6 +292,14 @@ fun TabsContent() {
                                         searchCallbacks = homeSearchCallbacks,
                                     )
                                 }
+
+                                is TabsDestination.PdfContent -> {
+                                    PdfContentScreen(
+                                        bookId = destination.bookId,
+                                        lineId = destination.lineId,
+                                        tabId = destination.tabId,
+                                    )
+                                }
                             }
                         }
                     }
@@ -385,6 +395,9 @@ private fun SearchTabContent(
                 },
                 onOpenResult = { r, newTab ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenResult(r, newTab))
+                },
+                onOpenPdfResult = { r, newTab ->
+                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenPdfResult(r, newTab))
                 },
                 onRequestBreadcrumb = { r ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))

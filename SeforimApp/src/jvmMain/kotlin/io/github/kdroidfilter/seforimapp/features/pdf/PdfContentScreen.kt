@@ -171,7 +171,7 @@ fun PdfContentScreen(bookId: Long, lineId: Long?, tabId: String) {
             topContent = {
                 SelectableIconButtonWithToolip(
                     toolTipText = stringResource(Res.string.pdf_zoom_in_tooltip),
-                    onClick = { zoom = (zoom + 0.08f).coerceAtMost(1.1f) },
+                    onClick = { zoom = (zoom + PDF_ZOOM_STEP).coerceAtMost(PDF_ZOOM_MAX) },
                     isSelected = false,
                     icon = ZoomIn,
                     iconDescription = stringResource(Res.string.zoom_in),
@@ -180,7 +180,7 @@ fun PdfContentScreen(bookId: Long, lineId: Long?, tabId: String) {
                 )
                 SelectableIconButtonWithToolip(
                     toolTipText = stringResource(Res.string.pdf_zoom_out_tooltip),
-                    onClick = { zoom = (zoom - 0.08f).coerceAtLeast(0.52f) },
+                    onClick = { zoom = (zoom - PDF_ZOOM_STEP).coerceAtLeast(PDF_ZOOM_MIN) },
                     isSelected = false,
                     icon = ZoomOut,
                     iconDescription = stringResource(Res.string.zoom_out),
@@ -234,13 +234,67 @@ private fun PdfHeader(title: String?, onTextEdition: () -> Unit) {
 
 @Composable
 private fun PdfSidePane(title: String?, file: File?, showLibrary: Boolean, showToc: Boolean) {
-    val outline by produceState<List<PdfOutlineEntry>>(emptyList(), file) { value = file?.let { withContext(Dispatchers.IO) { readPdfOutline(it) } }.orEmpty() }
-    Column(Modifier.width(270.dp).fillMaxHeight().background(JewelTheme.globalColors.toolwindowBackground).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (showLibrary) PanelCard(stringResource(Res.string.pdf_printed_view)) { Text(title ?: stringResource(Res.string.pdf_loading), color = JewelTheme.globalColors.text.normal, fontWeight = FontWeight.SemiBold) }
-        if (showToc) PanelCard(stringResource(Res.string.pdf_table_of_contents)) {
-            if (outline.isEmpty()) Text(stringResource(Res.string.pdf_no_outline), color = JewelTheme.globalColors.text.disabled) else outline.take(80).forEach { entry -> Text("  ".repeat(entry.level) + entry.title, color = JewelTheme.globalColors.text.normal, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    val outline by produceState<List<PdfOutlineEntry>>(emptyList(), file) {
+        value = file?.let { withContext(Dispatchers.IO) { readPdfOutline(it) } }.orEmpty()
+    }
+    Column(
+        modifier =
+            Modifier
+                .width(270.dp)
+                .fillMaxHeight()
+                .background(JewelTheme.globalColors.toolwindowBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (showLibrary) {
+            PanelCard(stringResource(Res.string.pdf_printed_view)) {
+                Text(
+                    text = title ?: stringResource(Res.string.pdf_loading),
+                    color = JewelTheme.globalColors.text.normal,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
-        PanelCard(stringResource(Res.string.pdf_commentaries_hint)) { Text(stringResource(Res.string.pdf_commentaries_hint), color = JewelTheme.globalColors.text.disabled) }
+        if (showToc) {
+            PdfOutlinePanel(outline)
+        }
+        PanelCard(stringResource(Res.string.pdf_commentaries_hint)) {
+            Text(stringResource(Res.string.pdf_commentaries_hint), color = JewelTheme.globalColors.text.disabled)
+        }
+    }
+}
+
+@Composable
+private fun PdfOutlinePanel(outline: List<PdfOutlineEntry>) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(360.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(Res.string.pdf_table_of_contents),
+            fontWeight = FontWeight.SemiBold,
+            color = JewelTheme.globalColors.text.normal,
+        )
+        if (outline.isEmpty()) {
+            Text(stringResource(Res.string.pdf_no_outline), color = JewelTheme.globalColors.text.disabled)
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(outline, key = { entry -> "${entry.level}-${entry.pageIndex}-${entry.title}" }) { entry ->
+                    Text(
+                        text = "  ".repeat(entry.level) + entry.title,
+                        color = JewelTheme.globalColors.text.normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -309,6 +363,10 @@ private fun PdfPageCard(page: RenderedPdfPage?, zoom: Float) {
         if (page == null) Box(Modifier.fillMaxWidth().aspectRatio(0.72f), contentAlignment = Alignment.Center) { Text(stringResource(Res.string.pdf_pages_loading), color = JewelTheme.globalColors.text.disabled) } else Image(page.bitmap, null, Modifier.fillMaxWidth().aspectRatio(page.aspectRatio), contentScale = ContentScale.Fit)
     }
 }
+
+private const val PDF_ZOOM_MIN = 0.52f
+private const val PDF_ZOOM_MAX = 1f
+private const val PDF_ZOOM_STEP = 0.08f
 
 private data class RenderedPdfPage(val bitmap: ImageBitmap, val aspectRatio: Float)
 private data class PdfOutlineEntry(val title: String, val level: Int, val pageIndex: Int?)

@@ -73,7 +73,8 @@ fun CategoryBookTreeView(
     /* ---------------------------------------------------------------------
      * Build the flat hierarchical list to display.
      * -------------------------------------------------------------------- */
-    val pdfTitles by produceState<Set<String>>(initialValue = emptySet()) {
+    val pdfLibraryVersion by TalmudPdfService.libraryVersion.collectAsState()
+    val pdfTitles by produceState<Set<String>>(initialValue = emptySet(), pdfLibraryVersion) {
         value = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
     }
 

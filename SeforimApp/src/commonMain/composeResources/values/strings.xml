@@ -606,6 +606,7 @@
     <string name="menu_help">עזרה</string>
 
     <string name="open_pdf_edition">מהדורה מודפסת</string>
+    <string name="pdf_marker_label">PDF</string>
     <string name="back_to_text_edition">חזרה לטקסט</string>
     <string name="pdf_edition_title">מהדורת PDF: %s</string>
     <string name="pdf_loading">טוען PDF…</string>

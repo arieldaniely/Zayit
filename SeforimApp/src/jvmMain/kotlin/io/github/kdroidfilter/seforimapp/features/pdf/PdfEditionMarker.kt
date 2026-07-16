@@ -9,8 +9,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.pdf_marker_label
 
 @Composable
 fun PdfEditionMarker(
@@ -24,7 +27,7 @@ fun PdfEditionMarker(
             Color(0xFFB3261E)
         }
     Text(
-        text = "PDF",
+        text = stringResource(Res.string.pdf_marker_label),
         modifier =
             modifier
                 .border(1.dp, color.copy(alpha = 0.75f), RoundedCornerShape(4.dp))

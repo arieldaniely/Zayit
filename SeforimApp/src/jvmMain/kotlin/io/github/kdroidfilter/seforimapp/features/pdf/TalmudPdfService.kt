@@ -1,8 +1,11 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import com.github.luben.zstd.ZstdInputStream
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.net.URI
@@ -21,6 +24,8 @@ private const val DOWNLOAD_URL = "https://github.com/Otzaria/otzaria-library/rel
 
 object TalmudPdfService {
     private val pdfTitleCache = AtomicReference<Set<String>?>(null)
+    private val _libraryVersion = MutableStateFlow(0L)
+    val libraryVersion: StateFlow<Long> = _libraryVersion.asStateFlow()
 
     init {
         ImageIO.scanForPlugins()
@@ -72,9 +77,14 @@ object TalmudPdfService {
 
     fun hasPdfForTitle(title: String): Boolean = availablePdfTitles().contains(title.trim())
 
+    fun refreshAvailablePdfTitles() {
+        pdfTitleCache.set(null)
+        _libraryVersion.value = _libraryVersion.value + 1
+    }
+
     fun importArchive(archive: File) {
         extractTarZst(archive, pdfDirectory())
-        pdfTitleCache.set(null)
+        refreshAvailablePdfTitles()
     }
 
     fun downloadAndInstall(onProgress: (Long, Long) -> Unit = { _, _ -> }) {
@@ -99,7 +109,7 @@ object TalmudPdfService {
                 }
             }
             extractTarZst(tmp.toFile(), pdfDirectory())
-            pdfTitleCache.set(null)
+            refreshAvailablePdfTitles()
         } finally {
             Files.deleteIfExists(tmp)
         }

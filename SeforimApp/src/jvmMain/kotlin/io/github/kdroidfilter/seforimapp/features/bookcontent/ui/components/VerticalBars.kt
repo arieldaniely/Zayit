@@ -12,6 +12,7 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
@@ -144,6 +145,21 @@ fun EndVerticalBar(
                 label = stringResource(Res.string.zoom_out),
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
+
+            if (!noBookSelected) {
+                val hasPdf by produceState(initialValue = false, key1 = selectedBook.title) {
+                    value = TalmudPdfService.hasPdfForTitle(selectedBook.title)
+                }
+                SelectableIconButtonWithToolip(
+                    toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
+                    onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
+                    isSelected = false,
+                    enabled = hasPdf,
+                    icon = Print,
+                    iconDescription = stringResource(Res.string.open_pdf_edition),
+                    label = stringResource(Res.string.open_pdf_edition),
+                )
+            }
 
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
             if (!noBookSelected) {

@@ -168,6 +168,11 @@ class SearchResultViewModel(
             val openInNewTab: Boolean,
         ) : SearchResultEvents()
 
+        data class OpenPdfResult(
+            val result: SearchResult,
+            val openInNewTab: Boolean,
+        ) : SearchResultEvents()
+
         data class RequestBreadcrumb(
             val result: SearchResult,
         ) : SearchResultEvents()
@@ -235,6 +240,10 @@ class SearchResultViewModel(
 
             is SearchResultEvents.OpenResult -> {
                 openResult(event.result, event.openInNewTab)
+            }
+
+            is SearchResultEvents.OpenPdfResult -> {
+                openPdfResult(event.result, event.openInNewTab)
             }
 
             is SearchResultEvents.RequestBreadcrumb -> {
@@ -1746,6 +1755,26 @@ class SearchResultViewModel(
                     lineId = result.lineId,
                 ),
             )
+        }
+    }
+
+    private fun openPdfResult(
+        result: SearchResult,
+        openInNewTab: Boolean,
+    ) {
+        viewModelScope.launch {
+            val targetTabId = if (openInNewTab) UUID.randomUUID().toString() else tabId
+            val destination =
+                TabsDestination.PdfContent(
+                    bookId = result.bookId,
+                    tabId = targetTabId,
+                    lineId = result.lineId,
+                )
+            if (openInNewTab) {
+                tabsViewModel.openTab(destination)
+            } else {
+                tabsViewModel.replaceCurrentTabDestination(destination)
+            }
         }
     }
 

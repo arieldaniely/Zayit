@@ -33,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
+import java.util.UUID
 
 /** Simplified ViewModel for the book content screen */
 @OptIn(ExperimentalSplitPaneApi::class)
@@ -574,10 +575,10 @@ class BookContentViewModel(
 
     private fun openPdfEdition() {
         val selectedBook = stateManager.state.value.navigation.selectedBook ?: return
-        tabsViewModel.replaceCurrentTabDestination(
+        tabsViewModel.openTab(
             TabsDestination.PdfContent(
                 bookId = selectedBook.id,
-                tabId = tabId,
+                tabId = UUID.randomUUID().toString(),
                 lineId = stateManager.state.value.content.primaryLine?.id,
             ),
         )

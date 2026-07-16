@@ -1775,6 +1775,7 @@ class SearchResultViewModel(
             } else {
                 tabsViewModel.replaceCurrentTabDestination(destination)
             }
+            titleUpdateManager.updateTabTitle(targetTabId, result.bookTitle, TabType.BOOK)
         }
     }
 

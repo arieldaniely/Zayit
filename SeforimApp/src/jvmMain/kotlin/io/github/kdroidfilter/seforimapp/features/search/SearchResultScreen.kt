@@ -572,9 +572,19 @@ private fun SearchResultContentMvi(
                             Pair(it.bookId, Pair(it.lineId, index))
                         }) { idx, result ->
                             val windowInfo = LocalWindowInfo.current
-                            val hasPdfEdition by produceState(initialValue = false, key1 = result.bookTitle) {
+                            val pdfBreadcrumbs = breadcrumbs[result.lineId]
+                            val hasPdfEdition by produceState(
+                                initialValue = false,
+                                key1 = result.bookTitle,
+                                key2 = pdfBreadcrumbs,
+                            ) {
                                 value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                    TalmudPdfService.hasPdfForTitle(result.bookTitle)
+                                    val installed = TalmudPdfService.isInstalled()
+                                    if (installed) {
+                                        TalmudPdfService.hasPdfForTitle(result.bookTitle)
+                                    } else {
+                                        pdfBreadcrumbs.orEmpty().any(TalmudPdfService::isTalmudBavliTitle)
+                                    }
                                 }
                             }
                             SearchResultItemGoogleStyle(

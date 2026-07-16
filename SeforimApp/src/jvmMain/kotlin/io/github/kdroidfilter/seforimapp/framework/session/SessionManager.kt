@@ -212,7 +212,7 @@ object SessionManager {
                     if (bookId > 0) {
                         val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
                         if (book != null) {
-                            titles[tabId] = "PDF ${book.title}" to TabType.BOOK
+                            titles[tabId] = book.title to TabType.BOOK
                         }
                     }
                 }

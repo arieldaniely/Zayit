@@ -12,6 +12,7 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
@@ -147,18 +148,27 @@ fun EndVerticalBar(
             )
 
             if (!noBookSelected) {
-                val hasPdf by produceState(initialValue = false, key1 = selectedBook.title) {
-                    value = TalmudPdfService.hasPdfForTitle(selectedBook.title)
+                val pdfAvailability by produceState(
+                    initialValue = PdfAvailability(),
+                    key1 = selectedBook.id,
+                    key2 = selectedBook.title,
+                ) {
+                    val isBavli = TalmudPdfService.isTalmudBavliTitle(CatalogCache.getRootForBook(selectedBook)?.title)
+                    val installed = TalmudPdfService.isInstalled()
+                    val hasFile = TalmudPdfService.hasPdfForTitle(selectedBook.title)
+                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && (!installed || hasFile))
                 }
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
-                    onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
-                    isSelected = false,
-                    enabled = hasPdf,
-                    icon = Print,
-                    iconDescription = stringResource(Res.string.open_pdf_edition),
-                    label = stringResource(Res.string.open_pdf_edition),
-                )
+                if (pdfAvailability.isSupported && pdfAvailability.isActionAvailable) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
+                        onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
+                        isSelected = false,
+                        enabled = true,
+                        icon = Book,
+                        iconDescription = stringResource(Res.string.open_pdf_edition),
+                        label = stringResource(Res.string.open_pdf_edition),
+                    )
+                }
             }
 
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
@@ -298,4 +308,9 @@ private data class LineResourceAvailability(
     val targumAvailable: Boolean? = null,
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
+)
+
+private data class PdfAvailability(
+    val isSupported: Boolean = false,
+    val isActionAvailable: Boolean = false,
 )

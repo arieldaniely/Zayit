@@ -10,13 +10,22 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import javax.imageio.ImageIO
 import kotlin.io.path.createTempFile
 
 private const val TALMUD_BAVLI_DIR = "תלמוד בבלי"
 private const val DOWNLOAD_URL = "https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst"
 
 object TalmudPdfService {
+    init {
+        ImageIO.scanForPlugins()
+    }
+
     fun pdfDirectory(): File = File(File(getDatabasePath()).absoluteFile.parentFile, TALMUD_BAVLI_DIR)
+
+    fun isInstalled(): Boolean = pdfDirectory().walkTopDown().any { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+
+    fun isTalmudBavliTitle(title: String?): Boolean = title?.contains(TALMUD_BAVLI_DIR) == true
 
     fun pdfForTitle(title: String): File? {
         val dir = pdfDirectory()

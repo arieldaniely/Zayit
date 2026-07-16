@@ -377,7 +377,7 @@ class TabsViewModel(
             is TabsDestination.Home -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
-            is TabsDestination.PdfContent -> if (destination.bookId > 0) "PDF ${destination.bookId}" else ""
+            is TabsDestination.PdfContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
         }
 
     private fun updateTabTitle(

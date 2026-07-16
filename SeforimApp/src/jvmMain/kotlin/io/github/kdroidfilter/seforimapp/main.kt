@@ -46,6 +46,8 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberWindowV
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseUpdateWindow
 import io.github.kdroidfilter.seforimapp.features.onboarding.OnBoardingWindow
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfInstallPrompt
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
@@ -476,6 +478,17 @@ fun main(args: Array<String>) {
                                     onClose = { appGraph.appUpdateService.closeDialog() },
                                 )
                             }
+
+                            var showTalmudPdfPrompt by remember {
+                                mutableStateOf(
+                                    !AppSettings.isTalmudPdfInstallSkipped() &&
+                                        runCatching { !TalmudPdfService.isInstalled() }.getOrDefault(false),
+                                )
+                            }
+                            if (showTalmudPdfPrompt) {
+                                TalmudPdfInstallPrompt(onDone = { showTalmudPdfPrompt = false })
+                            }
+
                             MainTitleBar()
                             LaunchedEffect(state.isMinimized) {
                                 if (state.isMinimized) {

@@ -618,4 +618,8 @@
     <string name="pdf_install_failed">התקנת ספרי ה-PDF נכשלה: %s</string>
     <string name="open_pdf_edition_tooltip">פתח מהדורת PDF מודפסת</string>
     <string name="open_pdf_search_result">פתח PDF</string>
+    <string name="pdf_install_prompt_title">התקנת מהדורות PDF לתלמוד בבלי</string>
+    <string name="pdf_install_prompt_body">זוהתה התקנה ללא תיקיית PDF של תלמוד בבלי. ניתן להוריד כעת את המהדורות המודפסות, לבחור קובץ מקומי, או להמשיך בלי התוספת.</string>
+    <string name="pdf_install_prompt_later">מאוחר יותר</string>
+    <string name="pdf_install_prompt_skip">אל תציג שוב</string>
 </resources>

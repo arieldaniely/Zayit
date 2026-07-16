@@ -114,6 +114,8 @@ sealed interface BookContentEvent {
 
     data object ToggleDiacritics : BookContentEvent
 
+    data object OpenPdfEdition : BookContentEvent
+
     data class ContentScrolled(
         val anchorId: Long,
         val anchorIndex: Int,

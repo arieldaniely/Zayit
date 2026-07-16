@@ -177,6 +177,9 @@ kotlin {
             implementation(libs.seforimlibrary.delta.updater)
 
             implementation(libs.commons.compress)
+            implementation(libs.pdfbox)
+            implementation(libs.jbig2.imageio)
+            implementation(libs.jai.imageio.jpeg2000)
 
             // HTML sanitization for search snippets
             implementation(libs.jsoup)

@@ -49,6 +49,9 @@ sentrySdk = "8.43.1"
 graalHotspot = "22.0.0.2"
 intellijPlatformIcons = "262.4852.74"
 jbrApi = "1.10.1"
+pdfbox = "3.0.5"
+jbig2Imageio = "3.0.4"
+jaiImageioJpeg2000 = "1.4.0"
 
 [libraries]
 
@@ -114,6 +117,9 @@ jewel-markdown-extensions-autolink = { module = "org.jetbrains.jewel:jewel-markd
 jewel-markdown-int-ui-standalone-styling = { module = "org.jetbrains.jewel:jewel-markdown-int-ui-standalone-styling", version.ref = "jewel" }
 intellij-platform-icons = { module = "com.jetbrains.intellij.platform:icons", version.ref = "intellijPlatformIcons" }
 jbr-api = { module = "org.jetbrains.runtime:jbr-api", version.ref = "jbrApi" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+jbig2-imageio = { module = "org.apache.pdfbox:jbig2-imageio", version.ref = "jbig2Imageio" }
+jai-imageio-jpeg2000 = { module = "com.github.jai-imageio:jai-imageio-jpeg2000", version.ref = "jaiImageioJpeg2000" }
 androidx-paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
 androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
 nucleus-notification-common = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "nucleus" }

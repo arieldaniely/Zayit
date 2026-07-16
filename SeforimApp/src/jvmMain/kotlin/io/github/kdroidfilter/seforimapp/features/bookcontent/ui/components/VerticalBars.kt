@@ -12,6 +12,9 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimlibrary.core.models.Book as SeforimBook
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
@@ -144,6 +147,30 @@ fun EndVerticalBar(
                 label = stringResource(Res.string.zoom_out),
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
+
+            if (!noBookSelected) {
+                val pdfAvailability by produceState(
+                    initialValue = PdfAvailability(),
+                    key1 = selectedBook.id,
+                    key2 = selectedBook.title,
+                ) {
+                    val isBavli = isTalmudBavliBook(selectedBook)
+                    val installed = TalmudPdfService.isInstalled()
+                    val hasFile = TalmudPdfService.hasPdfForTitle(selectedBook.title)
+                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && (!installed || hasFile))
+                }
+                if (pdfAvailability.isSupported && pdfAvailability.isActionAvailable) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
+                        onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
+                        isSelected = false,
+                        enabled = true,
+                        icon = Book,
+                        iconDescription = stringResource(Res.string.open_pdf_edition),
+                        label = stringResource(Res.string.open_pdf_edition),
+                    )
+                }
+            }
 
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
             if (!noBookSelected) {
@@ -283,3 +310,21 @@ private data class LineResourceAvailability(
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
 )
+
+private data class PdfAvailability(
+    val isSupported: Boolean = false,
+    val isActionAvailable: Boolean = false,
+)
+
+private fun isTalmudBavliBook(book: SeforimBook): Boolean {
+    val categoriesById = CatalogCache.getCategoriesById() ?: return false
+    val titles = mutableListOf<String>()
+    var currentId: Long? = book.categoryId
+    var safety = 64
+    while (currentId != null && safety-- > 0) {
+        val category = categoriesById[currentId] ?: return false
+        titles += category.title
+        currentId = category.parentId
+    }
+    return TalmudPdfService.isTalmudBavliCategoryPath(titles)
+}

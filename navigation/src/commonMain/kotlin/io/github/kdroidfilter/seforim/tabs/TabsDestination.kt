@@ -29,4 +29,12 @@ sealed interface TabsDestination {
         override val tabId: String,
         val lineId: Long? = null,
     ) : TabsDestination
+
+    @Serializable
+    @Immutable
+    data class PdfContent(
+        val bookId: Long,
+        override val tabId: String,
+        val lineId: Long? = null,
+    ) : TabsDestination
 }

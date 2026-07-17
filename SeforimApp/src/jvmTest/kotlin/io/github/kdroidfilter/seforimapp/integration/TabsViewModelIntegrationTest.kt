@@ -362,6 +362,23 @@ class TabsViewModelIntegrationTest {
         }
 
     @Test
+    fun `switching between text and PDF preserves book title`() =
+        runTest {
+            viewModel.replaceCurrentTabDestination(TabsDestination.BookContent(bookId = 42, tabId = "ignored"))
+            val textTitle = viewModel.state.value.tabs.first().title
+
+            viewModel.replaceCurrentTabDestination(TabsDestination.PdfContent(bookId = 42, tabId = "ignored"))
+            val pdfTab = viewModel.state.value.tabs.first()
+            assertEquals(textTitle, pdfTab.title)
+            assertTrue(pdfTab.destination is TabsDestination.PdfContent)
+
+            viewModel.replaceCurrentTabDestination(TabsDestination.BookContent(bookId = 42, tabId = "ignored"))
+            val restoredTextTab = viewModel.state.value.tabs.first()
+            assertEquals(textTitle, restoredTextTab.title)
+            assertTrue(restoredTextTab.destination is TabsDestination.BookContent)
+        }
+
+    @Test
     fun `replaceCurrentTabWithNewTabId creates new tabId`() =
         runTest {
             val originalTabId =

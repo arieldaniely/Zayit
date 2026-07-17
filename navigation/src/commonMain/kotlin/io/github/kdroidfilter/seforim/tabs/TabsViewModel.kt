@@ -272,9 +272,22 @@ class TabsViewModel(
                         )
                 }
 
+            val isEditionSwitchForSameBook =
+                when {
+                    tab.destination is TabsDestination.BookContent && newDestination is TabsDestination.PdfContent ->
+                        tab.destination.bookId == newDestination.bookId
+                    tab.destination is TabsDestination.PdfContent && newDestination is TabsDestination.BookContent ->
+                        tab.destination.bookId == newDestination.bookId
+                    else -> false
+                }
             val updated =
                 tab.copy(
-                    title = getTabTitle(newDestination),
+                    title =
+                        if (isEditionSwitchForSameBook) {
+                            tab.title
+                        } else {
+                            getTabTitle(newDestination)
+                        },
                     destination = newDestination,
                     tabType = tabTypeFor(newDestination),
                 )

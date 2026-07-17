@@ -65,6 +65,7 @@ fun BookContentPanel(
     isSelected: Boolean = true,
     bookCharCounts: IntArray? = null,
     noteDraft: NoteDraftAnchor? = null,
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val isIslands = ThemeUtils.isIslandsStyle()
     val homeCardModifier =
@@ -110,6 +111,7 @@ fun BookContentPanel(
                     isSelected = isSelected,
                     bookCharCounts = bookCharCounts,
                     noteDraft = noteDraft,
+                    mainContentOverride = mainContentOverride,
                 )
             }
         }
@@ -125,6 +127,7 @@ private fun BookContentPanelContent(
     isSelected: Boolean,
     bookCharCounts: IntArray?,
     noteDraft: NoteDraftAnchor? = null,
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val providers = uiState.providers ?: return
     val selectedBook = uiState.navigation.selectedBook ?: return
@@ -210,9 +213,6 @@ private fun BookContentPanelContent(
             islandsCardModifier(isIslands, panelBackground, top = 3.dp)
         }
 
-    // Collect paging data here to keep BookContentView skippable
-    val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
-
     CompositionLocalProvider(LocalBookContentZoomInProgress provides isBookContentZoomInProgress) {
         Column(modifier = Modifier.fillMaxSize()) {
             EnhancedVerticalSplitPane(
@@ -222,45 +222,51 @@ private fun BookContentPanelContent(
                     EnhancedHorizontalSplitPane(
                         splitPaneState = uiState.layout.targumSplitState.asStable(),
                         firstContent = {
-                            BookContentView(
-                                bookId = selectedBook.id,
-                                lazyPagingItems = lazyPagingItems,
-                                selectedLineIds = uiState.content.selectedLineIds,
-                                primarySelectedLineId = uiState.content.primarySelectedLineId,
-                                isTocEntrySelection = uiState.content.isTocEntrySelection,
-                                onLineSelect = { line, isModifier ->
-                                    onEvent(BookContentEvent.LineSelected(line, isModifier))
-                                },
-                                onEvent = onEvent,
-                                tabId = uiState.tabId,
-                                showDiacritics = showDiacritics,
-                                draftNote = noteDraft,
-                                modifier = topPaneCardModifier,
-                                preservedListState = bookListState,
-                                scrollIndex = uiState.content.scrollIndex,
-                                scrollOffset = uiState.content.scrollOffset,
-                                scrollToLineTimestamp = uiState.content.scrollToLineTimestamp,
-                                anchorId = uiState.content.anchorId,
-                                anchorIndex = uiState.content.anchorIndex,
-                                topAnchorLineId = uiState.content.topAnchorLineId,
-                                topAnchorTimestamp = uiState.content.topAnchorRequestTimestamp,
-                                onScroll = { anchorId, anchorIndex, scrollIndex, scrollOffset ->
-                                    onEvent(
-                                        BookContentEvent.ContentScrolled(
-                                            anchorId = anchorId,
-                                            anchorIndex = anchorIndex,
-                                            scrollIndex = scrollIndex,
-                                            scrollOffset = scrollOffset,
-                                        ),
-                                    )
-                                },
-                                altHeadingsByLineId = uiState.altToc.lineHeadingsByLineId.asStableAltHeadings(),
-                                lineConnections = connectionsCache,
-                                onPrefetchLineConnections = prefetchConnections,
-                                isSelected = isSelected,
-                                bookCharCounts = bookCharCounts,
-                                onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
-                            )
+                            if (mainContentOverride != null) {
+                                mainContentOverride(topPaneCardModifier)
+                            } else {
+                                // Collect only for the text edition; a PDF tab must not keep an unused pager hot.
+                                val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
+                                BookContentView(
+                                    bookId = selectedBook.id,
+                                    lazyPagingItems = lazyPagingItems,
+                                    selectedLineIds = uiState.content.selectedLineIds,
+                                    primarySelectedLineId = uiState.content.primarySelectedLineId,
+                                    isTocEntrySelection = uiState.content.isTocEntrySelection,
+                                    onLineSelect = { line, isModifier ->
+                                        onEvent(BookContentEvent.LineSelected(line, isModifier))
+                                    },
+                                    onEvent = onEvent,
+                                    tabId = uiState.tabId,
+                                    showDiacritics = showDiacritics,
+                                    draftNote = noteDraft,
+                                    modifier = topPaneCardModifier,
+                                    preservedListState = bookListState,
+                                    scrollIndex = uiState.content.scrollIndex,
+                                    scrollOffset = uiState.content.scrollOffset,
+                                    scrollToLineTimestamp = uiState.content.scrollToLineTimestamp,
+                                    anchorId = uiState.content.anchorId,
+                                    anchorIndex = uiState.content.anchorIndex,
+                                    topAnchorLineId = uiState.content.topAnchorLineId,
+                                    topAnchorTimestamp = uiState.content.topAnchorRequestTimestamp,
+                                    onScroll = { anchorId, anchorIndex, scrollIndex, scrollOffset ->
+                                        onEvent(
+                                            BookContentEvent.ContentScrolled(
+                                                anchorId = anchorId,
+                                                anchorIndex = anchorIndex,
+                                                scrollIndex = scrollIndex,
+                                                scrollOffset = scrollOffset,
+                                            ),
+                                        )
+                                    },
+                                    altHeadingsByLineId = uiState.altToc.lineHeadingsByLineId.asStableAltHeadings(),
+                                    lineConnections = connectionsCache,
+                                    onPrefetchLineConnections = prefetchConnections,
+                                    isSelected = isSelected,
+                                    bookCharCounts = bookCharCounts,
+                                    onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
+                                )
+                            }
                         },
                         secondContent =
                             if (uiState.content.showTargum) {

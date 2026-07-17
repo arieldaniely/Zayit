@@ -499,6 +499,9 @@ class BookContentViewModel(
                 BookContentEvent.OpenPdfEdition ->
                     openPdfEdition()
 
+                BookContentEvent.OpenTextEdition ->
+                    openTextEdition()
+
                 is BookContentEvent.OpenPdfEditionForBook ->
                     openPdfEdition(event.book.id, null)
 
@@ -585,11 +588,23 @@ class BookContentViewModel(
         val targetBookId =
             bookId ?: stateManager.state.value.navigation.selectedBook
                 ?.id ?: return
-        tabsViewModel.openTab(
+        tabsViewModel.replaceCurrentTabDestination(
             TabsDestination.PdfContent(
                 bookId = targetBookId,
-                tabId = UUID.randomUUID().toString(),
+                tabId = tabId,
                 lineId = lineId,
+            ),
+        )
+    }
+
+    private fun openTextEdition() {
+        val state = stateManager.state.value
+        val bookId = state.navigation.selectedBook?.id ?: return
+        tabsViewModel.replaceCurrentTabDestination(
+            TabsDestination.BookContent(
+                bookId = bookId,
+                tabId = tabId,
+                lineId = state.content.primaryLine?.id,
             ),
         )
     }

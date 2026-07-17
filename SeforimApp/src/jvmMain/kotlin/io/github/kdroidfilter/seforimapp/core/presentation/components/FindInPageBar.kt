@@ -40,6 +40,7 @@ fun FindInPageBar(
     // Smart mode uses dictionary expansion for highlighting
     smartModeEnabled: Boolean = false,
     onToggleSmartMode: () -> Unit = {},
+    showSmartModeToggle: Boolean = true,
 ) {
     val panelColor = JewelTheme.globalColors.panelBackground
     val borderColor = JewelTheme.globalColors.borders.normal
@@ -88,19 +89,21 @@ fun FindInPageBar(
                 androidx.compose.ui.text
                     .TextStyle(fontSize = 13.sp),
         )
-        Spacer(Modifier.width(4.dp))
-        // Smart mode toggle (magic button icon)
-        IconButton(onClick = onToggleSmartMode) {
-            Icon(
-                imageVector = MaterialSymbolsMagicButton,
-                contentDescription = "Smart search mode",
-                tint =
-                    if (smartModeEnabled) {
-                        JewelTheme.globalColors.outlines.focused
-                    } else {
-                        Color.Gray
-                    },
-            )
+        if (showSmartModeToggle) {
+            Spacer(Modifier.width(4.dp))
+            // Smart mode toggle (magic button icon)
+            IconButton(onClick = onToggleSmartMode) {
+                Icon(
+                    imageVector = MaterialSymbolsMagicButton,
+                    contentDescription = "Smart search mode",
+                    tint =
+                        if (smartModeEnabled) {
+                            JewelTheme.globalColors.outlines.focused
+                        } else {
+                            Color.Gray
+                        },
+                )
+            }
         }
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onEnterPrev) {

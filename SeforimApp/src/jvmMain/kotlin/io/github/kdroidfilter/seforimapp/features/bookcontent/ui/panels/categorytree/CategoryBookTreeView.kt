@@ -57,6 +57,7 @@ private data class TreeItem(
 @Composable
 fun CategoryBookTreeView(
     navigationState: NavigationState,
+    isPdfEdition: Boolean = false,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
     onPdfBookClick: (Book) -> Unit,
@@ -86,6 +87,7 @@ fun CategoryBookTreeView(
             navigationState.booksInCategory,
             navigationState.selectedCategory,
             navigationState.selectedBook,
+            isPdfEdition,
             // Rebuild when search-related inputs change
             showCounts,
             categoryCounts,
@@ -103,6 +105,7 @@ fun CategoryBookTreeView(
                 booksInCategory = navigationState.booksInCategory,
                 selectedCategory = navigationState.selectedCategory,
                 selectedBook = navigationState.selectedBook,
+                isPdfEdition = isPdfEdition,
                 onCategoryClick = onCategoryClick,
                 onBookClick = onBookClick,
                 onPdfBookClick = onPdfBookClick,
@@ -350,6 +353,7 @@ private fun buildTreeItems(
     booksInCategory: Set<Book>,
     selectedCategory: Category?,
     selectedBook: Book?,
+    isPdfEdition: Boolean,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
     onPdfBookClick: (Book) -> Unit,
@@ -418,8 +422,8 @@ private fun buildTreeItems(
                                     BookItem(
                                         book = book,
                                         isSelected =
-                                            selectedBookIdOverride?.let { it == book.id }
-                                                ?: (selectedBook?.id == book.id),
+                                            !isPdfEdition &&
+                                                (selectedBookIdOverride?.let { it == book.id } ?: (selectedBook?.id == book.id)),
                                         onClick = { onBookClick(book) },
                                         count = bookCounts[book.id] ?: 0,
                                         showCount = showCounts,
@@ -439,7 +443,7 @@ private fun buildTreeItems(
                                     content = {
                                         BookItem(
                                             book = book,
-                                            isSelected = false,
+                                            isSelected = isPdfEdition && selectedBook?.id == book.id,
                                             onClick = { onPdfBookClick(book) },
                                             count = 0,
                                             showCount = false,

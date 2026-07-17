@@ -116,6 +116,8 @@ sealed interface BookContentEvent {
 
     data object OpenPdfEdition : BookContentEvent
 
+    data object OpenTextEdition : BookContentEvent
+
     data class OpenPdfEditionForBook(
         val book: io.github.kdroidfilter.seforimlibrary.core.models.Book,
     ) : BookContentEvent

@@ -208,6 +208,57 @@ jobs:
           Pop-Location
           Copy-Item "installer\target\${{ matrix.rust_target }}\release\zayit-installer.exe" "staging\Zayit-$ver-windows-$wtok.exe"
 
+      # A self-contained ZIP that keeps user data beside the application. This is
+      # intentionally built with the regular Compose runtime rather than NIK so the
+      # same layout is available on both Windows x64 and Windows ARM64.
+      - name: Build & stage portable Windows ZIP
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wtok = if ('${{ matrix.arch }}' -eq 'amd64') { 'x64' } else { 'arm64' }
+
+          if ('${{ matrix.arch }}' -eq 'amd64') {
+            .\gradlew.bat --no-daemon :SeforimApp:createDistributable
+            $appDir = 'SeforimApp\build\compose\binaries\main\app'
+          } else {
+            # The ARM64 installer step already creates this distributable.
+            $appDir = 'SeforimApp\build\compose\binaries\main-release\app'
+          }
+
+          if (-not (Test-Path $appDir -PathType Container)) {
+            throw "Compose app directory was not found: $appDir"
+          }
+
+          New-Item -ItemType Directory -Force portable-staging | Out-Null
+          $portableRoot = "zayit-$env:VERSION-windows-$wtok-portable"
+          New-Item -ItemType Directory -Force $portableRoot | Out-Null
+          Copy-Item (Join-Path $appDir '*') $portableRoot -Recurse -Force
+
+          $zayitRoot = Join-Path $portableRoot 'zayit'
+          New-Item -ItemType Directory -Force (Join-Path $zayitRoot 'data\databases') | Out-Null
+          New-Item -ItemType File -Force (Join-Path $zayitRoot 'zayit.portable') | Out-Null
+
+          @'
+          זית - מהדורה ניידת ל-Windows
+
+          כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
+          ניתן להפעיל מצב נייד גם באמצעות SEFORIMAPP_PORTABLE=1 או ‎-Dseforimapp.portable=true.
+          '@ | Set-Content (Join-Path $zayitRoot 'README-portable.txt') -Encoding utf8
+
+          Compress-Archive `
+            -Path (Join-Path $portableRoot '*') `
+            -DestinationPath "portable-staging\Zayit-$env:VERSION-windows-$wtok-portable.zip" `
+            -Force
+
+      - name: Upload portable Windows asset
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/upload-artifact@v6
+        with:
+          name: portable-assets-windows-${{ matrix.arch }}
+          path: portable-staging/*.zip
+          if-no-files-found: error
+
       # macOS builds (GraalVM): .dmg (download) + .zip (auto-update)
       - name: Build & stage macOS .dmg + .zip
         if: startsWith(matrix.os, 'macos')
@@ -280,6 +331,14 @@ jobs:
           artifacts-path: artifacts
           version: ${{ env.VERSION }}
           channel: latest
+
+      # Keep portable ZIPs out of update-feed generation, then merge them back for publication.
+      - name: Download portable Windows assets
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          pattern: portable-assets-*
+          merge-multiple: true
 
       # Creates/updates the GitHub release and uploads every installer + the consolidated feeds.
       - name: Create release and upload installers + feeds

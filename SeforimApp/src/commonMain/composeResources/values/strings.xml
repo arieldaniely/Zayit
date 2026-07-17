@@ -620,6 +620,13 @@
     <string name="pdf_loading">טוען PDF…</string>
     <string name="pdf_missing">לא נמצא קובץ PDF תואם בתיקיית תלמוד בבלי שליד מסד הנתונים.</string>
     <string name="pdf_pages_loading">טוען עמודים…</string>
+    <string name="pdf_page_status">עמוד %1$d מתוך %2$d</string>
+    <string name="pdf_outline_search_placeholder">חפש דף בסימניות…</string>
+    <string name="pdf_outline_no_results">לא נמצאה סימנייה מתאימה</string>
+    <string name="pdf_missing_settings">התקנת ספרי ה-PDF זמינה בעת ההתקנה הראשונית או בהגדרות הנתונים.</string>
+    <string name="pdf_load_failed">פתיחת קובץ ה-PDF נכשלה: %s</string>
+    <string name="pdf_unknown_error">שגיאה לא ידועה</string>
+    <string name="pdf_render_failed">טעינת העמוד נכשלה</string>
     <string name="pdf_download_library">הורד ספרי PDF</string>
     <string name="pdf_import_archive">בחר קובץ מקומי</string>
     <string name="pdf_import_dialog_title">בחר קובץ talmud_bavli_latest.tar.zst</string>

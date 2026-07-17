@@ -1,514 +1,1099 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
+import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Size
+import org.apache.pdfbox.text.TextPosition
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.zIndex
+import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
+import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.apache.pdfbox.text.PDFTextStripper
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.seforim.tabs.TabType
-import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforimapp.core.presentation.components.SelectableIconButtonWithToolip
-import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLateralBar
-import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLateralBarPosition
+import androidx.compose.ui.unit.LayoutDirection
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
-import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.Book
-import io.github.kdroidfilter.seforimapp.icons.Library
-import io.github.kdroidfilter.seforimapp.icons.TableOfContents
-import io.github.kdroidfilter.seforimapp.icons.ZoomIn
-import io.github.kdroidfilter.seforimapp.icons.ZoomOut
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
+import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDNamedDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageDestination
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.DefaultButton
+import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Icon
-import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
-import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.back_to_text_edition
-import seforimapp.seforimapp.generated.resources.pdf_book_list_hint
-import seforimapp.seforimapp.generated.resources.pdf_commentaries_hint
-import seforimapp.seforimapp.generated.resources.pdf_download_library
-import seforimapp.seforimapp.generated.resources.pdf_import_archive
-import seforimapp.seforimapp.generated.resources.pdf_import_dialog_title
-import seforimapp.seforimapp.generated.resources.pdf_install_failed
-import seforimapp.seforimapp.generated.resources.pdf_installing
-import seforimapp.seforimapp.generated.resources.pdf_loading
-import seforimapp.seforimapp.generated.resources.pdf_missing
-import seforimapp.seforimapp.generated.resources.pdf_no_outline
-import seforimapp.seforimapp.generated.resources.pdf_pages_loading
-import seforimapp.seforimapp.generated.resources.pdf_table_of_contents
-import seforimapp.seforimapp.generated.resources.pdf_text_edition_tooltip
-import seforimapp.seforimapp.generated.resources.pdf_zoom_in_tooltip
-import seforimapp.seforimapp.generated.resources.pdf_zoom_out_tooltip
-import seforimapp.seforimapp.generated.resources.table_of_contents
-import seforimapp.seforimapp.generated.resources.zoom_in
-import seforimapp.seforimapp.generated.resources.zoom_out
-import java.awt.FileDialog
-import java.awt.Frame
-import java.io.ByteArrayOutputStream
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ImageInfo
+import seforimapp.seforimapp.generated.resources.*
 import java.io.File
-import javax.imageio.ImageIO
+import java.util.LinkedHashMap
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import org.jetbrains.skia.Image as SkiaImage
 
-@Composable
-fun PdfContentScreen(
-    bookId: Long,
-    lineId: Long?,
-    tabId: String,
-) {
-    val graph = LocalAppGraph.current
-    var title by remember(bookId) { mutableStateOf<String?>(null) }
-    var pdf by remember(bookId) { mutableStateOf<File?>(null) }
-    var reloadToken by remember { mutableIntStateOf(0) }
-    var installing by remember { mutableStateOf(false) }
-    var downloadRequested by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var showPicker by remember { mutableStateOf(false) }
-    var showLibrary by remember { mutableStateOf(true) }
-    var showToc by remember { mutableStateOf(true) }
-    var zoom by remember { mutableFloatStateOf(0.78f) }
-    val pageListState = rememberLazyListState()
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+internal const val PDF_ZOOM_MIN = 0.55f
+internal const val PDF_ZOOM_MAX = 1.8f
+internal const val PDF_ZOOM_STEP = 0.1f
+internal const val PDF_DEFAULT_ZOOM = 0.92f
 
-    LaunchedEffect(bookId, reloadToken) {
-        val book = withContext(Dispatchers.IO) { graph.repository.getBookCore(bookId) }
-        title = book?.title
-        pdf = book?.title?.let { TalmudPdfService.pdfForTitle(it) }
-        if (book != null) graph.tabTitleUpdateManager.updateTabTitle(tabId, book.title, TabType.BOOK)
+/**
+ * The printed-edition content pane. The regular book screen supplies the surrounding library,
+ * table of contents, notes, commentaries, sources, and breadcrumbs.
+ */
+@Composable
+fun PdfContentView(
+    file: File?,
+    tabId: String,
+    bookId: Long,
+    selectedLineId: Long?,
+    requestedReferences: List<String>,
+    zoom: Float,
+    onZoomChange: (Float) -> Unit,
+    onLineSelected: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (file == null) {
+        MissingPdfPanel(modifier)
+        return
     }
 
-    Row(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground)) {
-        VerticalLateralBar(
-            position = VerticalLateralBarPosition.Start,
-            topContent = {
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.pdf_book_list_hint),
-                    onClick = { showLibrary = !showLibrary },
-                    isSelected = showLibrary,
-                    icon = Library,
-                    iconDescription = stringResource(Res.string.pdf_book_list_hint),
-                    label = stringResource(Res.string.pdf_book_list_hint),
-                    shortcutHint = if (PlatformInfo.isMacOS) "B+⌘" else "B+Ctrl",
-                )
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.pdf_table_of_contents),
-                    onClick = { showToc = !showToc },
-                    isSelected = showToc,
-                    icon = TableOfContents,
-                    iconDescription = stringResource(Res.string.table_of_contents),
-                    label = stringResource(Res.string.table_of_contents),
-                    shortcutHint = if (PlatformInfo.isMacOS) "B+⇧+⌘" else "B+Shift+Ctrl",
-                )
-            },
-            bottomContent = {},
-        )
-        if (showLibrary || showToc) {
-            PdfSidePane(
-                title = title,
-                file = pdf,
-                showLibrary = showLibrary,
-                showToc = showToc,
-                onOutlineClick = { pageIndex -> coroutineScope.launch { pageListState.animateScrollToItem(pageIndex) } },
-            )
+    val loadState by produceState<PdfLoadState>(PdfLoadState.Loading, file) {
+        val session =
+            runCatching { withContext(Dispatchers.IO) { PdfDocumentSession.open(file) } }
+                .getOrElse {
+                    value = PdfLoadState.Failed(it.message.orEmpty())
+                    return@produceState
+                }
+        value = PdfLoadState.Ready(session)
+        try {
+            awaitCancellation()
+        } finally {
+            session.close()
         }
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            val file = pdf
-            if (file == null) {
-                MissingPdfPanel(
-                    installing = installing,
-                    error = error,
-                    onDownload = {
-                        downloadRequested = true
-                        installing = true
-                        error = null
-                    },
-                    onImport = { showPicker = true },
+    }
+
+    when (val state = loadState) {
+        PdfLoadState.Loading -> LoadingPanel(modifier)
+        is PdfLoadState.Failed -> PdfErrorPanel(state.message, modifier)
+        is PdfLoadState.Ready ->
+            PdfReader(
+                session = state.session,
+                tabId = tabId,
+                bookId = bookId,
+                selectedLineId = selectedLineId,
+                requestedReferences = requestedReferences,
+                zoom = zoom,
+                onZoomChange = onZoomChange,
+                onLineSelected = onLineSelected,
+                modifier = modifier,
+            )
+    }
+}
+
+@OptIn(kotlinx.coroutines.FlowPreview::class)
+@Composable
+private fun PdfReader(
+    session: PdfDocumentSession,
+    tabId: String,
+    bookId: Long,
+    selectedLineId: Long?,
+    requestedReferences: List<String>,
+    zoom: Float,
+    onZoomChange: (Float) -> Unit,
+    onLineSelected: (Long) -> Unit,
+    modifier: Modifier,
+) {
+    val repository = LocalAppGraph.current.repository
+    val textAnchors by produceState<List<PdfTextAnchor>>(emptyList(), bookId) {
+        value =
+            withContext(Dispatchers.IO) {
+                repository
+                    .getTocEntriesForBook(bookId)
+                    .mapNotNull { entry -> entry.lineId?.let { PdfTextAnchor(entry.text, it) } }
+            }
+    }
+    val initialPage = remember(session, requestedReferences) {
+        session.outlineIndex.pageFor(requestedReferences)?.coerceIn(0, session.pageCount - 1) ?: 0
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage)
+    val currentSelectedLineId by rememberUpdatedState(selectedLineId)
+    val currentOnLineSelected by rememberUpdatedState(onLineSelected)
+    var programmaticTarget by remember(session) { mutableStateOf<Int?>(null) }
+    val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
+    val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")
+    val findState = remember(tabId) { TextFieldState() }
+    val scope = rememberCoroutineScope()
+    var searchMatches by remember(session) { mutableStateOf(emptyList<PdfSearchMatch>()) }
+    var selectedMatchIndex by remember(session) { mutableIntStateOf(-1) }
+
+    LaunchedEffect(persistedFindQuery) {
+        if (findState.text.toString() != persistedFindQuery) {
+            findState.edit { replace(0, length, persistedFindQuery) }
+        }
+    }
+
+    LaunchedEffect(session, requestedReferences) {
+        val page = session.outlineIndex.pageFor(requestedReferences) ?: return@LaunchedEffect
+        if (page != listState.mostVisiblePage()) {
+            programmaticTarget = page
+            listState.scrollToItem(page)
+        }
+    }
+
+    LaunchedEffect(session, listState, textAnchors) {
+        snapshotFlow { listState.mostVisiblePage() to listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .debounce(180)
+            .collect { (page, scrolling) ->
+                if (scrolling || page !in 0 until session.pageCount) return@collect
+                val target = programmaticTarget
+                if (target != null) {
+                    if (target == page) programmaticTarget = null
+                    return@collect
+                }
+                val anchor = session.outlineIndex.textAnchorForPage(page, textAnchors) ?: return@collect
+                if (anchor.lineId != currentSelectedLineId) currentOnLineSelected(anchor.lineId)
+            }
+    }
+
+    LaunchedEffect(findState.text, showFind, session) {
+        val query = findState.text.toString()
+        AppSettings.setFindQuery(tabId, if (query.length >= 2) query else "")
+        if (!showFind || query.length < 2) {
+            searchMatches = emptyList()
+            selectedMatchIndex = -1
+            return@LaunchedEffect
+        }
+        delay(PDF_SEARCH_DEBOUNCE_MS)
+        val matches = withContext(Dispatchers.IO) { session.searchPages(query) }
+        searchMatches = matches
+        selectedMatchIndex =
+            matches.indexOfFirst { it.pageIndex >= listState.mostVisiblePage() }
+                .takeIf { it >= 0 }
+                ?: if (matches.isEmpty()) -1 else 0
+    }
+
+    fun navigateToMatch(forward: Boolean) {
+        if (searchMatches.isEmpty()) return
+        selectedMatchIndex =
+            if (forward) {
+                (selectedMatchIndex + 1).mod(searchMatches.size)
+            } else {
+                (selectedMatchIndex - 1).mod(searchMatches.size)
+            }
+        val page = searchMatches[selectedMatchIndex].pageIndex
+        programmaticTarget = page
+        scope.launch { listState.animateScrollToItem(page) }
+    }
+
+    Box(modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground)) {
+        PdfPages(
+            session = session,
+            zoom = zoom,
+            listState = listState,
+            onZoomChange = onZoomChange,
+            searchMatches = searchMatches,
+            selectedMatchIndex = selectedMatchIndex,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (showFind) {
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).zIndex(2f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (findState.text.length >= 2) {
+                    CountBadge(searchMatches.size)
+                    Spacer(Modifier.width(8.dp))
+                }
+                FindInPageBar(
+                    state = findState,
+                    onEnterNext = { navigateToMatch(true) },
+                    onEnterPrev = { navigateToMatch(false) },
+                    onClose = { AppSettings.closeFindBar(tabId) },
+                    showSmartModeToggle = false,
                 )
-                if (downloadRequested) {
-                    LaunchedEffect(Unit) {
-                        runCatching { withContext(Dispatchers.IO) { TalmudPdfService.downloadAndInstall() } }
-                            .onFailure { error = it.message }
-                        downloadRequested = false
-                        installing = false
-                        reloadToken++
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun PdfPages(
+    session: PdfDocumentSession,
+    zoom: Float,
+    listState: LazyListState,
+    onZoomChange: (Float) -> Unit,
+    searchMatches: List<PdfSearchMatch>,
+    selectedMatchIndex: Int,
+    modifier: Modifier = Modifier,
+) {
+    val horizontalScrollState = rememberScrollState()
+    val renderSnapshot by session.renderSnapshot.collectAsState()
+    val textPages by session.textPages.collectAsState()
+    val currentPage by remember(listState) { derivedStateOf { listState.mostVisiblePage() } }
+    val isScrolling by remember(listState) { derivedStateOf { listState.isScrollInProgress } }
+    val currentZoom by rememberUpdatedState(zoom)
+    val currentOnZoomChange by rememberUpdatedState(onZoomChange)
+    val renderDpi = remember(zoom) {
+        val rawDpi = (PDF_BASE_DPI * max(1f, zoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
+        (rawDpi / PDF_DPI_STEP).roundToInt() * PDF_DPI_STEP
+    }
+    LaunchedEffect(session, currentPage, renderDpi, isScrolling) {
+        withContext(Dispatchers.IO) {
+            runCatching { session.loadTextPage(currentPage) }
+            progressiveRenderPlan(currentPage, renderDpi, session.pageCount, isScrolling).forEach { request ->
+                currentCoroutineContext().ensureActive()
+                runCatching { session.render(request.pageIndex, request.dpi) }
+                    .onFailure { session.recordRenderFailure(request.pageIndex) }
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+    BoxWithConstraints(
+        modifier
+            .onPointerEvent(PointerEventType.Scroll) { event ->
+                val modifiers = event.keyboardModifiers
+                if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
+                val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
+                val zoomDelta = if (abs(delta.y) >= abs(delta.x)) delta.y else delta.x
+                if (zoomDelta == 0f) return@onPointerEvent
+                val exponent = (-zoomDelta * 0.08f).coerceIn(-0.25f, 0.25f)
+                currentOnZoomChange(
+                    (currentZoom * exp(exponent.toDouble()).toFloat()).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX),
+                )
+                event.changes.forEach { it.consume() }
+            }
+            .pointerInput(Unit) {
+                detectTransformGestures { _, _, gestureZoom, _ ->
+                    if (gestureZoom != 1f) {
+                        currentOnZoomChange((currentZoom * gestureZoom).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX))
                     }
                 }
-            } else {
-                PdfPages(
-                    file = file,
-                    zoom = zoom,
-                    listState = pageListState,
-                    onZoomChange = { zoom = it.coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX) },
-                )
-            }
-        }
-        VerticalLateralBar(
-            position = VerticalLateralBarPosition.End,
-            topContent = {
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.pdf_zoom_in_tooltip),
-                    onClick = { zoom = (zoom + PDF_ZOOM_STEP).coerceAtMost(PDF_ZOOM_MAX) },
-                    isSelected = false,
-                    icon = ZoomIn,
-                    iconDescription = stringResource(Res.string.zoom_in),
-                    label = stringResource(Res.string.zoom_in),
-                    shortcutHint = if (PlatformInfo.isMacOS) "+⌘" else "+Ctrl",
-                )
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.pdf_zoom_out_tooltip),
-                    onClick = { zoom = (zoom - PDF_ZOOM_STEP).coerceAtLeast(PDF_ZOOM_MIN) },
-                    isSelected = false,
-                    icon = ZoomOut,
-                    iconDescription = stringResource(Res.string.zoom_out),
-                    label = stringResource(Res.string.zoom_out),
-                    shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
-                )
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
-                    onClick = {
-                        val newTabId = java.util.UUID.randomUUID().toString()
-                        graph.tabsViewModel.openTab(TabsDestination.BookContent(bookId, newTabId, lineId))
-                    },
-                    isSelected = false,
-                    icon = Book,
-                    iconDescription = stringResource(Res.string.back_to_text_edition),
-                    label = stringResource(Res.string.back_to_text_edition),
-                )
             },
-            bottomContent = {},
-        )
-    }
-
-    val importDialogTitle = stringResource(Res.string.pdf_import_dialog_title)
-    LaunchedEffect(showPicker) {
-        if (!showPicker) return@LaunchedEffect
-        val selected =
-            FileDialog(null as Frame?, importDialogTitle, FileDialog.LOAD).run {
-                isVisible = true
-                val selectedFile = file?.let { File(directory, it) }
-                dispose()
-                selectedFile
-            }
-        showPicker = false
-        if (selected != null) {
-            installing = true
-            error = null
-            runCatching { withContext(Dispatchers.IO) { TalmudPdfService.importArchive(selected) } }
-                .onFailure { error = it.message }
-            installing = false
-            reloadToken++
-        }
-    }
-}
-
-@Composable
-private fun PdfSidePane(
-    title: String?,
-    file: File?,
-    showLibrary: Boolean,
-    showToc: Boolean,
-    onOutlineClick: (Int) -> Unit,
-) {
-    val outline by produceState<List<PdfOutlineEntry>>(emptyList(), file) {
-        value = file?.let { withContext(Dispatchers.IO) { readPdfOutline(it) } }.orEmpty()
-    }
-    Column(
-        modifier =
-            Modifier
-                .width(270.dp)
-                .fillMaxHeight()
-                .background(JewelTheme.globalColors.toolwindowBackground)
-                .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (showLibrary) {
-            PanelCard(stringResource(Res.string.pdf_book_list_hint)) {
-                Text(
-                    text = title ?: stringResource(Res.string.pdf_loading),
-                    color = JewelTheme.globalColors.text.normal,
-                    fontWeight = FontWeight.SemiBold,
-                )
+        val contentWidth = maxWidth * max(1f, zoom)
+        val pageWidthFraction = if (zoom < 1f) zoom else 0.96f
+        LaunchedEffect(zoom, horizontalScrollState.maxValue) {
+            if (horizontalScrollState.maxValue > 0) {
+                horizontalScrollState.scrollTo(horizontalScrollState.maxValue / 2)
             }
         }
-        if (showToc) {
-            PdfOutlinePanel(outline, onOutlineClick)
-        }
-        PanelCard(stringResource(Res.string.pdf_commentaries_hint)) {
-            Text(stringResource(Res.string.pdf_commentaries_hint), color = JewelTheme.globalColors.text.disabled)
-        }
-    }
-}
-
-@Composable
-private fun PdfOutlinePanel(
-    outline: List<PdfOutlineEntry>,
-    onOutlineClick: (Int) -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(360.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(JewelTheme.globalColors.panelBackground)
-                .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = stringResource(Res.string.pdf_table_of_contents),
-            fontWeight = FontWeight.SemiBold,
-            color = JewelTheme.globalColors.text.normal,
-        )
-        if (outline.isEmpty()) {
-            Text(stringResource(Res.string.pdf_no_outline), color = JewelTheme.globalColors.text.disabled)
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(outline, key = { entry -> "${entry.level}-${entry.pageIndex}-${entry.title}" }) { entry ->
-                    Text(
-                        text = "  ".repeat(entry.level) + entry.title,
-                        color = if (entry.pageIndex != null) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.disabled,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable(enabled = entry.pageIndex != null) {
-                                entry.pageIndex?.let(onOutlineClick)
+        Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState, reverseScrolling = true)) {
+            LazyColumn(
+                modifier = Modifier.width(contentWidth).fillMaxHeight(),
+                state = listState,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            ) {
+                items(session.pageCount, key = { it }) { pageIndex ->
+                    val renderedPage = renderSnapshot.pages[pageIndex]
+                    val pageState =
+                        when {
+                            renderedPage != null -> PdfPageState.Ready(renderedPage)
+                            pageIndex in renderSnapshot.failedPages -> PdfPageState.Failed("")
+                            else -> PdfPageState.Loading
+                        }
+                    val pageHighlights =
+                        searchMatches.mapIndexedNotNull { index, match ->
+                            if (match.pageIndex == pageIndex) {
+                                PdfPageHighlight(match.bounds, index == selectedMatchIndex)
+                            } else {
+                                null
                             }
-                            .padding(vertical = 3.dp),
+                        }
+                    PdfPageCard(
+                        state = pageState,
+                        aspectRatio = session.displayAspectRatio,
+                        actualAspectRatio = session.pageAspectRatios[pageIndex],
+                        widthFraction = pageWidthFraction,
+                        highlights = pageHighlights,
+                        pageText = textPages[pageIndex],
                     )
                 }
             }
         }
+        if (horizontalScrollState.maxValue > 0) {
+            HorizontalScrollbar(
+                adapter = rememberScrollbarAdapter(horizontalScrollState),
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp),
+            )
+        }
     }
 }
+    }
 
 @Composable
-private fun PanelCard(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
+private fun PdfPageCard(
+    state: PdfPageState,
+    aspectRatio: Float,
+    actualAspectRatio: Float,
+    widthFraction: Float,
+    highlights: List<PdfPageHighlight>,
+    pageText: PdfPageText?,
 ) {
-    Column(
+    val clipboard = LocalClipboardManager.current
+    val focusRequester = remember { FocusRequester() }
+    var cardSize by remember { mutableStateOf(IntSize.Zero) }
+    var selectionStart by remember(pageText) { mutableStateOf<Offset?>(null) }
+    var selectionEnd by remember(pageText) { mutableStateOf<Offset?>(null) }
+    var isSelecting by remember(pageText) { mutableStateOf(false) }
+    val selectedGlyphs =
+        remember(pageText, selectionStart, selectionEnd, cardSize, actualAspectRatio) {
+            val start = selectionStart
+            val end = selectionEnd
+            if (pageText == null || start == null || end == null || cardSize == IntSize.Zero) {
+                emptyList()
+            } else {
+                val left = min(start.x, end.x)
+                val top = min(start.y, end.y)
+                val right = max(start.x, end.x)
+                val bottom = max(start.y, end.y)
+                val size = Size(cardSize.width.toFloat(), cardSize.height.toFloat())
+                pageText.glyphs.filter { glyph ->
+                    glyph.bounds.fitToPage(size, actualAspectRatio).intersects(left, top, right, bottom)
+                }
+            }
+        }
+    val selectedText = remember(selectedGlyphs) { selectedGlyphs.toPdfSelectionText() }
+
+    Box(
         Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(JewelTheme.globalColors.panelBackground)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .fillMaxWidth(widthFraction)
+            .aspectRatio(aspectRatio)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.White)
+            .onSizeChanged { cardSize = it }
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (
+                    event.type == KeyEventType.KeyDown &&
+                    event.key == Key.C &&
+                    (event.isCtrlPressed || event.isMetaPressed) &&
+                    selectedText.isNotEmpty()
+                ) {
+                    clipboard.setText(AnnotatedString(selectedText))
+                    true
+                } else {
+                    false
+                }
+            }.pointerInput(pageText, cardSize, actualAspectRatio) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val size = Size(cardSize.width.toFloat(), cardSize.height.toFloat())
+                        isSelecting =
+                            pageText?.glyphs?.any {
+                                it.bounds.fitToPage(size, actualAspectRatio).contains(offset)
+                            } == true
+                        if (isSelecting) {
+                            selectionStart = offset
+                            selectionEnd = offset
+                            focusRequester.requestFocus()
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        if (isSelecting) {
+                            selectionEnd = change.position
+                            change.consume()
+                        }
+                    },
+                    onDragEnd = { isSelecting = false },
+                    onDragCancel = { isSelecting = false },
+                )
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(title, fontWeight = FontWeight.SemiBold, color = JewelTheme.globalColors.text.normal)
-        content()
+        when (state) {
+            PdfPageState.Loading -> Unit
+            is PdfPageState.Failed ->
+                Text(
+                    stringResource(Res.string.pdf_render_failed),
+                    color = Color(0xFFB00020),
+                    modifier = Modifier.padding(16.dp),
+                )
+            is PdfPageState.Ready ->
+                Image(
+                    bitmap = state.page.bitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            highlights.forEach { highlight ->
+                val color = if (highlight.isCurrent) PDF_ACTIVE_HIGHLIGHT_COLOR else PDF_HIGHLIGHT_COLOR
+                highlight.bounds.forEach { bounds ->
+                    val fitted = bounds.fitToPage(size, actualAspectRatio)
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(fitted.left, fitted.top),
+                        size = Size(fitted.right - fitted.left, fitted.bottom - fitted.top),
+                    )
+                }
+            }
+            mergeGlyphBounds(selectedGlyphs).forEach { bounds ->
+                val fitted = bounds.fitToPage(size, actualAspectRatio)
+                drawRect(
+                    color = PDF_SELECTION_COLOR,
+                    topLeft = Offset(fitted.left, fitted.top),
+                    size = Size(fitted.right - fitted.left, fitted.bottom - fitted.top),
+                )
+            }
+        }
     }
 }
 
+private data class PdfPageHighlight(
+    val bounds: List<PdfNormalizedRect>,
+    val isCurrent: Boolean,
+)
+
 @Composable
-private fun MissingPdfPanel(
-    installing: Boolean,
-    error: String?,
-    onDownload: () -> Unit,
-    onImport: () -> Unit,
-) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun MissingPdfPanel(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             modifier =
                 Modifier
-                    .fillMaxWidth(0.42f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        JewelTheme.globalColors.borders.disabled
-                            .copy(alpha = 0.18f),
-                    ).padding(24.dp),
+                    .fillMaxWidth(0.55f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.14f))
+                    .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(Book, contentDescription = null, modifier = Modifier.size(42.dp))
             Text(stringResource(Res.string.pdf_missing), color = JewelTheme.globalColors.text.normal)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DefaultButton(enabled = !installing, onClick = onDownload) {
-                    Text(stringResource(Res.string.pdf_download_library))
-                }
-                OutlinedButton(enabled = !installing, onClick = onImport) {
-                    Text(stringResource(Res.string.pdf_import_archive))
-                }
-            }
-            if (installing) {
-                Text(stringResource(Res.string.pdf_installing), color = JewelTheme.globalColors.text.normal)
-            }
-            if (error != null) {
-                Text(stringResource(Res.string.pdf_install_failed).format(error), color = Color(0xFFB00020))
-            }
+            Text(stringResource(Res.string.pdf_missing_settings), color = JewelTheme.globalColors.text.info)
         }
     }
 }
 
 @Composable
-private fun PdfPages(
-    file: File,
-    zoom: Float,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    onZoomChange: (Float) -> Unit,
-) {
-    var pageCount by remember(file) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(file) { pageCount = withContext(Dispatchers.IO) { Loader.loadPDF(file).use { it.numberOfPages } } }
-    val count = pageCount
-    if (count ==
-        null
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(Res.string.pdf_pages_loading)) }
-    } else {
-        val horizontalScrollState = rememberScrollState()
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .horizontalScroll(horizontalScrollState)
-                .pointerInput(zoom) {
-                    detectTransformGestures { _, _, gestureZoom, _ ->
-                        if (gestureZoom != 1f) onZoomChange(zoom * gestureZoom)
-                    }
-                },
-        ) {
-            val contentWidth = maxWidth * zoom.coerceAtLeast(1f)
-            LazyColumn(
-                modifier = Modifier.width(contentWidth).fillMaxHeight(),
-                state = listState,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                contentPadding = PaddingValues(bottom = 32.dp, top = 8.dp),
-            ) {
-                items((0 until count).toList(), key = { it }) { pageIndex ->
-                    val page by produceState<RenderedPdfPage?>(null, file, pageIndex) {
-                        value =
-                            withContext(Dispatchers.IO) { renderPdfPage(file, pageIndex) }
-                    }
-                    PdfPageCard(page, zoom.coerceAtMost(1f))
-                }
-            }
+private fun LoadingPanel(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator()
+            Text(stringResource(Res.string.pdf_loading))
         }
     }
 }
 
 @Composable
-private fun PdfPageCard(
-    page: RenderedPdfPage?,
-    zoom: Float,
+private fun PdfErrorPanel(
+    message: String,
+    modifier: Modifier = Modifier,
 ) {
-    Box(
-        Modifier
-            .fillMaxWidth(zoom)
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color.White)
-            .padding(1.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (page ==
-            null
-        ) {
-            Box(Modifier.fillMaxWidth().aspectRatio(0.72f), contentAlignment = Alignment.Center) {
-                Text(stringResource(Res.string.pdf_pages_loading), color = JewelTheme.globalColors.text.disabled)
-            }
-        } else {
-            Image(page.bitmap, null, Modifier.fillMaxWidth().aspectRatio(page.aspectRatio), contentScale = ContentScale.Fit)
-        }
+    val detail = message.ifBlank { stringResource(Res.string.pdf_unknown_error) }
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = stringResource(Res.string.pdf_load_failed, detail),
+            color = Color(0xFFB00020),
+            modifier = Modifier.padding(24.dp),
+        )
     }
 }
 
-private const val PDF_ZOOM_MIN = 0.52f
-private const val PDF_ZOOM_MAX = 1.8f
-private const val PDF_ZOOM_STEP = 0.08f
+private fun LazyListState.mostVisiblePage(): Int {
+    val layout = layoutInfo
+    if (layout.visibleItemsInfo.isEmpty()) return firstVisibleItemIndex
+    return layout.visibleItemsInfo
+        .maxByOrNull { item ->
+            val visibleStart = max(item.offset, layout.viewportStartOffset)
+            val visibleEnd = min(item.offset + item.size, layout.viewportEndOffset)
+            (visibleEnd - visibleStart).coerceAtLeast(0)
+        }?.index ?: firstVisibleItemIndex
+}
 
+private sealed interface PdfLoadState {
+    data object Loading : PdfLoadState
+
+    data class Ready(
+        val session: PdfDocumentSession,
+    ) : PdfLoadState
+
+    data class Failed(
+        val message: String,
+    ) : PdfLoadState
+}
+
+private sealed interface PdfPageState {
+    data object Loading : PdfPageState
+
+    data class Ready(
+        val page: RenderedPdfPage,
+    ) : PdfPageState
+
+    data class Failed(
+        val message: String,
+    ) : PdfPageState
+}
+
+@Stable
 private data class RenderedPdfPage(
     val bitmap: ImageBitmap,
-    val aspectRatio: Float,
 )
 
-private data class PdfOutlineEntry(
-    val title: String,
-    val level: Int,
-    val pageIndex: Int?,
+@Stable
+private data class PdfRenderSnapshot(
+    val pages: Map<Int, RenderedPdfPage> = emptyMap(),
+    val failedPages: Set<Int> = emptySet(),
 )
 
-private fun readPdfOutline(file: File): List<PdfOutlineEntry> =
-    Loader.loadPDF(file).use { document ->
-        buildList {
-            document.documentCatalog.documentOutline
-                ?.firstChild
-                ?.let { appendOutline(it, 0) }
+/** One open PDFBox document per visible PDF tab, guarded because PDFBox renderers are not thread-safe. */
+private class PdfDocumentSession private constructor(
+    private val document: PDDocument,
+    val outlineIndex: PdfOutlineIndex,
+    val pageAspectRatios: List<Float>,
+    val displayAspectRatio: Float,
+    private val searchIndex: PdfTextSearchIndex,
+) : AutoCloseable {
+    private val renderer = PDFRenderer(document)
+    private val lock = Any()
+    private var closed = false
+    private val pageCache =
+        object : LinkedHashMap<Int, CachedRenderedPdfPage>(PDF_CACHE_SIZE + 1, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedRenderedPdfPage>?): Boolean =
+                size > PDF_CACHE_SIZE
         }
+
+    private val mutableRenderSnapshot = MutableStateFlow(PdfRenderSnapshot())
+    val renderSnapshot: StateFlow<PdfRenderSnapshot> = mutableRenderSnapshot
+
+    val pageCount: Int get() = pageAspectRatios.size
+
+    fun render(
+        pageIndex: Int,
+        dpi: Int,
+    ): RenderedPdfPage =
+        synchronized(lock) {
+            check(!closed) { "PDF document is closed" }
+            val cached = pageCache[pageIndex]
+            if (cached != null && cached.dpi >= dpi) return@synchronized cached.page
+            val image = renderer.renderImageWithDPI(pageIndex, dpi.toFloat(), ImageType.RGB)
+            val source = image.getRGB(0, 0, image.width, image.height, null, 0, image.width)
+            val pixels = ByteArray(source.size * 4)
+            source.forEachIndexed { index, argb ->
+                val offset = index * 4
+                pixels[offset] = (argb and 0xFF).toByte()
+                pixels[offset + 1] = ((argb ushr 8) and 0xFF).toByte()
+                pixels[offset + 2] = ((argb ushr 16) and 0xFF).toByte()
+                pixels[offset + 3] = 0xFF.toByte()
+            }
+            val info = ImageInfo.makeN32(image.width, image.height, ColorAlphaType.OPAQUE)
+            val skiaImage = SkiaImage.makeRaster(info, pixels, image.width * 4)
+            val renderedPage =
+                try {
+                    RenderedPdfPage(skiaImage.toComposeImageBitmap())
+                } finally {
+                    skiaImage.close()
+                }
+            renderedPage
+                .also {
+                    pageCache[pageIndex] = CachedRenderedPdfPage(dpi, it)
+                    mutableRenderSnapshot.value =
+                        PdfRenderSnapshot(
+                            pages = pageCache.mapValues { entry -> entry.value.page },
+                            failedPages = mutableRenderSnapshot.value.failedPages - pageIndex,
+                        )
+                }
+        }
+
+    val textPages: StateFlow<Map<Int, PdfPageText>> = searchIndex.pages
+
+    fun searchPages(query: String): List<PdfSearchMatch> = searchIndex.searchMatches(query)
+
+    fun loadTextPage(pageIndex: Int) = searchIndex.page(pageIndex)
+
+    fun recordRenderFailure(pageIndex: Int) {
+        synchronized(lock) {
+            mutableRenderSnapshot.value =
+                mutableRenderSnapshot.value.copy(failedPages = mutableRenderSnapshot.value.failedPages + pageIndex)
+        }
+    }
+
+    override fun close() {
+        synchronized(lock) {
+            if (closed) return
+            closed = true
+            pageCache.values.forEach { it.page.bitmap.asSkiaBitmap().close() }
+            pageCache.clear()
+            mutableRenderSnapshot.value = PdfRenderSnapshot()
+            searchIndex.close()
+            document.close()
+        }
+    }
+
+    companion object {
+        fun open(file: File): PdfDocumentSession {
+            val document = Loader.loadPDF(file)
+            return try {
+                val aspectRatios =
+                    document.pages.map { page ->
+                        val box = page.cropBox
+                        val rotated = page.rotation.mod(180) != 0
+                        val width = if (rotated) box.height else box.width
+                        val height = if (rotated) box.width else box.height
+                        (width / height).coerceAtLeast(0.1f)
+                    }
+                PdfDocumentSession(
+                    document = document,
+                    outlineIndex = PdfOutlineIndex(readPdfOutline(document)),
+                    pageAspectRatios = aspectRatios,
+                    displayAspectRatio = aspectRatios.sorted().getOrNull(aspectRatios.size / 2) ?: PDF_DEFAULT_ASPECT_RATIO,
+                    searchIndex = PdfTextSearchIndex(file),
+                )
+            } catch (error: Throwable) {
+                document.close()
+                throw error
+            }
+        }
+    }
+}
+
+/** Builds a lazy, page-level index from the PDF's embedded text. No OCR is involved. */
+private class PdfTextSearchIndex(
+    private val file: File,
+) : AutoCloseable {
+    private val lock = Any()
+    private val document = Loader.loadPDF(file)
+    private val pageCache = arrayOfNulls<PdfPageText>(document.numberOfPages)
+    private val mutablePages = MutableStateFlow<Map<Int, PdfPageText>>(emptyMap())
+    val pages: StateFlow<Map<Int, PdfPageText>> = mutablePages
+    private var pageTexts: List<String>? = null
+
+    fun page(pageIndex: Int): PdfPageText =
+        synchronized(lock) {
+            pageCache[pageIndex]?.let { return@synchronized it }
+            val stripper = PositionCollectingPdfStripper(pageIndex)
+            stripper.getText(document)
+            val page = PdfPageText(stripper.glyphs.toList())
+            pageCache[pageIndex] = page
+            mutablePages.value = mutablePages.value + (pageIndex to page)
+            page
+        }
+
+    fun searchMatches(query: String): List<PdfSearchMatch> =
+        synchronized(lock) {
+            val needle = normalizePdfMatchKey(query)
+            if (needle.length < 2) return@synchronized emptyList()
+            buildList {
+                for (pageIndex in pageCache.indices) {
+                    addAll(findMatches(pageIndex, page(pageIndex), needle))
+                }
+            }
+        }
+
+
+    fun search(query: String): List<Int> =
+        synchronized(lock) {
+            val needle = normalizePdfSearchText(query)
+            if (needle.length < 2) return@synchronized emptyList()
+            val reversedNeedle = needle.reversed()
+            val texts = pageTexts ?: extractPageTexts().also { pageTexts = it }
+            texts.mapIndexedNotNull { index, text ->
+                index.takeIf {
+                    text.contains(needle, ignoreCase = true) ||
+                        text.contains(reversedNeedle, ignoreCase = true)
+                }
+            }
+        }
+
+    private fun extractPageTexts(): List<String> =
+        Loader.loadPDF(file).use { searchDocument ->
+            List(searchDocument.numberOfPages) { pageIndex ->
+                PDFTextStripper()
+                    .apply {
+                        startPage = pageIndex + 1
+                        endPage = pageIndex + 1
+                        sortByPosition = true
+                    }.getText(searchDocument)
+                    .let(::normalizePdfSearchText)
+            }
+        }
+
+    override fun close() =
+        synchronized(lock) {
+            pageTexts = null
+            pageCache.fill(null)
+            mutablePages.value = emptyMap()
+            document.close()
+}
+}
+
+private fun normalizePdfSearchText(text: String): String =
+    text.replace(PDF_DIRECTIONAL_MARKS, "").replace(PDF_SEARCH_WHITESPACE, " ").trim()
+private class PositionCollectingPdfStripper(pageIndex: Int) : PDFTextStripper() {
+    val glyphs = mutableListOf<PdfGlyph>()
+
+    init {
+        startPage = pageIndex + 1
+        endPage = pageIndex + 1
+        sortByPosition = true
+    }
+
+    override fun processTextPosition(text: TextPosition) {
+        val pageWidth = text.pageWidth.coerceAtLeast(1f)
+        val pageHeight = text.pageHeight.coerceAtLeast(1f)
+        val bounds =
+            PdfNormalizedRect(
+                left = (text.xDirAdj / pageWidth).coerceIn(0f, 1f),
+                top = ((text.yDirAdj - text.heightDir) / pageHeight).coerceIn(0f, 1f),
+                right = ((text.xDirAdj + text.widthDirAdj) / pageWidth).coerceIn(0f, 1f),
+                bottom = (text.yDirAdj / pageHeight).coerceIn(0f, 1f),
+            )
+        text.unicode.orEmpty().forEach { character ->
+            if (!character.isWhitespace() && !character.isPdfDirectionalMark()) {
+                glyphs += PdfGlyph(character.toString(), bounds)
+            }
+        }
+        super.processTextPosition(text)
+    }
+}
+
+private fun findMatches(pageIndex: Int, page: PdfPageText, needle: String): List<PdfSearchMatch> {
+    val logicalGlyphs = page.glyphs.toLogicalPdfOrder()
+    val searchable = logicalGlyphs.joinToString(separator = "") { it.text.lowercase() }
+    return buildList {
+        var start = searchable.indexOf(needle)
+        while (start >= 0) {
+            val glyphs = logicalGlyphs.subList(start, start + needle.length)
+            add(PdfSearchMatch(pageIndex, mergeGlyphBounds(glyphs)))
+            start = searchable.indexOf(needle, start + 1)
+        }
+    }.distinctBy { it.bounds }
+}
+
+private fun mergeGlyphBounds(glyphs: List<PdfGlyph>): List<PdfNormalizedRect> =
+    buildList {
+        glyphs.forEach { glyph ->
+            val previous = lastOrNull()
+            if (previous == null || abs(previous.verticalCenter - glyph.bounds.verticalCenter) > PDF_LINE_TOLERANCE) {
+                add(glyph.bounds)
+            } else {
+                this[lastIndex] = previous.union(glyph.bounds)
+            }
+        }
+    }
+
+private fun normalizePdfMatchKey(text: String): String =
+    text.filterNot { it.isWhitespace() || it.isPdfDirectionalMark() }.lowercase()
+
+private fun Char.isPdfDirectionalMark(): Boolean =
+    this == '\u200E' || this == '\u200F' || this in '\u202A'..'\u202E' || this in '\u2066'..'\u2069'
+private fun Char.isHebrewCharacter(): Boolean = this in '\u0590'..'\u05FF' || this in '\uFB1D'..'\uFB4F'
+
+/** PDF text streams commonly store Hebrew glyphs in visual order inside each word. */
+private fun List<PdfGlyph>.toLogicalPdfOrder(): List<PdfGlyph> =
+    buildList {
+        val word = mutableListOf<PdfGlyph>()
+
+        fun flushWord() {
+            if (word.any { glyph -> glyph.text.any(Char::isHebrewCharacter) }) {
+                addAll(word.asReversed())
+            } else {
+                addAll(word)
+            }
+            word.clear()
+        }
+
+        this@toLogicalPdfOrder.forEach { glyph ->
+            val previous = word.lastOrNull()
+            if (previous != null) {
+                val newLine = abs(previous.bounds.verticalCenter - glyph.bounds.verticalCenter) > PDF_LINE_TOLERANCE
+                val horizontalGap =
+                    max(
+                        glyph.bounds.left - previous.bounds.right,
+                        previous.bounds.left - glyph.bounds.right,
+                    )
+                if (newLine || horizontalGap > PDF_WORD_GAP) flushWord()
+            }
+            word += glyph
+        }
+        flushWord()
+    }
+
+
+private data class PdfPageText(val glyphs: List<PdfGlyph>)
+
+private data class PdfGlyph(val text: String, val bounds: PdfNormalizedRect)
+
+private data class PdfSearchMatch(val pageIndex: Int, val bounds: List<PdfNormalizedRect>)
+
+private data class PdfNormalizedRect(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+) {
+    val verticalCenter: Float get() = (top + bottom) / 2f
+
+    fun union(other: PdfNormalizedRect): PdfNormalizedRect =
+        PdfNormalizedRect(
+            left = min(left, other.left),
+            top = min(top, other.top),
+            right = max(right, other.right),
+            bottom = max(bottom, other.bottom),
+        )
+}
+private data class PdfPixelRect(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+) {
+    fun contains(point: Offset): Boolean =
+        point.x in (left - PDF_SELECTION_HIT_SLOP)..(right + PDF_SELECTION_HIT_SLOP) &&
+            point.y in (top - PDF_SELECTION_HIT_SLOP)..(bottom + PDF_SELECTION_HIT_SLOP)
+
+    fun intersects(left: Float, top: Float, right: Float, bottom: Float): Boolean =
+        this.right >= left && this.left <= right && this.bottom >= top && this.top <= bottom
+}
+
+private fun PdfNormalizedRect.fitToPage(size: Size, actualAspectRatio: Float): PdfPixelRect {
+    if (size.width <= 0f || size.height <= 0f) return PdfPixelRect(0f, 0f, 0f, 0f)
+    val cardAspectRatio = size.width / size.height
+    val contentWidth: Float
+    val contentHeight: Float
+    val offsetX: Float
+    val offsetY: Float
+    if (actualAspectRatio >= cardAspectRatio) {
+        contentWidth = size.width
+        contentHeight = size.width / actualAspectRatio
+        offsetX = 0f
+        offsetY = (size.height - contentHeight) / 2f
+    } else {
+        contentHeight = size.height
+        contentWidth = size.height * actualAspectRatio
+        offsetX = (size.width - contentWidth) / 2f
+        offsetY = 0f
+    }
+    return PdfPixelRect(
+        left = offsetX + left * contentWidth,
+        top = offsetY + top * contentHeight,
+        right = offsetX + right * contentWidth,
+        bottom = offsetY + bottom * contentHeight,
+    )
+}
+
+private fun List<PdfGlyph>.toPdfSelectionText(): String {
+    val logicalGlyphs = toLogicalPdfOrder()
+    return buildString {
+        logicalGlyphs.forEachIndexed { index, glyph ->
+            val previous = logicalGlyphs.getOrNull(index - 1)
+            if (previous != null) {
+                val newLine =
+                    abs(previous.bounds.verticalCenter - glyph.bounds.verticalCenter) > PDF_LINE_TOLERANCE
+                if (newLine) {
+                    appendLine()
+                } else {
+                    val horizontalGap =
+                        max(
+                            glyph.bounds.left - previous.bounds.right,
+                            previous.bounds.left - glyph.bounds.right,
+                        )
+                    if (horizontalGap > PDF_WORD_GAP) append(' ')
+                }
+            }
+            append(glyph.text)
+        }
+    }
+
+}
+
+private data class CachedRenderedPdfPage(
+    val dpi: Int,
+    val page: RenderedPdfPage,
+)
+
+private data class RenderRequest(
+    val pageIndex: Int,
+    val dpi: Int,
+)
+
+private fun progressiveRenderPlan(
+    currentPage: Int,
+    targetDpi: Int,
+    pageCount: Int,
+    isScrolling: Boolean,
+): List<RenderRequest> =
+    buildList {
+        fun addIfValid(pageIndex: Int, dpi: Int) {
+            if (pageIndex in 0 until pageCount) add(RenderRequest(pageIndex, dpi))
+        }
+
+        addIfValid(currentPage, if (isScrolling) min(targetDpi, PDF_ACTIVE_PREVIEW_DPI) else targetDpi)
+
+        for (distance in 1..PDF_PREFETCH_DISTANCE) {
+            val dpi =
+                when (distance) {
+                    1, 2 -> PDF_SCROLL_PREVIEW_NEAR_DPI
+                    in 3..5 -> PDF_SCROLL_PREVIEW_MID_DPI
+                    else -> PDF_SCROLL_PREVIEW_FAR_DPI
+                }
+            addIfValid(currentPage + distance, dpi)
+            addIfValid(currentPage - distance, dpi)
+        }
+
+        if (!isScrolling) {
+            for (distance in 1..PDF_QUALITY_UPGRADE_DISTANCE) {
+                val dpi =
+                    when (distance) {
+                        1 -> PDF_NEARBY_DPI
+                        2 -> PDF_DISTANT_DPI
+                        else -> PDF_FAR_DPI
+                    }
+                addIfValid(currentPage + distance, dpi)
+                addIfValid(currentPage - distance, dpi)
+            }
+        }
+    }.distinct()
+
+private fun readPdfOutline(document: PDDocument): List<PdfOutlineEntry> =
+    buildList {
+        document.documentCatalog.documentOutline?.firstChild?.let { appendOutline(document, it, 0) }
     }
 
 private fun MutableList<PdfOutlineEntry>.appendOutline(
+    document: PDDocument,
     item: PDOutlineItem,
     level: Int,
 ) {
     var current: PDOutlineItem? = item
     while (current != null) {
         val destination = current.destination ?: (current.action as? PDActionGoTo)?.destination
-        val pageIndex = (destination as? PDPageDestination)?.retrievePageNumber()
-        add(PdfOutlineEntry(current.title.orEmpty(), level, pageIndex?.takeIf { it >= 0 }))
-        current.firstChild?.let { appendOutline(it, level + 1) }
+        resolvePageIndex(document, destination)?.takeIf { it >= 0 }?.let { pageIndex ->
+            add(PdfOutlineEntry(current.title.orEmpty(), level, pageIndex))
+        }
+        current.firstChild?.let { appendOutline(document, it, level + 1) }
         current = current.nextSibling
     }
 }
 
-private fun renderPdfPage(
-    file: File,
-    pageIndex: Int,
-): RenderedPdfPage =
-    Loader.loadPDF(file).use { document ->
-        val image = PDFRenderer(document).renderImageWithDPI(pageIndex, 160f, ImageType.RGB)
-        val bytes = ByteArrayOutputStream()
-        ImageIO.write(image, "png", bytes)
-        RenderedPdfPage(
-            SkiaImage.makeFromEncoded(bytes.toByteArray()).toComposeImageBitmap(),
-            image.width.toFloat() / image.height.toFloat(),
-        )
+private fun resolvePageIndex(
+    document: PDDocument,
+    destination: PDDestination?,
+): Int? =
+    when (destination) {
+        is PDPageDestination -> destination.retrievePageNumber()
+        is PDNamedDestination -> document.documentCatalog.findNamedDestinationPage(destination)?.retrievePageNumber()
+        else -> null
     }
+
+private const val PDF_BASE_DPI = 180f
+private const val PDF_MAX_DPI = 300
+private const val PDF_DPI_STEP = 15
+private const val PDF_ACTIVE_PREVIEW_DPI = 72
+private const val PDF_SEARCH_DEBOUNCE_MS = 140L
+private const val PDF_LINE_TOLERANCE = 0.006f
+private const val PDF_WORD_GAP = 0.004f
+private const val PDF_SELECTION_HIT_SLOP = 3f
+private val PDF_HIGHLIGHT_COLOR = Color(0x66FFF176)
+private val PDF_ACTIVE_HIGHLIGHT_COLOR = Color(0x99FFB300)
+private val PDF_SELECTION_COLOR = Color(0x665B9DFF)
+
+private const val PDF_DEFAULT_ASPECT_RATIO = 0.707f
+private val PDF_DIRECTIONAL_MARKS = Regex("[\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]")
+private val PDF_SEARCH_WHITESPACE = Regex("\\s+")
+private const val PDF_NEARBY_DPI = 84
+private const val PDF_DISTANT_DPI = 66
+private const val PDF_FAR_DPI = 54
+private const val PDF_SCROLL_PREVIEW_NEAR_DPI = 48
+private const val PDF_SCROLL_PREVIEW_MID_DPI = 36
+private const val PDF_SCROLL_PREVIEW_FAR_DPI = 30
+private const val PDF_PREFETCH_DISTANCE = 10
+private const val PDF_QUALITY_UPGRADE_DISTANCE = 3
+private const val PDF_CACHE_SIZE = 24

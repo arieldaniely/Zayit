@@ -68,16 +68,22 @@ fun EndVerticalBar(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
+    isPdfEdition: Boolean = false,
+    pdfCanZoomIn: Boolean = false,
+    pdfCanZoomOut: Boolean = false,
+    onPdfZoomIn: () -> Unit = {},
+    onPdfZoomOut: () -> Unit = {},
 ) {
     // Collect current text size from settings
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
-    val canZoomIn = rawTextSize < AppSettings.MAX_TEXT_SIZE
-    val canZoomOut = rawTextSize > AppSettings.MIN_TEXT_SIZE
+    val canZoomIn = if (isPdfEdition) pdfCanZoomIn else rawTextSize < AppSettings.MAX_TEXT_SIZE
+    val canZoomOut = if (isPdfEdition) pdfCanZoomOut else rawTextSize > AppSettings.MIN_TEXT_SIZE
 
     val selectedBook = uiState.navigation.selectedBook
+    val pdfLibraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     val noBookSelected = selectedBook == null
     val selectedLine = uiState.content.primaryLine
     val providers = uiState.providers
@@ -119,12 +125,14 @@ fun EndVerticalBar(
             // Platform-specific shortcut hint for Zoom In
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomIn) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_in_tooltip)
+                    } else if (canZoomIn) {
                         stringResource(Res.string.zoom_in_tooltip)
                     } else {
                         stringResource(Res.string.zoom_in_tooltip) + " (${AppSettings.MAX_TEXT_SIZE.toInt()}sp max)"
                     },
-                onClick = { AppSettings.increaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomIn() else AppSettings.increaseTextSize() },
                 isSelected = false,
                 enabled = canZoomIn,
                 icon = ZoomIn,
@@ -134,12 +142,14 @@ fun EndVerticalBar(
             )
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomOut) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_out_tooltip)
+                    } else if (canZoomOut) {
                         stringResource(Res.string.zoom_out_tooltip)
                     } else {
                         stringResource(Res.string.zoom_out_tooltip) + " (${AppSettings.MIN_TEXT_SIZE.toInt()}sp min)"
                     },
-                onClick = { AppSettings.decreaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomOut() else AppSettings.decreaseTextSize() },
                 isSelected = false,
                 enabled = canZoomOut,
                 icon = ZoomOut,
@@ -148,16 +158,25 @@ fun EndVerticalBar(
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
 
-            if (!noBookSelected) {
+            if (!noBookSelected && isPdfEdition) {
+                SelectableIconButtonWithToolip(
+                    toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
+                    onClick = { onEvent(BookContentEvent.OpenTextEdition) },
+                    isSelected = false,
+                    icon = Book_2,
+                    iconDescription = stringResource(Res.string.back_to_text_edition),
+                    label = stringResource(Res.string.back_to_text_edition),
+                )
+            } else if (!noBookSelected) {
                 val pdfAvailability by produceState(
                     initialValue = PdfAvailability(),
                     key1 = selectedBook.id,
                     key2 = selectedBook.title,
+                    key3 = pdfLibraryVersion,
                 ) {
                     val isBavli = isTalmudBavliBook(selectedBook)
-                    val installed = TalmudPdfService.isInstalled()
                     val hasFile = TalmudPdfService.hasPdfForTitle(selectedBook.title)
-                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && (!installed || hasFile))
+                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && hasFile)
                 }
                 if (pdfAvailability.isSupported && pdfAvailability.isActionAvailable) {
                     SelectableIconButtonWithToolip(
@@ -165,7 +184,7 @@ fun EndVerticalBar(
                         onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
                         isSelected = false,
                         enabled = true,
-                        icon = Book,
+                        icon = JournalText,
                         iconDescription = stringResource(Res.string.open_pdf_edition),
                         label = stringResource(Res.string.open_pdf_edition),
                     )
@@ -173,7 +192,7 @@ fun EndVerticalBar(
             }
 
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
-            if (!noBookSelected) {
+            if (!noBookSelected && !isPdfEdition) {
                 val bookHasDiacritics = selectedBook.hasNekudot || selectedBook.hasTeamim
                 if (bookHasDiacritics) {
                     SelectableIconButtonWithToolip(

@@ -67,6 +67,7 @@ sealed class SearchHomeNavigationEvent {
     data class NavigateToPdfContent(
         val bookId: Long,
         val tabId: String,
+        val lineId: Long?,
     ) : SearchHomeNavigationEvent()
 
     /**
@@ -110,6 +111,7 @@ data class SearchHomeUiState(
     val tocSuggestions: List<TocSuggestionDto> = emptyList(),
     val selectedScopeCategory: Category? = null,
     val selectedScopeBook: Book? = null,
+    val selectedScopeIsPdf: Boolean = false,
     val selectedScopeToc: TocEntry? = null,
     val userDisplayName: String = "",
     val userCommunityCode: String? = null,
@@ -401,6 +403,7 @@ class SearchHomeViewModel(
                 _uiState.value.copy(
                     selectedScopeCategory = null,
                     selectedScopeBook = null,
+                    selectedScopeIsPdf = false,
                     selectedScopeToc = null,
                     tocPreviewHints = emptyList(),
                     isReferenceLoading = false,
@@ -425,6 +428,7 @@ class SearchHomeViewModel(
             _uiState.value.copy(
                 selectedScopeCategory = category,
                 selectedScopeBook = null,
+                selectedScopeIsPdf = false,
                 selectedScopeToc = null,
                 suggestionsVisible = false,
                 tocSuggestionsVisible = false,
@@ -435,12 +439,16 @@ class SearchHomeViewModel(
             )
     }
 
-    fun onPickBook(book: Book) {
+    fun onPickBook(
+        book: Book,
+        isPdf: Boolean = false,
+    ) {
         // Update synchronously first
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = null,
                 selectedScopeBook = book,
+                selectedScopeIsPdf = isPdf,
                 selectedScopeToc = null,
                 suggestionsVisible = false,
                 tocSuggestionsVisible = false,
@@ -628,6 +636,7 @@ class SearchHomeViewModel(
     suspend fun openSelectedReferenceInCurrentTab(currentTabId: String) {
         val selectedToc = _uiState.value.selectedScopeToc
         val selectedBook = _uiState.value.selectedScopeBook
+        val selectedIsPdf = _uiState.value.selectedScopeIsPdf
 
         // Resolve book and optional line anchor
         val book =
@@ -649,13 +658,23 @@ class SearchHomeViewModel(
         }
 
         // Emit navigation event - UI layer handles actual navigation
-        _navigationEvents.send(
-            SearchHomeNavigationEvent.NavigateToBookContent(
-                bookId = book.id,
-                tabId = currentTabId,
-                lineId = anchorLineId,
-            ),
-        )
+        if (selectedIsPdf) {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToPdfContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        } else {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToBookContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        }
     }
 
     private suspend fun buildCategoryPathTitles(catId: Long): List<String> {

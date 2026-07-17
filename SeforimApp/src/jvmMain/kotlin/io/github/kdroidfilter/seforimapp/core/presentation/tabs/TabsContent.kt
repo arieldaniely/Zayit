@@ -11,9 +11,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -43,7 +46,12 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
-import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentScreen
+import io.github.kdroidfilter.seforimapp.features.pdf.PDF_DEFAULT_ZOOM
+import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MAX
+import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
+import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_STEP
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
@@ -75,7 +83,8 @@ private fun TabsDestination.typeKey(): String =
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
 
-private fun saveableKeysFor(tabId: String): List<String> = listOf("$tabId:home", "$tabId:search", "$tabId:book")
+private fun saveableKeysFor(tabId: String): List<String> =
+    listOf("$tabId:home", "$tabId:search", "$tabId:book", "$tabId:pdf")
 
 /**
  * Simplified tab content renderer without Compose Navigation.
@@ -138,12 +147,7 @@ fun TabsContent() {
                 },
                 onPickCategory = searchHomeViewModel::onPickCategory,
                 onPickBook = { book, isPdf ->
-                    if (isPdf) {
-                        val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
-                        tabsViewModel.replaceCurrentTabDestination(TabsDestination.PdfContent(bookId = book.id, tabId = tabId))
-                    } else {
-                        searchHomeViewModel.onPickBook(book)
-                    }
+                    searchHomeViewModel.onPickBook(book, isPdf)
                 },
                 onPickToc = searchHomeViewModel::onPickToc,
             )
@@ -184,6 +188,7 @@ fun TabsContent() {
                         TabsDestination.PdfContent(
                             bookId = event.bookId,
                             tabId = event.tabId,
+                            lineId = event.lineId,
                         ),
                     )
                 }
@@ -309,10 +314,13 @@ fun TabsContent() {
                                 }
 
                                 is TabsDestination.PdfContent -> {
-                                    PdfContentScreen(
-                                        bookId = destination.bookId,
-                                        lineId = destination.lineId,
-                                        tabId = destination.tabId,
+                                    PdfContentTabContent(
+                                        tabOwner = tabOwner,
+                                        destination = destination,
+                                        isSelected = isSelected,
+                                        isRestoringSession = isTransitioning,
+                                        searchUi = searchUi,
+                                        searchCallbacks = homeSearchCallbacks,
                                     )
                                 }
                             }
@@ -497,6 +505,84 @@ private fun BookContentTabContent(
         searchCallbacks = searchCallbacks,
         isSelected = isSelected,
         bookCharCounts = bookCharCounts,
+    )
+}
+
+@Composable
+private fun PdfContentTabContent(
+    tabOwner: SimpleTabViewModelOwner,
+    destination: TabsDestination.PdfContent,
+    isSelected: Boolean,
+    isRestoringSession: Boolean,
+    searchUi: io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState,
+    searchCallbacks: HomeSearchCallbacks,
+) {
+    tabOwner.setDefaultArgs(
+        savedState {
+            putString(StateKeys.TAB_ID, destination.tabId)
+            if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+            destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+        },
+    )
+
+    val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
+    val uiState by viewModel.uiState.collectAsState()
+    val showDiacritics by viewModel.showDiacritics.collectAsState()
+    val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
+    var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
+
+    LaunchedEffect(destination.bookId, destination.lineId) {
+        if (destination.bookId > 0) {
+            val lineId = destination.lineId
+            if (lineId != null && lineId > 0) {
+                viewModel.onEvent(BookContentEvent.OpenBookAtLine(destination.bookId, lineId))
+            } else {
+                viewModel.onEvent(BookContentEvent.OpenBookById(destination.bookId))
+            }
+        }
+    }
+
+    val selectedBook = uiState.navigation.selectedBook
+    val pdfFile =
+        remember(selectedBook?.title, libraryVersion) {
+            selectedBook?.title?.let(TalmudPdfService::pdfForTitle)
+        }
+    val selectedLine = uiState.content.primaryLine
+    val requestedReferences =
+        remember(uiState.toc.breadcrumbPath, selectedLine?.heRef, selectedBook?.title) {
+            buildList {
+                uiState.toc.breadcrumbPath.asReversed().mapTo(this) { it.text }
+                selectedLine?.heRef?.let(::add)
+                selectedBook?.title?.let(::add)
+            }
+        }
+
+    BookContentScreen(
+        uiState = uiState,
+        onEvent = viewModel::onEvent,
+        showDiacritics = showDiacritics,
+        isRestoringSession = isRestoringSession,
+        searchUi = searchUi,
+        searchCallbacks = searchCallbacks,
+        isSelected = isSelected,
+        isPdfEdition = true,
+        pdfCanZoomIn = pdfZoom < PDF_ZOOM_MAX,
+        pdfCanZoomOut = pdfZoom > PDF_ZOOM_MIN,
+        onPdfZoomIn = { pdfZoom = (pdfZoom + PDF_ZOOM_STEP).coerceAtMost(PDF_ZOOM_MAX) },
+        onPdfZoomOut = { pdfZoom = (pdfZoom - PDF_ZOOM_STEP).coerceAtLeast(PDF_ZOOM_MIN) },
+        mainContentOverride = { contentModifier ->
+            PdfContentView(
+                file = pdfFile,
+                tabId = destination.tabId,
+                bookId = destination.bookId,
+                selectedLineId = selectedLine?.id,
+                requestedReferences = requestedReferences,
+                zoom = pdfZoom,
+                onZoomChange = { pdfZoom = it },
+                onLineSelected = { lineId -> viewModel.onEvent(BookContentEvent.LoadAndSelectLine(lineId)) },
+                modifier = contentModifier,
+            )
+        },
     )
 }
 

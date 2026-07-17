@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.seforimapp.icons.Book_2
+import io.github.kdroidfilter.seforimapp.icons.JournalText
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
 
@@ -14,7 +14,7 @@ fun PdfEditionMarker(
     selected: Boolean = false,
 ) {
     Icon(
-        imageVector = Book_2,
+        imageVector = JournalText,
         contentDescription = null,
         modifier = modifier.size(16.dp),
         tint =

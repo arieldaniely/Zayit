@@ -25,6 +25,7 @@ import seforimapp.seforimapp.generated.resources.search_placeholder
 fun CategoryTreePanel(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
+    isPdfEdition: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val paneHoverSource = remember { MutableInteractionSource() }
@@ -48,6 +49,7 @@ fun CategoryTreePanel(
             // Classic navigation tree only (search variant is a dedicated composable)
             CategoryBookTreeView(
                 navigationState = uiState.navigation,
+                isPdfEdition = isPdfEdition,
                 onCategoryClick = { onEvent(BookContentEvent.CategorySelected(it)) },
                 onBookClick = {
                     val mods = windowInfo.keyboardModifiers

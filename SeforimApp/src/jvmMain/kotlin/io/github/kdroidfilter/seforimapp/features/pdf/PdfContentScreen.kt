@@ -126,6 +126,8 @@ internal const val PDF_ZOOM_MIN = 0.55f
 internal const val PDF_ZOOM_MAX = 1.8f
 internal const val PDF_ZOOM_STEP = 0.1f
 internal const val PDF_DEFAULT_ZOOM = 0.92f
+private const val PDF_COLUMN_GAP = 0.022f
+private const val PDF_BLOCK_CONTINUATION_THRESHOLD = 0.12f
 
 /**
  * The printed-edition content pane. The regular book screen supplies the surrounding library,
@@ -438,14 +440,8 @@ private fun PdfPageCard(
             if (pageText == null || start == null || end == null || cardSize == IntSize.Zero) {
                 emptyList()
             } else {
-                val left = min(start.x, end.x)
-                val top = min(start.y, end.y)
-                val right = max(start.x, end.x)
-                val bottom = max(start.y, end.y)
                 val size = Size(cardSize.width.toFloat(), cardSize.height.toFloat())
-                pageText.glyphs.filter { glyph ->
-                    glyph.bounds.fitToPage(size, actualAspectRatio).intersects(left, top, right, bottom)
-                }
+                pageText.selectTextFlow(start, end, size, actualAspectRatio)
             }
         }
     val selectedText = remember(selectedGlyphs) { selectedGlyphs.toPdfSelectionText() }
@@ -907,6 +903,99 @@ private fun List<PdfGlyph>.toLogicalPdfOrder(): List<PdfGlyph> =
     }
 
 
+/** Selects by reading lines and follows the overlapping text column where the drag began. */
+private fun PdfPageText.selectTextFlow(
+    start: Offset,
+    end: Offset,
+    pageSize: Size,
+    aspectRatio: Float,
+): List<PdfGlyph> {
+    if (glyphs.isEmpty()) return emptyList()
+    fun rect(glyph: PdfGlyph) = glyph.bounds.fitToPage(pageSize, aspectRatio)
+    var startGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(start) } ?: return emptyList()
+    var endGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(end) } ?: startGlyph
+    val baselines = glyphs.toPdfBaselines()
+    var startBaseline = baselines.indexOfFirst { baseline -> baseline.any { segment -> startGlyph in segment } }
+    var endBaseline = baselines.indexOfFirst { baseline -> baseline.any { segment -> endGlyph in segment } }
+    if (startBaseline < 0) return emptyList()
+    if (endBaseline < 0) endBaseline = startBaseline
+    var startPoint = start
+    var endPoint = end
+    if (startBaseline > endBaseline) {
+        val glyphSwap = startGlyph
+        startGlyph = endGlyph
+        endGlyph = glyphSwap
+        val baselineSwap = startBaseline
+        startBaseline = endBaseline
+        endBaseline = baselineSwap
+        startPoint = end
+        endPoint = start
+    }
+    val chosen = mutableListOf<List<PdfGlyph>>()
+    var segment = baselines[startBaseline].first { startGlyph in it }
+    chosen += segment
+    var lineIndex = startBaseline + 1
+    while (lineIndex <= endBaseline) {
+        val candidate = baselines[lineIndex].maxByOrNull(segment::continuationScore)
+        if (candidate != null && segment.continuationScore(candidate) >= PDF_BLOCK_CONTINUATION_THRESHOLD) {
+            segment = candidate
+            chosen += candidate
+        }
+        lineIndex += 1
+    }
+    if (chosen.size == 1) {
+        val low = min(startPoint.x, endPoint.x)
+        val high = max(startPoint.x, endPoint.x)
+        return chosen.single().filter { rect(it).right >= low && rect(it).left <= high }
+    }
+    return buildList {
+        chosen.forEachIndexed { index, line ->
+            val rtl = line.count { it.text.any(Char::isHebrewCharacter) } * 2 >= line.size
+            addAll(
+                when (index) {
+                    0 -> line.filter { rect(it).let { r -> if (rtl) r.left <= startPoint.x else r.right >= startPoint.x } }
+                    chosen.lastIndex -> line.filter { rect(it).let { r -> if (rtl) r.right >= endPoint.x else r.left <= endPoint.x } }
+                    else -> line
+                },
+            )
+        }
+    }
+}
+
+private fun List<PdfGlyph>.toPdfBaselines(): List<List<List<PdfGlyph>>> {
+    val lines = mutableListOf<MutableList<PdfGlyph>>()
+    sortedWith(compareBy<PdfGlyph> { it.bounds.verticalCenter }.thenBy { it.bounds.left }).forEach { glyph ->
+        val line = lines.lastOrNull()
+        if (line == null || abs(line.first().bounds.verticalCenter - glyph.bounds.verticalCenter) > PDF_LINE_TOLERANCE) {
+            lines += mutableListOf(glyph)
+        } else {
+            line += glyph
+        }
+    }
+    return lines.map { line ->
+        val segments = mutableListOf<MutableList<PdfGlyph>>()
+        line.sortedBy { it.bounds.left }.forEach { glyph ->
+            val segment = segments.lastOrNull()
+            if (segment == null || glyph.bounds.left - segment.last().bounds.right > PDF_COLUMN_GAP) {
+                segments += mutableListOf(glyph)
+            } else {
+                segment += glyph
+            }
+        }
+        segments
+    }
+}
+
+private fun List<PdfGlyph>.continuationScore(other: List<PdfGlyph>): Float {
+    val thisLeft = minOf { it.bounds.left }
+    val thisRight = maxOf { it.bounds.right }
+    val otherLeft = other.minOf { it.bounds.left }
+    val otherRight = other.maxOf { it.bounds.right }
+    val overlap = (min(thisRight, otherRight) - max(thisLeft, otherLeft)).coerceAtLeast(0f)
+    val narrower = min(thisRight - thisLeft, otherRight - otherLeft).coerceAtLeast(0.001f)
+    val centerDistance = abs((thisLeft + thisRight) / 2f - (otherLeft + otherRight) / 2f)
+    return overlap / narrower - centerDistance
+}
 private data class PdfPageText(val glyphs: List<PdfGlyph>)
 
 private data class PdfGlyph(val text: String, val bounds: PdfNormalizedRect)
@@ -941,6 +1030,19 @@ private data class PdfPixelRect(
 
     fun intersects(left: Float, top: Float, right: Float, bottom: Float): Boolean =
         this.right >= left && this.left <= right && this.bottom >= top && this.top <= bottom
+    fun distanceSquaredTo(point: Offset): Float {
+        val dx = when {
+            point.x < left -> left - point.x
+            point.x > right -> point.x - right
+            else -> 0f
+        }
+        val dy = when {
+            point.y < top -> top - point.y
+            point.y > bottom -> point.y - bottom
+            else -> 0f
+        }
+        return dx * dx + dy * dy
+    }
 }
 
 private fun PdfNormalizedRect.fitToPage(size: Size, actualAspectRatio: Float): PdfPixelRect {

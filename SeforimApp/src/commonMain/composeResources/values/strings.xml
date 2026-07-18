@@ -641,4 +641,9 @@
     <string name="pdf_install_success">ספרי ה-PDF הותקנו בהצלחה</string>
     <string name="settings_pdf_library_title">ספרי PDF לתלמוד בבלי</string>
     <string name="settings_pdf_library_description">הורדה או ייבוא מחדש של תיקיית המהדורות המודפסות לתלמוד בבלי.</string>
+    <string name="settings_pdf_library_installed_description">ספרי ה-PDF מותקנים וזמינים. ניתן להסיר אותם כדי לפנות מקום.</string>
+    <string name="pdf_remove_library">הסר ספרי PDF</string>
+    <string name="pdf_removing_library">מסיר…</string>
+    <string name="pdf_remove_success">ספרי ה-PDF הוסרו בהצלחה</string>
+    <string name="pdf_remove_failed">הסרת ספרי ה-PDF נכשלה: %s</string>
 </resources>

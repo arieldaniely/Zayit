@@ -353,7 +353,7 @@ class BookContentViewModel(
                     navigationUseCase.selectCategory(event.category)
 
                 is BookContentEvent.BookSelected ->
-                    loadBook(event.book)
+                    openSelectedBookAsText(event.book)
 
                 is BookContentEvent.BookSelectedInNewTab ->
                     openBookInNewTab(event.book)
@@ -607,6 +607,17 @@ class BookContentViewModel(
                 lineId = state.content.primaryLine?.id,
             ),
         )
+    }
+
+    private suspend fun openSelectedBookAsText(book: Book) {
+        val tabsState = tabsViewModel.state.value
+        val selectedDestination = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.destination
+        if (selectedDestination is TabsDestination.PdfContent) {
+            tabsViewModel.replaceCurrentTabDestination(
+                TabsDestination.BookContent(bookId = book.id, tabId = tabId),
+            )
+        }
+        loadBook(book)
     }
 
     private suspend fun toggleShowDiacriticsForCurrentCategory() {

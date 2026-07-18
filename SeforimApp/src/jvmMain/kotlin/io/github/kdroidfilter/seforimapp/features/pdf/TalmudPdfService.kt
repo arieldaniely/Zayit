@@ -33,7 +33,7 @@ object TalmudPdfService {
 
     fun pdfDirectory(): File = File(File(getDatabasePath()).absoluteFile.parentFile, TALMUD_BAVLI_DIR)
 
-    fun isInstalled(): Boolean = availablePdfTitles().isNotEmpty()
+    fun isInstalled(): Boolean = scanAvailablePdfTitles().isNotEmpty()
 
     fun isTalmudBavliTitle(title: String?): Boolean = title == TALMUD_BAVLI_DIR
 
@@ -60,20 +60,23 @@ object TalmudPdfService {
 
     fun availablePdfTitles(): Set<String> {
         pdfTitleCache.get()?.let { return it }
-        val dir = pdfDirectory()
-        val titles =
-            if (dir.isDirectory) {
-                dir
-                    .walkTopDown()
-                    .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
-                    .map { it.nameWithoutExtension.trim() }
-                    .filter { it.isNotBlank() }
-                    .toSet()
-            } else {
-                emptySet()
-            }
+        val titles = scanAvailablePdfTitles()
         pdfTitleCache.compareAndSet(null, titles)
         return pdfTitleCache.get().orEmpty()
+    }
+
+    private fun scanAvailablePdfTitles(): Set<String> {
+        val dir = pdfDirectory()
+        return if (dir.isDirectory) {
+            dir
+                .walkTopDown()
+                .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+                .map { it.nameWithoutExtension.trim() }
+                .filter { it.isNotBlank() }
+                .toSet()
+        } else {
+            emptySet()
+        }
     }
 
     fun hasPdfForTitle(title: String): Boolean = availablePdfTitles().contains(title.trim())
@@ -114,6 +117,16 @@ object TalmudPdfService {
         } finally {
             Files.deleteIfExists(tmp)
         }
+    }
+
+    fun removeInstalledLibrary() {
+        val directory = pdfDirectory().canonicalFile
+        val databaseParent = File(getDatabasePath()).absoluteFile.parentFile.canonicalFile
+        require(directory.parentFile == databaseParent) { "Refusing to remove an unexpected PDF directory" }
+        if (directory.exists()) {
+            check(directory.deleteRecursively()) { "Could not remove the installed PDF library" }
+        }
+        refreshAvailablePdfTitles()
     }
 
     private fun extractTarZst(

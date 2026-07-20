@@ -78,12 +78,12 @@ class PersonalLibraryImporter(
         val base = BaseLibraryIndex.load(baseDatabase)
         val ids = StableNegativeIds()
         DriverManager.getConnection("jdbc:sqlite:$database").use { target ->
-            target.autoCommit = false
             target.createStatement().use {
                 it.execute("PRAGMA foreign_keys=OFF")
                 it.execute("PRAGMA journal_mode=DELETE")
                 it.execute("PRAGMA synchronous=NORMAL")
             }
+            target.autoCommit = false
             try {
                 val context = ImportContext(target, base, ids)
                 val counts = folders.associate { folder -> folder.id to context.importFolder(folder) }.toMutableMap()

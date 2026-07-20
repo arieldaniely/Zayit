@@ -1,6 +1,6 @@
 [submodule "SeforimLibrary"]
 	path = SeforimLibrary
-	url = https://github.com/kdroidFilter/SeforimLibrary.git
+	url = https://github.com/arieldaniely/SeforimLibrary.git
 
 [submodule "SeforimAcronymizer"]
 	path = SeforimAcronymizer

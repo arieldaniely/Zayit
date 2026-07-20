@@ -464,6 +464,18 @@ class BookContentViewModel(
                     }
                 }
 
+                is BookContentEvent.OpenSourceBookInNewTab -> {
+                    val targetLineId =
+                        commentariesUseCase.resolveSourceTargetLine(event.baseLineIds, event.bookId)
+                    if (targetLineId != null) {
+                        openCommentaryTarget(event.bookId, targetLineId)
+                    } else {
+                        val book = repository.getBookCore(event.bookId)
+                        if (book != null) {
+                            openBookInNewTab(book)
+                        }
+                    }
+                }
                 BookContentEvent.NavigateToPreviousLine -> {
                     val line = contentUseCase.navigateToPreviousLine()
                     if (line != null) {

@@ -17,6 +17,9 @@ import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
@@ -32,6 +35,7 @@ import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourc
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
+import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
 import java.nio.file.Paths
@@ -90,25 +94,43 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideRepository(): SeforimRepository {
+    fun provideRepository(personalLibrary: PersonalLibraryManager): SeforimRepository {
         val dbPath = getDatabasePath()
+        val personalArtifacts = runCatching { personalLibrary.synchronize().second }
+            .onFailure { PersonalLibraryRuntime.startupError = it.message }
+            .getOrElse { personalLibrary.activeArtifacts() }
         // Persistent single-connection driver with prepared-statement cache +
         // read-tuning PRAGMAs. Replaces `JdbcSqliteDriver` whose ThreadedConnectionManager
         // closes the SQLite connection after every non-transactional query (confirmed by
         // JFR 2026-04-23: ~70 `NativeDB.prepare_utf8` + `NativeDB._close()` pairs / 20 s).
         val driver = PersistentSqliteDriver("jdbc:sqlite:$dbPath")
-        return SeforimRepository(dbPath, driver)
+        val repository = SeforimRepository(dbPath, driver)
+        val overlay = PersonalLibraryOverlay(driver)
+        overlay.attach(personalArtifacts?.databasePath)
+        PersonalLibraryRuntime.overlay = overlay
+        return repository
     }
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSearchEngine(repository: SeforimRepository): SearchEngine {
+    fun provideCompositeSearchEngine(
+        repository: SeforimRepository,
+        personalLibrary: PersonalLibraryManager,
+    ): CompositeSearchEngine {
         val dbPath = getDatabasePath()
         val indexPath = Paths.get(if (dbPath.endsWith(".db")) "$dbPath.lucene" else "$dbPath.luceneindex")
         val dictionaryPath = indexPath.resolveSibling("lexical.db")
         val snippetProvider = RepositorySnippetSourceProvider(repository)
-        return LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
+        val base = LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
+        val personal = personalLibrary.activeArtifacts()?.let {
+            LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
+        }
+        return CompositeSearchEngine(base, personal)
     }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideSearchEngine(engine: CompositeSearchEngine): SearchEngine = engine
 
     @Provides
     @SingleIn(AppScope::class)

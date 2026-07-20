@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.framework.database
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryCatalogMerger
 import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.errorln
 import io.github.kdroidfilter.seforimapp.logger.infoln
@@ -208,7 +209,7 @@ object CatalogCache {
     private fun loadCatalog(): PrecomputedCatalog? =
         try {
             val dbPath = getDatabasePath()
-            val catalog = CatalogLoader.loadCatalog(dbPath)
+            val catalog = CatalogLoader.loadCatalog(dbPath)?.let(PersonalLibraryCatalogMerger::merge)
 
             if (catalog != null) {
                 infoln { "[CatalogCache] Precomputed catalog loaded: ${catalog.totalCategories} categories, ${catalog.totalBooks} books" }

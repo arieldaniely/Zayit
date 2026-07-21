@@ -32,7 +32,7 @@ import seforimapp.seforimapp.generated.resources.notoserifhebrew
  * Utilities to build consistent Jewel theme definitions and related styling across the app.
  */
 object ThemeUtils {
-    private const val THEME_TRANSITION_DURATION_MS = 420
+    private const val THEME_TRANSITION_DURATION_MS = 240
 
     /**
      * Provides the app's default text style (centralized so callers don't repeat it).

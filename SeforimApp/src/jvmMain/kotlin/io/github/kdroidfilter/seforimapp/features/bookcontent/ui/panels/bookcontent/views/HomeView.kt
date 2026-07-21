@@ -4,7 +4,7 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcon
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.ScrollableState
@@ -163,7 +163,14 @@ fun HomeView(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         if (showWallpaper) {
             val isDark = JewelTheme.isDark
-            val transitionSprite = imageResource(Res.drawable.homepage_theme_transition_sprite)
+            val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.roundToInt()
+            val (transitionResource, transitionFrameSize) =
+                when {
+                    widthPx <= 960 -> Res.drawable.homepage_theme_transition_sprite_small to IntSize(960, 523)
+                    widthPx <= 1440 -> Res.drawable.homepage_theme_transition_sprite_medium to IntSize(1260, 686)
+                    else -> Res.drawable.homepage_theme_transition_sprite to IntSize(1276, 696)
+                }
+            val transitionSprite = imageResource(transitionResource)
             val transitionPosition = remember { Animatable(if (isDark) 1f else 0f) }
             var transitionVisible by remember { mutableStateOf(false) }
 
@@ -177,14 +184,13 @@ fun HomeView(
                         animationSpec =
                             tween(
                                 durationMillis = max(1, (HOME_THEME_TRANSITION_DURATION_MS * distance).roundToInt()),
-                                easing = LinearEasing,
+                                easing = FastOutSlowInEasing,
                             ),
                     )
                     transitionVisible = false
                 }
             }
 
-            val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.roundToInt()
             val wallpaper =
                 if (isDark) {
                     when {
@@ -217,12 +223,12 @@ fun HomeView(
                                 IntOffset(
                                     x =
                                         (frame % HOME_THEME_TRANSITION_SPRITE_COLUMNS) *
-                                            HOME_THEME_TRANSITION_FRAME_WIDTH,
+                                            transitionFrameSize.width,
                                     y =
                                         (frame / HOME_THEME_TRANSITION_SPRITE_COLUMNS) *
-                                            HOME_THEME_TRANSITION_FRAME_HEIGHT,
+                                            transitionFrameSize.height,
                                 ),
-                            srcSize = IntSize(HOME_THEME_TRANSITION_FRAME_WIDTH, HOME_THEME_TRANSITION_FRAME_HEIGHT),
+                            srcSize = transitionFrameSize,
                         )
                     }
                 Image(
@@ -1196,7 +1202,7 @@ private fun SuggestionRow(
             while (true) {
                 val dist = hScroll.value // currently at max, distance to start
                 val toStartMs = ((dist / speedPxPerSec) * 1000f).toInt().coerceIn(3000, 24000)
-                hScroll.animateScrollTo(0, animationSpec = tween(durationMillis = toStartMs, easing = LinearEasing))
+                hScroll.animateScrollTo(0, animationSpec = tween(durationMillis = toStartMs, easing = FastOutSlowInEasing))
                 delay(600.milliseconds)
                 hScroll.scrollTo(max)
                 delay(600.milliseconds)

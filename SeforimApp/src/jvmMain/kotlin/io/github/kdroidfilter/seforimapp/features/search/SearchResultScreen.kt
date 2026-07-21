@@ -55,6 +55,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.Print
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -757,6 +758,7 @@ private fun SearchResultItemGoogleStyle(
         // Top: small book title – toc leaf
         Row(
             modifier = Modifier.fillMaxWidth().pointerHoverIcon(PointerIcon.Hand),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             val header =
                 if (tocLeaf.isNullOrBlank()) {
@@ -781,8 +783,20 @@ private fun SearchResultItemGoogleStyle(
             )
             if (onOpenPdf != null) {
                 Spacer(Modifier.width(8.dp))
-                DefaultButton(onClick = onOpenPdf) {
-                    Text(stringResource(Res.string.open_pdf_search_result))
+                OutlinedButton(
+                    onClick = onOpenPdf,
+                    modifier = Modifier.height(26.dp).pointerHoverIcon(PointerIcon.Hand),
+                ) {
+                    Icon(
+                        imageVector = Print,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = stringResource(Res.string.open_pdf_search_result),
+                        fontSize = 12.sp,
+                    )
                 }
             }
         }

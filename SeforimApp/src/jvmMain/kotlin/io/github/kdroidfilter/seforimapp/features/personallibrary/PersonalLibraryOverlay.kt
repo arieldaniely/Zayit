@@ -8,6 +8,7 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
     @Synchronized
     fun attach(database: Path?) {
         val connection = driver.getConnection()
+        driver.setPersonalOverlayAttached(false)
         TABLES.asReversed().forEach { table ->
             connection.createStatement().use { it.execute("DROP VIEW IF EXISTS temp.\"$table\"") }
         }
@@ -15,6 +16,12 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         if (database == null) return
         val escaped = database.toAbsolutePath().toString().replace("'", "''")
         connection.createStatement().use { it.execute("ATTACH DATABASE '$escaped' AS personal") }
+        connection.createStatement().use { statement ->
+            // ATTACH starts with SQLite's tiny default cache and mmap disabled for the new schema.
+            // Match the main database tuning so the first personal-book read is fast as well.
+            statement.execute("PRAGMA personal.cache_size=-256000")
+            statement.execute("PRAGMA personal.mmap_size=536870912")
+        }
         TABLES.forEach { table ->
             connection.createStatement().use {
                 it.execute(
@@ -23,6 +30,7 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
                 )
             }
         }
+        driver.setPersonalOverlayAttached(true)
     }
 
     companion object {

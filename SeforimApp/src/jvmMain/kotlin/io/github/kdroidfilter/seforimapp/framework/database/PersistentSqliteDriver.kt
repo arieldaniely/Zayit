@@ -47,6 +47,9 @@ class PersistentSqliteDriver(
     // practice: a few hundred distinct queries across the whole app. Never evicted.
     private val statementCache = HashMap<String, PreparedStatement>()
 
+    @Volatile
+    private var personalOverlayAttached = false
+
     init {
         connection.autoCommit = true
         // Don't apply PRAGMAs here: `SeforimRepository.init` already issues its own
@@ -55,6 +58,11 @@ class PersistentSqliteDriver(
     }
 
     override fun getConnection(): Connection = connection
+
+    /** Enables direct partition routing while the personal-library database is attached. */
+    fun setPersonalOverlayAttached(attached: Boolean) {
+        personalOverlayAttached = attached
+    }
 
     override fun closeConnection(connection: Connection) = Unit
 
@@ -110,7 +118,12 @@ class PersistentSqliteDriver(
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<R> {
         synchronized(connection) {
-            val stmt = prepare(sql)
+            val firstBinding =
+                binders?.let { bind ->
+                    BindingProbe().also { probe -> bind(probe) }.firstBinding
+                }
+            val effectiveSql = PersonalLibraryQueryRouter.route(sql, firstBinding, personalOverlayAttached)
+            val stmt = prepare(effectiveSql)
             stmt.clearParameters()
             if (binders != null) JdbcPreparedStatement(stmt).binders()
             // Inlined from `JdbcPreparedStatement.executeQuery`, minus the `preparedStatement.close()`
@@ -134,5 +147,78 @@ class PersistentSqliteDriver(
         val fresh = connection.prepareStatement(sql)
         statementCache[sql] = fresh
         return fresh
+    }
+}
+
+/** Records only the first binding, which is enough to identify an id-partitioned query. */
+private class BindingProbe : SqlPreparedStatement {
+    var firstBinding: Any? = null
+        private set
+
+    private fun record(index: Int, value: Any?) {
+        if (index == 0) firstBinding = value
+    }
+
+    override fun bindBytes(index: Int, bytes: ByteArray?) = record(index, bytes)
+    override fun bindLong(index: Int, long: Long?) = record(index, long)
+    override fun bindDouble(index: Int, double: Double?) = record(index, double)
+    override fun bindString(index: Int, string: String?) = record(index, string)
+    override fun bindBoolean(index: Int, boolean: Boolean?) = record(index, boolean)
+}
+
+/**
+ * Bypasses UNION ALL views for queries whose first parameter is a stable entity id.
+ * Base ids are positive and personal ids are negative, so one database owns the entity.
+ * Link queries remain merged because imported links may connect both databases.
+ */
+internal object PersonalLibraryQueryRouter {
+    private val idSelector =
+        Regex(
+            """(?is)\b(?:id|bookId|lineId|tocEntryId|structureId|altTocEntryId)\s*(?:=|IN\s*\()\s*$""",
+        )
+    private val linkQuery = Regex("""(?i)\b(?:FROM|JOIN)\s+\"?link\"?\b""")
+    private val overlayTables =
+        listOf(
+            "category",
+            "category_closure",
+            "author",
+            "topic",
+            "pub_place",
+            "pub_date",
+            "source",
+            "book",
+            "book_pub_place",
+            "book_pub_date",
+            "book_topic",
+            "book_author",
+            "line",
+            "tocText",
+            "tocEntry",
+            "connection_type",
+            "book_has_links",
+            "line_toc",
+            "alt_toc_structure",
+            "alt_toc_entry",
+            "line_alt_toc",
+            "book_acronym",
+            "default_commentator",
+            "default_targum",
+        )
+    private val tablePatterns =
+        overlayTables.associateWith { table ->
+            Regex("""(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\b""")
+        }
+
+    fun route(sql: String, firstBinding: Any?, attached: Boolean): String {
+        if (!attached || firstBinding !is Long || linkQuery.containsMatchIn(sql)) return sql
+        val selectorPrefix = sql.substringBefore('?', missingDelimiterValue = "")
+        if (selectorPrefix.isEmpty() || !idSelector.containsMatchIn(selectorPrefix)) return sql
+
+        val schema = if (firstBinding < 0) "personal" else "main"
+        return tablePatterns.entries.fold(sql) { routed, (table, pattern) ->
+            pattern.replace(routed) { match ->
+                "${match.groupValues[1]} $schema.\"$table\""
+            }
+        }
     }
 }

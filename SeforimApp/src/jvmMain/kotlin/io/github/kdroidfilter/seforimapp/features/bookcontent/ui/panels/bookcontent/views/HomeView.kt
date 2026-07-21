@@ -3,6 +3,7 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
@@ -17,6 +18,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -69,6 +72,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.ExperimentalJewelApi
@@ -78,6 +82,8 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.theme.menuStyle
 import org.jetbrains.skiko.Cursor
 import seforimapp.seforimapp.generated.resources.*
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import io.github.kdroidfilter.seforimlibrary.core.models.Book as BookModel
@@ -146,12 +152,38 @@ fun HomeView(
 ) {
     CatalogRow(onEvent = onEvent)
 
-    val panelBackground = JewelTheme.globalColors.panelBackground
+    val panelBackground by
+        animateColorAsState(
+            targetValue = JewelTheme.globalColors.panelBackground,
+            animationSpec = tween(HOME_THEME_TRANSITION_DURATION_MS),
+            label = "homePanelBackground",
+        )
     val showWallpaper by AppSettings.showHomeWallpaperFlow.collectAsState()
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         if (showWallpaper) {
             val isDark = JewelTheme.isDark
+            val transitionSprite = imageResource(Res.drawable.homepage_theme_transition_sprite)
+            val transitionPosition = remember { Animatable(if (isDark) 1f else 0f) }
+            var transitionVisible by remember { mutableStateOf(false) }
+
+            LaunchedEffect(isDark) {
+                val target = if (isDark) 1f else 0f
+                val distance = abs(target - transitionPosition.value)
+                if (distance > 0.001f) {
+                    transitionVisible = true
+                    transitionPosition.animateTo(
+                        targetValue = target,
+                        animationSpec =
+                            tween(
+                                durationMillis = max(1, (HOME_THEME_TRANSITION_DURATION_MS * distance).roundToInt()),
+                                easing = LinearEasing,
+                            ),
+                    )
+                    transitionVisible = false
+                }
+            }
+
             val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.roundToInt()
             val wallpaper =
                 if (isDark) {
@@ -174,6 +206,35 @@ fun HomeView(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+            if (transitionVisible) {
+                val sprite = transitionSprite
+                val frame = homeThemeTransitionFrame(transitionPosition.value)
+                val framePainter =
+                    remember(sprite, frame) {
+                        BitmapPainter(
+                            image = sprite,
+                            srcOffset =
+                                IntOffset(
+                                    x =
+                                        (frame % HOME_THEME_TRANSITION_SPRITE_COLUMNS) *
+                                            HOME_THEME_TRANSITION_FRAME_WIDTH,
+                                    y =
+                                        (frame / HOME_THEME_TRANSITION_SPRITE_COLUMNS) *
+                                            HOME_THEME_TRANSITION_FRAME_HEIGHT,
+                                ),
+                            srcSize = IntSize(HOME_THEME_TRANSITION_FRAME_WIDTH, HOME_THEME_TRANSITION_FRAME_HEIGHT),
+                        )
+                    }
+                Image(
+                    painter = framePainter,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .alpha(homeThemeTransitionAlpha(transitionPosition.value, isDark)),
+                    contentScale = ContentScale.Crop,
+                )
+            }
 
             // Layer 2: Smooth horizontal vignette — image blends into background atmosphere
             Box(

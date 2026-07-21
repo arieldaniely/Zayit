@@ -89,9 +89,9 @@ class CommentariesUseCase(
             localCache[bookId] = cached
             return cached
         }
-        // Load authors + pubDates so commentator ordering can use canonical author ranks
-        // before falling back to publication-date heuristics.
-        val loaded = runSuspendCatching { repository.getBook(bookId) }.getOrNull() ?: return null
+        // Topics and publication places are irrelevant here; avoid those extra queries on the
+        // first display while retaining authors and dates for canonical chronological sorting.
+        val loaded = runSuspendCatching { repository.getBookWithPubDates(bookId) }.getOrNull() ?: return null
         commentatorBookCache[bookId] = loaded
         localCache[bookId] = loaded
         return loaded
@@ -124,7 +124,7 @@ class CommentariesUseCase(
         lineId: Long,
         commentatorIds: Set<Long>,
     ) {
-        if (lineId <= 0 || commentatorIds.isEmpty()) return
+        if (lineId == 0L || lineId == -1L || commentatorIds.isEmpty()) return
         for (commentatorId in commentatorIds) {
             currentCoroutineContext().ensureActive()
             runSuspendCatching {
@@ -153,26 +153,9 @@ class CommentariesUseCase(
         commentatorId: Long,
     ): Long? =
         runSuspendCatching {
-            if (lineIds.isEmpty()) return@runSuspendCatching null
-            val source =
-                if (lineIds.size == 1) {
-                    CommentsForLineOrTocPagingSource(repository, lineIds.first(), setOf(commentatorId))
-                } else {
-                    MultiLineCommentsPagingSource(repository, lineIds, setOf(commentatorId))
-                }
-            val result =
-                source.load(
-                    PagingSource.LoadParams.Refresh(
-                        key = 0,
-                        loadSize = PagingDefaults.COMMENTS.INITIAL_LOAD_SIZE,
-                        placeholdersEnabled = false,
-                    ),
-                )
-            (result as? PagingSource.LoadResult.Page)
-                ?.data
-                ?.firstOrNull()
-                ?.link
-                ?.targetLineId
+            val baseLineIds =
+                if (lineIds.size == 1) resolveBaseLineIds(lineIds.first()) else lineIds
+            repository.getFirstCommentaryTargetLineId(baseLineIds, commentatorId)
         }.getOrNull()
 
     suspend fun resolveSourceTargetLine(
@@ -180,36 +163,9 @@ class CommentariesUseCase(
         sourceBookId: Long,
     ): Long? =
         runSuspendCatching {
-            if (lineIds.isEmpty()) return@runSuspendCatching null
-            val source =
-                if (lineIds.size == 1) {
-                    LineTargumPagingSource(
-                        repository,
-                        lineIds.first(),
-                        setOf(sourceBookId),
-                        setOf(ConnectionType.SOURCE),
-                    )
-                } else {
-                    MultiLineLinksPagingSource(
-                        repository,
-                        lineIds,
-                        setOf(sourceBookId),
-                        setOf(ConnectionType.SOURCE),
-                    )
-                }
-            val result =
-                source.load(
-                    PagingSource.LoadParams.Refresh(
-                        key = 0,
-                        loadSize = PagingDefaults.COMMENTS.INITIAL_LOAD_SIZE,
-                        placeholdersEnabled = false,
-                    ),
-                )
-            (result as? PagingSource.LoadResult.Page)
-                ?.data
-                ?.firstOrNull()
-                ?.link
-                ?.targetLineId
+            val baseLineIds =
+                if (lineIds.size == 1) resolveBaseLineIds(lineIds.first()) else lineIds
+            repository.getFirstSourceTargetLineId(baseLineIds, sourceBookId)
         }.getOrNull()
     /**
      * Construit un Pager pour les liens/targum d'une ligne

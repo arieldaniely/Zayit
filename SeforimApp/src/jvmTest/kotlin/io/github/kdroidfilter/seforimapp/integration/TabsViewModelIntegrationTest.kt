@@ -104,6 +104,23 @@ class TabsViewModelIntegrationTest {
         }
 
     @Test
+    fun `negative personal book id creates a book tab`() =
+        runTest {
+            val bookId = -1_234_567L
+            viewModel.openTab(
+                TabsDestination.BookContent(
+                    bookId = bookId,
+                    tabId = UUID.randomUUID().toString(),
+                    lineId = -7_654_321L,
+                ),
+            )
+
+            val tab = viewModel.state.value.tabs.first()
+            assertEquals(TabType.BOOK, tab.tabType)
+            assertEquals(bookId.toString(), tab.title)
+        }
+
+    @Test
     fun `openTab with Search destination creates search tab`() =
         runTest {
             val searchQuery = "Torah"

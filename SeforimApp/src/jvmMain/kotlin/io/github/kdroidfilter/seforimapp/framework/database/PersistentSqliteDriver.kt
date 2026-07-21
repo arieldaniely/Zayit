@@ -118,11 +118,11 @@ class PersistentSqliteDriver(
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<R> {
         synchronized(connection) {
-            val firstBinding =
+            val bindings =
                 binders?.let { bind ->
-                    BindingProbe().also { probe -> bind(probe) }.firstBinding
-                }
-            val effectiveSql = PersonalLibraryQueryRouter.route(sql, firstBinding, personalOverlayAttached)
+                    BindingProbe().also { probe -> bind(probe) }.bindings
+                }.orEmpty()
+            val effectiveSql = PersonalLibraryQueryRouter.route(sql, bindings, personalOverlayAttached)
             val stmt = prepare(effectiveSql)
             stmt.clearParameters()
             if (binders != null) JdbcPreparedStatement(stmt).binders()
@@ -150,13 +150,13 @@ class PersistentSqliteDriver(
     }
 }
 
-/** Records only the first binding, which is enough to identify an id-partitioned query. */
+/** Records bindings without touching JDBC, so partitioned queries can be routed before preparation. */
 private class BindingProbe : SqlPreparedStatement {
-    var firstBinding: Any? = null
-        private set
+    private val mutableBindings = HashMap<Int, Any?>()
+    val bindings: Map<Int, Any?> get() = mutableBindings
 
     private fun record(index: Int, value: Any?) {
-        if (index == 0) firstBinding = value
+        mutableBindings[index] = value
     }
 
     override fun bindBytes(index: Int, bytes: ByteArray?) = record(index, bytes)
@@ -209,8 +209,15 @@ internal object PersonalLibraryQueryRouter {
             Regex("""(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\b""")
         }
 
-    fun route(sql: String, firstBinding: Any?, attached: Boolean): String {
-        if (!attached || firstBinding !is Long || linkQuery.containsMatchIn(sql)) return sql
+    fun route(sql: String, firstBinding: Any?, attached: Boolean): String =
+        route(sql, mapOf(0 to firstBinding), attached)
+
+    fun route(sql: String, bindings: Map<Int, Any?>, attached: Boolean): String {
+        if (!attached) return sql
+        if (linkQuery.containsMatchIn(sql)) return routeLinkQuery(sql, bindings)
+
+        val firstBinding = bindings[0]
+        if (firstBinding !is Long) return sql
         val selectorPrefix = sql.substringBefore('?', missingDelimiterValue = "")
         if (selectorPrefix.isEmpty() || !idSelector.containsMatchIn(selectorPrefix)) return sql
 
@@ -219,6 +226,92 @@ internal object PersonalLibraryQueryRouter {
             pattern.replace(routed) { match ->
                 "${match.groupValues[1]} $schema.\"$table\""
             }
+        }
+    }
+
+    /**
+     * Link rows belong to the database of their source book/line. Route that table directly,
+     * then route JOINs when their owning IDs are also known. This preserves cross-library links
+     * while avoiding the combinatorial UNION-view query plan on commentary hot paths.
+     */
+    private fun routeLinkQuery(sql: String, bindings: Map<Int, Any?>): String {
+        val sourceLineSchema = schemaFor(selectorValues(sql, "sourceLineId", bindings))
+        val sourceBookSchema = schemaFor(selectorValues(sql, "sourceBookId", bindings))
+        val filteredTargetSchema = schemaFor(selectorValues(sql, "targetBookId", bindings))
+        val linkIdSchema = schemaFor(selectorValues(sql, "id", bindings))
+        val linkSchema =
+            if (filteredTargetSchema == "personal") {
+                // The immutable base DB can never point at a later personal entity.
+                "personal"
+            } else {
+                sourceLineSchema ?: sourceBookSchema ?: linkIdSchema ?: return sql
+            }
+
+        var routed = qualifyTableAlias(sql, "link", "l", linkSchema)
+        // Personal links deliberately reuse the immutable base connection-type IDs.
+        routed = qualifyTableAlias(routed, "connection_type", "ct", "main")
+
+        val normalized = sql.replace(Regex("""\s+"""), " ")
+        if (Regex("""(?i)\bl\.sourceLineId\s*=\s*sl\.id\b|\bsl\.id\s*=\s*l\.sourceLineId\b""").containsMatchIn(normalized)) {
+            routed = qualifyTableAlias(routed, "line", "sl", linkSchema)
+        }
+        if (Regex("""(?i)\bl\.sourceBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.sourceBookId\b""").containsMatchIn(normalized)) {
+            routed = qualifyTableAlias(routed, "book", "b", linkSchema)
+        }
+
+        val targetSchema =
+            if (linkSchema == "main") {
+                // The immutable base database cannot contain references to later personal IDs.
+                "main"
+            } else {
+                filteredTargetSchema
+            }
+        if (targetSchema != null) {
+            if (Regex("""(?i)\bl\.targetBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.targetBookId\b""").containsMatchIn(normalized)) {
+                routed = qualifyTableAlias(routed, "book", "b", targetSchema)
+            }
+            if (Regex("""(?i)\bl\.targetLineId\s*=\s*tl\.id\b|\btl\.id\s*=\s*l\.targetLineId\b""").containsMatchIn(normalized)) {
+                routed = qualifyTableAlias(routed, "line", "tl", targetSchema)
+            }
+        }
+        return routed
+    }
+
+    private fun selectorValues(
+        sql: String,
+        field: String,
+        bindings: Map<Int, Any?>,
+    ): List<Long> {
+        val selector =
+            Regex(
+                """(?is)\bl\.${Regex.escape(field)}\s*(?:=\s*\?|IN\s*\(\s*(?:\?\s*,?\s*)+\))""",
+            ).find(sql) ?: return emptyList()
+        val firstIndex = sql.substring(0, selector.range.first).count { it == '?' }
+        val count = selector.value.count { it == '?' }
+        return (firstIndex until firstIndex + count).mapNotNull { bindings[it] as? Long }
+    }
+
+    private fun schemaFor(values: List<Long>): String? {
+        if (values.isEmpty() || values.any { it == 0L }) return null
+        return when {
+            values.all { it < 0L } -> "personal"
+            values.all { it > 0L } -> "main"
+            else -> null
+        }
+    }
+
+    private fun qualifyTableAlias(
+        sql: String,
+        table: String,
+        alias: String,
+        schema: String,
+    ): String {
+        val pattern =
+            Regex(
+                """(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\s+${Regex.escape(alias)}\b""",
+            )
+        return pattern.replace(sql) { match ->
+            "${match.groupValues[1]} $schema.\"$table\" $alias"
         }
     }
 }

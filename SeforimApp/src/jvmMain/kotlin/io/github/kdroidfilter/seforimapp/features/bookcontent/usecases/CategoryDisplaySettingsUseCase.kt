@@ -45,7 +45,7 @@ class CategoryDisplaySettingsUseCase(
         categoryId: Long,
         navigation: NavigationState,
     ): Long? {
-        if (categoryId <= 0) return null
+        if (categoryId == 0L || categoryId == -1L) return null
         val parentIndex = buildParentIndex(navigation)
         if (parentIndex.containsKey(categoryId)) {
             var currentId = categoryId

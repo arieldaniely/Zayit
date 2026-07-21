@@ -198,8 +198,10 @@ object SessionManager {
                 }
 
                 is TabsDestination.BookContent -> {
-                    val bookId = tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it > 0 } ?: dest.bookId
-                    if (bookId > 0) {
+                    val bookId =
+                        tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it != 0L && it != -1L }
+                            ?: dest.bookId
+                    if (bookId != 0L && bookId != -1L) {
                         val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
                         if (book != null) {
                             titles[tabId] = book.title to TabType.BOOK
@@ -209,7 +211,7 @@ object SessionManager {
 
                 is TabsDestination.PdfContent -> {
                     val bookId = dest.bookId
-                    if (bookId > 0) {
+                    if (bookId != 0L && bookId != -1L) {
                         val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
                         if (book != null) {
                             titles[tabId] = book.title to TabType.BOOK

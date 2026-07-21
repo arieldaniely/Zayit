@@ -412,7 +412,8 @@ class PersonalLibraryImporter(
             var salt = 0
             while (true) {
                 val bytes = MessageDigest.getInstance("SHA-256").digest("$key#$salt".toByteArray())
-                val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(1L)
+                // Reserve -1 for legacy UI/session sentinels.
+                val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(2L)
                 val candidate = -positive
                 val previous = keysById.putIfAbsent(candidate, key)
                 if (previous == null || previous == key) return candidate

@@ -588,7 +588,7 @@ fun BookContentView(
         }
 
         // Avoid wiping a previously known anchor when the list hasn't resolved item keys yet (e.g., while loading).
-        val stableAnchorId = data.anchorId.takeIf { it > 0 } ?: savedAnchorIdUpdated
+        val stableAnchorId = data.anchorId.takeIf { it != 0L && it != -1L } ?: savedAnchorIdUpdated
         val stableAnchorIndex = if (data.anchorId > 0) data.anchorIndex else savedAnchorIndexUpdated
 
         onScrollUpdated(stableAnchorId, stableAnchorIndex, data.scrollIndex, data.scrollOffset)

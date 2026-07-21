@@ -25,11 +25,72 @@ class PersonalLibraryQueryRouterTest {
     }
 
     @Test
-    fun `keeps merged searches and cross-library links on union views`() {
+    fun `keeps merged searches and inverse cross-library discovery on union views`() {
         val titleSearch = "SELECT * FROM book WHERE title LIKE ? ORDER BY title LIMIT ?"
-        val links = "SELECT l.* FROM link l JOIN line tl ON l.targetLineId = tl.id WHERE l.sourceLineId IN (?)"
+        val links = "SELECT l.* FROM link l JOIN line sl ON l.sourceLineId = sl.id WHERE l.targetLineId IN (?)"
         assertEquals(titleSearch, PersonalLibraryQueryRouter.route(titleSearch, "%test%", attached = true))
         assertEquals(links, PersonalLibraryQueryRouter.route(links, -11L, attached = true))
+    }
+
+    @Test
+    fun `routes base commentary joins directly`() {
+        val sql =
+            "SELECT l.*, ct.name, b.title, tl.content FROM link l " +
+                "JOIN connection_type ct ON l.connectionTypeId = ct.id " +
+                "JOIN book b ON l.targetBookId = b.id JOIN line tl ON l.targetLineId = tl.id " +
+                "WHERE l.sourceLineId IN (?) AND l.targetBookId IN (?)"
+        val routed = PersonalLibraryQueryRouter.route(sql, mapOf(0 to 12L, 1 to 34L), attached = true)
+        assertTrue("FROM main.\"link\" l" in routed)
+        assertTrue("JOIN main.\"connection_type\" ct" in routed)
+        assertTrue("JOIN main.\"book\" b" in routed)
+        assertTrue("JOIN main.\"line\" tl" in routed)
+    }
+
+    @Test
+    fun `routes personal link with base commentary target across schemas`() {
+        val sql =
+            "SELECT l.*, ct.name, b.title, tl.content FROM link l " +
+                "JOIN connection_type ct ON l.connectionTypeId = ct.id " +
+                "JOIN book b ON l.targetBookId = b.id JOIN line tl ON l.targetLineId = tl.id " +
+                "WHERE l.sourceLineId IN (?, ?) AND l.targetBookId IN (?)"
+        val routed =
+            PersonalLibraryQueryRouter.route(
+                sql,
+                mapOf(0 to -12L, 1 to -13L, 2 to 34L),
+                attached = true,
+            )
+        assertTrue("FROM personal.\"link\" l" in routed)
+        assertTrue("JOIN main.\"connection_type\" ct" in routed)
+        assertTrue("JOIN main.\"book\" b" in routed)
+        assertTrue("JOIN main.\"line\" tl" in routed)
+    }
+
+    @Test
+    fun `routes inverse navigation by personal source book`() {
+        val sql =
+            "SELECT l.sourceLineId FROM link l " +
+                "WHERE l.targetLineId IN (?, ?) AND l.sourceBookId = ? LIMIT 1"
+        val routed =
+            PersonalLibraryQueryRouter.route(
+                sql,
+                mapOf(0 to 10L, 1 to 11L, 2 to -42L),
+                attached = true,
+            )
+        assertTrue("FROM personal.\"link\" l" in routed)
+    }
+
+    @Test
+    fun `personal target forces personal link storage even for a base source`() {
+        val sql =
+            "SELECT l.targetLineId FROM link l " +
+                "WHERE l.sourceLineId IN (?) AND l.targetBookId = ? LIMIT 1"
+        val routed =
+            PersonalLibraryQueryRouter.route(
+                sql,
+                mapOf(0 to 10L, 1 to -42L),
+                attached = true,
+            )
+        assertTrue("FROM personal.\"link\" l" in routed)
     }
 
     @Test

@@ -474,7 +474,7 @@ private fun BookContentTabContent(
     tabOwner.setDefaultArgs(
         savedState {
             putString(StateKeys.TAB_ID, destination.tabId)
-            if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+            if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
             destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
         },
     )
@@ -486,9 +486,9 @@ private fun BookContentTabContent(
 
     // React to destination changes when ViewModel is reused
     LaunchedEffect(destination.bookId, destination.lineId) {
-        if (destination.bookId > 0) {
+        if (destination.bookId != 0L && destination.bookId != -1L) {
             val lineId = destination.lineId
-            if (lineId != null && lineId > 0) {
+            if (lineId != null && lineId != 0L && lineId != -1L) {
                 viewModel.onEvent(BookContentEvent.OpenBookAtLine(destination.bookId, lineId))
             } else {
                 viewModel.onEvent(BookContentEvent.OpenBookById(destination.bookId))
@@ -520,7 +520,7 @@ private fun PdfContentTabContent(
     tabOwner.setDefaultArgs(
         savedState {
             putString(StateKeys.TAB_ID, destination.tabId)
-            if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+            if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
             destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
         },
     )
@@ -532,9 +532,9 @@ private fun PdfContentTabContent(
     var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
 
     LaunchedEffect(destination.bookId, destination.lineId) {
-        if (destination.bookId > 0) {
+        if (destination.bookId != 0L && destination.bookId != -1L) {
             val lineId = destination.lineId
-            if (lineId != null && lineId > 0) {
+            if (lineId != null && lineId != 0L && lineId != -1L) {
                 viewModel.onEvent(BookContentEvent.OpenBookAtLine(destination.bookId, lineId))
             } else {
                 viewModel.onEvent(BookContentEvent.OpenBookById(destination.bookId))

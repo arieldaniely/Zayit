@@ -244,8 +244,8 @@ class BookContentViewModel(
     /** ViewModel initialization */
     private fun initialize(savedStateHandle: SavedStateHandle) {
         val persistedBookState = persistedStore.get(tabId)?.bookContent
-        val persistedBookId: Long? = persistedBookState?.selectedBookId?.takeIf { it > 0 }
-        val argBookId: Long? = savedStateHandle.get<Long>(StateKeys.BOOK_ID)?.takeIf { it > 0 }
+        val persistedBookId: Long? = persistedBookState?.selectedBookId?.takeIf { it != 0L && it != -1L }
+        val argBookId: Long? = savedStateHandle.get<Long>(StateKeys.BOOK_ID)?.takeIf { it != 0L && it != -1L }
         val bookIdToOpen: Long? = argBookId ?: persistedBookId
 
         debugln {
@@ -261,7 +261,8 @@ class BookContentViewModel(
             // Load root categories
             navigationUseCase.loadRootCategories()
 
-            val requestedLineId: Long? = savedStateHandle.get<Long>(StateKeys.LINE_ID)?.takeIf { it > 0 }
+            val requestedLineId: Long? =
+                savedStateHandle.get<Long>(StateKeys.LINE_ID)?.takeIf { it != 0L && it != -1L }
             debugln { "[BookContentViewModel] init tabId=$tabId requestedLineId=$requestedLineId bookIdToOpen=$bookIdToOpen" }
             if (bookIdToOpen != null) {
                 // Explicit line navigation wins (e.g., search result / deep link)
@@ -333,7 +334,7 @@ class BookContentViewModel(
 
     private suspend fun refreshDiacriticsForNavigation(nav: NavigationState) {
         val categoryId = nav.selectedBook?.categoryId
-        if (categoryId == null || categoryId <= 0) {
+        if (categoryId == null || categoryId == 0L || categoryId == -1L) {
             currentRootCategoryId = null
             _showDiacritics.value = true
             return
@@ -703,12 +704,14 @@ class BookContentViewModel(
                             } == true
                         // Restaurer la sélection multi-ligne ou simple
                         val selectedLineIds = persisted?.selectedLineIds?.takeIf { it.isNotEmpty() }
-                        val primaryLineId = persisted?.primarySelectedLineId?.takeIf { it > 0 }
+                        val primaryLineId = persisted?.primarySelectedLineId?.takeIf { it != 0L && it != -1L }
                         val isTocEntrySelection = persisted?.isTocEntrySelection ?: false
 
                         val lineIdToSelect: Long? =
                             primaryLineId
-                                ?: persisted?.contentAnchorLineId?.takeIf { it > 0 && shouldEnsureSelectionForPanes }
+                                ?: persisted?.contentAnchorLineId?.takeIf {
+                                    it != 0L && it != -1L && shouldEnsureSelectionForPanes
+                                }
 
                         // Restore path: load the book without resetting persisted scroll/selection.
                         loadBookData(book)

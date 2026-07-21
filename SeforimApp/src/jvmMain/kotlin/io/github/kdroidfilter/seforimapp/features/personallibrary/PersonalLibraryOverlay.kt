@@ -18,9 +18,12 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         connection.createStatement().use { it.execute("ATTACH DATABASE '$escaped' AS personal") }
         connection.createStatement().use { statement ->
             // ATTACH starts with SQLite's tiny default cache and mmap disabled for the new schema.
-            // Match the main database tuning so the first personal-book read is fast as well.
-            statement.execute("PRAGMA personal.cache_size=-256000")
-            statement.execute("PRAGMA personal.mmap_size=536870912")
+            // The personal database is much smaller than the multi-gigabyte corpus. Giving both
+            // schemas a 256 MiB page cache made the app retain hundreds of unnecessary megabytes
+            // after a UNION scan. A 64 MiB cache plus 128 MiB mmap keeps indexed reads hot without
+            // duplicating the main database's memory budget.
+            statement.execute("PRAGMA personal.cache_size=-65536")
+            statement.execute("PRAGMA personal.mmap_size=134217728")
         }
         TABLES.forEach { table ->
             connection.createStatement().use {

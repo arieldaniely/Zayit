@@ -7,10 +7,12 @@ import app.cash.sqldelight.db.SqlPreparedStatement
 import app.cash.sqldelight.driver.jdbc.JdbcCursor
 import app.cash.sqldelight.driver.jdbc.JdbcDriver
 import app.cash.sqldelight.driver.jdbc.JdbcPreparedStatement
+import io.github.kdroidfilter.seforimlibrary.dao.repository.LinkPartitionQueryDriver
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * SQLite JDBC driver backed by a single persistent connection with a per-identifier
@@ -38,7 +40,7 @@ import java.util.Properties
 class PersistentSqliteDriver(
     url: String,
     properties: Properties = Properties(),
-) : JdbcDriver() {
+) : JdbcDriver(), LinkPartitionQueryDriver {
     private val connection: Connection = DriverManager.getConnection(url, properties)
 
     // Statement cache keyed by SQL text — SqlDelight sometimes reuses the same
@@ -49,6 +51,7 @@ class PersistentSqliteDriver(
 
     @Volatile
     private var personalOverlayAttached = false
+    private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
         connection.autoCommit = true
@@ -62,6 +65,27 @@ class PersistentSqliteDriver(
     /** Enables direct partition routing while the personal-library database is attached. */
     fun setPersonalOverlayAttached(attached: Boolean) {
         personalOverlayAttached = attached
+    }
+
+    override fun <T> queryEachLinkPartition(query: () -> T): List<T> {
+        if (!personalOverlayAttached) return listOf(query())
+        return listOf(
+            withForcedLinkSchema("main", query),
+            withForcedLinkSchema("personal", query),
+        )
+    }
+
+    private fun <T> withForcedLinkSchema(
+        schema: String,
+        query: () -> T,
+    ): T {
+        val previous = forcedLinkSchema.get()
+        forcedLinkSchema.set(schema)
+        return try {
+            query()
+        } finally {
+            if (previous == null) forcedLinkSchema.remove() else forcedLinkSchema.set(previous)
+        }
     }
 
     override fun closeConnection(connection: Connection) = Unit
@@ -118,11 +142,23 @@ class PersistentSqliteDriver(
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<R> {
         synchronized(connection) {
-            val bindings =
-                binders?.let { bind ->
-                    BindingProbe().also { probe -> bind(probe) }.bindings
-                }.orEmpty()
-            val effectiveSql = PersonalLibraryQueryRouter.route(sql, bindings, personalOverlayAttached)
+            val forcedSchema = forcedLinkSchema.get()
+            val effectiveSql =
+                when {
+                    !personalOverlayAttached || binders == null -> sql
+                    forcedSchema != null && PersonalLibraryQueryRouter.isLinkQuery(sql) ->
+                        PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, forcedSchema)
+                    PersonalLibraryQueryRouter.isLinkQuery(sql) -> {
+                        val bindings = LinkBindingProbe().also { probe -> binders(probe) }.bindings
+                        PersonalLibraryQueryRouter.route(sql, bindings, attached = true)
+                    }
+                    else ->
+                        PersonalLibraryQueryRouter.routeEntityQuery(
+                            sql,
+                            captureFirstBinding(binders),
+                            attached = true,
+                        )
+                }
             val stmt = prepare(effectiveSql)
             stmt.clearParameters()
             if (binders != null) JdbcPreparedStatement(stmt).binders()
@@ -150,13 +186,28 @@ class PersistentSqliteDriver(
     }
 }
 
-/** Records bindings without touching JDBC, so partitioned queries can be routed before preparation. */
-private class BindingProbe : SqlPreparedStatement {
-    private val mutableBindings = HashMap<Int, Any?>()
-    val bindings: Map<Int, Any?> get() = mutableBindings
+/** Stops the generated binder immediately after parameter zero instead of walking large IN lists twice. */
+internal fun captureFirstBinding(bind: SqlPreparedStatement.() -> Unit): Any? {
+    val probe = FirstBindingProbe()
+    try {
+        bind(probe)
+    } catch (_: FirstBindingCaptured) {
+        // Parameter zero was captured; the remaining generated bind calls are irrelevant.
+    }
+    return probe.firstBinding
+}
+
+private object FirstBindingCaptured : Throwable(null, null, false, false)
+
+private class FirstBindingProbe : SqlPreparedStatement {
+    var firstBinding: Any? = null
+        private set
 
     private fun record(index: Int, value: Any?) {
-        mutableBindings[index] = value
+        if (index == 0) {
+            firstBinding = value
+            throw FirstBindingCaptured
+        }
     }
 
     override fun bindBytes(index: Int, bytes: ByteArray?) = record(index, bytes)
@@ -164,6 +215,21 @@ private class BindingProbe : SqlPreparedStatement {
     override fun bindDouble(index: Int, double: Double?) = record(index, double)
     override fun bindString(index: Int, string: String?) = record(index, string)
     override fun bindBoolean(index: Int, boolean: Boolean?) = record(index, boolean)
+}
+
+/** Link routing needs numeric selector parameters only; never retain text or binary query payloads. */
+private class LinkBindingProbe : SqlPreparedStatement {
+    private val mutableBindings = HashMap<Int, Long>()
+    val bindings: Map<Int, Long> get() = mutableBindings
+
+    override fun bindLong(index: Int, long: Long?) {
+        if (long != null) mutableBindings[index] = long
+    }
+
+    override fun bindBytes(index: Int, bytes: ByteArray?) = Unit
+    override fun bindDouble(index: Int, double: Double?) = Unit
+    override fun bindString(index: Int, string: String?) = Unit
+    override fun bindBoolean(index: Int, boolean: Boolean?) = Unit
 }
 
 /**
@@ -177,6 +243,30 @@ internal object PersonalLibraryQueryRouter {
             """(?is)\b(?:id|bookId|lineId|tocEntryId|structureId|altTocEntryId)\s*(?:=|IN\s*\()\s*$""",
         )
     private val linkQuery = Regex("""(?i)\b(?:FROM|JOIN)\s+\"?link\"?\b""")
+    private val whitespace = Regex("""\s+""")
+    private val linkSelectorPatterns =
+        listOf("sourceLineId", "sourceBookId", "targetBookId", "id").associateWith { field ->
+            Regex(
+                """(?is)\bl\.${Regex.escape(field)}\s*(?:=\s*\?|IN\s*\(\s*(?:\?\s*,?\s*)+\))""",
+            )
+        }
+    private val sourceLineJoin =
+        Regex("""(?i)\bl\.sourceLineId\s*=\s*sl\.id\b|\bsl\.id\s*=\s*l\.sourceLineId\b""")
+    private val sourceBookJoin =
+        Regex("""(?i)\bl\.sourceBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.sourceBookId\b""")
+    private val targetBookJoin =
+        Regex("""(?i)\bl\.targetBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.targetBookId\b""")
+    private val targetLineJoin =
+        Regex("""(?i)\bl\.targetLineId\s*=\s*tl\.id\b|\btl\.id\s*=\s*l\.targetLineId\b""")
+    private val linkAliasPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?link\"?\s+l\b""")
+    private val bareLinkPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?link\"?\b""")
+    private val connectionTypeAliasPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?connection_type\"?\s+ct\b""")
+    private val sourceLineAliasPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?line\"?\s+sl\b""")
+    private val targetLineAliasPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?line\"?\s+tl\b""")
+    private val bookAliasPattern = Regex("""(?i)\b(FROM|JOIN)\s+\"?book\"?\s+b\b""")
+    private val linkQueryPresence = ConcurrentHashMap<String, Boolean>()
+    private val mainEntityRoutes = ConcurrentHashMap<String, String>()
+    private val personalEntityRoutes = ConcurrentHashMap<String, String>()
     private val overlayTables =
         listOf(
             "category",
@@ -209,22 +299,38 @@ internal object PersonalLibraryQueryRouter {
             Regex("""(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\b""")
         }
 
-    fun route(sql: String, firstBinding: Any?, attached: Boolean): String =
-        route(sql, mapOf(0 to firstBinding), attached)
+    fun route(sql: String, firstBinding: Any?, attached: Boolean): String {
+        if (!attached || isLinkQuery(sql)) return sql
+        return routeEntityQuery(sql, firstBinding, attached = true)
+    }
+
+    fun isLinkQuery(sql: String): Boolean =
+        linkQueryPresence.computeIfAbsent(sql) { candidate -> linkQuery.containsMatchIn(candidate) }
+
+    /** Used by partitioned inverse-link reads; source-side JOINs live with their link row. */
+    fun routeLinkQueryToSchema(sql: String, schema: String): String =
+        routeLinkQuery(sql, emptyMap(), forcedLinkSchema = schema)
 
     fun route(sql: String, bindings: Map<Int, Any?>, attached: Boolean): String {
         if (!attached) return sql
-        if (linkQuery.containsMatchIn(sql)) return routeLinkQuery(sql, bindings)
+        if (isLinkQuery(sql)) return routeLinkQuery(sql, bindings)
 
-        val firstBinding = bindings[0]
-        if (firstBinding !is Long) return sql
-        val selectorPrefix = sql.substringBefore('?', missingDelimiterValue = "")
-        if (selectorPrefix.isEmpty() || !idSelector.containsMatchIn(selectorPrefix)) return sql
+        return routeEntityQuery(sql, bindings[0], attached = true)
+    }
 
+    fun routeEntityQuery(sql: String, firstBinding: Any?, attached: Boolean): String {
+        if (!attached || firstBinding !is Long) return sql
         val schema = if (firstBinding < 0) "personal" else "main"
-        return tablePatterns.entries.fold(sql) { routed, (table, pattern) ->
-            pattern.replace(routed) { match ->
-                "${match.groupValues[1]} $schema.\"$table\""
+        val cache = if (schema == "personal") personalEntityRoutes else mainEntityRoutes
+        return cache.computeIfAbsent(sql) {
+            val selectorPrefix = sql.substringBefore('?', missingDelimiterValue = "")
+            if (selectorPrefix.isEmpty() || !idSelector.containsMatchIn(selectorPrefix)) {
+                return@computeIfAbsent sql
+            }
+            tablePatterns.entries.fold(sql) { routed, (table, pattern) ->
+                pattern.replace(routed) { match ->
+                    "${match.groupValues[1]} $schema.\"$table\""
+                }
             }
         }
     }
@@ -234,13 +340,17 @@ internal object PersonalLibraryQueryRouter {
      * then route JOINs when their owning IDs are also known. This preserves cross-library links
      * while avoiding the combinatorial UNION-view query plan on commentary hot paths.
      */
-    private fun routeLinkQuery(sql: String, bindings: Map<Int, Any?>): String {
+    private fun routeLinkQuery(
+        sql: String,
+        bindings: Map<Int, Any?>,
+        forcedLinkSchema: String? = null,
+    ): String {
         val sourceLineSchema = schemaFor(selectorValues(sql, "sourceLineId", bindings))
         val sourceBookSchema = schemaFor(selectorValues(sql, "sourceBookId", bindings))
         val filteredTargetSchema = schemaFor(selectorValues(sql, "targetBookId", bindings))
         val linkIdSchema = schemaFor(selectorValues(sql, "id", bindings))
         val linkSchema =
-            if (filteredTargetSchema == "personal") {
+            forcedLinkSchema ?: if (filteredTargetSchema == "personal") {
                 // The immutable base DB can never point at a later personal entity.
                 "personal"
             } else {
@@ -248,14 +358,18 @@ internal object PersonalLibraryQueryRouter {
             }
 
         var routed = qualifyTableAlias(sql, "link", "l", linkSchema)
+        routed =
+            bareLinkPattern.replace(routed) { match ->
+                match.groupValues[1] + " " + linkSchema + ".\"link\""
+            }
         // Personal links deliberately reuse the immutable base connection-type IDs.
         routed = qualifyTableAlias(routed, "connection_type", "ct", "main")
 
-        val normalized = sql.replace(Regex("""\s+"""), " ")
-        if (Regex("""(?i)\bl\.sourceLineId\s*=\s*sl\.id\b|\bsl\.id\s*=\s*l\.sourceLineId\b""").containsMatchIn(normalized)) {
+        val normalized = sql.replace(whitespace, " ")
+        if (sourceLineJoin.containsMatchIn(normalized)) {
             routed = qualifyTableAlias(routed, "line", "sl", linkSchema)
         }
-        if (Regex("""(?i)\bl\.sourceBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.sourceBookId\b""").containsMatchIn(normalized)) {
+        if (sourceBookJoin.containsMatchIn(normalized)) {
             routed = qualifyTableAlias(routed, "book", "b", linkSchema)
         }
 
@@ -267,10 +381,10 @@ internal object PersonalLibraryQueryRouter {
                 filteredTargetSchema
             }
         if (targetSchema != null) {
-            if (Regex("""(?i)\bl\.targetBookId\s*=\s*b\.id\b|\bb\.id\s*=\s*l\.targetBookId\b""").containsMatchIn(normalized)) {
+            if (targetBookJoin.containsMatchIn(normalized)) {
                 routed = qualifyTableAlias(routed, "book", "b", targetSchema)
             }
-            if (Regex("""(?i)\bl\.targetLineId\s*=\s*tl\.id\b|\btl\.id\s*=\s*l\.targetLineId\b""").containsMatchIn(normalized)) {
+            if (targetLineJoin.containsMatchIn(normalized)) {
                 routed = qualifyTableAlias(routed, "line", "tl", targetSchema)
             }
         }
@@ -282,10 +396,7 @@ internal object PersonalLibraryQueryRouter {
         field: String,
         bindings: Map<Int, Any?>,
     ): List<Long> {
-        val selector =
-            Regex(
-                """(?is)\bl\.${Regex.escape(field)}\s*(?:=\s*\?|IN\s*\(\s*(?:\?\s*,?\s*)+\))""",
-            ).find(sql) ?: return emptyList()
+        val selector = linkSelectorPatterns.getValue(field).find(sql) ?: return emptyList()
         val firstIndex = sql.substring(0, selector.range.first).count { it == '?' }
         val count = selector.value.count { it == '?' }
         return (firstIndex until firstIndex + count).mapNotNull { bindings[it] as? Long }
@@ -307,9 +418,14 @@ internal object PersonalLibraryQueryRouter {
         schema: String,
     ): String {
         val pattern =
-            Regex(
-                """(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\s+${Regex.escape(alias)}\b""",
-            )
+            when {
+                table == "link" && alias == "l" -> linkAliasPattern
+                table == "connection_type" && alias == "ct" -> connectionTypeAliasPattern
+                table == "line" && alias == "sl" -> sourceLineAliasPattern
+                table == "line" && alias == "tl" -> targetLineAliasPattern
+                table == "book" && alias == "b" -> bookAliasPattern
+                else -> error("Unsupported routed alias: $table $alias")
+            }
         return pattern.replace(sql) { match ->
             "${match.groupValues[1]} $schema.\"$table\" $alias"
         }

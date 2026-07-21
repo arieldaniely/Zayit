@@ -6,6 +6,23 @@ import kotlin.test.assertTrue
 
 class PersonalLibraryQueryRouterTest {
     @Test
+    fun `first binding capture does not traverse a large binder`() {
+        var trailingBindingsVisited = 0
+
+        val first =
+            captureFirstBinding {
+                bindLong(0, -42L)
+                repeat(10_000) { index ->
+                    trailingBindingsVisited++
+                    bindLong(index + 1, index.toLong())
+                }
+            }
+
+        assertEquals(-42L, first)
+        assertEquals(0, trailingBindingsVisited)
+    }
+
+    @Test
     fun `routes base and personal entity queries directly`() {
         val sql = "SELECT charCount FROM line WHERE bookId = ? ORDER BY lineIndex"
         val base = PersonalLibraryQueryRouter.route(sql, 42L, attached = true)
@@ -97,5 +114,35 @@ class PersonalLibraryQueryRouterTest {
     fun `does not route while overlay is detached`() {
         val sql = "SELECT * FROM line WHERE id = ?"
         assertEquals(sql, PersonalLibraryQueryRouter.route(sql, -1L, attached = false))
+    }
+
+    @Test
+    fun `routes inverse link joins to each forced physical partition`() {
+        val sql =
+            "SELECT l.id, b.title, sl.content FROM link l " +
+                "JOIN connection_type ct ON l.connectionTypeId = ct.id " +
+                "JOIN line sl ON sl.id = l.sourceLineId " +
+                "JOIN book b ON l.sourceBookId = b.id WHERE l.targetLineId IN (?)"
+
+        val main = PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, "main")
+        assertTrue("FROM main.\"link\" l" in main)
+        assertTrue("JOIN main.\"connection_type\" ct" in main)
+        assertTrue("JOIN main.\"line\" sl" in main)
+        assertTrue("JOIN main.\"book\" b" in main)
+
+        val personal = PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, "personal")
+        assertTrue("FROM personal.\"link\" l" in personal)
+        assertTrue("JOIN main.\"connection_type\" ct" in personal)
+        assertTrue("JOIN personal.\"line\" sl" in personal)
+        assertTrue("JOIN personal.\"book\" b" in personal)
+    }
+
+    @Test
+    fun `routes unaliased link counts to a forced partition`() {
+        val sql = "SELECT COUNT(*) FROM link WHERE targetBookId = ?"
+
+        val routed = PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, "personal")
+
+        assertTrue("FROM personal.\"link\"" in routed)
     }
 }

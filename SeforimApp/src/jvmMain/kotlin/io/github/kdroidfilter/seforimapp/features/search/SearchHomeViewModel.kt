@@ -298,13 +298,24 @@ class SearchHomeViewModel(
                                             if (q.length < minBookPrefixLen) {
                                                 emptyList<BookSuggestionDto>()
                                             } else {
-                                                val bookHits = lookup.searchBooksWithScoring(qNorm, limit = maxBookPredictive)
-                                                val pdfTitles = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
-                                                bookHits
-                                                    // Already sorted by score in searchBooksWithScoring, no need to re-sort
-                                                    .take(maxBookPredictive)
-                                                    .flatMap { hit ->
-                                                        val book =
+                                                coroutineScope {
+                                                    // The lookup index contains the distributed library only. Query the
+                                                    // repository alongside it so personal books are discoverable too and
+                                                    // so reference lookup still works if the optional lookup index is absent.
+                                                    val indexedDeferred =
+                                                        async(Dispatchers.Default) {
+                                                            runCatching {
+                                                                lookup.searchBooksWithScoring(qNorm, limit = maxBookPredictive)
+                                                            }.getOrDefault(emptyList())
+                                                        }
+                                                    val repositoryDeferred =
+                                                        async(Dispatchers.IO) {
+                                                            runSuspendCatching {
+                                                                repository.findBooksByTitleLikeCore(pattern, limit = maxBookPredictive)
+                                                            }.getOrDefault(emptyList())
+                                                        }
+                                                    val indexedBooks =
+                                                        indexedDeferred.await().map { hit ->
                                                             Book(
                                                                 id = hit.id,
                                                                 categoryId = hit.categoryId,
@@ -313,6 +324,14 @@ class SearchHomeViewModel(
                                                                 order = hit.orderIndex.toFloat(),
                                                                 isBaseBook = hit.isBaseBook,
                                                             )
+                                                        }
+                                                    val books =
+                                                        (indexedBooks + repositoryDeferred.await())
+                                                            .distinctBy(Book::id)
+                                                            .take(maxBookPredictive)
+                                                    val pdfTitles =
+                                                        withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
+                                                    books.flatMap { book ->
                                                         val catPath = buildCategoryPathTitlesCached(book.categoryId)
                                                         val textSuggestion = BookSuggestionDto(book, catPath + book.title)
                                                         val hasPdfEdition =
@@ -324,6 +343,7 @@ class SearchHomeViewModel(
                                                             listOf(textSuggestion)
                                                         }
                                                     }
+                                                }
                                             }
                                         }
 

@@ -165,8 +165,13 @@ class CommentariesUseCase(
     ): Long? =
         runSuspendCatching {
             val baseLineIds =
-                if (lineIds.size == 1) resolveBaseLineIds(lineIds.first()) else lineIds
+                if (lineIds.size == 1) {
+                    (listOf(lineIds.first()) + resolveBaseLineIds(lineIds.first())).distinct()
+                } else {
+                    lineIds
+                }
             repository.getFirstSourceTargetLineId(baseLineIds, sourceBookId)
+                ?: repository.getFirstCommentaryTargetLineId(baseLineIds, sourceBookId)
         }.getOrNull()
     /**
      * Construit un Pager pour les liens/targum d'une ligne
@@ -448,7 +453,10 @@ class CommentariesUseCase(
                     ?: return@runSuspendCatching emptyMap<String, Long>()
             if (
                 !selectedBook.hasSourceConnection &&
-                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id)
+                !selectedBook.hasReferenceConnection &&
+                !selectedBook.hasOtherConnection &&
+                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id) &&
+                !repository.hasAdditionalMentionLinksForBook(selectedBook.id)
             ) {
                 return@runSuspendCatching emptyMap<String, Long>()
             }
@@ -1105,7 +1113,10 @@ class CommentariesUseCase(
             // Its exact side index keeps the old fast path for every unaffected main book.
             if (
                 !selectedBook.hasSourceConnection &&
-                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id)
+                !selectedBook.hasReferenceConnection &&
+                !selectedBook.hasOtherConnection &&
+                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id) &&
+                !repository.hasAdditionalMentionLinksForBook(selectedBook.id)
             ) {
                 return@runSuspendCatching emptyMap<String, Long>()
             }

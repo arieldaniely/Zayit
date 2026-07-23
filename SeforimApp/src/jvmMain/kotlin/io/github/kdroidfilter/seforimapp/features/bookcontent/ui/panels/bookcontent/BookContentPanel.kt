@@ -193,7 +193,7 @@ private fun BookContentPanelContent(
     }
 
     val isIslands = ThemeUtils.isIslandsStyle()
-    val hasBottomPane = uiState.content.showCommentaries || uiState.content.showSources || uiState.content.showMentions
+    val hasBottomPane = uiState.content.showCommentaries || uiState.content.showSources
     val panelBackground = JewelTheme.globalColors.panelBackground
 
     val paneCardModifier =
@@ -269,9 +269,17 @@ private fun BookContentPanelContent(
                             }
                         },
                         secondContent =
-                            if (uiState.content.showTargum) {
+                            if (uiState.content.showTargum || uiState.content.showMentions) {
                                 {
-                                    TargumPane(
+                                    if (uiState.content.showMentions) {
+                                        MentionsPane(
+                                            uiState = uiState,
+                                            onEvent = onEvent,
+                                            lineConnections = connectionsCache,
+                                            showDiacritics = showDiacritics,
+                                            modifier = topPaneCardModifier,
+                                        )
+                                    } else TargumPane(
                                         uiState = uiState,
                                         onEvent = onEvent,
                                         lineConnections = connectionsCache,
@@ -310,17 +318,6 @@ private fun BookContentPanelContent(
                             }
                         }
 
-                        uiState.content.showMentions -> {
-                            {
-                                MentionsPane(
-                                    uiState = uiState,
-                                    onEvent = onEvent,
-                                    lineConnections = connectionsCache,
-                                    showDiacritics = showDiacritics,
-                                    modifier = bottomPaneCardModifier,
-                                )
-                            }
-                        }
 
                         else -> null
                     },

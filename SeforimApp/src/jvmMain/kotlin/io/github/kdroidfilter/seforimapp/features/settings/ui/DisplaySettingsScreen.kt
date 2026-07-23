@@ -127,6 +127,32 @@ private fun DisplaySettingsView(
                 onCheckedChange = { onEvent(DisplaySettingsEvents.SetCompactMode(it)) },
             )
 
+            Text(text = stringResource(Res.string.settings_context_menu_title))
+            SettingCard(
+                title = Res.string.settings_context_targumim,
+                description = Res.string.settings_context_item_description,
+                checked = state.showContextTargumim,
+                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextTargumim(it)) },
+            )
+            SettingCard(
+                title = Res.string.settings_context_mentions,
+                description = Res.string.settings_context_item_description,
+                checked = state.showContextMentions,
+                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextMentions(it)) },
+            )
+            SettingCard(
+                title = Res.string.settings_context_sources,
+                description = Res.string.settings_context_item_description,
+                checked = state.showContextSources,
+                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextSources(it)) },
+            )
+            SettingCard(
+                title = Res.string.settings_context_commentaries,
+                description = Res.string.settings_context_item_description,
+                checked = state.showContextCommentaries,
+                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextCommentaries(it)) },
+            )
+
             MaxCommentatorsPerPageCard(
                 value = state.maxCommentatorsPerPage,
                 onValueChange = { onEvent(DisplaySettingsEvents.SetMaxCommentatorsPerPage(it)) },

@@ -90,6 +90,14 @@ object AppSettings {
 
     // Compact mode for vertical bars
     private const val KEY_COMPACT_MODE = "compact_mode"
+    private const val KEY_SHOW_CONTEXT_TARGUMIM = "show_context_targumim"
+    private const val KEY_SHOW_CONTEXT_MENTIONS = "show_context_mentions"
+    private const val KEY_SHOW_CONTEXT_SOURCES = "show_context_sources"
+    private const val KEY_SHOW_CONTEXT_COMMENTARIES = "show_context_commentaries"
+    private const val KEY_SHOW_CONTEXT_TARGUMIM = "show_context_targumim"
+    private const val KEY_SHOW_CONTEXT_MENTIONS = "show_context_mentions"
+    private const val KEY_SHOW_CONTEXT_SOURCES = "show_context_sources"
+    private const val KEY_SHOW_CONTEXT_COMMENTARIES = "show_context_commentaries"
     private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
 
     // Backing Settings storage (can be replaced at startup if needed)
@@ -111,6 +119,10 @@ object AppSettings {
         _commentaryFontCodeFlow.value = getCommentaryFontCode()
         _targumFontCodeFlow.value = getTargumFontCode()
         _sourceFontCodeFlow.value = getSourceFontCode()
+        _showContextTargumimFlow.value = isContextTargumimVisible()
+        _showContextMentionsFlow.value = isContextMentionsVisible()
+        _showContextSourcesFlow.value = isContextSourcesVisible()
+        _showContextCommentariesFlow.value = isContextCommentariesVisible()
         // User profile reactive values
         _userFirstNameFlow.value = getUserFirstName() ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""
@@ -156,6 +168,15 @@ object AppSettings {
     // StateFlow for compact mode
     private val _compactModeFlow = MutableStateFlow(isCompactModeEnabled())
     val compactModeFlow: StateFlow<Boolean> = _compactModeFlow.asStateFlow()
+
+    private val _showContextTargumimFlow = MutableStateFlow(isContextTargumimVisible())
+    val showContextTargumimFlow: StateFlow<Boolean> = _showContextTargumimFlow.asStateFlow()
+    private val _showContextMentionsFlow = MutableStateFlow(isContextMentionsVisible())
+    val showContextMentionsFlow: StateFlow<Boolean> = _showContextMentionsFlow.asStateFlow()
+    private val _showContextSourcesFlow = MutableStateFlow(isContextSourcesVisible())
+    val showContextSourcesFlow: StateFlow<Boolean> = _showContextSourcesFlow.asStateFlow()
+    private val _showContextCommentariesFlow = MutableStateFlow(isContextCommentariesVisible())
+    val showContextCommentariesFlow: StateFlow<Boolean> = _showContextCommentariesFlow.asStateFlow()
 
     // Font preference flows
     private val _bookFontCodeFlow = MutableStateFlow(getBookFontCode())
@@ -371,6 +392,30 @@ object AppSettings {
         _compactModeFlow.value = enabled
     }
 
+    fun isContextTargumimVisible(): Boolean = settings[KEY_SHOW_CONTEXT_TARGUMIM, true]
+    fun setContextTargumimVisible(visible: Boolean) {
+        settings[KEY_SHOW_CONTEXT_TARGUMIM] = visible
+        _showContextTargumimFlow.value = visible
+    }
+
+    fun isContextMentionsVisible(): Boolean = settings[KEY_SHOW_CONTEXT_MENTIONS, true]
+    fun setContextMentionsVisible(visible: Boolean) {
+        settings[KEY_SHOW_CONTEXT_MENTIONS] = visible
+        _showContextMentionsFlow.value = visible
+    }
+
+    fun isContextSourcesVisible(): Boolean = settings[KEY_SHOW_CONTEXT_SOURCES, true]
+    fun setContextSourcesVisible(visible: Boolean) {
+        settings[KEY_SHOW_CONTEXT_SOURCES] = visible
+        _showContextSourcesFlow.value = visible
+    }
+
+    fun isContextCommentariesVisible(): Boolean = settings[KEY_SHOW_CONTEXT_COMMENTARIES, true]
+    fun setContextCommentariesVisible(visible: Boolean) {
+        settings[KEY_SHOW_CONTEXT_COMMENTARIES] = visible
+        _showContextCommentariesFlow.value = visible
+    }
+
     fun isTalmudPdfInstallSkipped(): Boolean = settings[KEY_TALMUD_PDF_INSTALL_SKIPPED, false]
 
     fun setTalmudPdfInstallSkipped(skipped: Boolean) {
@@ -546,6 +591,10 @@ object AppSettings {
         _showZmanimWidgetsFlow.value = true
         _showHomeWallpaperFlow.value = true
         _compactModeFlow.value = false
+        _showContextTargumimFlow.value = true
+        _showContextMentionsFlow.value = true
+        _showContextSourcesFlow.value = true
+        _showContextCommentariesFlow.value = true
         _bookFontCodeFlow.value = DEFAULT_BOOK_FONT
         _commentaryFontCodeFlow.value = DEFAULT_COMMENTARY_FONT
         _targumFontCodeFlow.value = DEFAULT_TARGUM_FONT

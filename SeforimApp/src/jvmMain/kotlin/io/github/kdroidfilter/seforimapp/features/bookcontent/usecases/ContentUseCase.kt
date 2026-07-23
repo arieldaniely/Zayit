@@ -390,15 +390,16 @@ class ContentUseCase(
         val currentState = stateManager.state.value
         val isVisible = currentState.content.showMentions
         if (isVisible) {
-            val prev = currentState.layout.contentSplitState.positionPercentage
-            stateManager.updateLayout { copy(previousPositions = previousPositions.copy(sources = prev)) }
-            currentState.layout.contentSplitState.positionPercentage = 1f
+            val prev = currentState.layout.targumSplitState.positionPercentage
+            stateManager.updateLayout { copy(previousPositions = previousPositions.copy(links = prev)) }
+            currentState.layout.targumSplitState.positionPercentage = 1f
         } else {
-            currentState.layout.contentSplitState.positionPercentage = currentState.layout.previousPositions.sources
+            currentState.layout.targumSplitState.positionPercentage = currentState.layout.previousPositions.links
         }
         stateManager.updateContent {
             copy(
                 showMentions = !isVisible,
+                showTargum = false,
                 showSources = if (!isVisible) false else showSources,
                 showCommentaries = if (!isVisible) false else showCommentaries,
             )
@@ -435,7 +436,10 @@ class ContentUseCase(
         }
 
         stateManager.updateContent {
-            copy(showTargum = !isVisible)
+            copy(
+                showTargum = !isVisible,
+                showMentions = if (!isVisible) false else showMentions,
+            )
         }
 
         return !isVisible

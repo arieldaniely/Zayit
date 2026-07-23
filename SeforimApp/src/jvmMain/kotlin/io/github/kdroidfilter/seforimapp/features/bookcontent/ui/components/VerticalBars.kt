@@ -76,6 +76,10 @@ fun EndVerticalBar(
 ) {
     // Collect current text size from settings
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
+    val showContextTargumim by AppSettings.showContextTargumimFlow.collectAsState()
+    val showContextMentions by AppSettings.showContextMentionsFlow.collectAsState()
+    val showContextSources by AppSettings.showContextSourcesFlow.collectAsState()
+    val showContextCommentaries by AppSettings.showContextCommentariesFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
@@ -269,7 +273,7 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                if (targumEnabled) {
+                if (showContextTargumim && targumEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleTargum) },
@@ -282,7 +286,7 @@ fun EndVerticalBar(
                     )
                 }
 
-                if (mentionsEnabled) {
+                if (showContextMentions && mentionsEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText =
                             if (selectedLine == null) {
@@ -292,14 +296,14 @@ fun EndVerticalBar(
                             },
                         onClick = { onEvent(BookContentEvent.ToggleMentions) },
                         isSelected = uiState.content.showMentions,
-                        icon = Link,
+                        icon = Quote,
                         iconDescription = stringResource(Res.string.show_mentions),
                         label = stringResource(Res.string.show_mentions),
                         enabled = selectedLine != null,
                     )
                 }
 
-                if (sourcesEnabled) {
+                if (showContextSources && sourcesEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = sourcesTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleSources) },
@@ -313,7 +317,7 @@ fun EndVerticalBar(
                 }
 
                 // Show Commentaries only when available for the book
-                if (commentaryEnabled) {
+                if (showContextCommentaries && commentaryEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = commentaryTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleCommentaries) },

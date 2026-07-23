@@ -32,8 +32,8 @@ class BookContentStateManager(
         val navVisible = persisted.isBookTreeVisible
         val tocVisible = persisted.isTocVisible
         val notesVisible = persisted.isNotesVisible
-        val bottomPaneVisible = persisted.showCommentaries || persisted.showSources || persisted.showMentions
-        val targumVisible = persisted.showTargum
+        val bottomPaneVisible = persisted.showCommentaries || persisted.showSources
+        val targumVisible = persisted.showTargum || persisted.showMentions
 
         return BookContentState(
             tabId = tabId,

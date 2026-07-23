@@ -346,7 +346,7 @@ class ContentUseCase(
             copy(
                 showCommentaries = !isVisible,
                 showSources = if (!isVisible) false else showSources,
-                showMentions = if (!isVisible) false else showMentions,
+                showMentions = showMentions,
             )
         }
 
@@ -379,7 +379,7 @@ class ContentUseCase(
             copy(
                 showSources = !isVisible,
                 showCommentaries = if (!isVisible) false else showCommentaries,
-                showMentions = if (!isVisible) false else showMentions,
+                showMentions = showMentions,
             )
         }
 

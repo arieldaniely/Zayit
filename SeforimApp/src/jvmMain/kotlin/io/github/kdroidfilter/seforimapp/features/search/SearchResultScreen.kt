@@ -55,7 +55,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
-import io.github.kdroidfilter.seforimapp.icons.Print
+import io.github.kdroidfilter.seforimapp.icons.JournalText
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -783,20 +783,33 @@ private fun SearchResultItemGoogleStyle(
             )
             if (onOpenPdf != null) {
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(
-                    onClick = onOpenPdf,
-                    modifier = Modifier.height(26.dp).pointerHoverIcon(PointerIcon.Hand),
+                Tooltip(
+                    tooltip = {
+                        Text(
+                            text = stringResource(Res.string.open_pdf_edition_tooltip),
+                            fontSize = 12.sp,
+                        )
+                    },
                 ) {
-                    Icon(
-                        imageVector = Print,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        text = stringResource(Res.string.open_pdf_search_result),
-                        fontSize = 12.sp,
-                    )
+                    OutlinedButton(
+                        onClick = onOpenPdf,
+                        modifier = Modifier.pointerHoverIcon(PointerIcon.Hand),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Icon(
+                                imageVector = JournalText,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = stringResource(Res.string.open_pdf_search_result),
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
                 }
             }
         }

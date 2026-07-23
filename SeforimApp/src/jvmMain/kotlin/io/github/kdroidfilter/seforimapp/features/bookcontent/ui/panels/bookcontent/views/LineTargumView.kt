@@ -289,6 +289,8 @@ private fun SingleLineTargumView(
                                     .flatMap { listOf(0) + it }
                         }
 
+                        var expandedItemIds by remember(selectedLine.id) { mutableStateOf(setOf<Long>()) }
+
                         val density = LocalDensity.current
                         val textMeasurer = rememberTextMeasurer()
                         var textLayoutWidthPx by remember(selectedLine.id) { mutableIntStateOf(0) }
@@ -314,6 +316,12 @@ private fun SingleLineTargumView(
                                         )
                                     (CAPACITY_REFERENCE.length / result.lineCount.coerceAtLeast(1)).coerceAtLeast(1)
                                 }
+                            }
+                        }
+
+                        val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
+                            derivedStateOf {
+                                computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
                             }
                         }
 
@@ -375,6 +383,16 @@ private fun SingleLineTargumView(
                                                     boldScale = boldScaleForPlatform,
                                                     highlightQuery = highlightQuery,
                                                     onClick = { onLinkClick(item) },
+                                                    isExpanded = item.link.id in expandedItemIds,
+                                                    onToggleExpand = {
+                                                        val id = item.link.id
+                                                        expandedItemIds =
+                                                            if (id in expandedItemIds) {
+                                                                expandedItemIds - id
+                                                            } else {
+                                                                expandedItemIds + id
+                                                            }
+                                                    },
                                                     showDiacritics = showDiacritics,
                                                     annotationCache = annotationCache,
                                                     onLayoutWidthMeasure = { width ->
@@ -410,7 +428,7 @@ private fun SingleLineTargumView(
                                 }
                                 TargumScrollbar(
                                     listState = listState,
-                                    allCharCounts = allCharCounts,
+                                    allCharCounts = effectiveCharCounts,
                                     capacity = capacity,
                                     lineHeightPx = lineHeightPx,
                                     paddingPerItemPx = paddingPerItemPx,
@@ -740,6 +758,8 @@ private fun MultiLineTargumView(
                             .flatMap { listOf(0) + it }
                 }
 
+                var expandedItemIds by remember(selectedLineIds) { mutableStateOf(setOf<Long>()) }
+
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
                 var textLayoutWidthPx by remember(selectedLineIds) { mutableIntStateOf(0) }
@@ -765,6 +785,12 @@ private fun MultiLineTargumView(
                                 )
                             (CAPACITY_REFERENCE.length / result.lineCount.coerceAtLeast(1)).coerceAtLeast(1)
                         }
+                    }
+                }
+
+                val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
+                    derivedStateOf {
+                        computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
                     }
                 }
 
@@ -826,15 +852,22 @@ private fun MultiLineTargumView(
                                             boldScale = boldScaleForPlatform,
                                             highlightQuery = highlightQuery,
                                             onClick = {
-                                                val mods = windowInfo.keyboardModifiers
-                                                if (mods.isCtrlPressed || mods.isMetaPressed) {
-                                                    onEvent(
-                                                        BookContentEvent.OpenCommentaryTarget(
-                                                            bookId = item.link.targetBookId,
-                                                            lineId = item.link.targetLineId,
-                                                        ),
-                                                    )
-                                                }
+                                                onEvent(
+                                                    BookContentEvent.OpenCommentaryTarget(
+                                                        bookId = item.link.targetBookId,
+                                                        lineId = item.link.targetLineId,
+                                                    ),
+                                                )
+                                            },
+                                            isExpanded = item.link.id in expandedItemIds,
+                                            onToggleExpand = {
+                                                val id = item.link.id
+                                                expandedItemIds =
+                                                    if (id in expandedItemIds) {
+                                                        expandedItemIds - id
+                                                    } else {
+                                                        expandedItemIds + id
+                                                    }
                                             },
                                             showDiacritics = showDiacritics,
                                             annotationCache = annotationCache,
@@ -871,7 +904,7 @@ private fun MultiLineTargumView(
                         }
                         TargumScrollbar(
                             listState = listState,
-                            allCharCounts = allCharCounts,
+                            allCharCounts = effectiveCharCounts,
                             capacity = capacity,
                             lineHeightPx = lineHeightPx,
                             paddingPerItemPx = paddingPerItemPx,
@@ -907,10 +940,11 @@ private fun LinkItem(
     showDiacritics: Boolean,
     annotationCache: StableAnnotatedCache,
     boldScale: Float = 1.0f,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
     onLayoutWidthMeasure: (Int) -> Unit = {},
 ) {
     val windowInfo = LocalWindowInfo.current
-    var isExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier =
@@ -922,10 +956,8 @@ private fun LinkItem(
                         val mods = windowInfo.keyboardModifiers
                         if (mods.isCtrlPressed || mods.isMetaPressed) {
                             onClick()
-                        } else if (!isExpanded) {
-                            isExpanded = true
                         } else {
-                            isExpanded = false
+                            onToggleExpand()
                         }
                     })
                 },
@@ -1048,4 +1080,54 @@ private fun SourceSectionHeader(
                     },
                 ),
     )
+}
+
+private fun computeEffectiveCharCounts(
+    sourceSections: List<SourceSection>,
+    allCharCounts: List<Int>,
+    expandedItemIds: Set<Long>,
+    capacity: Int,
+): List<Int> {
+    if (allCharCounts.isEmpty()) return emptyList()
+    val result = ArrayList<Int>(allCharCounts.size)
+    var globalIdx = 0
+    for (section in sourceSections) {
+        if (globalIdx >= allCharCounts.size) break
+        // Header entry in allCharCounts is 0
+        result.add(allCharCounts[globalIdx++])
+        val itemCount = section.items.itemCount
+        for (i in 0 until itemCount) {
+            if (globalIdx >= allCharCounts.size) break
+            val rawCount = allCharCounts[globalIdx++]
+            val item = section.items.peek(i)
+            val isExpanded = item != null && item.link.id in expandedItemIds
+            val effectiveCount =
+                if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT && !isExpanded) {
+                    if (capacity > 0) {
+                        minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
+                    } else {
+                        minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
+                    }
+                } else {
+                    rawCount
+                }
+            result.add(effectiveCount)
+        }
+    }
+    // Any remaining items if allCharCounts has entries beyond loaded sections
+    while (globalIdx < allCharCounts.size) {
+        val rawCount = allCharCounts[globalIdx++]
+        val effectiveCount =
+            if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT) {
+                if (capacity > 0) {
+                    minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
+                } else {
+                    minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
+                }
+            } else {
+                rawCount
+            }
+        result.add(effectiveCount)
+    }
+    return result
 }

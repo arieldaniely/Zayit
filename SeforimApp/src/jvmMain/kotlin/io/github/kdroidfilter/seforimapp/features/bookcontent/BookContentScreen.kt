@@ -786,6 +786,10 @@ fun BookContentScreen(
                                     }
                                     true
                                 }
+                                isCtrlOrCmd && keyEvent.key == Key.H -> {
+                                    onEvent(BookContentEvent.ToggleHistory)
+                                    true
+                                }
                                 isCtrlOrCmd && keyEvent.key == Key.J -> {
                                     onEvent(BookContentEvent.ToggleDiacritics)
                                     true
@@ -833,9 +837,15 @@ fun BookContentScreen(
                         secondContent = {
                             EnhancedHorizontalSplitPane(
                                 splitPaneState = uiState.layout.notesSplitState.asStable(),
-                                firstMinSize = if (uiState.notes.isVisible) SplitDefaults.MIN_NOTES else 0f,
+                                firstMinSize = if (uiState.notes.isVisible || uiState.history.isVisible) SplitDefaults.MIN_NOTES else 0f,
                                 firstContent = {
-                                    if (uiState.notes.isVisible) {
+                                    if (uiState.history.isVisible) {
+                                        io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.history.HistoryPanel(
+                                            uiState = uiState,
+                                            onEvent = onEvent,
+                                            modifier = panelCardModifier,
+                                        )
+                                    } else if (uiState.notes.isVisible) {
                                         NotesPanel(
                                             uiState = uiState,
                                             onEvent = onEvent,

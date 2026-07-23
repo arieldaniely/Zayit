@@ -42,6 +42,9 @@ sealed interface BookContentEvent {
     // Notes pane
     data object ToggleNotes : BookContentEvent
 
+    // History pane
+    data object ToggleHistory : BookContentEvent
+
     data class NotesScrolled(
         val index: Int,
         val offset: Int,

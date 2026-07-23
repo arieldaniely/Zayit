@@ -187,6 +187,15 @@ fun main(args: Array<String>) {
         // Ensure AppSettings uses the DI-provided Settings immediately
         AppSettings.initialize(appGraph.settings)
 
+        LaunchedEffect(appGraph) {
+            appGraph.tabsViewModel.onTabClosedListener = { tab ->
+                io.github.kdroidfilter.seforimapp.framework.history.recordTabToHistory(tab, appGraph)
+            }
+            appGraph.tabsViewModel.onTabDestinationReplacedListener = { oldTab, _ ->
+                io.github.kdroidfilter.seforimapp.framework.history.recordTabToHistory(oldTab, appGraph)
+            }
+        }
+
         // Register the AWT-level keyboard shortcuts here (instead of in main()) so they can read
         // from the DI-provided SelectionContext. The DisposableEffect re-runs only if the graph
         // identity changes (effectively never), and removes the dispatchers on app teardown.

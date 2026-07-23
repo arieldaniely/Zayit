@@ -181,6 +181,16 @@ class BookContentStateManager(
     }
 
     /**
+     * Updates history pane state only.
+     */
+    fun updateHistory(
+        save: Boolean = true,
+        transform: HistoryState.() -> HistoryState,
+    ) {
+        update(save) { copy(history = history.transform()) }
+    }
+
+    /**
      * Met à jour uniquement le contenu
      */
     fun updateContent(

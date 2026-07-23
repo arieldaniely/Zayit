@@ -404,6 +404,9 @@ class BookContentViewModel(
                 BookContentEvent.ToggleNotes ->
                     notesUseCase.toggleNotes()
 
+                BookContentEvent.ToggleHistory ->
+                    stateManager.updateHistory { copy(isVisible = !isVisible) }
+
                 is BookContentEvent.NotesScrolled ->
                     notesUseCase.updateNotesScrollPosition(event.index, event.offset)
 

@@ -191,6 +191,11 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
+    fun provideHistoryManager(): io.github.kdroidfilter.seforimapp.framework.history.HistoryManager =
+        io.github.kdroidfilter.seforimapp.framework.history.HistoryManager()
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun provideDesktopManager(
         tabsViewModel: TabsViewModel,
         tabPersistedStateStore: TabPersistedStateStore,

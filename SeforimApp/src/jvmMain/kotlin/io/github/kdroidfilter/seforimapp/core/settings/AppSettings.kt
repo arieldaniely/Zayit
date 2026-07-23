@@ -94,10 +94,6 @@ object AppSettings {
     private const val KEY_SHOW_CONTEXT_MENTIONS = "show_context_mentions"
     private const val KEY_SHOW_CONTEXT_SOURCES = "show_context_sources"
     private const val KEY_SHOW_CONTEXT_COMMENTARIES = "show_context_commentaries"
-    private const val KEY_SHOW_CONTEXT_TARGUMIM = "show_context_targumim"
-    private const val KEY_SHOW_CONTEXT_MENTIONS = "show_context_mentions"
-    private const val KEY_SHOW_CONTEXT_SOURCES = "show_context_sources"
-    private const val KEY_SHOW_CONTEXT_COMMENTARIES = "show_context_commentaries"
     private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
 
     // Backing Settings storage (can be replaced at startup if needed)

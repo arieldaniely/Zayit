@@ -63,6 +63,12 @@ import seforimapp.seforimapp.generated.resources.settings_show_zmanim_widgets_de
 import seforimapp.seforimapp.generated.resources.settings_theme_style_classic
 import seforimapp.seforimapp.generated.resources.settings_theme_style_islands
 import seforimapp.seforimapp.generated.resources.settings_theme_style_label
+import seforimapp.seforimapp.generated.resources.settings_context_menu_title
+import seforimapp.seforimapp.generated.resources.settings_context_targumim
+import seforimapp.seforimapp.generated.resources.settings_context_item_description
+import seforimapp.seforimapp.generated.resources.settings_context_mentions
+import seforimapp.seforimapp.generated.resources.settings_context_sources
+import seforimapp.seforimapp.generated.resources.settings_context_commentaries
 
 @Composable
 fun DisplaySettingsScreen() {

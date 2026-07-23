@@ -400,8 +400,8 @@ class ContentUseCase(
             copy(
                 showMentions = !isVisible,
                 showTargum = false,
-                showSources = if (!isVisible) false else showSources,
-                showCommentaries = if (!isVisible) false else showCommentaries,
+                showSources = showSources,
+                showCommentaries = showCommentaries,
             )
         }
         return !isVisible

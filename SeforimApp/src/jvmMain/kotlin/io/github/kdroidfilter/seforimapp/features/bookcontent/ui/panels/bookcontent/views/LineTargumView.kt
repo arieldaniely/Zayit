@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,6 +81,8 @@ import seforimapp.seforimapp.generated.resources.sources
 // Per-side vertical padding applied by `LinkItem`'s Column. Exposed so the scrollbar
 // can derive the exact per-item padding contribution as `2 × LinkItemVerticalPaddingPerSide`.
 private val LinkItemVerticalPaddingPerSide = 8.dp
+private const val MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT = 1200
+private const val MAX_COLLAPSED_LINK_ITEM_LINES = 6
 
 @OptIn(ExperimentalSplitPaneApi::class)
 @Composable
@@ -906,19 +909,36 @@ private fun LinkItem(
     boldScale: Float = 1.0f,
     onLayoutWidthMeasure: (Int) -> Unit = {},
 ) {
+    val windowInfo = LocalWindowInfo.current
+    var isExpanded by remember { mutableStateOf(false) }
+
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = LinkItemVerticalPaddingPerSide, horizontal = 16.dp)
                 .pointerInput(linkId) {
-                    detectTapGestures(onTap = { onClick() })
+                    detectTapGestures(onTap = {
+                        val mods = windowInfo.keyboardModifiers
+                        if (mods.isCtrlPressed || mods.isMetaPressed) {
+                            onClick()
+                        } else if (!isExpanded) {
+                            isExpanded = true
+                        } else {
+                            isExpanded = false
+                        }
+                    })
                 },
     ) {
         val processedText =
             remember(linkId, targetText, showDiacritics) {
                 if (showDiacritics) targetText else HebrewTextUtils.removeAllDiacritics(targetText)
             }
+        val shouldCollapse = remember(processedText) {
+            processedText.length > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT
+        }
+        val maxLines = if (shouldCollapse && !isExpanded) MAX_COLLAPSED_LINK_ITEM_LINES else Int.MAX_VALUE
+        val overflow = if (shouldCollapse && !isExpanded) TextOverflow.Ellipsis else TextOverflow.Clip
 
         // Footnote marker color from theme
         val footnoteMarkerColor = JewelTheme.globalColors.outlines.focused
@@ -959,6 +979,8 @@ private fun LinkItem(
                 fontSize = commentTextSize.sp,
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
+                maxLines = maxLines,
+                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
@@ -981,6 +1003,8 @@ private fun LinkItem(
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
                 inlineContent = inlineImageContent,
+                maxLines = maxLines,
+                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)

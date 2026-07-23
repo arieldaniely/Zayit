@@ -241,6 +241,28 @@ class ContentUseCaseLineSelectionTest {
         }
 
     @Test
+    fun `toggleMentions preserves bottom pane visibility`() =
+        runTest {
+            stateManager.updateContent {
+                copy(
+                    showCommentaries = true,
+                    showSources = true,
+                    showMentions = false,
+                    showTargum = false,
+                )
+            }
+
+            val result = useCase.toggleMentions()
+
+            val state = stateManager.state.value
+            assertTrue(result)
+            assertTrue(state.content.showMentions)
+            assertFalse(state.content.showTargum)
+            assertTrue(state.content.showCommentaries)
+            assertTrue(state.content.showSources)
+        }
+
+    @Test
     fun `selectLine updates TOC breadcrumb path`() =
         runTest {
             // Given: A line with a TOC entry

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -17,8 +18,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -28,6 +31,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -935,17 +939,29 @@ private fun SourceSectionHeader(
     textSize: Float,
     onClick: (() -> Unit)?,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
     Text(
         text = title,
         fontWeight = FontWeight.Bold,
         fontSize = (textSize * 1.1f).sp,
         textAlign = TextAlign.Center,
+        textDecoration =
+            if (onClick != null && isHovered) {
+                TextDecoration.Underline
+            } else {
+                TextDecoration.None
+            },
         modifier =
             Modifier
                 .fillMaxWidth()
                 .then(
                     if (onClick != null) {
-                        Modifier.pointerInput(title) { detectTapGestures(onTap = { onClick() }) }
+                        Modifier
+                            .hoverable(interactionSource)
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .pointerInput(title) { detectTapGestures(onTap = { onClick() }) }
                     } else {
                         Modifier
                     },

@@ -25,6 +25,18 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
             statement.execute("PRAGMA personal.cache_size=-65536")
             statement.execute("PRAGMA personal.mmap_size=134217728")
         }
+        val targetBookIds = HashSet<Long>()
+        val targetLineIds = HashSet<Long>()
+        connection.createStatement().use { statement ->
+            statement
+                .executeQuery("SELECT targetBookId, targetLineId FROM personal.link WHERE targetLineId > 0")
+                .use { rows ->
+                    while (rows.next()) {
+                        targetBookIds += rows.getLong(1)
+                        targetLineIds += rows.getLong(2)
+                    }
+                }
+        }
         TABLES.forEach { table ->
             connection.createStatement().use {
                 it.execute(
@@ -33,7 +45,11 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
                 )
             }
         }
-        driver.setPersonalOverlayAttached(true)
+        driver.setPersonalOverlayAttached(
+            attached = true,
+            targetBookIds = targetBookIds,
+            targetLineIds = targetLineIds,
+        )
     }
 
     companion object {

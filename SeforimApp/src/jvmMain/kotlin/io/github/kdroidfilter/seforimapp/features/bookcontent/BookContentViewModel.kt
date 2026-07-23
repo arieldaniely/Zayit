@@ -835,9 +835,6 @@ class BookContentViewModel(
         viewModelScope.launch {
             stateManager.setLoading(true)
             try {
-                // Pre-apply default commentators for this book (if defined in database)
-                runSuspendCatching { commentariesUseCase.applyDefaultCommentatorsForBook(book.id) }
-
                 val state = stateManager.state.value
                 // Always prefer an explicit anchor when present (e.g., opening from a commentary link)
                 val shouldUseAnchor = state.content.anchorId != -1L
@@ -898,6 +895,11 @@ class BookContentViewModel(
 
                 // Release loading indicator immediately so the user sees content
                 stateManager.setLoading(false)
+
+                // Defaults are optional pane state and must never delay the book itself.
+                viewModelScope.launch {
+                    runSuspendCatching { commentariesUseCase.applyDefaultCommentatorsForBook(book.id) }
+                }
 
                 // Load TOC, alt-TOC, and line selection in parallel
                 coroutineScope {

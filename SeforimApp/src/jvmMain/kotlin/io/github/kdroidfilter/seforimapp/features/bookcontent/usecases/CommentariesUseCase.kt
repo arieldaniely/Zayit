@@ -38,6 +38,8 @@ import kotlin.math.min
  */
 private val YEAR_REGEX = Regex("""-?\d{3,4}""")
 private const val MAX_BASE_LINES_PER_REQUEST = 128
+private val DISPLAYED_LINK_TYPES =
+    setOf(ConnectionType.TARGUM, ConnectionType.REFERENCE, ConnectionType.OTHER)
 
 class CommentariesUseCase(
     private val repository: SeforimRepository,
@@ -179,7 +181,7 @@ class CommentariesUseCase(
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.TARGUM))
+                    LineTargumPagingSource(repository, lineId, ids, DISPLAYED_LINK_TYPES)
                 },
             ).flow.cachedIn(scope)
         }
@@ -229,7 +231,7 @@ class CommentariesUseCase(
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.TARGUM))
+                    MultiLineLinksPagingSource(repository, lineIds, ids, DISPLAYED_LINK_TYPES)
                 },
             ).flow.cachedIn(scope)
         }
@@ -296,7 +298,8 @@ class CommentariesUseCase(
             repository.getCommentaryCharCountsForLineOrSection(
                 baseLineId = lineId,
                 activeCommentatorIds = setOf(sourceBookId),
-                connectionTypes = setOf(connectionType),
+                connectionTypes =
+                    if (connectionType == ConnectionType.TARGUM) DISPLAYED_LINK_TYPES else setOf(connectionType),
             )
         }.getOrElse { emptyList() }
 
@@ -314,7 +317,8 @@ class CommentariesUseCase(
             repository.getCommentaryCharCountsForLines(
                 lineIds = lineIds,
                 activeCommentatorIds = setOf(sourceBookId),
-                connectionTypes = setOf(connectionType),
+                connectionTypes =
+                    if (connectionType == ConnectionType.TARGUM) DISPLAYED_LINK_TYPES else setOf(connectionType),
             )
         }.getOrElse { emptyList() }
 
@@ -404,7 +408,13 @@ class CommentariesUseCase(
                 stateManager.state
                     .first()
                     .navigation.selectedBook
-            if (selectedBook?.hasSourceConnection != true) return@runSuspendCatching emptyMap<String, Long>()
+                    ?: return@runSuspendCatching emptyMap<String, Long>()
+            if (
+                !selectedBook.hasSourceConnection &&
+                !repository.hasAdditionalLinksTargetingBook(selectedBook.id)
+            ) {
+                return@runSuspendCatching emptyMap<String, Long>()
+            }
 
             val allBaseIds =
                 lineIds
@@ -961,7 +971,7 @@ class CommentariesUseCase(
         if (connections.isEmpty()) return LineConnectionsSnapshot()
 
         val commentaries = connections.filter { it.link.connectionType == ConnectionType.COMMENTARY }
-        val targumLinks = connections.filter { it.link.connectionType == ConnectionType.TARGUM }
+        val targumLinks = connections.filter { it.link.connectionType in DISPLAYED_LINK_TYPES }
         val sourceLinks = connections.filter { it.link.connectionType == ConnectionType.SOURCE }
 
         val commentatorGroups =
@@ -1027,14 +1037,8 @@ class CommentariesUseCase(
             val links =
                 repository
                     .getCommentarySummariesForLines(resolution.baseLineIds)
-                    .filter { it.link.connectionType == ConnectionType.TARGUM }
-                    .let { targumLinks ->
-                        if (resolution.headingTocEntryId != null && defaultTargumId != null) {
-                            targumLinks.filter { it.link.targetBookId == defaultTargumId }
-                        } else {
-                            targumLinks
-                        }
-                    }
+                    .filter { it.link.connectionType in DISPLAYED_LINK_TYPES }
+                    .let { filterTargumConnections(it, resolution, defaultTargumId) }
 
             val currentBookTitle =
                 stateManager.state
@@ -1053,8 +1057,15 @@ class CommentariesUseCase(
                 stateManager.state
                     .first()
                     .navigation.selectedBook
-            // Fast path: book has no inbound oriented links — no need to hit DB.
-            if (selectedBook?.hasSourceConnection != true) return@runSuspendCatching emptyMap<String, Long>()
+                    ?: return@runSuspendCatching emptyMap<String, Long>()
+            // The immutable book flag cannot reflect links added later by the personal overlay.
+            // Its exact side index keeps the old fast path for every unaffected main book.
+            if (
+                !selectedBook.hasSourceConnection &&
+                !repository.hasAdditionalLinksTargetingBook(selectedBook.id)
+            ) {
+                return@runSuspendCatching emptyMap<String, Long>()
+            }
 
             val baseIds = resolveBaseLineIds(lineId)
             val links =

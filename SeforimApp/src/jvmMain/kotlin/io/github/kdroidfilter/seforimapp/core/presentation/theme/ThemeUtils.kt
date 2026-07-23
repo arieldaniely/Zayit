@@ -1,10 +1,7 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.theme
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -32,8 +29,6 @@ import seforimapp.seforimapp.generated.resources.notoserifhebrew
  * Utilities to build consistent Jewel theme definitions and related styling across the app.
  */
 object ThemeUtils {
-    private const val THEME_TRANSITION_DURATION_MS = 240
-
     /**
      * Provides the app's default text style (centralized so callers don't repeat it).
      */
@@ -89,27 +84,19 @@ object ThemeUtils {
             val accent = accentColor.resolveColor(isDark)
             val disabledValues = if (isDark) DisabledAppearanceValues.dark() else DisabledAppearanceValues.light()
             val iconData = accentIconData(accent, isDark)
-            val targetColors =
-                when (themeStyle) {
-                    ThemeStyle.Islands ->
-                        if (isDark) islandsDarkGlobalColors(accent) else lightIslandsGlobalColors(accent)
-                    ThemeStyle.Classic ->
-                        if (isDark) classicDarkGlobalColors(accent) else classicLightGlobalColors(accent)
-                }
-            val colors = animateGlobalBackgrounds(targetColors)
 
             when (themeStyle) {
                 ThemeStyle.Islands ->
                     if (isDark) {
                         JewelTheme.darkThemeDefinition(
-                            colors = colors,
+                            colors = islandsDarkGlobalColors(accent),
                             iconData = iconData,
                             defaultTextStyle = defaultTextStyle(),
                             disabledAppearanceValues = disabledValues,
                         )
                     } else {
                         JewelTheme.lightThemeDefinition(
-                            colors = colors,
+                            colors = lightIslandsGlobalColors(accent),
                             iconData = iconData,
                             defaultTextStyle = defaultTextStyle(),
                             disabledAppearanceValues = disabledValues,
@@ -118,14 +105,14 @@ object ThemeUtils {
                 ThemeStyle.Classic ->
                     if (isDark) {
                         JewelTheme.darkThemeDefinition(
-                            colors = colors,
+                            colors = classicDarkGlobalColors(accent),
                             iconData = iconData,
                             defaultTextStyle = defaultTextStyle(),
                             disabledAppearanceValues = disabledValues,
                         )
                     } else {
                         JewelTheme.lightThemeDefinition(
-                            colors = colors,
+                            colors = classicLightGlobalColors(accent),
                             iconData = iconData,
                             defaultTextStyle = defaultTextStyle(),
                             disabledAppearanceValues = disabledValues,
@@ -133,29 +120,6 @@ object ThemeUtils {
                     }
             }
         }
-
-    @Composable
-    private fun animateGlobalBackgrounds(target: GlobalColors): GlobalColors {
-        val panelBackground by
-            animateColorAsState(
-                targetValue = target.panelBackground,
-                animationSpec = tween(THEME_TRANSITION_DURATION_MS),
-                label = "themePanelBackground",
-            )
-        val toolwindowBackground by
-            animateColorAsState(
-                targetValue = target.toolwindowBackground,
-                animationSpec = tween(THEME_TRANSITION_DURATION_MS),
-                label = "themeToolwindowBackground",
-            )
-        return GlobalColors(
-            borders = target.borders,
-            outlines = target.outlines,
-            text = target.text,
-            panelBackground = panelBackground,
-            toolwindowBackground = toolwindowBackground,
-        )
-    }
 
     /**
      * Builds the [ComponentStyling] matching the current theme style and accent color.

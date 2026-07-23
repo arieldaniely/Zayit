@@ -228,7 +228,8 @@ fun EndVerticalBar(
         bottomContent = {
             val targumEnabled = selectedBook?.hasTargumConnection == true
             val commentaryEnabled = selectedBook?.hasCommentaryConnection == true
-            val sourcesEnabled = selectedBook?.hasSourceConnection == true
+            val sourcesEnabled =
+                selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
             val linksEnabled = (selectedBook?.hasReferenceConnection == true) || (selectedBook?.hasOtherConnection == true)
 
             // Hide both buttons on Home (no book selected)
@@ -265,8 +266,8 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                // Show Targum only when available for the book
-                if (targumEnabled) {
+                // The links pane contains targum, reference, and other links.
+                if (targumEnabled || linksEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleTargum) },

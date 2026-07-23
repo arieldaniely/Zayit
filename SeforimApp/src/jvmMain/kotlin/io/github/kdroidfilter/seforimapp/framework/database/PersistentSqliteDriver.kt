@@ -51,6 +51,10 @@ class PersistentSqliteDriver(
 
     @Volatile
     private var personalOverlayAttached = false
+    @Volatile
+    private var personalTargetBookIds: Set<Long> = emptySet()
+    @Volatile
+    private var personalTargetLineIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
@@ -63,8 +67,15 @@ class PersistentSqliteDriver(
     override fun getConnection(): Connection = connection
 
     /** Enables direct partition routing while the personal-library database is attached. */
-    fun setPersonalOverlayAttached(attached: Boolean) {
-        personalOverlayAttached = attached
+    fun setPersonalOverlayAttached(
+        attached: Boolean,
+        targetBookIds: Set<Long> = emptySet(),
+        targetLineIds: Set<Long> = emptySet(),
+    ) {
+        if (!attached) personalOverlayAttached = false
+        personalTargetBookIds = if (attached) targetBookIds else emptySet()
+        personalTargetLineIds = if (attached) targetLineIds else emptySet()
+        if (attached) personalOverlayAttached = true
     }
 
     override fun <T> queryEachLinkPartition(query: () -> T): List<T> {
@@ -74,6 +85,29 @@ class PersistentSqliteDriver(
             withForcedLinkSchema("personal", query),
         )
     }
+
+    override fun <T> queryEachLinkPartitionForTargetLines(
+        targetLineIds: Collection<Long>,
+        query: () -> T,
+    ): List<T> {
+        if (!personalOverlayAttached) return listOf(query())
+        if (targetLineIds.isEmpty()) return emptyList()
+
+        val results = ArrayList<T>(2)
+        // Main entities always have positive IDs; the immutable main database can
+        // never contain a link targeting a later personal (negative) line.
+        if (targetLineIds.any { it > 0L }) {
+            results += withForcedLinkSchema("main", query)
+        }
+        // Personal links may target either personal lines or selected main lines.
+        if (targetLineIds.any { it < 0L || it in personalTargetLineIds }) {
+            results += withForcedLinkSchema("personal", query)
+        }
+        return results
+    }
+
+    override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalTargetBookIds
 
     private fun <T> withForcedLinkSchema(
         schema: String,

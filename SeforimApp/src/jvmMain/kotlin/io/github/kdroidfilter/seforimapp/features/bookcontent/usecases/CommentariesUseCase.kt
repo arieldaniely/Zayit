@@ -1016,6 +1016,7 @@ class CommentariesUseCase(
         val commentaries = connections.filter { it.link.connectionType == ConnectionType.COMMENTARY }
         val targumLinks = connections.filter { it.link.connectionType in DISPLAYED_LINK_TYPES }
         val sourceLinks = connections.filter { it.link.connectionType == ConnectionType.SOURCE }
+        val mentionLinks = connections.filter { it.link.connectionType == ConnectionType.MENTION }
 
         val commentatorGroups =
             if (commentaries.isNotEmpty()) {
@@ -1029,6 +1030,7 @@ class CommentariesUseCase(
             commentatorGroups = commentatorGroups,
             targumSources = buildSourceMap(targumLinks, currentBookTitle),
             sources = buildSourceMap(sourceLinks, currentBookTitle),
+            mentions = buildSourceMap(mentionLinks, currentBookTitle),
         )
     }
 
@@ -1163,7 +1165,7 @@ class CommentariesUseCase(
         val currentState = stateManager.state.first()
         val selectedBook = currentState.navigation.selectedBook
 
-        val allConnections = repository.getCommentarySummariesForLines(allBaseIds, includeSources = true)
+        val allConnections = repository.getCommentarySummariesForLines(allBaseIds, includeSources = true, includeMentions = true)
         if (allConnections.isEmpty()) return storeAndMerge(missing.associateWith { LineConnectionsSnapshot() })
 
         val connectionsBySource = allConnections.groupBy { it.link.sourceLineId }

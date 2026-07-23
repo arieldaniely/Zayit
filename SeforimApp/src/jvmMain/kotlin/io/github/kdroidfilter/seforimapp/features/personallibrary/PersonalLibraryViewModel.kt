@@ -60,6 +60,8 @@ class PersonalLibraryViewModel(private val service: PersonalLibraryService) : Vi
     private fun apply(configuration: PersonalLibraryConfiguration, force: Boolean = false) {
         if (_state.value.isWorking) return
         _state.value = _state.value.copy(configuration = configuration)
-        service.requestSynchronize(configuration, force)
+        viewModelScope.launch {
+            service.requestSynchronize(configuration, force)
+        }
     }
 }

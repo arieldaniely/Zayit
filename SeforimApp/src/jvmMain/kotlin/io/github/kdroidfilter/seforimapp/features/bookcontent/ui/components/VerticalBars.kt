@@ -230,7 +230,10 @@ fun EndVerticalBar(
             val commentaryEnabled = selectedBook?.hasCommentaryConnection == true
             val sourcesEnabled =
                 selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
-            val linksEnabled = (selectedBook?.hasReferenceConnection == true) || (selectedBook?.hasOtherConnection == true)
+            val mentionsEnabled =
+                selectedBook?.hasReferenceConnection == true ||
+                    selectedBook?.hasOtherConnection == true ||
+                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true)
 
             // Hide both buttons on Home (no book selected)
             if (!noBookSelected) {
@@ -266,8 +269,7 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                // The links pane contains targum, reference, and other links.
-                if (targumEnabled || linksEnabled) {
+                if (targumEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleTargum) },
@@ -277,6 +279,23 @@ fun EndVerticalBar(
                         label = stringResource(Res.string.show_targumim),
                         enabled = !targumDisabledForLine,
                         shortcutHint = if (PlatformInfo.isMacOS) "K+⇧+⌘" else "K+Shift+Ctrl",
+                    )
+                }
+
+                if (mentionsEnabled) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText =
+                            if (selectedLine == null) {
+                                stringResource(Res.string.select_line_for_mentions)
+                            } else {
+                                stringResource(Res.string.show_mentions_tooltip)
+                            },
+                        onClick = { onEvent(BookContentEvent.ToggleMentions) },
+                        isSelected = uiState.content.showMentions,
+                        icon = Link,
+                        iconDescription = stringResource(Res.string.show_mentions),
+                        label = stringResource(Res.string.show_mentions),
+                        enabled = selectedLine != null,
                     )
                 }
 

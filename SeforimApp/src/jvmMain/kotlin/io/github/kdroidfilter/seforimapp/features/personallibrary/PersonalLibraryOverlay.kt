@@ -27,9 +27,18 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         }
         ensureTargetBookHints(connection)
         val targetBookIds = HashSet<Long>()
+        val sourceTargetBookIds = HashSet<Long>()
+        val mentionBookIds = HashSet<Long>()
         connection.createStatement().use { statement ->
-            statement.executeQuery("SELECT bookId FROM personal.personal_link_target_book").use { rows ->
-                while (rows.next()) targetBookIds += rows.getLong(1)
+            statement.executeQuery(
+                "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
+            ).use { rows ->
+                while (rows.next()) {
+                    val bookId = rows.getLong(1)
+                    targetBookIds += bookId
+                    if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
+                    if (rows.getInt(3) != 0) mentionBookIds += bookId
+                }
             }
         }
         TABLES.forEach { table ->
@@ -43,6 +52,8 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         driver.setPersonalOverlayAttached(
             attached = true,
             targetBookIds = targetBookIds,
+            sourceTargetBookIds = sourceTargetBookIds,
+            mentionBookIds = mentionBookIds,
         )
     }
 
@@ -50,16 +61,35 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         connection.createStatement().use { statement ->
             statement.execute(
                 "CREATE TABLE IF NOT EXISTS personal.personal_link_target_book " +
-                    "(bookId INTEGER PRIMARY KEY NOT NULL)",
+                    "(bookId INTEGER PRIMARY KEY NOT NULL,hasSourceLinks INTEGER NOT NULL DEFAULT 0," +
+                    "hasMentionLinks INTEGER NOT NULL DEFAULT 0)",
             )
+            runCatching {
+                statement.execute(
+                    "ALTER TABLE personal.personal_link_target_book " +
+                        "ADD COLUMN hasSourceLinks INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+            runCatching {
+                statement.execute(
+                    "ALTER TABLE personal.personal_link_target_book " +
+                        "ADD COLUMN hasMentionLinks INTEGER NOT NULL DEFAULT 0",
+                )
+            }
             val hintsReady =
                 statement.executeQuery(
                     "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
                 ).use { rows -> rows.next() && rows.getString(1) == "1" }
             if (!hintsReady) {
+                statement.execute("DELETE FROM personal.personal_link_target_book")
                 statement.execute(
-                    "INSERT OR IGNORE INTO personal.personal_link_target_book(bookId) " +
-                        "SELECT DISTINCT targetBookId FROM personal.link WHERE targetBookId > 0",
+                    "INSERT INTO personal.personal_link_target_book(bookId,hasSourceLinks,hasMentionLinks) " +
+                        "SELECT l.targetBookId," +
+                        "MAX(CASE WHEN ct.name IN ('COMMENTARY','SUPER_COMMENTARY','TARGUM','MIDRASH'," +
+                        "'PARSHANUT','DIBUR_HAMATCHIL','EIN_MISHPAT') THEN 1 ELSE 0 END)," +
+                        "MAX(CASE WHEN ct.name IN ('REFERENCE','OTHER') THEN 1 ELSE 0 END) " +
+                        "FROM personal.link l JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
+                        "WHERE l.targetBookId > 0 GROUP BY l.targetBookId",
                 )
                 statement.execute(
                     "INSERT INTO personal.schema_meta(key,value) VALUES('$TARGET_BOOK_HINTS_KEY','1') " +
@@ -70,7 +100,7 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
     }
 
     companion object {
-        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
         private val TABLES = listOf(
             "category", "category_closure", "author", "topic", "pub_place", "pub_date", "source",
             "book", "book_pub_place", "book_pub_date", "book_topic", "book_author", "line", "tocText",

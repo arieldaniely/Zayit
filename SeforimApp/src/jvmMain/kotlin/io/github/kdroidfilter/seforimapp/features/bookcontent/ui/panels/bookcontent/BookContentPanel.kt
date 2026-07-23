@@ -193,7 +193,7 @@ private fun BookContentPanelContent(
     }
 
     val isIslands = ThemeUtils.isIslandsStyle()
-    val hasBottomPane = uiState.content.showCommentaries || uiState.content.showSources
+    val hasBottomPane = uiState.content.showCommentaries || uiState.content.showSources || uiState.content.showMentions
     val panelBackground = JewelTheme.globalColors.panelBackground
 
     val paneCardModifier =
@@ -310,6 +310,18 @@ private fun BookContentPanelContent(
                             }
                         }
 
+                        uiState.content.showMentions -> {
+                            {
+                                MentionsPane(
+                                    uiState = uiState,
+                                    onEvent = onEvent,
+                                    lineConnections = connectionsCache,
+                                    showDiacritics = showDiacritics,
+                                    modifier = bottomPaneCardModifier,
+                                )
+                            }
+                        }
+
                         else -> null
                     },
             )
@@ -368,6 +380,25 @@ private fun SourcesPane(
             onEvent = onEvent,
             lineConnections = lineConnections,
             availabilityType = ConnectionType.SOURCE,
+            showDiacritics = showDiacritics,
+        )
+    }
+}
+
+@Composable
+private fun MentionsPane(
+    uiState: BookContentState,
+    onEvent: (BookContentEvent) -> Unit,
+    lineConnections: Map<Long, LineConnectionsSnapshot>,
+    showDiacritics: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        LineTargumView(
+            uiState = uiState,
+            onEvent = onEvent,
+            lineConnections = lineConnections,
+            availabilityType = ConnectionType.MENTION,
             showDiacritics = showDiacritics,
         )
     }

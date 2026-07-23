@@ -32,7 +32,7 @@ class BookContentStateManager(
         val navVisible = persisted.isBookTreeVisible
         val tocVisible = persisted.isTocVisible
         val notesVisible = persisted.isNotesVisible
-        val bottomPaneVisible = persisted.showCommentaries || persisted.showSources
+        val bottomPaneVisible = persisted.showCommentaries || persisted.showSources || persisted.showMentions
         val targumVisible = persisted.showTargum
 
         return BookContentState(
@@ -73,6 +73,7 @@ class BookContentStateManager(
                     showCommentaries = persisted.showCommentaries,
                     showTargum = persisted.showTargum,
                     showSources = persisted.showSources,
+                    showMentions = persisted.showMentions,
                     scrollIndex = persisted.contentScrollIndex,
                     scrollOffset = persisted.contentScrollOffset,
                     anchorId = persisted.contentAnchorLineId,
@@ -217,6 +218,7 @@ class BookContentStateManager(
                 scrollIndex = 0,
                 scrollOffset = 0,
                 showSources = false,
+                showMentions = false,
                 topAnchorLineId = -1L,
                 topAnchorRequestTimestamp = 0L,
             )
@@ -270,6 +272,7 @@ class BookContentStateManager(
                 showCommentaries = currentState.content.showCommentaries,
                 showTargum = currentState.content.showTargum,
                 showSources = currentState.content.showSources,
+                showMentions = currentState.content.showMentions,
                 paragraphScrollPosition = currentState.content.paragraphScrollPosition,
                 chapterScrollPosition = currentState.content.chapterScrollPosition,
                 selectedChapter = currentState.content.selectedChapter,

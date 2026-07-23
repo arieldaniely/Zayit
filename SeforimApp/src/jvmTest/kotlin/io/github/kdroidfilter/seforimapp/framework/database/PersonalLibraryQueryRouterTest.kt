@@ -175,6 +175,9 @@ class PersonalLibraryQueryRouterTest {
             )
             assertTrue(driver.hasAdditionalLinksTargetingBook(7L))
             assertTrue(!driver.hasAdditionalLinksTargetingBook(8L))
+            assertTrue(driver.hasAdditionalSourceLinksTargetingBook(7L))
+            assertTrue(!driver.hasAdditionalSourceLinksTargetingBook(9L))
+            assertTrue(driver.hasAdditionalMentionLinksForBook(9L))
         } finally {
             driver.close()
         }

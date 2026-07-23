@@ -38,8 +38,7 @@ import kotlin.math.min
  */
 private val YEAR_REGEX = Regex("""-?\d{3,4}""")
 private const val MAX_BASE_LINES_PER_REQUEST = 128
-private val DISPLAYED_LINK_TYPES =
-    setOf(ConnectionType.TARGUM, ConnectionType.REFERENCE, ConnectionType.OTHER)
+private val DISPLAYED_LINK_TYPES = setOf(ConnectionType.TARGUM)
 
 class CommentariesUseCase(
     private val repository: SeforimRepository,
@@ -200,6 +199,20 @@ class CommentariesUseCase(
             ).flow.cachedIn(scope)
         }
 
+    fun buildMentionsPager(
+        lineId: Long,
+        sourceBookId: Long? = null,
+    ): Flow<PagingData<CommentaryWithText>> =
+        cachedPager("men:$lineId:${sourceBookId ?: -1L}") {
+            val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
+            Pager(
+                config = PagingDefaults.COMMENTS.config(placeholders = false),
+                pagingSourceFactory = {
+                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.MENTION))
+                },
+            ).flow.cachedIn(scope)
+        }
+
     // ========== Multi-line pagers for multi-selection ==========
 
     /**
@@ -249,6 +262,20 @@ class CommentariesUseCase(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
                     MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.SOURCE))
+                },
+            ).flow.cachedIn(scope)
+        }
+
+    fun buildMentionsPagerForLines(
+        lineIds: List<Long>,
+        sourceBookId: Long? = null,
+    ): Flow<PagingData<CommentaryWithText>> =
+        cachedPager("menL:${lineIds.joinToString(",")}:${sourceBookId ?: -1L}") {
+            val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
+            Pager(
+                config = PagingDefaults.COMMENTS.config(placeholders = false),
+                pagingSourceFactory = {
+                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.MENTION))
                 },
             ).flow.cachedIn(scope)
         }
@@ -401,6 +428,16 @@ class CommentariesUseCase(
      * globally. Per-lineId iteration would interleave per-source-book entries
      * by lineId rather than by catalog position.
      */
+    suspend fun getAvailableMentionsForLines(lineIds: List<Long>): Map<String, Long> {
+        if (lineIds.isEmpty()) return emptyMap()
+        return runSuspendCatching {
+            val allBaseIds = lineIds.flatMap { resolveBaseLineIds(it) }.distinct()
+            val links = repository.getMentionSummariesForLines(allBaseIds)
+            val currentTitle = stateManager.state.first().navigation.selectedBook?.title?.trim().orEmpty()
+            buildSourceMap(links, currentTitle)
+        }.getOrElse { emptyMap() }
+    }
+
     suspend fun getAvailableSourcesForLines(lineIds: List<Long>): Map<String, Long> {
         if (lineIds.isEmpty()) return emptyMap()
         return runSuspendCatching {
@@ -411,7 +448,7 @@ class CommentariesUseCase(
                     ?: return@runSuspendCatching emptyMap<String, Long>()
             if (
                 !selectedBook.hasSourceConnection &&
-                !repository.hasAdditionalLinksTargetingBook(selectedBook.id)
+                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id)
             ) {
                 return@runSuspendCatching emptyMap<String, Long>()
             }
@@ -423,9 +460,7 @@ class CommentariesUseCase(
             if (allBaseIds.isEmpty()) return@runSuspendCatching emptyMap<String, Long>()
 
             val links =
-                repository
-                    .getCommentarySummariesForLines(allBaseIds, includeSources = true)
-                    .filter { it.link.connectionType == ConnectionType.SOURCE }
+                repository.getSourceSummariesForLines(allBaseIds)
 
             buildSourceMap(links, selectedBook.title.trim())
         }.getOrElse { emptyMap() }
@@ -1051,6 +1086,14 @@ class CommentariesUseCase(
             buildSourceMap(links, currentBookTitle)
         }.getOrElse { emptyMap() }
 
+    suspend fun getAvailableMentions(lineId: Long): Map<String, Long> =
+        runSuspendCatching {
+            val baseIds = resolveBaseLineIds(lineId)
+            val links = repository.getMentionSummariesForLines(baseIds)
+            val currentTitle = stateManager.state.first().navigation.selectedBook?.title?.trim().orEmpty()
+            buildSourceMap(links, currentTitle)
+        }.getOrElse { emptyMap() }
+
     suspend fun getAvailableSources(lineId: Long): Map<String, Long> =
         runSuspendCatching {
             val selectedBook =
@@ -1062,16 +1105,14 @@ class CommentariesUseCase(
             // Its exact side index keeps the old fast path for every unaffected main book.
             if (
                 !selectedBook.hasSourceConnection &&
-                !repository.hasAdditionalLinksTargetingBook(selectedBook.id)
+                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id)
             ) {
                 return@runSuspendCatching emptyMap<String, Long>()
             }
 
             val baseIds = resolveBaseLineIds(lineId)
             val links =
-                repository
-                    .getCommentarySummariesForLines(baseIds, includeSources = true)
-                    .filter { it.link.connectionType == ConnectionType.SOURCE }
+                repository.getSourceSummariesForLines(baseIds)
 
             val currentBookTitle = selectedBook.title.trim()
             buildSourceMap(links, currentBookTitle)

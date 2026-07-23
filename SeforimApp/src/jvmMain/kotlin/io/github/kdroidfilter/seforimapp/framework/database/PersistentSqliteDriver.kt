@@ -53,6 +53,10 @@ class PersistentSqliteDriver(
     private var personalOverlayAttached = false
     @Volatile
     private var personalTargetBookIds: Set<Long> = emptySet()
+    @Volatile
+    private var personalSourceTargetBookIds: Set<Long> = emptySet()
+    @Volatile
+    private var personalMentionBookIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
@@ -68,9 +72,13 @@ class PersistentSqliteDriver(
     fun setPersonalOverlayAttached(
         attached: Boolean,
         targetBookIds: Set<Long> = emptySet(),
+        sourceTargetBookIds: Set<Long> = emptySet(),
+        mentionBookIds: Set<Long> = emptySet(),
     ) {
         if (!attached) personalOverlayAttached = false
         personalTargetBookIds = if (attached) targetBookIds else emptySet()
+        personalSourceTargetBookIds = if (attached) sourceTargetBookIds else emptySet()
+        personalMentionBookIds = if (attached) mentionBookIds else emptySet()
         if (attached) personalOverlayAttached = true
     }
 
@@ -120,6 +128,12 @@ class PersistentSqliteDriver(
 
     override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean =
         personalOverlayAttached && bookId in personalTargetBookIds
+
+    override fun hasAdditionalSourceLinksTargetingBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalSourceTargetBookIds
+
+    override fun hasAdditionalMentionLinksForBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalMentionBookIds
 
     private fun <T> withForcedLinkSchema(
         schema: String,

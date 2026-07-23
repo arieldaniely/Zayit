@@ -68,6 +68,9 @@ import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.links
+import seforimapp.seforimapp.generated.resources.mentions
+import seforimapp.seforimapp.generated.resources.no_mentions_for_line
+import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
 import seforimapp.seforimapp.generated.resources.no_sources_for_line
 import seforimapp.seforimapp.generated.resources.select_line_for_links
@@ -159,6 +162,7 @@ private fun SingleLineTargumView(
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
+                                    ConnectionType.MENTION -> null
                                     else -> snapshot.targumSources
                                 }
                             }
@@ -168,11 +172,12 @@ private fun SingleLineTargumView(
                         mutableStateOf<Map<String, Long>>(cachedSources ?: emptyMap())
                     }
 
-                    LaunchedEffect(selectedLine.id, lineConnections) {
+                    LaunchedEffect(selectedLine.id, lineConnections, availabilityType) {
                         val cached =
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
+                                    ConnectionType.MENTION -> null
                                     else -> snapshot.targumSources
                                 }
                             }
@@ -322,17 +327,28 @@ private fun SingleLineTargumView(
                                                 title = section.title,
                                                 textSize = commentTextSize,
                                                 onClick =
-                                                    if (availabilityType == ConnectionType.SOURCE) {
-                                                        {
-                                                            onEvent(
-                                                                BookContentEvent.OpenSourceBookInNewTab(
-                                                                    bookId = section.bookId,
-                                                                    baseLineIds = listOf(selectedLine.id),
-                                                                ),
-                                                            )
+                                                    when (availabilityType) {
+                                                        ConnectionType.SOURCE -> {
+                                                            {
+                                                                onEvent(
+                                                                    BookContentEvent.OpenSourceBookInNewTab(
+                                                                        bookId = section.bookId,
+                                                                        baseLineIds = listOf(selectedLine.id),
+                                                                    ),
+                                                                )
+                                                            }
                                                         }
-                                                    } else {
-                                                        null
+                                                        ConnectionType.MENTION -> {
+                                                            {
+                                                                onEvent(
+                                                                    BookContentEvent.OpenBookByIdInNewTab(
+                                                                        bookId = section.bookId,
+                                                                        baseLineIds = listOf(selectedLine.id),
+                                                                    ),
+                                                                )
+                                                            }
+                                                        }
+                                                        else -> null
                                                     },
                                             )
                                         }
@@ -428,22 +444,35 @@ fun LineTargumView(
 
     // Sélectionner les bons providers et callbacks selon le type
     val isSourceType = availabilityType == ConnectionType.SOURCE
+    val isMentionType = availabilityType == ConnectionType.MENTION
 
     val buildPagerFor =
-        if (isSourceType) providers.buildSourcesPagerFor else providers.buildLinksPagerFor
+        when {
+            isSourceType -> providers.buildSourcesPagerFor
+            isMentionType -> providers.buildMentionsPagerFor
+            else -> providers.buildLinksPagerFor
+        }
     val getAvailableForLine =
-        if (isSourceType) providers.getAvailableSourcesForLine else providers.getAvailableLinksForLine
+        when {
+            isSourceType -> providers.getAvailableSourcesForLine
+            isMentionType -> providers.getAvailableMentionsForLine
+            else -> providers.getAvailableLinksForLine
+        }
     val initiallySelectedIds =
-        if (isSourceType) contentState.selectedSourceIds else contentState.selectedTargumSourceIds
+        when {
+            isSourceType -> contentState.selectedSourceIds
+            isMentionType -> emptySet()
+            else -> contentState.selectedTargumSourceIds
+        }
 
     val onSelectedSourcesChange =
-        remember(contentState.primaryLine, isSourceType) {
+        remember(contentState.primaryLine, isSourceType, isMentionType) {
             { ids: Set<Long> ->
                 contentState.primaryLine?.let { line ->
-                    if (isSourceType) {
-                        onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
-                    } else {
-                        onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
+                    when {
+                        isSourceType -> onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
+                        isMentionType -> Unit
+                        else -> onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
                     }
                 }
                 Unit
@@ -473,22 +502,33 @@ fun LineTargumView(
         }
 
     val onHide =
-        remember(isSourceType) {
+        remember(isSourceType, isMentionType) {
             {
-                if (isSourceType) {
-                    onEvent(BookContentEvent.ToggleSources)
-                } else {
-                    onEvent(BookContentEvent.ToggleTargum)
+                when {
+                    isSourceType -> onEvent(BookContentEvent.ToggleSources)
+                    isMentionType -> onEvent(BookContentEvent.ToggleMentions)
+                    else -> onEvent(BookContentEvent.ToggleTargum)
                 }
             }
         }
 
     // Titres et messages selon le type
-    val titleRes = if (isSourceType) Res.string.sources else Res.string.links
-    val selectLineRes =
-        if (isSourceType) Res.string.select_line_for_sources else Res.string.select_line_for_links
-    val emptyRes = if (isSourceType) Res.string.no_sources_for_line else Res.string.no_links_for_line
-    val fontCodeFlow = if (isSourceType) AppSettings.sourceFontCodeFlow else AppSettings.targumFontCodeFlow
+    val titleRes = when {
+        isSourceType -> Res.string.sources
+        isMentionType -> Res.string.mentions
+        else -> Res.string.links
+    }
+    val selectLineRes = when {
+        isSourceType -> Res.string.select_line_for_sources
+        isMentionType -> Res.string.select_line_for_mentions
+        else -> Res.string.select_line_for_links
+    }
+    val emptyRes = when {
+        isSourceType -> Res.string.no_sources_for_line
+        isMentionType -> Res.string.no_mentions_for_line
+        else -> Res.string.no_links_for_line
+    }
+    val fontCodeFlow = if (isSourceType || isMentionType) AppSettings.sourceFontCodeFlow else AppSettings.targumFontCodeFlow
 
     if (isManualMultiSelection) {
         MultiLineTargumView(
@@ -577,6 +617,7 @@ private fun MultiLineTargumView(
         value =
             when (availabilityType) {
                 ConnectionType.SOURCE -> providers.getAvailableSourcesForLines(selectedLineIds)
+                ConnectionType.MENTION -> providers.getAvailableMentionsForLines(selectedLineIds)
                 else -> providers.getAvailableLinksForLines(selectedLineIds)
             }
     }
@@ -584,11 +625,13 @@ private fun MultiLineTargumView(
     val titleRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.sources
+            ConnectionType.MENTION -> Res.string.mentions
             else -> Res.string.links
         }
     val emptyRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.no_sources_for_line
+            ConnectionType.MENTION -> Res.string.no_mentions_for_line
             else -> Res.string.no_links_for_line
         }
 
@@ -628,6 +671,9 @@ private fun MultiLineTargumView(
                                 when (availabilityType) {
                                     ConnectionType.SOURCE ->
                                         providers.buildSourcesPagerForLines(selectedLineIds, meta.bookId)
+
+                                    ConnectionType.MENTION ->
+                                        providers.buildMentionsPagerForLines(selectedLineIds, meta.bookId)
 
                                     else ->
                                         providers.buildLinksPagerForLines(selectedLineIds, meta.bookId)
@@ -732,17 +778,28 @@ private fun MultiLineTargumView(
                                         title = section.title,
                                         textSize = commentTextSize,
                                         onClick =
-                                            if (availabilityType == ConnectionType.SOURCE) {
-                                                {
-                                                    onEvent(
-                                                        BookContentEvent.OpenSourceBookInNewTab(
-                                                            bookId = section.bookId,
-                                                            baseLineIds = selectedLineIds,
-                                                        ),
-                                                    )
+                                            when (availabilityType) {
+                                                ConnectionType.SOURCE -> {
+                                                    {
+                                                        onEvent(
+                                                            BookContentEvent.OpenSourceBookInNewTab(
+                                                                bookId = section.bookId,
+                                                                baseLineIds = selectedLineIds,
+                                                            ),
+                                                        )
+                                                    }
                                                 }
-                                            } else {
-                                                null
+                                                ConnectionType.MENTION -> {
+                                                    {
+                                                        onEvent(
+                                                            BookContentEvent.OpenBookByIdInNewTab(
+                                                                bookId = section.bookId,
+                                                                baseLineIds = selectedLineIds,
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+                                                else -> null
                                             },
                                     )
                                 }

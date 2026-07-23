@@ -646,4 +646,9 @@
     <string name="pdf_removing_library">מסיר…</string>
     <string name="pdf_remove_success">ספרי ה-PDF הוסרו בהצלחה</string>
     <string name="pdf_remove_failed">הסרת ספרי ה-PDF נכשלה: %s</string>
+    <string name="mentions">&#x05D0;&#x05D6;&#x05DB;&#x05D5;&#x05E8;&#x05D9;&#x05DD;</string>
+    <string name="show_mentions">&#x05D0;&#x05D6;&#x05DB;&#x05D5;&#x05E8;&#x05D9;&#x05DD;</string>
+    <string name="show_mentions_tooltip">&#x05D4;&#x05E6;&#x05D2; &#x05D0;&#x05D6;&#x05DB;&#x05D5;&#x05E8;&#x05D9;&#x05DD;</string>
+    <string name="select_line_for_mentions">&#x05D1;&#x05D7;&#x05E8; &#x05E9;&#x05D5;&#x05E8;&#x05D4; &#x05DB;&#x05D3;&#x05D9; &#x05DC;&#x05E6;&#x05E4;&#x05D5;&#x05EA; &#x05D1;&#x05D0;&#x05D6;&#x05DB;&#x05D5;&#x05E8;&#x05D9;&#x05DD;</string>
+    <string name="no_mentions_for_line">&#x05D0;&#x05D9;&#x05DF; &#x05D0;&#x05D6;&#x05DB;&#x05D5;&#x05E8;&#x05D9;&#x05DD; &#x05D6;&#x05DE;&#x05D9;&#x05E0;&#x05D9;&#x05DD; &#x05DC;&#x05E9;&#x05D5;&#x05E8;&#x05D4; &#x05D6;&#x05D5;</string>
 </resources>

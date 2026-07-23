@@ -40,7 +40,7 @@ class PersonalLibraryImporterTest {
                         assertEquals(2, rows.getInt("totalLines"))
                     }
                     statement.executeQuery(
-                        "SELECT value FROM schema_meta WHERE key='personal_target_book_hints_v1'",
+                        "SELECT value FROM schema_meta WHERE key='personal_target_book_hints_v2'",
                     ).use { rows ->
                         assertTrue(rows.next())
                         assertEquals("1", rows.getString(1))

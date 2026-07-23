@@ -84,7 +84,8 @@ class PersonalLibraryImporter(
                 it.execute("PRAGMA synchronous=NORMAL")
                 it.execute(
                     "CREATE TABLE IF NOT EXISTS personal_link_target_book " +
-                        "(bookId INTEGER PRIMARY KEY NOT NULL)",
+                        "(bookId INTEGER PRIMARY KEY NOT NULL,hasSourceLinks INTEGER NOT NULL DEFAULT 0," +
+                        "hasMentionLinks INTEGER NOT NULL DEFAULT 0)",
                 )
             }
             target.autoCommit = false
@@ -117,6 +118,8 @@ class PersonalLibraryImporter(
         private val personalBooksByFolderAndTitle = HashMap<Pair<String, String>, BookRef>()
         private val booksWithSourceLinks = HashSet<Long>()
         private val booksWithTargetLinks = HashSet<Long>()
+        private val sourceTargetBooks = HashSet<Long>()
+        private val mentionTargetBooks = HashSet<Long>()
         private val flagsByBook = HashMap<Long, MutableSet<ConnectionType>>()
 
         fun importFolder(folder: PersonalBookFolder): PersonalImportSummary {
@@ -285,19 +288,42 @@ class PersonalLibraryImporter(
                         val sourceLineId = source.lineIds.getOrNull(sourceIndex) ?: return@forEachIndexed
                         val targetLineId = target.lineIds.getOrNull(targetIndex)
                             ?: base.lineId(target.id, targetIndex) ?: return@forEachIndexed
-                        var type = ConnectionType.fromString(data.connectionType)
-                        if (type == ConnectionType.SOURCE) type = ConnectionType.OTHER
+                        val declaredType = ConnectionType.fromString(data.connectionType)
+                        val isExplicitSource = declaredType == ConnectionType.SOURCE
+                        val type = if (isExplicitSource) ConnectionType.COMMENTARY else declaredType
+                        val storedSourceBook = if (isExplicitSource) target else source
+                        val storedTargetBook = if (isExplicitSource) source else target
+                        val storedSourceLineId = if (isExplicitSource) targetLineId else sourceLineId
+                        val storedTargetLineId = if (isExplicitSource) sourceLineId else targetLineId
+                        val storedTargetIndex = if (isExplicitSource) sourceIndex else targetIndex
                         val typeId = base.connectionTypes[type.name] ?: return@forEachIndexed
-                        val linkId = ids.id("link:${folder.id}:${file.fileName}:$index:$sourceLineId:$targetLineId")
+                        val linkId = ids.id("link:${folder.id}:${file.fileName}:$index:$storedSourceLineId:$storedTargetLineId")
                         execute(
                             """INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
                                targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)""".trimIndent(),
-                            linkId, source.id, target.id, sourceLineId, targetLineId, targetIndex, target.order, typeId,
+                            linkId, storedSourceBook.id, storedTargetBook.id, storedSourceLineId, storedTargetLineId,
+                            storedTargetIndex, storedTargetBook.order, typeId,
                         )
-                        booksWithSourceLinks += source.id
-                        booksWithTargetLinks += target.id
-                        flagsByBook.getOrPut(source.id, ::mutableSetOf).add(type)
-                        flagsByBook.getOrPut(target.id, ::mutableSetOf).add(type)
+                        booksWithSourceLinks += storedSourceBook.id
+                        booksWithTargetLinks += storedTargetBook.id
+                        if (
+                            type == ConnectionType.COMMENTARY ||
+                            type == ConnectionType.SUPER_COMMENTARY ||
+                            type == ConnectionType.TARGUM ||
+                            type == ConnectionType.MIDRASH ||
+                            type == ConnectionType.PARSHANUT ||
+                            type == ConnectionType.DIBUR_HAMATCHIL ||
+                            type == ConnectionType.EIN_MISHPAT
+                        ) {
+                            sourceTargetBooks += storedTargetBook.id
+                        }
+                        if (type == ConnectionType.REFERENCE || type == ConnectionType.OTHER) {
+                            mentionTargetBooks += storedTargetBook.id
+                        }
+                        flagsByBook.getOrPut(storedSourceBook.id, ::mutableSetOf).add(type)
+                        flagsByBook.getOrPut(storedTargetBook.id, ::mutableSetOf).add(
+                            if (isExplicitSource) ConnectionType.SOURCE else type,
+                        )
                         count++
                     }
                 }
@@ -307,7 +333,13 @@ class PersonalLibraryImporter(
 
         fun finishLinks() {
             booksWithTargetLinks.filter { it > 0L }.forEach { bookId ->
-                execute("INSERT OR IGNORE INTO personal_link_target_book(bookId) VALUES(?)", bookId)
+                execute(
+                    "INSERT OR REPLACE INTO personal_link_target_book(" +
+                        "bookId,hasSourceLinks,hasMentionLinks) VALUES(?,?,?)",
+                    bookId,
+                    if (bookId in sourceTargetBooks) 1 else 0,
+                    if (bookId in mentionTargetBooks) 1 else 0,
+                )
             }
             execute(
                 "INSERT INTO schema_meta(key,value) VALUES(?,?) " +
@@ -327,9 +359,9 @@ class PersonalLibraryImporter(
                        hasCommentaryConnection=?,hasOtherConnection=? WHERE id=?""".trimIndent(),
                     if (ConnectionType.TARGUM in flags) 1 else 0,
                     if (ConnectionType.REFERENCE in flags) 1 else 0,
-                    1,
+                    if (ConnectionType.SOURCE in flags) 1 else 0,
                     if (flags.any { it == ConnectionType.COMMENTARY || it == ConnectionType.SUPER_COMMENTARY }) 1 else 0,
-                    if (flags.any { it !in setOf(ConnectionType.TARGUM, ConnectionType.REFERENCE, ConnectionType.COMMENTARY, ConnectionType.SUPER_COMMENTARY) }) 1 else 0,
+                    if (ConnectionType.OTHER in flags) 1 else 0,
                     bookId,
                 )
             }
@@ -439,7 +471,7 @@ class PersonalLibraryImporter(
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
-        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
         fun normalizeLabel(value: String): String = value.trim()

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -100,7 +102,8 @@ fun HistoryPanel(
     val historyManager: HistoryManager = appGraph.historyManager
     val entries by historyManager.entries.collectAsState()
 
-    var searchQuery by remember { mutableStateOf("") }
+    val searchQueryState = remember { TextFieldState() }
+    val searchQuery by remember { derivedStateOf { searchQueryState.text.toString() } }
     val paneHoverSource = remember { MutableInteractionSource() }
 
     val filteredEntries =
@@ -172,9 +175,8 @@ fun HistoryPanel(
         // Search History Filter Bar
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
             TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text(stringResource(Res.string.search_history_placeholder)) },
+                state = searchQueryState,
+                placeholder = { Text(text = stringResource(Res.string.search_history_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = {
                     Icon(
@@ -189,8 +191,7 @@ fun HistoryPanel(
                             Box(
                                 modifier =
                                     Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable { searchQuery = "" }
+                                        .clip(RoundedCornerShape(4.dp)).clickable { searchQueryState.edit { clear() } }
                                         .padding(2.dp),
                             ) {
                                 Icon(

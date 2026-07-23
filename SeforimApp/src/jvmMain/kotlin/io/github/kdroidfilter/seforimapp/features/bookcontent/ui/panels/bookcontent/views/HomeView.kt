@@ -540,7 +540,7 @@ private fun HomeBody(
                                     ReferenceByCategorySection(
                                         state = referenceSearchState,
                                         tocState = tocSearchState,
-                                        isExpanded = scopeExpanded,
+                                    expanded = scopeExpanded,
                                         onExpandedChange = { scopeExpanded = it },
                                         suggestionsVisible = searchUi.suggestionsVisible,
                                         categorySuggestions = mappedCategorySuggestions,
@@ -558,7 +558,7 @@ private fun HomeBody(
                                         onPickCategory = { picked ->
                                             searchCallbacks.onPickCategory(picked.category)
                                             val full = dedupAdjacent(picked.path).joinToString(breadcrumbSeparator)
-                                            skipNextReferenceQuery = true
+                                        skipNextReferenceQuery = true
                                             referenceSearchState.edit { replace(0, length, full) }
                                         },
                                         onPickBook = { picked ->
@@ -647,7 +647,7 @@ private fun HomeBody(
  * In dark mode: accent color tint from the current theme.
  */
 @Composable
-private fun LogoImage(modifier: Modifier = Modifier) {
+fun LogoImage(modifier: Modifier = Modifier) {
     val isDark = JewelTheme.isDark
     val accent = JewelTheme.globalColors.outlines.focused
     val logoTint = if (isDark) accent else AccentColor.Gold.forMode(isDark = false)
@@ -745,13 +745,12 @@ private fun ReferenceByCategorySection(
             GroupHeader(
                 text = stringResource(Res.string.search_by_category_or_book),
                 modifier =
-                    Modifier
-                        .clickable(indication = null, interactionSource = interactionSource) {
-                            onExpandedChange(!isExpanded)
-                        }.hoverable(interactionSource)
+                    Modifier.clickable(indication = null, interactionSource = interactionSource) {
+                        onExpandedChange(!expanded)
+                    }.hoverable(interactionSource)
                         .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR))),
                 startComponent = {
-                    if (isExpanded) {
+                    if (expanded) {
                         Icon(AllIconsKeys.General.ChevronDown, stringResource(Res.string.chevron_icon_description))
                     } else {
                         Icon(AllIconsKeys.General.ChevronLeft, stringResource(Res.string.chevron_icon_description))
@@ -760,7 +759,7 @@ private fun ReferenceByCategorySection(
             )
         }
 
-        if (!showHeader || isExpanded) {
+        if (!showHeader || expanded) {
             SearchBar(
                 state = activeState,
                 selectedFilter = SearchFilter.REFERENCE,
@@ -1027,7 +1026,7 @@ private fun TocSuggestionsPanel(
  * the previous by a common separator (comma/space/colon/dash). This keeps
  * suggestions concise while preserving the most specific path.
  */
-private fun dedupAdjacent(parts: List<String>): List<String> {
+fun dedupAdjacent(parts: List<String>): List<String> {
     if (parts.isEmpty()) return parts
 
     fun extends(
@@ -1073,7 +1072,7 @@ private fun dedupAdjacent(parts: List<String>): List<String> {
  * this between the keyboard handlers and [TocSuggestionsPanel] keeps the rendered list,
  * the highlighted row and the picked entry in sync, so navigation opens the right place.
  */
-private fun tocSuggestionsForDisplay(
+fun tocSuggestionsForDisplay(
     selectedBook: BookModel?,
     tocSuggestions: List<TocSuggestion>,
 ): List<Pair<TocSuggestion, List<String>>> =
@@ -1086,7 +1085,7 @@ private fun tocSuggestionsForDisplay(
  * Strips the selected book's title if it redundantly appears as the first
  * breadcrumb in a TOC path, handling common punctuation right after the title.
  */
-private fun stripBookPrefixFromTocPath(
+fun stripBookPrefixFromTocPath(
     selectedBook: BookModel?,
     parts: List<String>,
 ): List<String> {
@@ -1108,7 +1107,7 @@ private fun stripBookPrefixFromTocPath(
 }
 
 @Composable
-private fun SuggestionRow(
+fun SuggestionRow(
     parts: List<String>,
     onClick: () -> Unit,
     highlighted: Boolean = false,
@@ -1218,7 +1217,7 @@ private fun SuggestionRow(
 }
 
 @Composable
-private fun SearchBar(
+fun SearchBar(
     state: TextFieldState,
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
@@ -1745,7 +1744,7 @@ private fun SearchBar(
 }
 
 @Composable
-private fun SelectedBookChip(
+fun SelectedBookChip(
     title: String,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1779,7 +1778,7 @@ private fun SelectedBookChip(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun IntegratedSwitch(
+fun IntegratedSwitch(
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
     modifier: Modifier = Modifier,
@@ -1824,7 +1823,7 @@ private fun IntegratedSwitch(
 }
 
 @Composable
-private fun FilterButton(
+fun FilterButton(
     text: String,
     isSelected: Boolean,
     onClick: () -> Unit,

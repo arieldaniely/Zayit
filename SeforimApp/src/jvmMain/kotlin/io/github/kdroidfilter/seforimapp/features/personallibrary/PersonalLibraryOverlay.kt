@@ -81,15 +81,30 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
                     "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
                 ).use { rows -> rows.next() && rows.getString(1) == "1" }
             if (!hintsReady) {
-                statement.execute("DELETE FROM personal.personal_link_target_book")
+                val legacyHintsReady =
+                    statement.executeQuery(
+                        "SELECT value FROM personal.schema_meta WHERE key='$LEGACY_TARGET_BOOK_HINTS_KEY'",
+                    ).use { rows -> rows.next() && rows.getString(1) == "1" }
+                if (!legacyHintsReady) {
+                    statement.execute(
+                        "INSERT OR IGNORE INTO personal.personal_link_target_book(bookId) " +
+                            "SELECT DISTINCT targetBookId FROM personal.link WHERE targetBookId > 0",
+                    )
+                }
                 statement.execute(
-                    "INSERT INTO personal.personal_link_target_book(bookId,hasSourceLinks,hasMentionLinks) " +
-                        "SELECT l.targetBookId," +
-                        "MAX(CASE WHEN ct.name IN ('COMMENTARY','SUPER_COMMENTARY','TARGUM','MIDRASH'," +
-                        "'PARSHANUT','DIBUR_HAMATCHIL','EIN_MISHPAT') THEN 1 ELSE 0 END)," +
-                        "MAX(CASE WHEN ct.name IN ('REFERENCE','OTHER') THEN 1 ELSE 0 END) " +
-                        "FROM personal.link l JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
-                        "WHERE l.targetBookId > 0 GROUP BY l.targetBookId",
+                    "UPDATE personal.personal_link_target_book SET hasSourceLinks=EXISTS(" +
+                        "SELECT 1 FROM personal.link l " +
+                        "JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
+                        "WHERE l.targetBookId=personal_link_target_book.bookId " +
+                        "AND ct.name IN ('COMMENTARY','SUPER_COMMENTARY','TARGUM','MIDRASH'," +
+                        "'PARSHANUT','DIBUR_HAMATCHIL','EIN_MISHPAT') LIMIT 1)",
+                )
+                statement.execute(
+                    "UPDATE personal.personal_link_target_book SET hasMentionLinks=EXISTS(" +
+                        "SELECT 1 FROM personal.link l " +
+                        "JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
+                        "WHERE l.targetBookId=personal_link_target_book.bookId " +
+                        "AND ct.name IN ('REFERENCE','OTHER') LIMIT 1)",
                 )
                 statement.execute(
                     "INSERT INTO personal.schema_meta(key,value) VALUES('$TARGET_BOOK_HINTS_KEY','1') " +
@@ -101,6 +116,7 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
 
     companion object {
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
+        private const val LEGACY_TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
         private val TABLES = listOf(
             "category", "category_closure", "author", "topic", "pub_place", "pub_date", "source",
             "book", "book_pub_place", "book_pub_date", "book_topic", "book_author", "line", "tocText",

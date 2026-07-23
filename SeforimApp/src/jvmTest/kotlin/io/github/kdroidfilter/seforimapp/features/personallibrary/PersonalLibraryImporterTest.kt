@@ -39,6 +39,18 @@ class PersonalLibraryImporterTest {
                         assertEquals("ספר בדיקה", rows.getString("title"))
                         assertEquals(2, rows.getInt("totalLines"))
                     }
+                    statement.executeQuery(
+                        "SELECT value FROM schema_meta WHERE key='personal_target_book_hints_v1'",
+                    ).use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("1", rows.getString(1))
+                    }
+                    statement.executeQuery(
+                        "SELECT COUNT(*) FROM personal_link_target_book",
+                    ).use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals(0, rows.getInt(1))
+                    }
                 }
             }
         } finally {

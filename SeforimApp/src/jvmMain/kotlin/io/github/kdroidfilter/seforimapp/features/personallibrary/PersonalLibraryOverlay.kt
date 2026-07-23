@@ -25,17 +25,12 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
             statement.execute("PRAGMA personal.cache_size=-65536")
             statement.execute("PRAGMA personal.mmap_size=134217728")
         }
+        ensureTargetBookHints(connection)
         val targetBookIds = HashSet<Long>()
-        val targetLineIds = HashSet<Long>()
         connection.createStatement().use { statement ->
-            statement
-                .executeQuery("SELECT targetBookId, targetLineId FROM personal.link WHERE targetLineId > 0")
-                .use { rows ->
-                    while (rows.next()) {
-                        targetBookIds += rows.getLong(1)
-                        targetLineIds += rows.getLong(2)
-                    }
-                }
+            statement.executeQuery("SELECT bookId FROM personal.personal_link_target_book").use { rows ->
+                while (rows.next()) targetBookIds += rows.getLong(1)
+            }
         }
         TABLES.forEach { table ->
             connection.createStatement().use {
@@ -48,11 +43,34 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         driver.setPersonalOverlayAttached(
             attached = true,
             targetBookIds = targetBookIds,
-            targetLineIds = targetLineIds,
         )
     }
 
+    private fun ensureTargetBookHints(connection: java.sql.Connection) {
+        connection.createStatement().use { statement ->
+            statement.execute(
+                "CREATE TABLE IF NOT EXISTS personal.personal_link_target_book " +
+                    "(bookId INTEGER PRIMARY KEY NOT NULL)",
+            )
+            val hintsReady =
+                statement.executeQuery(
+                    "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
+                ).use { rows -> rows.next() && rows.getString(1) == "1" }
+            if (!hintsReady) {
+                statement.execute(
+                    "INSERT OR IGNORE INTO personal.personal_link_target_book(bookId) " +
+                        "SELECT DISTINCT targetBookId FROM personal.link WHERE targetBookId > 0",
+                )
+                statement.execute(
+                    "INSERT INTO personal.schema_meta(key,value) VALUES('$TARGET_BOOK_HINTS_KEY','1') " +
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                )
+            }
+        }
+    }
+
     companion object {
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
         private val TABLES = listOf(
             "category", "category_closure", "author", "topic", "pub_place", "pub_date", "source",
             "book", "book_pub_place", "book_pub_date", "book_topic", "book_author", "line", "tocText",

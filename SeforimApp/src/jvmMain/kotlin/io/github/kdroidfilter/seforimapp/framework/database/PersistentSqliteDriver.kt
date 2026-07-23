@@ -53,8 +53,6 @@ class PersistentSqliteDriver(
     private var personalOverlayAttached = false
     @Volatile
     private var personalTargetBookIds: Set<Long> = emptySet()
-    @Volatile
-    private var personalTargetLineIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
@@ -70,11 +68,9 @@ class PersistentSqliteDriver(
     fun setPersonalOverlayAttached(
         attached: Boolean,
         targetBookIds: Set<Long> = emptySet(),
-        targetLineIds: Set<Long> = emptySet(),
     ) {
         if (!attached) personalOverlayAttached = false
         personalTargetBookIds = if (attached) targetBookIds else emptySet()
-        personalTargetLineIds = if (attached) targetLineIds else emptySet()
         if (attached) personalOverlayAttached = true
     }
 
@@ -99,11 +95,27 @@ class PersistentSqliteDriver(
         if (targetLineIds.any { it > 0L }) {
             results += withForcedLinkSchema("main", query)
         }
-        // Personal links may target either personal lines or selected main lines.
-        if (targetLineIds.any { it < 0L || it in personalTargetLineIds }) {
+        // Negative lines belong to the personal DB. Positive lines use a small,
+        // indexed targetLineId probe only after book-level hints allowed this path.
+        if (targetLineIds.any { it < 0L } || personalContainsAnyTargetLine(targetLineIds)) {
             results += withForcedLinkSchema("personal", query)
         }
         return results
+    }
+
+    private fun personalContainsAnyTargetLine(targetLineIds: Collection<Long>): Boolean {
+        if (personalTargetBookIds.isEmpty()) return false
+        val mainLineIds = targetLineIds.filter { it > 0L }
+        if (mainLineIds.isEmpty()) return false
+        synchronized(connection) {
+            val placeholders = List(mainLineIds.size) { "?" }.joinToString(",")
+            val statement = prepare(
+                "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
+            )
+            statement.clearParameters()
+            mainLineIds.forEachIndexed { index, id -> statement.setLong(index + 1, id) }
+            statement.executeQuery().use { rows -> return rows.next() }
+        }
     }
 
     override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean =

@@ -82,6 +82,10 @@ class PersonalLibraryImporter(
                 it.execute("PRAGMA foreign_keys=OFF")
                 it.execute("PRAGMA journal_mode=DELETE")
                 it.execute("PRAGMA synchronous=NORMAL")
+                it.execute(
+                    "CREATE TABLE IF NOT EXISTS personal_link_target_book " +
+                        "(bookId INTEGER PRIMARY KEY NOT NULL)",
+                )
             }
             target.autoCommit = false
             try {
@@ -302,6 +306,15 @@ class PersonalLibraryImporter(
         }
 
         fun finishLinks() {
+            booksWithTargetLinks.filter { it > 0L }.forEach { bookId ->
+                execute("INSERT OR IGNORE INTO personal_link_target_book(bookId) VALUES(?)", bookId)
+            }
+            execute(
+                "INSERT INTO schema_meta(key,value) VALUES(?,?) " +
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                TARGET_BOOK_HINTS_KEY,
+                "1",
+            )
             (booksWithSourceLinks + booksWithTargetLinks).filter { it < 0 }.forEach { bookId ->
                 execute(
                     "INSERT INTO book_has_links(bookId,hasSourceLinks,hasTargetLinks) VALUES(?,?,?)",
@@ -426,6 +439,7 @@ class PersonalLibraryImporter(
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
         fun normalizeLabel(value: String): String = value.trim()

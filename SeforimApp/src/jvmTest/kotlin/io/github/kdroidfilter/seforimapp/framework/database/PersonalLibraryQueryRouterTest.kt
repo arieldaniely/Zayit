@@ -150,10 +150,15 @@ class PersonalLibraryQueryRouterTest {
     fun `inverse partition index skips unrelated personal links`() {
         val driver = PersistentSqliteDriver("jdbc:sqlite::memory:")
         try {
+            driver.getConnection().createStatement().use { statement ->
+                statement.execute("ATTACH DATABASE ':memory:' AS personal")
+                statement.execute("CREATE TABLE personal.link(targetLineId INTEGER NOT NULL)")
+                statement.execute("CREATE INDEX personal.idx_personal_target_line ON link(targetLineId)")
+                statement.execute("INSERT INTO personal.link(targetLineId) VALUES(70)")
+            }
             driver.setPersonalOverlayAttached(
                 attached = true,
                 targetBookIds = setOf(7L),
-                targetLineIds = setOf(70L),
             )
 
             assertEquals(

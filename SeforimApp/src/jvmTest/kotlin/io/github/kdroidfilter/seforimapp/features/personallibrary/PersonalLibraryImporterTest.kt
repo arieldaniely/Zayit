@@ -57,4 +57,34 @@ class PersonalLibraryImporterTest {
             temp.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun reportsProgressUpdatesDuringBuild() {
+        val temp = Files.createTempDirectory("personal-library-progress")
+        try {
+            val baseDatabase = temp.resolve("base.db")
+            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+
+            val books = Files.createDirectory(temp.resolve("books"))
+            books.resolve("ספר בדיקה.txt").writeText("שורה ראשונה")
+
+            val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
+            val folder = PersonalBookFolder(
+                id = "progress-folder",
+                path = books.toString(),
+                displayName = "הספרים שלי",
+                placement = PersonalFolderPlacement.PERSONAL_BOOKS,
+            )
+            val progressValues = mutableListOf<Float>()
+
+            importer.build(listOf(folder), "test-progress") { progress ->
+                progressValues += progress
+            }
+
+            assertTrue(progressValues.isNotEmpty())
+            assertTrue(progressValues.last() >= 1f)
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
 }

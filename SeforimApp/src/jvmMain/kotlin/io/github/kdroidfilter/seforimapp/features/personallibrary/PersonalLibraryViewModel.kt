@@ -9,7 +9,7 @@ import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -17,6 +17,7 @@ import java.util.UUID
 data class PersonalLibraryUiState(
     val configuration: PersonalLibraryConfiguration = PersonalLibraryConfiguration(),
     val isWorking: Boolean = false,
+    val progress: Float = 0f,
     val error: String? = null,
     val success: Boolean = false,
 )
@@ -27,6 +28,12 @@ data class PersonalLibraryUiState(
 class PersonalLibraryViewModel(private val service: PersonalLibraryService) : ViewModel() {
     private val _state = MutableStateFlow(PersonalLibraryUiState(configuration = service.configuration()))
     val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            service.state.collectLatest { _state.value = it }
+        }
+    }
 
     fun addFolder(directory: File, placement: PersonalFolderPlacement) {
         val canonical = runCatching { directory.canonicalFile }.getOrElse { directory.absoluteFile }
@@ -52,15 +59,7 @@ class PersonalLibraryViewModel(private val service: PersonalLibraryService) : Vi
 
     private fun apply(configuration: PersonalLibraryConfiguration, force: Boolean = false) {
         if (_state.value.isWorking) return
-        viewModelScope.launch {
-            _state.update { it.copy(isWorking = true, error = null, success = false) }
-            runCatching { service.synchronize(configuration, force) }
-                .onSuccess { synchronized ->
-                    _state.value = PersonalLibraryUiState(configuration = synchronized, success = true)
-                }
-                .onFailure { error ->
-                    _state.update { it.copy(isWorking = false, error = error.message ?: error::class.simpleName) }
-                }
-        }
+        _state.value = _state.value.copy(configuration = configuration)
+        service.requestSynchronize(configuration, force)
     }
 }

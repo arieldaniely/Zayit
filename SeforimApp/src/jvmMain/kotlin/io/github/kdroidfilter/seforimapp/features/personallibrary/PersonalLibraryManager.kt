@@ -17,6 +17,7 @@ class PersonalLibraryManager(
     fun synchronize(
         requested: PersonalLibraryConfiguration = store.load(),
         force: Boolean = false,
+        onProgress: ((Float) -> Unit)? = null,
     ): Pair<PersonalLibraryConfiguration, PersonalLibraryArtifacts?> {
         val enabled = requested.folders.filter { it.enabled }
         if (enabled.isEmpty()) {
@@ -32,7 +33,7 @@ class PersonalLibraryManager(
             return requested to current
         }
         val generation = if (force) "$fingerprint-${System.currentTimeMillis()}" else fingerprint
-        val (artifacts, summaries) = importer.build(enabled, generation)
+        val (artifacts, summaries) = importer.build(enabled, generation, onProgress)
         val now = System.currentTimeMillis()
         val folders = requested.folders.map { folder ->
             if (!folder.enabled) folder else summaries[folder.id]?.let { summary ->

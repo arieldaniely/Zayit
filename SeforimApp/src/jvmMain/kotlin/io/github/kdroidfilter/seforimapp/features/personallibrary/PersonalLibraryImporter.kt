@@ -52,20 +52,28 @@ class PersonalLibraryImporter(
         return digest.digest().toHex()
     }
 
-    fun build(folders: List<PersonalBookFolder>, generation: String): Pair<PersonalLibraryArtifacts, Map<String, PersonalImportSummary>> {
+    fun build(
+        folders: List<PersonalBookFolder>,
+        generation: String,
+        onProgress: ((Float) -> Unit)? = null,
+    ): Pair<PersonalLibraryArtifacts, Map<String, PersonalImportSummary>> {
         val generationDir = generationsDirectory.resolve(generation)
         val database = generationDir.resolve("personal.db")
         val index = generationDir.resolve("personal.lucene")
         if (database.isRegularFile() && Files.isDirectory(index)) {
+            onProgress?.invoke(1f)
             return PersonalLibraryArtifacts(generation, database, index) to emptyMap()
         }
         Files.createDirectories(generationDir)
         val stagingDb = generationDir.resolve("personal.db.building")
         Files.deleteIfExists(stagingDb)
         createSchema(stagingDb)
-        val summaries = importInto(stagingDb, folders.filter { it.enabled })
+        onProgress?.invoke(0.05f)
+        val summaries = importInto(stagingDb, folders.filter { it.enabled }, onProgress)
+        onProgress?.invoke(0.9f)
         PersonalLuceneIndexBuilder.build(stagingDb, index)
         Files.move(stagingDb, database)
+        onProgress?.invoke(1f)
         return PersonalLibraryArtifacts(generation, database, index) to summaries
     }
 
@@ -74,7 +82,11 @@ class PersonalLibraryImporter(
         try { SeforimDb.Schema.create(driver) } finally { driver.close() }
     }
 
-    private fun importInto(database: Path, folders: List<PersonalBookFolder>): Map<String, PersonalImportSummary> {
+    private fun importInto(
+        database: Path,
+        folders: List<PersonalBookFolder>,
+        onProgress: ((Float) -> Unit)? = null,
+    ): Map<String, PersonalImportSummary> {
         val base = BaseLibraryIndex.load(baseDatabase)
         val ids = StableNegativeIds()
         DriverManager.getConnection("jdbc:sqlite:$database").use { target ->
@@ -91,10 +103,16 @@ class PersonalLibraryImporter(
             target.autoCommit = false
             try {
                 val context = ImportContext(target, base, ids)
-                val counts = folders.associate { folder -> folder.id to context.importFolder(folder) }.toMutableMap()
-                folders.forEach { folder ->
+                val totalFolders = folders.size.coerceAtLeast(1)
+                val counts = linkedMapOf<String, PersonalImportSummary>()
+                folders.forEachIndexed { index, folder ->
+                    val folderProgress = 0.1f + ((index.toFloat() + 0.5f) / totalFolders) * 0.8f
+                    onProgress?.invoke(folderProgress)
+                    counts[folder.id] = context.importFolder(folder)
                     val added = context.importLinks(folder)
                     counts[folder.id] = counts.getValue(folder.id).copy(links = added)
+                    val nextProgress = 0.1f + ((index + 1).toFloat() / totalFolders) * 0.8f
+                    onProgress?.invoke(nextProgress)
                 }
                 context.finishLinks()
                 target.commit()

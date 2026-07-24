@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -146,24 +148,68 @@ fun HistoryPanel(
                 if (olderList.isNotEmpty()) add(HistoryGroup(olderStr, olderList))
             }
         }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier =
             modifier
-                .fillMaxHeight()
-                .hoverable(paneHoverSource),
+                .fillMaxHeight(),
     ) {
+        val searchQueryState = remember { TextFieldState() }
+        val searchQuery by remember { derivedStateOf { searchQueryState.text.toString() } }
+        val paneHoverSource = remember { MutableInteractionSource() }
+
+        val filteredEntries =
+            remember(entries, searchQuery) {
+                if (searchQuery.isBlank()) {
+                    entries
+                } else {
+                    entries.filter { entry ->
+                        (entry.bookTitle?.contains(searchQuery, ignoreCase = true) == true) ||
+                            (entry.searchQuery?.contains(searchQuery, ignoreCase = true) == true)
+                    }
+                }
+            }
+
+        val todayStr = stringResource(Res.string.history_today)
+        val yesterdayStr = stringResource(Res.string.history_yesterday)
+        val olderStr = stringResource(Res.string.history_older)
+
+        val groupedHistory =
+            remember(filteredEntries, todayStr, yesterdayStr, olderStr) {
+                val today = LocalDate.now()
+                val yesterday = today.minusDays(1)
+
+                val todayList = mutableListOf<HistoryEntry>()
+                val yesterdayList = mutableListOf<HistoryEntry>()
+                val olderList = mutableListOf<HistoryEntry>()
+
+                for (entry in filteredEntries) {
+                    val entryDate = Instant.ofEpochMilli(entry.timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
+                    when {
+                        entryDate == today -> todayList.add(entry)
+                        entryDate == yesterday -> yesterdayList.add(entry)
+                        else -> olderList.add(entry)
+                    }
+                }
+
+                buildList {
+                    if (todayList.isNotEmpty()) add(HistoryGroup(todayStr, todayList))
+                    if (yesterdayList.isNotEmpty()) add(HistoryGroup(yesterdayStr, yesterdayList))
+                    if (olderList.isNotEmpty()) add(HistoryGroup(olderStr, olderList))
+                }
+            }
+
         PaneHeader(
             label = stringResource(Res.string.study_history),
             interactionSource = paneHoverSource,
             onHide = { onEvent(BookContentEvent.ToggleHistory) },
             actions = {
                 if (entries.isNotEmpty()) {
-                    val clearTooltip = stringResource(Res.string.clear_history)
                     IconActionButton(
-                        key = AllIconsKeys.General.Delete,
-                        onClick = { historyManager.clearAll() },
-                        contentDescription = clearTooltip,
+                        key = AllIconsKeys.Actions.GC,
+                        contentDescription = stringResource(Res.string.clear_history),
+                        onClick = { showClearConfirmDialog = true },
                     )
                 }
             },
@@ -171,39 +217,32 @@ fun HistoryPanel(
 
         // Search History Filter Bar
         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
-            TextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text(stringResource(Res.string.search_history_placeholder)) },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                leadingIcon = {
-                    Icon(
-                        key = AllIconsKeys.Actions.Find,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                },
-                trailingIcon =
-                    if (searchQuery.isNotEmpty()) {
-                        {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable { searchQuery = "" }
-                                        .padding(2.dp),
-                            ) {
-                                Icon(
-                                    key = AllIconsKeys.Windows.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                            }
-                        }
-                    } else {
-                        null
-                    },
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextField(
+                    state = searchQueryState,
+                    placeholder = { Text(stringResource(Res.string.search_history_placeholder)) },
+                    modifier = Modifier.weight(1f),
+                )
+                if (searchQuery.isNotEmpty()) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { searchQueryState.edit { replace(0, length, "") } }
+                                .padding(2.dp),
+                    ) {
+                        Icon(
+                            key = AllIconsKeys.Windows.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
+                }
+            }
         }
 
         if (filteredEntries.isEmpty()) {

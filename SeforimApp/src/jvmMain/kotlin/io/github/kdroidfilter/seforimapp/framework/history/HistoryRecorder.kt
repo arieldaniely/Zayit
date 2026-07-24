@@ -7,10 +7,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+import io.github.santimattius.structured.annotations.StructuredScope
+
 fun recordTabToHistory(
     tab: TabItem,
     appGraph: AppGraph,
-    scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
+    @StructuredScope scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) {
     val dest = tab.destination
     if (dest is TabsDestination.Home) return
@@ -54,7 +56,7 @@ fun recordTabToHistory(
                     val lineId = dest.lineId ?: tabState?.bookContent?.primarySelectedLineId?.takeIf { it != -1L }
                     val lineLabel =
                         if (lineId != null && lineId != -1L) {
-                            repository.getLineByIdCore(lineId)?.let { line ->
+                            repository.getLine(lineId)?.let { line ->
                                 "\u05E9\u05D5\u05E8\u05D4 ${line.lineIndex}"
                             }
                         } else {

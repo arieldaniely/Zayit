@@ -743,7 +743,7 @@ class SearchHomeViewModel(
             }
     }
 
-    internal suspend fun buildTocPathTitles(entry: TocEntry): List<String> {
+    private suspend fun buildTocPathTitles(entry: TocEntry): List<String> {
         val bookTitle = runSuspendCatching { repository.getBookCore(entry.bookId)?.title }.getOrNull()
         val tocTitles = mutableListOf<String>()
         var current: TocEntry? = entry
@@ -759,7 +759,7 @@ class SearchHomeViewModel(
         return dedupAdjacent(combined)
     }
 
-    internal fun dedupAdjacent(parts: List<String>): List<String> {
+    private fun dedupAdjacent(parts: List<String>): List<String> {
         if (parts.isEmpty()) return parts
 
         fun extends(
@@ -787,14 +787,5 @@ class SearchHomeViewModel(
             }
         }
         return out
-    }
-
-    internal fun stripBookPrefixFromTocPath(path: List<String>, bookTitle: String?): List<String> {
-        if (path.isEmpty() || bookTitle == null) return path
-        return if (path.first().equals(bookTitle, ignoreCase = true)) {
-            path.drop(1)
-        } else {
-            path
-        }
     }
 }

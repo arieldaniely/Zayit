@@ -56,8 +56,35 @@ fun recordTabToHistory(
                     val lineId = dest.lineId ?: tabState?.bookContent?.primarySelectedLineId?.takeIf { it != -1L }
                     val lineLabel =
                         if (lineId != null && lineId != -1L) {
-                            repository.getLine(lineId)?.let { line ->
-                                "\u05E9\u05D5\u05E8\u05D4 ${line.lineIndex}"
+                            val tocId = runCatching { repository.getTocEntryIdForLine(lineId) }.getOrNull()
+                            val tocPath =
+                                if (tocId != null) {
+                                    val path = mutableListOf<io.github.kdroidfilter.seforimlibrary.core.models.TocEntry>()
+                                    var current: Long? = tocId
+                                    var guard = 0
+                                    while (current != null && guard++ < 200) {
+                                        val entry = repository.getTocEntry(current)
+                                        if (entry != null) {
+                                            path.add(0, entry)
+                                            current = entry.parentId
+                                        } else {
+                                            break
+                                        }
+                                    }
+                                    if (path.firstOrNull()?.text == bookTitle) path.drop(1) else path
+                                } else {
+                                    emptyList()
+                                }
+                            val line = repository.getLine(lineId)
+                            val heRef = line?.heRef?.takeIf { it.isNotBlank() }
+                            val tocText = tocPath.joinToString(" > ") { it.text }.takeIf { it.isNotBlank() }
+
+                            when {
+                                tocText != null && heRef != null && !tocText.endsWith(heRef) -> "$tocText · $heRef"
+                                tocText != null -> tocText
+                                heRef != null -> heRef
+                                line != null -> "שורה ${line.lineIndex}"
+                                else -> null
                             }
                         } else {
                             null

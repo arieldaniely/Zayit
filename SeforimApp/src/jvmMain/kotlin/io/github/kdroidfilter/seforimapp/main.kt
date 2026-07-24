@@ -426,6 +426,9 @@ fun main(args: Array<String>) {
                                         tabsVm.onEvent(TabsEvents.OnClose(currentIndex))
                                     }
                                     true
+                                } else if (isCtrlOrCmd && keyEvent.key == Key.H && !keyEvent.isShiftPressed) {
+                                    tabsVm.openHistoryTab()
+                                    true
                                 } else if (isCtrlOrCmd && keyEvent.key == Key.Tab) {
                                     val count = currentTabs.size
                                     if (count > 0) {
@@ -547,9 +550,13 @@ fun main(args: Array<String>) {
                                             if (keyEvent.type == KeyEventType.KeyDown) {
                                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                                 when {
-                                                    // Ctrl/Cmd + W => close current tab
+                                                    // Ctrl/Cmd + W => close current tab (or close all with Shift)
                                                     isCtrlOrCmd && keyEvent.key == Key.W -> {
-                                                        tabsVm.onEvent(TabsEvents.OnClose(selectedIndex))
+                                                        if (keyEvent.isShiftPressed) {
+                                                            tabsVm.onEvent(TabsEvents.CloseAll)
+                                                        } else {
+                                                            tabsVm.onEvent(TabsEvents.OnClose(selectedIndex))
+                                                        }
                                                         true
                                                     }
                                                     // Ctrl/Cmd + Shift + Tab => previous tab
@@ -570,9 +577,18 @@ fun main(args: Array<String>) {
                                                         }
                                                         true
                                                     }
-                                                    // Ctrl/Cmd + T => new tab
+                                                    // Ctrl/Cmd + T => new tab (or reopen closed with Shift)
                                                     isCtrlOrCmd && keyEvent.key == Key.T -> {
-                                                        tabsVm.onEvent(TabsEvents.OnAdd)
+                                                        if (keyEvent.isShiftPressed) {
+                                                            tabsVm.onEvent(TabsEvents.ReopenLastClosedTab)
+                                                        } else {
+                                                            tabsVm.onEvent(TabsEvents.OnAdd)
+                                                        }
+                                                        true
+                                                    }
+                                                    // Ctrl/Cmd + H (Windows/Linux) => open History tab
+                                                    isCtrlOrCmd && keyEvent.key == Key.H && !keyEvent.isShiftPressed -> {
+                                                        tabsVm.openHistoryTab()
                                                         true
                                                     }
                                                     // Alt + Home (Windows) or Cmd + Shift + H (macOS) => go Home on current tab

@@ -37,4 +37,10 @@ sealed interface TabsDestination {
         override val tabId: String,
         val lineId: Long? = null,
     ) : TabsDestination
+
+    @Serializable
+    @Immutable
+    data class History(
+        override val tabId: String,
+    ) : TabsDestination
 }

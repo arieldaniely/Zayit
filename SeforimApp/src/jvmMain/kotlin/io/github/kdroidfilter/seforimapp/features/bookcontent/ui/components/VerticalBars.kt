@@ -47,15 +47,6 @@ fun StartVerticalBar(
                     shortcutHint = if (PlatformInfo.isMacOS) "B+⇧+⌘" else "B+Shift+Ctrl",
                 )
             }
-            SelectableIconButtonWithToolip(
-                toolTipText = stringResource(Res.string.study_history),
-                onClick = { onEvent(BookContentEvent.ToggleHistory) },
-                isSelected = uiState.history.isVisible,
-                icon = History,
-                iconDescription = stringResource(Res.string.study_history),
-                label = stringResource(Res.string.study_history),
-                shortcutHint = if (PlatformInfo.isMacOS) "H+⌘" else "H+Ctrl",
-            )
         },
         bottomContent = {
             if (uiState.navigation.selectedBook != null) {

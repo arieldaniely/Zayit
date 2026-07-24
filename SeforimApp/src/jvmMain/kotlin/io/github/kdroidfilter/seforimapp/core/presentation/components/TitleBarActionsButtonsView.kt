@@ -123,6 +123,15 @@ fun TitleBarActionsButtonsView() {
         shortcutHint = homeShortcutHint,
     )
     TitleBarActionButton(
+        key = AllIconsKeys.Vcs.History,
+        contentDescription = stringResource(Res.string.history),
+        onClick = {
+            tabsViewModel.openHistoryTab()
+        },
+        tooltipText = stringResource(Res.string.history),
+        shortcutHint = if (PlatformInfo.isMacOS) "⌘+H" else "Ctrl+H",
+    )
+    TitleBarActionButton(
         key = AllIconsKeys.Actions.Find,
         contentDescription = stringResource(Res.string.find),
         onClick = {

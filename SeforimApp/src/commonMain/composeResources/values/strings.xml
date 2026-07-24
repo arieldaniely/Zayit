@@ -673,6 +673,6 @@
     <string name="history_this_week">השבוע</string>
     <string name="history_older">מוקדם יותר</string>
     <string name="history_scope_all">כל הספרים</string>
-    <string name="history_in_desktop">במרחב: %s</string>
+    <string name="history_in_desktop">במרחב: %1$s</string>
 </resources>
 

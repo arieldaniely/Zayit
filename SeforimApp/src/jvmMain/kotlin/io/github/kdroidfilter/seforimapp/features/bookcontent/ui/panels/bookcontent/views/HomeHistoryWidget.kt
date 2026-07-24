@@ -150,13 +150,21 @@ private fun HomeHistoryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                val iconKey = if (entry.type == HistoryType.BOOK) Book else History
-                Icon(
-                    imageVector = iconKey,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp),
-                    tint = JewelTheme.globalColors.text.info,
-                )
+                if (entry.type == HistoryType.BOOK) {
+                    Icon(
+                        imageVector = Book,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = JewelTheme.globalColors.text.info,
+                    )
+                } else {
+                    Icon(
+                        key = AllIconsKeys.Actions.Find,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = JewelTheme.globalColors.text.info,
+                    )
+                }
                 Spacer(Modifier.width(6.dp))
 
                 val titleText =

@@ -43,6 +43,7 @@ import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
+import io.github.kdroidfilter.seforimapp.features.history.HistoryView
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
@@ -76,6 +77,7 @@ val LocalTabSelected = compositionLocalOf { true }
 private fun TabsDestination.typeKey(): String =
     when (this) {
         is TabsDestination.Home -> "home"
+        is TabsDestination.History -> "history"
         is TabsDestination.Search -> "search"
         is TabsDestination.BookContent -> "book"
         is TabsDestination.PdfContent -> "pdf"
@@ -84,7 +86,7 @@ private fun TabsDestination.typeKey(): String =
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
 
 private fun saveableKeysFor(tabId: String): List<String> =
-    listOf("$tabId:home", "$tabId:search", "$tabId:book", "$tabId:pdf")
+    listOf("$tabId:home", "$tabId:history", "$tabId:search", "$tabId:book", "$tabId:pdf")
 
 /**
  * Simplified tab content renderer without Compose Navigation.
@@ -322,6 +324,10 @@ fun TabsContent() {
                                         searchUi = searchUi,
                                         searchCallbacks = homeSearchCallbacks,
                                     )
+                                }
+
+                                is TabsDestination.History -> {
+                                    HistoryView()
                                 }
                             }
                         }

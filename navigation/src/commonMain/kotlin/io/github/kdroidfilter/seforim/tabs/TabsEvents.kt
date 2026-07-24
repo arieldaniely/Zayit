@@ -30,4 +30,6 @@ sealed class TabsEvents {
     data class CloseRight(
         val index: Int,
     ) : TabsEvents()
+
+    data object ReopenLastClosedTab : TabsEvents()
 }

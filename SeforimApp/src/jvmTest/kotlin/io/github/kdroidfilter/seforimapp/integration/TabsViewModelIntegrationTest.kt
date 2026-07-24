@@ -621,4 +621,65 @@ class TabsViewModelIntegrationTest {
                     .map { it.id }
             assertEquals(tabIds.size, tabIds.toSet().size) // All IDs should be unique
         }
+
+    // ==================== Reopen Closed Tab Tests ====================
+
+    @Test
+    fun `reopen last closed tab works`() =
+        runTest {
+            val tabId = UUID.randomUUID().toString()
+            val destination = TabsDestination.Search(searchQuery = "Torah", tabId = tabId)
+            viewModel.openTab(destination)
+
+            // Now we have 2 tabs. Close the first one (the search tab, which is at index 0)
+            viewModel.onEvent(TabsEvents.OnClose(0))
+
+            // Reopen it
+            viewModel.onEvent(TabsEvents.ReopenLastClosedTab)
+
+            val tabs = viewModel.state.value.tabs
+            assertEquals(2, tabs.size)
+            assertTrue(tabs.first().destination is TabsDestination.Search)
+            assertEquals("Torah", (tabs.first().destination as TabsDestination.Search).searchQuery)
+        }
+
+    @Test
+    fun `reopen closed tab respects LIFO order`() =
+        runTest {
+            val searchDest = TabsDestination.Search(searchQuery = "SearchQuery", tabId = "tab-search")
+            val bookDest = TabsDestination.BookContent(bookId = 42, tabId = "tab-book")
+            viewModel.openTab(searchDest)
+            viewModel.openTab(bookDest)
+
+            // Close the search tab (index 1) then close the book tab (index 0)
+            viewModel.onEvent(TabsEvents.OnClose(1))
+            viewModel.onEvent(TabsEvents.OnClose(0))
+
+            // Reopen first time: should reopen the book tab (last closed)
+            viewModel.onEvent(TabsEvents.ReopenLastClosedTab)
+            val tabsAfterFirstReopen = viewModel.state.value.tabs
+            val firstReopened = tabsAfterFirstReopen.first().destination
+            assertTrue(firstReopened is TabsDestination.BookContent)
+            assertEquals(42L, firstReopened.bookId)
+
+            // Reopen second time: should reopen the search tab (closed before book tab)
+            viewModel.onEvent(TabsEvents.ReopenLastClosedTab)
+            val tabsAfterSecondReopen = viewModel.state.value.tabs
+            val secondReopened = tabsAfterSecondReopen.first().destination
+            assertTrue(secondReopened is TabsDestination.Search)
+            assertEquals("SearchQuery", secondReopened.searchQuery)
+        }
+
+    @Test
+    fun `empty default tabs are not recorded in closed stack`() =
+        runTest {
+            // The initial tab is a default BookContent with bookId = -1
+            // Closing it should replace it with a fresh one but NOT record it
+            viewModel.onEvent(TabsEvents.OnClose(0))
+
+            // Trying to reopen should do nothing because stack is empty
+            val beforeReopen = viewModel.state.value.tabs.size
+            viewModel.onEvent(TabsEvents.ReopenLastClosedTab)
+            assertEquals(beforeReopen, viewModel.state.value.tabs.size)
+        }
 }

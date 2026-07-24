@@ -222,6 +222,10 @@ object SessionManager {
                 is TabsDestination.Home -> {
                     // No-op: Home titles are localized in the UI.
                 }
+
+                is TabsDestination.History -> {
+                    // No-op: History titles are localized in the UI.
+                }
             }
         }
         return titles
@@ -236,6 +240,7 @@ object SessionManager {
                 val destinationsMissingTitles =
                     snapshot.destinations.filter { destination ->
                         destination !is TabsDestination.Home &&
+                            destination !is TabsDestination.History &&
                             snapshot.titles[destination.tabId]?.title.isNullOrBlank()
                     }
                 if (destinationsMissingTitles.isEmpty()) {

@@ -219,6 +219,7 @@ class TabsViewModel(
                 is TabsDestination.Search -> TabsDestination.Search(destination.searchQuery, destination.tabId)
                 is TabsDestination.BookContent -> TabsDestination.BookContent(destination.bookId, destination.tabId, destination.lineId)
                 is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
+                is TabsDestination.History -> TabsDestination.History(destination.tabId)
             }
 
         val newTab =
@@ -347,6 +348,10 @@ class TabsViewModel(
                             tabId = tab.destination.tabId,
                             lineId = destination.lineId,
                         )
+                    is TabsDestination.History ->
+                        TabsDestination.History(
+                            tabId = tab.destination.tabId,
+                        )
                 }
 
             val isEditionSwitchForSameBook =
@@ -410,6 +415,10 @@ class TabsViewModel(
                             bookId = destination.bookId,
                             tabId = newTabId,
                             lineId = destination.lineId,
+                        )
+                    is TabsDestination.History ->
+                        TabsDestination.History(
+                            tabId = newTabId,
                         )
                 }
 

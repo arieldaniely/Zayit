@@ -46,6 +46,7 @@ fun TabsDestination.toShareLink(): String? =
         is TabsDestination.PdfContent -> if (bookId != 0L && bookId != -1L) bookShareLink(bookId, lineId) else null
         is TabsDestination.Search -> searchShareLink(searchQuery)
         is TabsDestination.Home -> null
+        is TabsDestination.History -> null
     }
 
 /**

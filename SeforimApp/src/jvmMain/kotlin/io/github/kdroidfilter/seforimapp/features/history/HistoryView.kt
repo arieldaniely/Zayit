@@ -168,7 +168,7 @@ fun HistoryView(modifier: Modifier = Modifier) {
         modifier =
             modifier
                 .fillMaxSize()
-                .background(JewelTheme.globalColors.paneBackground),
+                .background(JewelTheme.globalColors.panelBackground),
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(
@@ -278,7 +278,7 @@ fun HistoryView(modifier: Modifier = Modifier) {
         if (showClearConfirmDialog) {
             ClearHistoryConfirmDialog(
                 onConfirm = {
-                    historyManager.clearHistory()
+                    historyManager.clearAll()
                     showClearConfirmDialog = false
                 },
                 onDismiss = { showClearConfirmDialog = false },

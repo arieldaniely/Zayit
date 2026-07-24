@@ -371,7 +371,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')}</h1>
             <p className="download-subtitle flex items-center justify-center gap-2">
               {getOSIcon(platform.os)}
@@ -396,7 +396,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')} — {t('dl.common.download')}</h1>
           </div>
 
@@ -418,7 +418,7 @@ export function DownloadModal() {
       <>
         {/* Header */}
         <div className="text-center mb-7">
-          <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+          <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
           <h1 className="download-title">{t('dl.header.downloadTitle')}</h1>
           <p className="download-subtitle flex items-center justify-center gap-2 flex-wrap">
             {getOSIcon(platform.os)}

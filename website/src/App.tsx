@@ -236,7 +236,7 @@ function App() {
   // Fetch download count
   const [downloadCount, setDownloadCount] = useState<number | null>(null);
   useEffect(() => {
-    fetch('/download-count.json')
+    fetch(`${import.meta.env.BASE_URL}download-count.json`)
       .then(res => res.json())
       .then(data => setDownloadCount(data.count))
       .catch(() => setDownloadCount(null));

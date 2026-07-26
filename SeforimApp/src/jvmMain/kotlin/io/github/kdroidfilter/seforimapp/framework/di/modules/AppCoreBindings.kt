@@ -11,6 +11,7 @@ import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
+import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
@@ -90,6 +91,10 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideNoteStore(database: UserSettingsDb): NoteStore = NoteStore(database)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideHistoryStore(database: UserSettingsDb): HistoryStore = HistoryStore(database)
 
     @Provides
     @SingleIn(AppScope::class)
@@ -175,11 +180,6 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideAppUpdateService(): AppUpdateService = AppUpdateService.create()
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun provideHistoryManager(): io.github.kdroidfilter.seforimapp.framework.history.HistoryManager =
-        io.github.kdroidfilter.seforimapp.framework.history.HistoryManager()
 
     @Provides
     @SingleIn(AppScope::class)

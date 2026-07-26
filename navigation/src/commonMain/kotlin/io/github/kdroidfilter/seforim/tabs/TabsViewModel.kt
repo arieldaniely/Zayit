@@ -550,7 +550,7 @@ class TabsViewModel(
     private fun getTabTitle(destination: TabsDestination): String =
         when (destination) {
             is TabsDestination.Home -> ""
-            is TabsDestination.History -> "\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8\u05D9\u05D4"
+            is TabsDestination.History -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""

@@ -43,7 +43,6 @@ import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
-import io.github.kdroidfilter.seforimapp.features.history.HistoryView
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
@@ -53,6 +52,7 @@ import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_STEP
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
@@ -332,7 +332,7 @@ fun TabsContent() {
                                 }
 
                                 is TabsDestination.History -> {
-                                    HistoryView()
+                                    HistoryTabContent(tabId = tabId)
                                 }
                             }
                         }

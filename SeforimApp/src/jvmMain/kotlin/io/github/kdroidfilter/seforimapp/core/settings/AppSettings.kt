@@ -87,10 +87,6 @@ object AppSettings {
 
     // Homepage wallpaper visibility
     private const val KEY_SHOW_HOME_WALLPAPER = "show_home_wallpaper"
-
-    // Recent history widget visibility on the homepage
-    private const val KEY_SHOW_HOME_HISTORY = "show_home_history"
-
     // Compact mode for vertical bars
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val KEY_SHOW_CONTEXT_TARGUMIM = "show_context_targumim"
@@ -118,7 +114,6 @@ object AppSettings {
         _commentaryFontCodeFlow.value = getCommentaryFontCode()
         _targumFontCodeFlow.value = getTargumFontCode()
         _sourceFontCodeFlow.value = getSourceFontCode()
-        _showHomeHistoryFlow.value = isShowHomeHistoryEnabled()
         _showContextTargumimFlow.value = isContextTargumimVisible()
         _showContextMentionsFlow.value = isContextMentionsVisible()
         _showContextSourcesFlow.value = isContextSourcesVisible()
@@ -164,10 +159,6 @@ object AppSettings {
     // StateFlow for homepage wallpaper visibility
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
     val showHomeWallpaperFlow: StateFlow<Boolean> = _showHomeWallpaperFlow.asStateFlow()
-
-    private val _showHomeHistoryFlow = MutableStateFlow(isShowHomeHistoryEnabled())
-    val showHomeHistoryFlow: StateFlow<Boolean> = _showHomeHistoryFlow.asStateFlow()
-
     // StateFlow for compact mode
     private val _compactModeFlow = MutableStateFlow(isCompactModeEnabled())
     val compactModeFlow: StateFlow<Boolean> = _compactModeFlow.asStateFlow()
@@ -387,13 +378,6 @@ object AppSettings {
         _showHomeWallpaperFlow.value = enabled
     }
 
-    fun isShowHomeHistoryEnabled(): Boolean = settings[KEY_SHOW_HOME_HISTORY, true]
-
-    fun setShowHomeHistoryEnabled(enabled: Boolean) {
-        settings[KEY_SHOW_HOME_HISTORY] = enabled
-        _showHomeHistoryFlow.value = enabled
-    }
-
     // Compact mode for vertical bars
     fun isCompactModeEnabled(): Boolean = settings[KEY_COMPACT_MODE, false]
 
@@ -601,7 +585,6 @@ object AppSettings {
         _showZmanimWidgetsFlow.value = true
         _showHomeWallpaperFlow.value = true
         _compactModeFlow.value = false
-        _showHomeHistoryFlow.value = true
         _showContextTargumimFlow.value = true
         _showContextMentionsFlow.value = true
         _showContextSourcesFlow.value = true

@@ -58,8 +58,6 @@ import seforimapp.seforimapp.generated.resources.settings_max_commentators_per_p
 import seforimapp.seforimapp.generated.resources.settings_max_commentators_per_page_description
 import seforimapp.seforimapp.generated.resources.settings_show_home_wallpaper
 import seforimapp.seforimapp.generated.resources.settings_show_home_wallpaper_description
-import seforimapp.seforimapp.generated.resources.settings_show_home_history
-import seforimapp.seforimapp.generated.resources.settings_show_home_history_description
 import seforimapp.seforimapp.generated.resources.settings_show_zmanim_widgets
 import seforimapp.seforimapp.generated.resources.settings_show_zmanim_widgets_description
 import seforimapp.seforimapp.generated.resources.settings_theme_style_classic
@@ -126,13 +124,6 @@ private fun DisplaySettingsView(
                 description = Res.string.settings_show_home_wallpaper_description,
                 checked = state.showHomeWallpaper,
                 onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowHomeWallpaper(it)) },
-            )
-
-            SettingCard(
-                title = Res.string.settings_show_home_history,
-                description = Res.string.settings_show_home_history_description,
-                checked = state.showHomeHistory,
-                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowHomeHistory(it)) },
             )
 
             SettingCard(

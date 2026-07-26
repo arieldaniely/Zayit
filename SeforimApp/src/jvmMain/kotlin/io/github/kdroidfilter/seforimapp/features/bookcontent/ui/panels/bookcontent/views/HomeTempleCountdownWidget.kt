@@ -55,7 +55,7 @@ private data class TempleCountdownData(
     val days: Int,
 )
 
-private const val DESTRUCTION_YEAR = 3830
+private const val DESTRUCTION_YEAR = 3828
 private const val DESTRUCTION_DAY = 9
 private val DESTRUCTION_MONTH = JewishCalendar.AV
 

@@ -259,6 +259,10 @@ object SessionManager {
                 is TabsDestination.History -> {
                     // No-op: History titles are localized in the UI.
                 }
+
+                is TabsDestination.Favorites -> {
+                    // No-op: the Favorites screen localizes its own title.
+                }
             }
         }
         return titles

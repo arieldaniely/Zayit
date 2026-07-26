@@ -21,10 +21,10 @@ class RealDatabaseVerificationTest {
         val repository = SeforimRepository(dbFile.absolutePath, driver)
 
         // Find a Tanakh book ID (e.g. Genesis / בראשית)
-        val books = repository.searchBooks("בראשית", limit = 10)
+        val books = repository.findBooksByTitleLike("%בראשית%", limit = 10)
         val genesis = books.firstOrNull { it.title.trim() == "בראשית" } ?: books.firstOrNull()
         if (genesis != null) {
-            val lines = repository.getLinesForBook(genesis.id, offset = 0, limit = 10)
+            val lines = repository.getLines(genesis.id, startIndex = 0, endIndex = 9)
             if (lines.isNotEmpty()) {
                 val lineId = lines.first().id
                 val sources = repository.getSourceSummariesForLines(listOf(lineId))
@@ -46,10 +46,10 @@ class RealDatabaseVerificationTest {
         }
 
         // Find a Talmud book ID (e.g. Berakhot / ברכות)
-        val berakhotBooks = repository.searchBooks("ברכות", limit = 10)
+        val berakhotBooks = repository.findBooksByTitleLike("%ברכות%", limit = 10)
         val berakhot = berakhotBooks.firstOrNull { it.title.contains("בבלי") || it.title.contains("ברכות") }
         if (berakhot != null) {
-            val lines = repository.getLinesForBook(berakhot.id, offset = 0, limit = 20)
+            val lines = repository.getLines(berakhot.id, startIndex = 0, endIndex = 19)
             if (lines.isNotEmpty()) {
                 val lineId = lines.first().id
                 val sources = repository.getSourceSummariesForLines(listOf(lineId))

@@ -109,6 +109,8 @@ private data class TabEntry(
     val onCloseRight: () -> Unit,
     // null when the destination has nothing shareable (e.g. Home, or a book still loading)
     val onCopyLink: (() -> Unit)?,
+    // null when the tab is the window's only one (the window itself already is that tab)
+    val onDetach: (() -> Unit)?,
 )
 
 private val TabTooltipWidthThreshold = 140.dp
@@ -133,6 +135,8 @@ private fun DefaultTabShowcase(
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val isRtl = layoutDirection == LayoutDirection.Rtl
+    val desktopManager = LocalAppGraph.current.desktopManager
+    val windowId = LocalOpenWindow.current.id
 
     // Track for auto-scrolling (no-op in shrink-to-fit mode)
     var previousTabCount by remember { mutableStateOf(state.tabs.size) }
@@ -210,6 +214,12 @@ private fun DefaultTabShowcase(
                             onCloseLeft = { onEvents(TabsEvents.CloseRight(actualIndex)) },
                             onCloseRight = { onEvents(TabsEvents.CloseLeft(actualIndex)) },
                             onCopyLink = tabItem.destination.toShareLink()?.let { link -> { copyToClipboard(link) } },
+                            onDetach =
+                                if (state.tabs.size > 1) {
+                                    { desktopManager.detachTabToNewWindow(tabItem.destination.tabId, windowId) }
+                                } else {
+                                    null
+                                },
                         )
                     }.toImmutableList()
             } else {
@@ -276,6 +286,12 @@ private fun DefaultTabShowcase(
                             onCloseLeft = { onEvents(TabsEvents.CloseLeft(index)) },
                             onCloseRight = { onEvents(TabsEvents.CloseRight(index)) },
                             onCopyLink = tabItem.destination.toShareLink()?.let { link -> { copyToClipboard(link) } },
+                            onDetach =
+                                if (state.tabs.size > 1) {
+                                    { desktopManager.detachTabToNewWindow(tabItem.destination.tabId, windowId) }
+                                } else {
+                                    null
+                                },
                         )
                     }.toImmutableList()
             }
@@ -407,6 +423,8 @@ private fun RtlAwareTabStripContent(
                     windowPxToScreen = stripGeometry::windowPxToScreen,
                     boundsOnScreen = stripGeometry::dropAreaBoundsOnScreen,
                     dropIndexFor = stripGeometry::dropIndexFor,
+                    dropAreaContainsWindowPx = stripGeometry::dropAreaContainsWindowPx,
+                    dropIndexForWindowPx = stripGeometry::dropIndexForWindowPx,
                 ),
             )
             onDispose {
@@ -527,6 +545,7 @@ private fun RtlAwareTabStripContent(
                                             onCloseLeft = tabEntry.onCloseLeft,
                                             onCloseRight = tabEntry.onCloseRight,
                                             onCopyLink = tabEntry.onCopyLink,
+                                            onDetach = tabEntry.onDetach,
                                             animateWidth = !isNew,
                                             enterFromSmall = isNew,
                                             enterDurationMs = enterDurationMs,
@@ -633,6 +652,7 @@ private fun RtlAwareTab(
     onCloseRight: () -> Unit,
     modifier: Modifier = Modifier,
     onCopyLink: (() -> Unit)? = null,
+    onDetach: (() -> Unit)? = null,
     animateWidth: Boolean = true,
     enterFromSmall: Boolean = false,
     enterDurationMs: Int = 200,
@@ -896,12 +916,23 @@ private fun RtlAwareTab(
             val closeLeftLabel = stringResource(Res.string.close_tabs_left)
             val closeRightLabel = stringResource(Res.string.close_tabs_right)
             val copyLinkLabel = stringResource(Res.string.copy_tab_link)
+            val detachLabel = stringResource(Res.string.tab_open_in_new_window)
 
             TabContextMenu(
                 anchorOffset = anchorOffset,
                 contextClickOffset = contextClickOffset,
                 onDismissRequest = { contextMenuOpen = false },
             ) {
+                if (onDetach != null) {
+                    tabContextMenuItem(
+                        label = detachLabel,
+                        icon = AllIconsKeys.Actions.OpenNewTab,
+                        onClick = {
+                            contextMenuOpen = false
+                            onDetach()
+                        },
+                    )
+                }
                 if (onCopyLink != null) {
                     tabContextMenuItem(
                         label = copyLinkLabel,
@@ -1119,6 +1150,58 @@ private class StripGeometry(
         if (tabWidth <= 0f) return tabCount
         val visualIndex = ((screenX - bounds.left) / tabWidth).roundToInt().coerceIn(0, tabCount)
         return if (isRtl) tabCount - visualIndex else visualIndex
+    }
+
+    /**
+     * Window-px variants of the drop hit-test/index, for the Wayland pending-drop
+     * path where cross-window screen coordinates don't exist (the drop target is
+     * identified by the pointer-enter it receives right after the drag ends, with
+     * coordinates in ITS OWN window space).
+     */
+    fun dropAreaContainsWindowPx(p: Offset): Boolean {
+        val area = dropAreaBoundsInWindow() ?: return false
+        val d = safeDensity()
+        return p.x >= area.left &&
+            p.x <= area.right &&
+            p.y >= area.top - DROP_SLACK_TOP_DP * d &&
+            p.y <= area.bottom + DROP_SLACK_Y_DP * d
+    }
+
+    fun dropIndexForWindowPx(xPx: Float): Int {
+        val bounds = tabsBoundsInWindow ?: return tabCount
+        if (tabWidthPx <= 0f) return tabCount
+        val visualIndex = ((xPx - bounds.left) / tabWidthPx).roundToInt().coerceIn(0, tabCount)
+        return if (isRtl) tabCount - visualIndex else visualIndex
+    }
+
+    private companion object {
+        // Mirrors TabDockManager's screen-space drop slack (logical dp).
+        const val DROP_SLACK_TOP_DP = 40f
+        const val DROP_SLACK_Y_DP = 16f
+    }
+}
+
+private fun MenuScope.tabContextMenuItem(
+    label: String,
+    icon: org.jetbrains.jewel.ui.icon.IconKey,
+    onClick: () -> Unit,
+) {
+    selectableItem(
+        selected = false,
+        onClick = onClick,
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                key = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = JewelTheme.globalColors.text.normal,
+            )
+            Text(label)
+        }
     }
 }
 

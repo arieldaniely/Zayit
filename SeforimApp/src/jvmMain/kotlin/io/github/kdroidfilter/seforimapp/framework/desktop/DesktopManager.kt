@@ -75,6 +75,12 @@ class DesktopManager(
     /** Snapshots of desktops that are not currently open in any window. */
     private val dormantSnapshots = mutableMapOf<String, DesktopTabsSnapshot>()
 
+    /**
+     * App-level quit path (persist session, apply pending updates, exit). Wired by main.kt;
+     * invoked when the last tab of the last window is closed (Chrome-like).
+     */
+    var onQuitRequest: (() -> Unit)? = null
+
     // ---- Lookups ----
 
     fun window(windowId: String): OpenWindow? = _windows.value.find { it.id == windowId }
@@ -271,16 +277,22 @@ class DesktopManager(
         val item = from.tabsViewModel.takeTab(tabId) ?: return null
         val desktopId = from.desktopId.value
         // Chrome-like: the detached window floats noticeably smaller than the (often maximized)
-        // source window, under the cursor — it must never inherit a maximized footprint.
+        // source window — it must never inherit a maximized footprint. With pointer coordinates
+        // (drag & drop) it lands under the cursor; without (context-menu action) it cascades
+        // from the source window.
         val sourceGeometry = from.windowState.toSavedGeometry()
         val geometry =
-            SavedGeometry(
-                x = screenX ?: SavedGeometry.UNSPECIFIED,
-                y = screenY ?: SavedGeometry.UNSPECIFIED,
-                width = (sourceGeometry.width * 3 / 4).coerceIn(640, 1200),
-                height = (sourceGeometry.height * 3 / 4).coerceIn(480, 840),
-                placement = "Floating",
-            )
+            if (screenX != null && screenY != null) {
+                SavedGeometry(
+                    x = screenX,
+                    y = screenY,
+                    width = (sourceGeometry.width * 3 / 4).coerceIn(640, 1200),
+                    height = (sourceGeometry.height * 3 / 4).coerceIn(480, 840),
+                    placement = "Floating",
+                )
+            } else {
+                cascadedFloatingGeometry(null)
+            }
         val snapshot =
             WindowSnapshot(
                 destinations = listOf(item.destination),
@@ -479,13 +491,26 @@ class DesktopManager(
                 skipAnimation = true,
             )
         }
-        return OpenWindow(
-            id = UUID.randomUUID().toString(),
-            desktopId = desktopId,
-            tabsViewModel = tabsViewModel,
-            searchHomeViewModel = searchHomeViewModelFactory(),
-            windowState = snapshot?.geometry.toWindowState(),
-        )
+        val w =
+            OpenWindow(
+                id = UUID.randomUUID().toString(),
+                desktopId = desktopId,
+                tabsViewModel = tabsViewModel,
+                searchHomeViewModel = searchHomeViewModelFactory(),
+                windowState = snapshot?.geometry.toWindowState(),
+            )
+        // Chrome-like: closing a window's last tab closes the window; closing the last window
+        // quits the app. The tab is already removed, so the desktop snapshot / persisted
+        // session no longer contains it.
+        tabsViewModel.onLastTabClosed = { removed ->
+            tabPersistedStateStore.remove(removed.destination.tabId)
+            if (_windows.value.size > 1) {
+                closeWindow(w.id)
+            } else {
+                onQuitRequest?.invoke() ?: freshHomeInto(w)
+            }
+        }
+        return w
     }
 
     private fun spawnWindow(

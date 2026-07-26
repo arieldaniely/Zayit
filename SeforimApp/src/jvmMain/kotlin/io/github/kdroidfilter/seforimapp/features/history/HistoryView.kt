@@ -62,6 +62,7 @@ import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import java.util.UUID
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.all_workspaces
 import seforimapp.seforimapp.generated.resources.clear_history
@@ -82,7 +83,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.UUID
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -165,13 +165,24 @@ fun HistoryView(
 
     val handleCatalogEvent: (BookContentEvent) -> Unit = remember(onCatalogEvent, appGraph) {
         onCatalogEvent ?: { event ->
-            if (event is BookContentEvent.SelectBook) {
-                appGraph.tabsViewModel.openTab(
-                    TabsDestination.BookContent(
-                        bookId = event.bookId,
-                        tabId = UUID.randomUUID().toString(),
-                    ),
-                )
+            when (event) {
+                is BookContentEvent.BookSelected -> {
+                    appGraph.tabsViewModel.openTab(
+                        TabsDestination.BookContent(
+                            bookId = event.book.id,
+                            tabId = UUID.randomUUID().toString(),
+                        ),
+                    )
+                }
+                is BookContentEvent.OpenBookById -> {
+                    appGraph.tabsViewModel.openTab(
+                        TabsDestination.BookContent(
+                            bookId = event.bookId,
+                            tabId = UUID.randomUUID().toString(),
+                        ),
+                    )
+                }
+                else -> {}
             }
         }
     }

@@ -35,6 +35,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AppDockMen
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppJumpList
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppLinuxQuicklist
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppNativeMenuBar
+import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
 import io.github.kdroidfilter.seforimapp.framework.history.HistoryType
 import java.util.UUID
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent

@@ -40,9 +40,14 @@ import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.delete_history_item
 import seforimapp.seforimapp.generated.resources.history_in_desktop
+import seforimapp.seforimapp.generated.resources.recent_history
 import seforimapp.seforimapp.generated.resources.to_full_history
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")

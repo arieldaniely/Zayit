@@ -401,6 +401,7 @@ private fun SearchTabContent(
     val selectedTocIds by viewModel.selectedTocIdsFlow.collectAsState()
     val tocCounts by viewModel.tocCountsFlow.collectAsState()
     val tocTree by viewModel.tocTreeFlow.collectAsState()
+    val bookCounts by viewModel.bookFacetCountsFlow.collectAsState()
 
     val actions =
         remember(viewModel) {
@@ -464,6 +465,8 @@ private fun SearchTabContent(
         selectedTocIds = selectedTocIds,
         tocCounts = tocCounts,
         tocTree = tocTree,
+        bookCounts = bookCounts,
+        loadBookHits = viewModel::loadAllHitsForBook,
         actions = actions,
     )
 }

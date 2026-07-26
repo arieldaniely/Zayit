@@ -327,29 +327,7 @@ fun TabsContent() {
                                 }
 
                                 is TabsDestination.History -> {
-                                    HistoryView(
-                                        onCatalogEvent = { event ->
-                                            when (event) {
-                                                is BookContentEvent.BookSelected -> {
-                                                    appGraph.tabsViewModel.openTab(
-                                                        TabsDestination.BookContent(
-                                                            bookId = event.book.id,
-                                                            tabId = java.util.UUID.randomUUID().toString(),
-                                                        ),
-                                                    )
-                                                }
-                                                is BookContentEvent.OpenBookById -> {
-                                                    appGraph.tabsViewModel.openTab(
-                                                        TabsDestination.BookContent(
-                                                            bookId = event.bookId,
-                                                            tabId = java.util.UUID.randomUUID().toString(),
-                                                        ),
-                                                    )
-                                                }
-                                                else -> {}
-                                            }
-                                        },
-                                    )
+                                    HistoryView()
                                 }
                             }
                         }

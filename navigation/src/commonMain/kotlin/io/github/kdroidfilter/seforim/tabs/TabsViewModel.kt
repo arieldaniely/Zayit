@@ -470,7 +470,7 @@ class TabsViewModel(
     private fun tabTypeFor(destination: TabsDestination): TabType =
         when (destination) {
             is TabsDestination.Home -> TabType.SEARCH
-            is TabsDestination.History -> TabType.SEARCH
+            is TabsDestination.History -> TabType.HISTORY
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH

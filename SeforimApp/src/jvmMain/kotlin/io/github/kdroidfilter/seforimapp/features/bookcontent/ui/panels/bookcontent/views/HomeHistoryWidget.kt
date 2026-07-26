@@ -47,18 +47,24 @@ import java.util.UUID
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.delete_history_item
 import seforimapp.seforimapp.generated.resources.history_in_desktop
+import seforimapp.seforimapp.generated.resources.history_scope_basic_books
+import seforimapp.seforimapp.generated.resources.history_scope_book
+import seforimapp.seforimapp.generated.resources.history_scope_category
+import seforimapp.seforimapp.generated.resources.history_scope_toc
+import seforimapp.seforimapp.generated.resources.history_other_workspaces
 import seforimapp.seforimapp.generated.resources.recent_history
 import seforimapp.seforimapp.generated.resources.to_full_history
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+@Composable
 private fun formatScope(scopeText: String?): String? {
     if (scopeText.isNullOrBlank()) return null
     return when (scopeText) {
-        "global" -> "ספרי יסוד"
-        "category" -> "קטגוריה"
-        "book" -> "ספר"
-        "toc" -> "סעיף בספר"
+        "global" -> stringResource(Res.string.history_scope_basic_books)
+        "category" -> stringResource(Res.string.history_scope_category)
+        "book" -> stringResource(Res.string.history_scope_book)
+        "toc" -> stringResource(Res.string.history_scope_toc)
         else -> scopeText
     }
 }
@@ -83,7 +89,12 @@ fun HomeHistoryWidget(modifier: Modifier = Modifier) {
         }
     }
 
-    val recentEntries = remember(workspaceEntries) { workspaceEntries.take(4) }
+    if (entries.isEmpty()) return
+
+    val showingOtherWorkspaces = workspaceEntries.isEmpty()
+    val recentEntries = remember(entries, workspaceEntries) {
+        (workspaceEntries.ifEmpty { entries }).take(4)
+    }
     val recentHistoryTitle = stringResource(Res.string.recent_history)
 
     Column(
@@ -124,23 +135,30 @@ fun HomeHistoryWidget(modifier: Modifier = Modifier) {
             )
         }
 
-        if (recentEntries.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                recentEntries.forEach { entry ->
-                    HomeHistoryCard(
-                        entry = entry,
-                        modifier = Modifier.weight(1f),
-                        onOpen = {
-                            openHistoryEntry(entry, appGraph)
-                        },
-                        onDelete = {
-                            historyManager.deleteEntry(entry.id)
-                        },
-                    )
-                }
+        if (showingOtherWorkspaces) {
+            Text(
+                text = stringResource(Res.string.history_other_workspaces),
+                fontSize = 11.sp,
+                color = JewelTheme.globalColors.text.info.copy(alpha = 0.75f),
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            recentEntries.forEach { entry ->
+                HomeHistoryCard(
+                    entry = entry,
+                    modifier = Modifier.weight(1f),
+                    onOpen = {
+                        openHistoryEntry(entry, appGraph)
+                    },
+                    onDelete = {
+                        historyManager.deleteEntry(entry.id)
+                    },
+                )
             }
         }
     }

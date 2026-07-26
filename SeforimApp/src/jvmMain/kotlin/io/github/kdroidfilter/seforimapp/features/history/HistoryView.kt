@@ -43,10 +43,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
-import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.components.CatalogRow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.history.HistoryEntry
 import io.github.kdroidfilter.seforimapp.framework.history.HistoryManager
@@ -66,12 +62,18 @@ import java.util.UUID
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.all_workspaces
 import seforimapp.seforimapp.generated.resources.clear_history
+import seforimapp.seforimapp.generated.resources.cancel
 import seforimapp.seforimapp.generated.resources.confirm_clear_history
 import seforimapp.seforimapp.generated.resources.delete_history_item
 import seforimapp.seforimapp.generated.resources.filter_by_type
 import seforimapp.seforimapp.generated.resources.filter_by_workspace
 import seforimapp.seforimapp.generated.resources.history
 import seforimapp.seforimapp.generated.resources.history_in_desktop
+import seforimapp.seforimapp.generated.resources.history_scope_basic_books
+import seforimapp.seforimapp.generated.resources.history_scope_book
+import seforimapp.seforimapp.generated.resources.history_scope_category
+import seforimapp.seforimapp.generated.resources.history_scope_toc
+import seforimapp.seforimapp.generated.resources.history_no_filtered_items
 import seforimapp.seforimapp.generated.resources.history_type_all
 import seforimapp.seforimapp.generated.resources.history_type_books
 import seforimapp.seforimapp.generated.resources.history_type_searches
@@ -122,13 +124,14 @@ private fun formatHebrewFullDate(date: LocalDate): String {
     return "$dayOfWeekStr, $dayOfMonth $monthStr $year"
 }
 
+@Composable
 private fun formatScope(scopeText: String?): String? {
     if (scopeText.isNullOrBlank()) return null
     return when (scopeText) {
-        "global" -> "ספרי יסוד"
-        "category" -> "קטגוריה"
-        "book" -> "ספר"
-        "toc" -> "סעיף בספר"
+        "global" -> stringResource(Res.string.history_scope_basic_books)
+        "category" -> stringResource(Res.string.history_scope_category)
+        "book" -> stringResource(Res.string.history_scope_book)
+        "toc" -> stringResource(Res.string.history_scope_toc)
         else -> scopeText
     }
 }
@@ -140,10 +143,7 @@ private data class HistoryDateGroup(
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun HistoryView(
-    modifier: Modifier = Modifier,
-    onCatalogEvent: ((BookContentEvent) -> Unit)? = null,
-) {
+fun HistoryView(modifier: Modifier = Modifier) {
     val appGraph = LocalAppGraph.current
     val historyManager: HistoryManager = appGraph.historyManager
     val desktopManager = appGraph.desktopManager
@@ -163,29 +163,6 @@ fun HistoryView(
     var selectedTypeFilter by remember { mutableStateOf<HistoryType?>(null) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
 
-    val handleCatalogEvent: (BookContentEvent) -> Unit = remember(onCatalogEvent, appGraph) {
-        onCatalogEvent ?: { event ->
-            when (event) {
-                is BookContentEvent.BookSelected -> {
-                    appGraph.tabsViewModel.openTab(
-                        TabsDestination.BookContent(
-                            bookId = event.book.id,
-                            tabId = UUID.randomUUID().toString(),
-                        ),
-                    )
-                }
-                is BookContentEvent.OpenBookById -> {
-                    appGraph.tabsViewModel.openTab(
-                        TabsDestination.BookContent(
-                            bookId = event.bookId,
-                            tabId = UUID.randomUUID().toString(),
-                        ),
-                    )
-                }
-                else -> {}
-            }
-        }
-    }
 
     val filteredEntries =
         remember(entries, searchQuery, selectedDesktopFilter, selectedTypeFilter) {
@@ -243,8 +220,6 @@ fun HistoryView(
                 .fillMaxSize()
                 .background(JewelTheme.globalColors.panelBackground),
     ) {
-        // Top Catalog Row preset dropdowns overlay
-        CatalogRow(onEvent = handleCatalogEvent)
 
         Row(modifier = Modifier.fillMaxSize()) {
             // Main Central Content
@@ -402,7 +377,7 @@ fun HistoryView(
                     }
 
                     if (filteredEntries.isEmpty()) {
-                        HistoryTabEmptyState()
+                        HistoryTabEmptyState(isFiltered = entries.isNotEmpty())
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -419,12 +394,6 @@ fun HistoryView(
                 }
             }
 
-            // Left Lateral Bar with Text Size Zoom In / Zoom Out controls
-            EndVerticalBar(
-                uiState = BookContentState(),
-                onEvent = {},
-                showDiacritics = false,
-            )
         }
 
         if (showClearConfirmDialog) {
@@ -484,25 +453,16 @@ private fun FilterChip(
 
 @Composable
 private fun HistoryDateCard(group: HistoryDateGroup) {
-    val shape = RoundedCornerShape(12.dp)
     val appGraph = LocalAppGraph.current
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(JewelTheme.globalColors.panelBackground)
-                .border(1.dp, JewelTheme.globalColors.borders.normal.copy(alpha = 0.5f), shape)
-                .padding(16.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         // Date Group Header
         Text(
             text = group.dateHeader,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
             color = JewelTheme.globalColors.text.info,
-            modifier = Modifier.padding(bottom = 12.dp, start = 4.dp),
+            modifier = Modifier.padding(bottom = 6.dp, start = 8.dp),
         )
 
         // List of entries with timeline on the side
@@ -669,7 +629,7 @@ private fun HistoryTimelineItemRow(
 }
 
 @Composable
-private fun HistoryTabEmptyState() {
+private fun HistoryTabEmptyState(isFiltered: Boolean) {
     Box(
         modifier = Modifier.fillMaxSize().padding(48.dp),
         contentAlignment = Alignment.Center,
@@ -685,7 +645,10 @@ private fun HistoryTabEmptyState() {
                 tint = JewelTheme.globalColors.text.info.copy(alpha = 0.4f),
             )
             Text(
-                text = stringResource(Res.string.no_history_items),
+                text =
+                    stringResource(
+                        if (isFiltered) Res.string.history_no_filtered_items else Res.string.no_history_items,
+                    ),
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
                 color = JewelTheme.globalColors.text.info,
@@ -725,7 +688,7 @@ private fun ClearHistoryConfirmDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedButton(onClick = onDismiss) {
-                        Text("ביטול")
+                        Text(stringResource(Res.string.cancel))
                     }
                     Spacer(Modifier.width(8.dp))
                     DefaultButton(onClick = onConfirm) {

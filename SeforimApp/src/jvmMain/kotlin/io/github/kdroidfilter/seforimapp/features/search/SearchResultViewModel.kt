@@ -28,6 +28,7 @@ import io.github.kdroidfilter.seforimapp.features.search.domain.SearchStatePersi
 import io.github.kdroidfilter.seforimapp.features.search.domain.SearchTocUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocLineIndex
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
+import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -83,7 +84,7 @@ class SearchResultViewModel(
     private val repository: SeforimRepository,
     private val lucene: SearchEngine,
     private val titleUpdateManager: TabTitleUpdateManager,
-    private val tabsViewModel: TabsViewModel,
+    private val desktopManager: DesktopManager,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(SearchResultViewModel::class)
@@ -782,9 +783,8 @@ class SearchResultViewModel(
         }
 
         viewModelScope.launch {
-            // Observe tabs list and cancel search if this tab gets closed
-            tabsViewModel.tabs.collect { tabs ->
-                val exists = tabs.any { it.destination.tabId == tabId }
+            // Observe all windows' tabs and cancel search if this tab gets closed everywhere
+            desktopManager.tabExistsFlow(tabId).collect { exists ->
                 if (!exists) {
                     // Tab was closed; stop work.
                     cancelSearch()
@@ -1190,7 +1190,7 @@ class SearchResultViewModel(
         // without re-searching.
         val stillExists =
             runCatching {
-                tabsViewModel.tabs.value.any { it.destination.tabId == tabId }
+                desktopManager.isTabOpen(tabId)
             }.getOrDefault(false)
         if (stillExists) {
             val snap = buildSnapshot(uiState.value.results)
@@ -1788,7 +1788,7 @@ class SearchResultViewModel(
                 AppSettings.openFindBar(newTabId)
             }
 
-            tabsViewModel.openTab(
+            desktopManager.tabsViewModelFor(tabId)?.openTab(
                 TabsDestination.BookContent(
                     bookId = result.bookId,
                     tabId = newTabId,
@@ -1810,6 +1810,7 @@ class SearchResultViewModel(
                     tabId = targetTabId,
                     lineId = result.lineId,
                 )
+            val tabsViewModel = desktopManager.tabsViewModelFor(tabId) ?: return@launch
             if (openInNewTab) {
                 tabsViewModel.openTab(destination)
             } else {
@@ -1859,7 +1860,7 @@ class SearchResultViewModel(
             }
 
             // Swap current tab destination to BookContent while preserving tabId
-            tabsViewModel.replaceCurrentTabDestination(
+            desktopManager.tabsViewModelFor(tabId)?.replaceCurrentTabDestination(
                 TabsDestination.BookContent(
                     bookId = result.bookId,
                     tabId = tabId,

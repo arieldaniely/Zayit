@@ -43,23 +43,42 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.delete_history_item
 import seforimapp.seforimapp.generated.resources.history_in_desktop
-import seforimapp.seforimapp.generated.resources.recent_history
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.UUID
+import seforimapp.seforimapp.generated.resources.to_full_history
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+private fun formatScope(scopeText: String?): String? {
+    if (scopeText.isNullOrBlank()) return null
+    return when (scopeText) {
+        "global" -> "ספרי יסוד"
+        "category" -> "קטגוריה"
+        "book" -> "ספר"
+        "toc" -> "סעיף בספר"
+        else -> scopeText
+    }
+}
 
 @Composable
 fun HomeHistoryWidget(modifier: Modifier = Modifier) {
     val appGraph = LocalAppGraph.current
     val historyManager = appGraph.historyManager
+    val desktopManager = appGraph.desktopManager
+
     val entries by historyManager.entries.collectAsState()
+    val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
+    val desktops by desktopManager.desktops.collectAsState()
 
-    val recentEntries = remember(entries) { entries.take(4) }
-    if (recentEntries.isEmpty()) return
+    val activeDesktopName = remember(activeDesktopId, desktops) {
+        desktops.find { it.id == activeDesktopId }?.name ?: ""
+    }
 
+    val workspaceEntries = remember(entries, activeDesktopName) {
+        entries.filter { entry ->
+            entry.desktopName.isBlank() || entry.desktopName == activeDesktopName
+        }
+    }
+
+    val recentEntries = remember(workspaceEntries) { workspaceEntries.take(4) }
     val recentHistoryTitle = stringResource(Res.string.recent_history)
 
     Column(
@@ -68,38 +87,55 @@ fun HomeHistoryWidget(modifier: Modifier = Modifier) {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         ) {
-            Icon(
-                imageVector = History,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = JewelTheme.globalColors.text.info,
-            )
-            Spacer(Modifier.width(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = History,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = JewelTheme.globalColors.text.info,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = recentHistoryTitle,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = JewelTheme.globalColors.text.info,
+                )
+            }
+
             Text(
-                text = recentHistoryTitle,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
+                text = stringResource(Res.string.to_full_history),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = JewelTheme.globalColors.text.info,
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { appGraph.tabsViewModel.openHistoryTab() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            recentEntries.forEach { entry ->
-                HomeHistoryCard(
-                    entry = entry,
-                    modifier = Modifier.weight(1f),
-                    onOpen = {
-                        openHistoryEntry(entry, appGraph)
-                    },
-                    onDelete = {
-                        historyManager.deleteEntry(entry.id)
-                    },
-                )
+        if (recentEntries.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                recentEntries.forEach { entry ->
+                    HomeHistoryCard(
+                        entry = entry,
+                        modifier = Modifier.weight(1f),
+                        onOpen = {
+                            openHistoryEntry(entry, appGraph)
+                        },
+                        onDelete = {
+                            historyManager.deleteEntry(entry.id)
+                        },
+                    )
+                }
             }
         }
     }
@@ -194,7 +230,7 @@ private fun HomeHistoryCard(
             val detailText =
                 when (entry.type) {
                     HistoryType.BOOK -> entry.lineDisplayLabel
-                    HistoryType.SEARCH -> entry.searchScope
+                    HistoryType.SEARCH -> formatScope(entry.searchScope)
                 }
             if (!detailText.isNullOrBlank()) {
                 Text(

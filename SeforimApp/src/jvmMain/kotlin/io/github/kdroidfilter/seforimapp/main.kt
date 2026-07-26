@@ -35,7 +35,8 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AppDockMen
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppJumpList
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppLinuxQuicklist
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AppNativeMenuBar
-import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
+import io.github.kdroidfilter.seforimapp.framework.history.HistoryType
+import java.util.UUID
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
@@ -407,14 +408,14 @@ fun main(args: Array<String>) {
                         minimumSize = DpSize(600.dp, 300.dp),
                         onKeyEvent = { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown) {
-                                // Read fresh state to avoid stale captures in cached lambda
+                            // Read fresh state to avoid stale captures in cached lambda
                                 val currentState = tabsVm.state.value
                                 val currentTabs = currentState.tabs
                                 val currentIndex = currentState.selectedTabIndex
                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                 if (isCtrlOrCmd && keyEvent.key == Key.T) {
                                     if (keyEvent.isShiftPressed) {
-                                        tabsVm.onEvent(TabsEvents.ReopenLastClosedTab)
+                                        reopenWorkspaceHistoryOrTab(appGraph)
                                     } else {
                                         tabsVm.onEvent(TabsEvents.OnAdd)
                                     }
@@ -580,7 +581,7 @@ fun main(args: Array<String>) {
                                                     // Ctrl/Cmd + T => new tab (or reopen closed with Shift)
                                                     isCtrlOrCmd && keyEvent.key == Key.T -> {
                                                         if (keyEvent.isShiftPressed) {
-                                                            tabsVm.onEvent(TabsEvents.ReopenLastClosedTab)
+                                                            reopenWorkspaceHistoryOrTab(appGraph)
                                                         } else {
                                                             tabsVm.onEvent(TabsEvents.OnAdd)
                                                         }
@@ -658,5 +659,49 @@ fun main(args: Array<String>) {
                 }
             }
         }
+    }
+}
+
+private fun reopenWorkspaceHistoryOrTab(appGraph: io.github.kdroidfilter.seforimapp.framework.di.AppGraph) {
+    val desktopManager = appGraph.desktopManager
+    val activeId = desktopManager.activeDesktopId.value
+    val activeDesktopName = desktopManager.desktops.value.find { it.id == activeId }?.name ?: ""
+
+    val historyManager = appGraph.historyManager
+    val entries = historyManager.entries.value
+
+    val matchingEntry = entries.firstOrNull { entry ->
+        entry.desktopName.isBlank() || entry.desktopName == activeDesktopName
+    }
+
+    if (matchingEntry != null) {
+        val tabsVm = appGraph.tabsViewModel
+        val tabId = UUID.randomUUID().toString()
+        when (matchingEntry.type) {
+            HistoryType.BOOK -> {
+                val bookId = matchingEntry.bookId ?: return
+                tabsVm.openTab(
+                    TabsDestination.BookContent(
+                        bookId = bookId,
+                        tabId = tabId,
+                        lineId = matchingEntry.lineId,
+                    ),
+                )
+            }
+
+            HistoryType.SEARCH -> {
+                val query = matchingEntry.searchQuery.orEmpty()
+                if (query.isNotBlank()) {
+                    tabsVm.openTab(
+                        TabsDestination.Search(
+                            searchQuery = query,
+                            tabId = tabId,
+                        ),
+                    )
+                }
+            }
+        }
+    } else {
+        appGraph.tabsViewModel.onEvent(TabsEvents.ReopenLastClosedTab)
     }
 }

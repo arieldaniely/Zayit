@@ -674,5 +674,14 @@
     <string name="history_older">מוקדם יותר</string>
     <string name="history_scope_all">כל הספרים</string>
     <string name="history_in_desktop">במרחב: %1$s</string>
+    <string name="to_full_history">להסטוריה המלאה</string>
+    <string name="filter_by_workspace">מרחב:</string>
+    <string name="all_workspaces">כל המרחבים</string>
+    <string name="filter_by_type">סוג:</string>
+    <string name="history_type_all">הכל</string>
+    <string name="history_type_books">ספרים</string>
+    <string name="history_type_searches">חיפושים</string>
+    <string name="history_scope_basic_books">ספרי יסוד</string>
+    <string name="history_scope_full_repo">מאגר מלא</string>
 </resources>
 

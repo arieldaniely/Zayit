@@ -34,7 +34,25 @@ fun recordTabToHistory(
             is TabsDestination.Search -> {
                 val query = dest.searchQuery.ifBlank { tabState?.search?.query.orEmpty() }
                 if (query.isNotBlank()) {
-                    val scopeText = tabState?.search?.datasetScope ?: "global"
+                    val searchState = tabState?.search
+                    val datasetScope = searchState?.datasetScope ?: "global"
+                    val scopeText =
+                        when (datasetScope) {
+                            "category" -> {
+                                val catId = searchState?.filterCategoryId?.takeIf { it > 0 } ?: searchState?.fetchCategoryId ?: 0L
+                                val cat = if (catId > 0) repository.getCategory(catId) else null
+                                if (cat != null) "קטגוריית ${cat.heTitle.ifBlank { cat.title }}" else "קטגוריה"
+                            }
+                            "book", "toc" -> {
+                                val bookId = searchState?.filterBookId?.takeIf { it > 0 } ?: searchState?.fetchBookId ?: 0L
+                                val book = if (bookId > 0) repository.getBookCore(bookId) else null
+                                if (book != null) "ספר ${book.title}" else "ספר"
+                            }
+                            else -> {
+                                if (searchState?.globalExtended == true) "מאגר מלא" else "ספרי יסוד"
+                            }
+                        }
+
                     historyManager.addEntry(
                         HistoryEntry(
                             desktopName = activeDesktopName,

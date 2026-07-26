@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
@@ -42,6 +43,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.components.CatalogRow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.history.HistoryEntry
 import io.github.kdroidfilter.seforimapp.framework.history.HistoryManager
@@ -58,11 +63,17 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.all_workspaces
 import seforimapp.seforimapp.generated.resources.clear_history
 import seforimapp.seforimapp.generated.resources.confirm_clear_history
 import seforimapp.seforimapp.generated.resources.delete_history_item
+import seforimapp.seforimapp.generated.resources.filter_by_type
+import seforimapp.seforimapp.generated.resources.filter_by_workspace
 import seforimapp.seforimapp.generated.resources.history
 import seforimapp.seforimapp.generated.resources.history_in_desktop
+import seforimapp.seforimapp.generated.resources.history_type_all
+import seforimapp.seforimapp.generated.resources.history_type_books
+import seforimapp.seforimapp.generated.resources.history_type_searches
 import seforimapp.seforimapp.generated.resources.no_history_items
 import seforimapp.seforimapp.generated.resources.open_in_new_tab
 import seforimapp.seforimapp.generated.resources.search_history_placeholder
@@ -111,35 +122,86 @@ private fun formatHebrewFullDate(date: LocalDate): String {
     return "$dayOfWeekStr, $dayOfMonth $monthStr $year"
 }
 
+private fun formatScope(scopeText: String?): String? {
+    if (scopeText.isNullOrBlank()) return null
+    return when (scopeText) {
+        "global" -> "ספרי יסוד"
+        "category" -> "קטגוריה"
+        "book" -> "ספר"
+        "toc" -> "סעיף בספר"
+        else -> scopeText
+    }
+}
+
 private data class HistoryDateGroup(
     val dateHeader: String,
     val entries: List<HistoryEntry>,
 )
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun HistoryView(modifier: Modifier = Modifier) {
+fun HistoryView(
+    modifier: Modifier = Modifier,
+    onCatalogEvent: ((BookContentEvent) -> Unit)? = null,
+) {
     val appGraph = LocalAppGraph.current
     val historyManager: HistoryManager = appGraph.historyManager
+    val desktopManager = appGraph.desktopManager
+
     val entries by historyManager.entries.collectAsState()
+    val desktops by desktopManager.desktops.collectAsState()
+    val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
+
+    val activeDesktopName = remember(activeDesktopId, desktops) {
+        desktops.find { it.id == activeDesktopId }?.name ?: ""
+    }
 
     val searchQueryState = remember { TextFieldState() }
     val searchQuery by remember { derivedStateOf { searchQueryState.text.toString() } }
 
+    var selectedDesktopFilter by remember { mutableStateOf<String?>(activeDesktopName) }
+    var selectedTypeFilter by remember { mutableStateOf<HistoryType?>(null) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
 
+    val handleCatalogEvent: (BookContentEvent) -> Unit = remember(onCatalogEvent, appGraph) {
+        onCatalogEvent ?: { event ->
+            if (event is BookContentEvent.SelectBook) {
+                appGraph.tabsViewModel.openTab(
+                    TabsDestination.BookContent(
+                        bookId = event.bookId,
+                        tabId = UUID.randomUUID().toString(),
+                    ),
+                )
+            }
+        }
+    }
+
     val filteredEntries =
-        remember(entries, searchQuery) {
-            if (searchQuery.isBlank()) {
-                entries
-            } else {
-                val q = searchQuery.trim().lowercase()
-                entries.filter { entry ->
-                    entry.bookTitle.orEmpty().lowercase().contains(q) ||
-                        entry.searchQuery.orEmpty().lowercase().contains(q) ||
-                        entry.lineDisplayLabel.orEmpty().lowercase().contains(q) ||
-                        entry.desktopName.lowercase().contains(q)
-                }
+        remember(entries, searchQuery, selectedDesktopFilter, selectedTypeFilter) {
+            entries.filter { entry ->
+                // Filter by desktop
+                val desktopMatch =
+                    selectedDesktopFilter.isNullOrBlank() ||
+                        entry.desktopName.isBlank() ||
+                        entry.desktopName == selectedDesktopFilter
+
+                // Filter by type
+                val typeMatch = selectedTypeFilter == null || entry.type == selectedTypeFilter
+
+                // Filter by query
+                val queryMatch =
+                    if (searchQuery.isBlank()) {
+                        true
+                    } else {
+                        val q = searchQuery.trim().lowercase()
+                        entry.bookTitle.orEmpty().lowercase().contains(q) ||
+                            entry.searchQuery.orEmpty().lowercase().contains(q) ||
+                            entry.lineDisplayLabel.orEmpty().lowercase().contains(q) ||
+                            entry.searchScope.orEmpty().lowercase().contains(q) ||
+                            entry.desktopName.lowercase().contains(q)
+                    }
+
+                desktopMatch && typeMatch && queryMatch
             }
         }
 
@@ -169,110 +231,189 @@ fun HistoryView(modifier: Modifier = Modifier) {
             modifier
                 .fillMaxSize()
                 .background(JewelTheme.globalColors.panelBackground),
-        contentAlignment = Alignment.TopCenter,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .widthIn(max = 940.dp)
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-        ) {
-            // Header Bar
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+        // Top Catalog Row preset dropdowns overlay
+        CatalogRow(onEvent = handleCatalogEvent)
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Main Central Content
+            Box(
+                modifier = Modifier.weight(1f).fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = History,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = JewelTheme.globalColors.text.info,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(Res.string.history),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-
-                // Centered Search Bar
-                Box(
-                    modifier = Modifier.weight(1f).padding(horizontal = 32.dp),
-                    contentAlignment = Alignment.Center,
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .widthIn(max = 960.dp)
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
                 ) {
+                    // Header Bar
                     Row(
-                        modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextField(
-                            state = searchQueryState,
-                            placeholder = { Text(stringResource(Res.string.search_history_placeholder)) },
-                            leadingIcon = {
-                                Icon(
-                                    key = AllIconsKeys.Actions.Find,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = JewelTheme.globalColors.text.info,
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (searchQuery.isNotEmpty()) {
-                            Spacer(Modifier.width(4.dp))
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .clip(CircleShape)
-                                        .clickable { searchQueryState.edit { replace(0, length, "") } }
-                                        .padding(4.dp),
-                            ) {
-                                Icon(
-                                    key = AllIconsKeys.Windows.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Clear History Action Button
-                if (entries.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = { showClearConfirmDialog = true },
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                key = AllIconsKeys.Actions.GC,
+                                imageVector = History,
                                 contentDescription = null,
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(24.dp),
+                                tint = JewelTheme.globalColors.text.info,
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(Res.string.clear_history), fontSize = 12.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = stringResource(Res.string.history),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+
+                        // Centered Search Input
+                        Box(
+                            modifier = Modifier.weight(1f).padding(horizontal = 24.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().widthIn(max = 440.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TextField(
+                                    state = searchQueryState,
+                                    placeholder = { Text(stringResource(Res.string.search_history_placeholder)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            key = AllIconsKeys.Actions.Find,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = JewelTheme.globalColors.text.info,
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (searchQuery.isNotEmpty()) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .clickable { searchQueryState.edit { replace(0, length, "") } }
+                                                .padding(4.dp),
+                                    ) {
+                                        Icon(
+                                            key = AllIconsKeys.Windows.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Clear History Button
+                        if (entries.isNotEmpty()) {
+                            OutlinedButton(
+                                onClick = { showClearConfirmDialog = true },
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        key = AllIconsKeys.Actions.GC,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.clear_history), fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Advanced Filter Bar (Workspaces + Type filter)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        // Workspaces filter section
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.filter_by_workspace),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = JewelTheme.globalColors.text.info,
+                            )
+                            FilterChip(
+                                label = stringResource(Res.string.all_workspaces),
+                                selected = selectedDesktopFilter == null,
+                                onClick = { selectedDesktopFilter = null },
+                            )
+                            desktops.forEach { desktop ->
+                                FilterChip(
+                                    label = desktop.name,
+                                    selected = selectedDesktopFilter == desktop.name,
+                                    onClick = { selectedDesktopFilter = desktop.name },
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(16.dp))
+
+                        // Type filter section
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.filter_by_type),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = JewelTheme.globalColors.text.info,
+                            )
+                            FilterChip(
+                                label = stringResource(Res.string.history_type_all),
+                                selected = selectedTypeFilter == null,
+                                onClick = { selectedTypeFilter = null },
+                            )
+                            FilterChip(
+                                label = stringResource(Res.string.history_type_books),
+                                selected = selectedTypeFilter == HistoryType.BOOK,
+                                onClick = { selectedTypeFilter = HistoryType.BOOK },
+                            )
+                            FilterChip(
+                                label = stringResource(Res.string.history_type_searches),
+                                selected = selectedTypeFilter == HistoryType.SEARCH,
+                                onClick = { selectedTypeFilter = HistoryType.SEARCH },
+                            )
+                        }
+                    }
+
+                    if (filteredEntries.isEmpty()) {
+                        HistoryTabEmptyState()
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            groupedHistory.forEach { group ->
+                                item(key = group.dateHeader) {
+                                    HistoryDateCard(group = group)
+                                }
+                            }
+                            item { Spacer(Modifier.height(24.dp)) }
                         }
                     }
                 }
             }
 
-            if (filteredEntries.isEmpty()) {
-                HistoryTabEmptyState()
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    groupedHistory.forEach { group ->
-                        item(key = group.dateHeader) {
-                            HistoryDateCard(group = group)
-                        }
-                    }
-                    item { Spacer(Modifier.height(24.dp)) }
-                }
-            }
+            // Left Lateral Bar with Text Size Zoom In / Zoom Out controls
+            EndVerticalBar(
+                uiState = BookContentState(),
+                onEvent = {},
+                showDiacritics = false,
+            )
         }
 
         if (showClearConfirmDialog) {
@@ -284,6 +425,49 @@ fun HistoryView(modifier: Modifier = Modifier) {
                 onDismiss = { showClearConfirmDialog = false },
             )
         }
+    }
+}
+
+@Composable
+private fun FilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg =
+        if (selected) {
+            JewelTheme.globalColors.outlines.focused.copy(alpha = 0.2f)
+        } else {
+            JewelTheme.globalColors.panelBackground
+        }
+    val border =
+        if (selected) {
+            JewelTheme.globalColors.outlines.focused
+        } else {
+            JewelTheme.globalColors.borders.normal.copy(alpha = 0.5f)
+        }
+    val textColor =
+        if (selected) {
+            JewelTheme.globalColors.outlines.focused
+        } else {
+            JewelTheme.globalColors.text.info
+        }
+
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(bg)
+                .border(1.dp, border, RoundedCornerShape(12.dp))
+                .clickable { onClick() }
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = textColor,
+        )
     }
 }
 
@@ -312,13 +496,8 @@ private fun HistoryDateCard(group: HistoryDateGroup) {
 
         // List of entries with timeline on the side
         group.entries.forEachIndexed { index, entry ->
-            val isFirst = index == 0
-            val isLast = index == group.entries.lastIndex
-
             HistoryTimelineItemRow(
                 entry = entry,
-                isFirst = isFirst,
-                isLast = isLast,
                 onOpen = {
                     openHistoryItem(entry, appGraph, inNewTab = false)
                 },
@@ -337,8 +516,6 @@ private fun HistoryDateCard(group: HistoryDateGroup) {
 @Composable
 private fun HistoryTimelineItemRow(
     entry: HistoryEntry,
-    isFirst: Boolean,
-    isLast: Boolean,
     onOpen: () -> Unit,
     onOpenNewTab: () -> Unit,
     onDelete: () -> Unit,
@@ -377,12 +554,11 @@ private fun HistoryTimelineItemRow(
                     .padding(vertical = 6.dp, horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Timeline Column: Timestamp + Vertical Line + Node Dot
+            // Timeline Column: Timestamp + Node Dot
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.width(90.dp),
             ) {
-                // Timestamp
                 Text(
                     text = timeLabel,
                     fontSize = 12.sp,
@@ -390,7 +566,6 @@ private fun HistoryTimelineItemRow(
                     modifier = Modifier.width(45.dp),
                 )
 
-                // Node Dot
                 Box(
                     modifier =
                         Modifier
@@ -423,7 +598,6 @@ private fun HistoryTimelineItemRow(
 
             // Details Column
             Column(modifier = Modifier.weight(1f)) {
-                // Title
                 val titleText =
                     when (entry.type) {
                         HistoryType.BOOK -> entry.bookTitle.orEmpty()
@@ -437,11 +611,10 @@ private fun HistoryTimelineItemRow(
                     overflow = TextOverflow.Ellipsis,
                 )
 
-                // Detail / Subtitle
                 val detailText =
                     when (entry.type) {
                         HistoryType.BOOK -> entry.lineDisplayLabel
-                        HistoryType.SEARCH -> entry.searchScope
+                        HistoryType.SEARCH -> formatScope(entry.searchScope)
                     }
                 if (!detailText.isNullOrBlank()) {
                     Text(

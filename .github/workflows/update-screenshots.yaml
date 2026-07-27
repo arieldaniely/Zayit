@@ -27,20 +27,52 @@ jobs:
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
 
-      - name: Install Linux Desktop / Skiko dependencies
+      - name: Install deterministic Hebrew fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgl1 libgl1-mesa-dri libglx-mesa0 libxcursor1 libxi6 libxinerama1 libxrandr2 libxrender1 libxtst6 libx11-dev libfreetype6-dev libfontconfig1-dev
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-core
+          fc-cache -f
 
       - name: Run Screenshot Generator
         env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
           SKIKO_RENDER_API: "SOFTWARE_COMPAT"
+        run: ./gradlew :SeforimApp:generateScreenshots --no-daemon --stacktrace
+
+      - name: Verify Generated Screenshots
         run: |
-          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew :SeforimApp:generateScreenshots --no-daemon
+          python3 <<'PY'
+          import hashlib
+          import struct
+          from pathlib import Path
+
+          stems = [
+              'HOME', 'BOOK-SEARCH', 'TOC-BOOK-SEARCH', 'PIRUSHIM-TARGUMIM', 'PIRUSHIM',
+              'INBOOK-SEARCH', 'MEKOR', 'DB-SEARCH-SIMPLE', 'DB-SEARCH-ADVANCED', 'CLIPBOARD-DEMO',
+          ]
+          names = [f'{stem}-{mode}.png' for stem in stems for mode in ('LIGHT', 'DARK')]
+          art_dir = Path('art')
+          web_dir = Path('website/public/art')
+
+          for name in names:
+              copies = [art_dir / name, web_dir / name]
+              for path in copies:
+                  if not path.is_file():
+                      raise SystemExit(f'Missing generated screenshot: {path}')
+                  with path.open('rb') as image:
+                      if image.read(8) != b'\x89PNG\r\n\x1a\n':
+                          raise SystemExit(f'Not a valid PNG: {path}')
+                      image.read(8)
+                      width, height = struct.unpack('>II', image.read(8))
+                  if (width, height) != (1463, 811):
+                      raise SystemExit(f'Wrong dimensions for {path}: {width}x{height}')
+              digests = [hashlib.sha256(path.read_bytes()).digest() for path in copies]
+              if digests[0] != digests[1]:
+                  raise SystemExit(f'Copies differ for {name}')
+
+          print(f'Verified {len(names)} screenshots in both output directories.')
+          PY
 
       - name: Upload Generated Screenshots Artifact
-        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: generated-screenshots
@@ -48,11 +80,35 @@ jobs:
             art/*.png
             website/public/art/*.png
           retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Screenshot Failure Diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: screenshot-test-report
+          path: |
+            SeforimApp/build/reports/tests/generateScreenshots/
+            SeforimApp/build/test-results/generateScreenshots/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Set Base Branch
+        id: set_base
+        env:
+          REQUESTED_BASE: ${{ inputs.target_branch }}
+        run: |
+          TARGET_BRANCH="$REQUESTED_BASE"
+          if [ -z "$TARGET_BRANCH" ]; then
+            TARGET_BRANCH="${{ github.ref_name }}"
+          fi
+          echo "base_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Generate PR Description and Step Summary
         id: pr_desc
+        env:
+          BASE_REF: ${{ steps.set_base.outputs.base_branch }}
         run: |
-          python3 -c "
+          python3 <<'PY'
           import os
 
           scenarios = [
@@ -74,7 +130,7 @@ jobs:
           body.append('### 📊 Image Comparison (Before & After)\n')
 
           repo = os.environ.get('GITHUB_REPOSITORY', 'arieldaniely/Zayit')
-          base_ref = os.environ.get('GITHUB_REF_NAME', 'master')
+          base_ref = os.environ['BASE_REF']
 
           for light, dark, title, desc in scenarios:
               body.append(f'<details open>\n<summary><b>{title}</b></summary>\n')
@@ -87,17 +143,9 @@ jobs:
 
           with open('/tmp/pr_body.md', 'w', encoding='utf-8') as f:
               f.write('\n'.join(body))
-          "
-          cat /tmp/pr_body.md >> $GITHUB_STEP_SUMMARY
+          PY
+          cat /tmp/pr_body.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Set Base Branch
-        id: set_base
-        run: |
-          TARGET_BRANCH="${{ inputs.target_branch }}"
-          if [ -z "$TARGET_BRANCH" ]; then
-            TARGET_BRANCH="${{ github.ref_name }}"
-          fi
-          echo "base_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6

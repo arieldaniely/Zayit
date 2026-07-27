@@ -13,8 +13,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,16 +48,19 @@ class ScreenshotGeneratorTest {
         g2d.drawImage(awtImage, 0, 0, targetWidth, targetHeight, null)
         g2d.dispose()
 
-        val artDir = File("../art")
-        val webArtDir = File("../website/public/art")
-        artDir.mkdirs()
-        webArtDir.mkdirs()
+        val repositoryDir = File(checkNotNull(System.getProperty("screenshot.repositoryDir")) {
+            "The screenshot.repositoryDir system property must point to the repository root"
+        })
+        val artDir = repositoryDir.resolve("art")
+        val webArtDir = repositoryDir.resolve("website/public/art")
+        check(artDir.mkdirs() || artDir.isDirectory) { "Could not create ${artDir.absolutePath}" }
+        check(webArtDir.mkdirs() || webArtDir.isDirectory) { "Could not create ${webArtDir.absolutePath}" }
 
         val artFile = File(artDir, filename)
         val webArtFile = File(webArtDir, filename)
 
-        ImageIO.write(resizedImage, "png", artFile)
-        ImageIO.write(resizedImage, "png", webArtFile)
+        check(ImageIO.write(resizedImage, "png", artFile)) { "No PNG writer is available" }
+        check(ImageIO.write(resizedImage, "png", webArtFile)) { "No PNG writer is available" }
         println("Saved screenshot $filename ($targetWidth x $targetHeight) to art/ and website/public/art/")
     }
 
@@ -337,7 +338,9 @@ class ScreenshotGeneratorTest {
                     }
                 }
                 waitForIdle()
-                saveScreenshot(onRoot().captureToImage(), lightName)
+                // Capture the fixed-size backing surface. Capturing onRoot() crops to the
+                // semantics bounds, which can be empty in a headless desktop test on Linux.
+                saveScreenshot(captureToImage(), lightName)
             }
 
             // Dark Mode
@@ -350,7 +353,7 @@ class ScreenshotGeneratorTest {
                     }
                 }
                 waitForIdle()
-                saveScreenshot(onRoot().captureToImage(), darkName)
+                saveScreenshot(captureToImage(), darkName)
             }
         }
     }

@@ -408,9 +408,12 @@ tasks.register<Test>("generateScreenshots") {
     description = "Generates application screenshots for the website and documentation"
     testClassesDirs = kotlin.targets.getByName("jvm").compilations.getByName("test").output.classesDirs
     classpath = kotlin.targets.getByName("jvm").compilations.getByName("test").runtimeDependencyFiles ?: files()
-    systemProperty("java.awt.headless", "false")
+    systemProperty("java.awt.headless", "true")
     systemProperty("skiko.renderApi", "SOFTWARE_COMPAT")
     systemProperty("skiko.linux.autodetect.software", "true")
+    systemProperty("screenshot.repositoryDir", rootProject.layout.projectDirectory.asFile.absolutePath)
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
     filter {
         includeTestsMatching("io.github.kdroidfilter.seforimapp.ScreenshotGeneratorTest")
     }

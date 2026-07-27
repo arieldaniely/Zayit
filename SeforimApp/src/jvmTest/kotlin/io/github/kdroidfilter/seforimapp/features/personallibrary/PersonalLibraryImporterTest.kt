@@ -126,11 +126,10 @@ class PersonalLibraryImporterTest {
             DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
                 connection.createStatement().use { statement ->
                     val query = """
-                        SELECT tt.text, l.lineIndex
+                        SELECT tt.text, t.id
                         FROM tocEntry t
                         JOIN tocText tt ON t.textId = tt.id
-                        JOIN line l ON t.lineId = l.id
-                        ORDER BY l.lineIndex ASC
+                        ORDER BY t.id ASC
                     """.trimIndent()
                     statement.executeQuery(query).use { rows ->
                         val titles = mutableListOf<String>()

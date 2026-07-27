@@ -117,15 +117,17 @@ class DesktopManagerIntegrationTest {
     }
 
     @Test
-    fun `closing the last tab in the last window requests application quit`() {
+    fun `closing the last tab replaces it with a fresh home tab`() {
         val window = desktopManager.windows.value.single()
-        var quitRequested = false
-        desktopManager.onQuitRequest = { quitRequested = true }
+        val closedTabId = window.tabsViewModel.state.value.tabs.single().destination.tabId
 
         window.tabsViewModel.onEvent(TabsEvents.OnClose(0))
 
-        assertTrue(quitRequested)
-        assertTrue(window.tabsViewModel.state.value.tabs.isEmpty())
+        val replacement = window.tabsViewModel.state.value.tabs.single().destination
+        assertTrue(replacement is TabsDestination.BookContent)
+        assertEquals(-1L, replacement.bookId)
+        assertNotEquals(closedTabId, replacement.tabId)
+        assertEquals(1, desktopManager.windows.value.size)
     }
 
     private fun createManager(store: TabPersistedStateStore): DesktopManager =

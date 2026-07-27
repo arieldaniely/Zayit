@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -304,6 +305,7 @@ fun SearchResultInBookShellMvi(
                                     visibleResults = visibleResults,
                                     isFiltering = isFiltering,
                                     breadcrumbs = breadcrumbs,
+                                    tocTree = tocTree,
                                     bookCounts = bookCounts,
                                     loadBookHits = loadBookHits,
                                     actions = actions,
@@ -337,6 +339,7 @@ private fun SearchResultContentMvi(
     visibleResults: ImmutableList<SearchResult>,
     isFiltering: Boolean,
     breadcrumbs: ImmutableMap<Long, List<String>>,
+    tocTree: TocTree?,
     bookCounts: Map<Long, Int>,
     loadBookHits: suspend (Long) -> List<SearchResult>,
     actions: SearchShellActions,
@@ -496,7 +499,10 @@ private fun SearchResultContentMvi(
                 baseBooksHadNoResults = state.baseBooksHadNoResults,
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            SearchScopeIndicator(state = state, tocTree = tocTree)
+
+            Spacer(Modifier.height(10.dp))
             val loadedResults = maxOf(state.progressCurrent, visibleResults.size)
             val totalResults =
                 maxOf(
@@ -709,6 +715,61 @@ private fun SearchResultContentMvi(
     }
 }
 
+@Composable
+private fun SearchScopeIndicator(
+    state: SearchUiState,
+    tocTree: TocTree?,
+) {
+    val separator = stringResource(Res.string.breadcrumb_separator)
+    val tocTitle =
+        remember(tocTree, state.scopeTocId) {
+            val tocId = state.scopeTocId ?: return@remember null
+            tocTree
+                ?.let { it.rootEntries + it.children.values.flatten() }
+                ?.firstOrNull { it.id == tocId }
+                ?.text
+        }
+    val scopeText =
+        when {
+            state.scopeTocId != null ->
+                listOfNotNull(state.scopeBook?.title, tocTitle)
+                    .joinToString(separator)
+                    .ifBlank { stringResource(Res.string.search_scope_selected_section) }
+            state.scopeBook != null -> state.scopeBook.title
+            state.scopeCategoryPath.isNotEmpty() -> state.scopeCategoryPath.joinToString(separator) { it.title }
+            state.globalExtended -> stringResource(Res.string.search_scope_all_library)
+            else -> stringResource(Res.string.search_scope_base_books)
+        }
+    val accent = JewelTheme.globalColors.outlines.focused
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(accent.copy(alpha = if (JewelTheme.isDark) 0.10f else 0.055f))
+                .border(1.dp, accent.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(Res.string.search_scope),
+            color = JewelTheme.globalColors.text.disabledSelected,
+            fontSize = 12.sp,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = scopeText,
+            color = JewelTheme.globalColors.text.normal,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
 /**
  * A book group for the grouped (Google-style) results view: a primary hit plus the
  * secondary hits of the same book that were loaded contiguously after it.
@@ -885,6 +946,7 @@ private fun BookResultCard(
 
     val accent = JewelTheme.globalColors.outlines.focused
     val cardShape = RoundedCornerShape(14.dp)
+    val referenceColumnWidth = (textSize * 4.4f).dp
 
     Box(
         modifier =
@@ -974,8 +1036,9 @@ private fun BookResultCard(
                     color = accent,
                     fontSize = (textSize * 0.78f).sp,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    modifier = Modifier.widthIn(min = (textSize * 4.4f).dp).padding(top = (textSize * 0.22f).dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(referenceColumnWidth).padding(top = (textSize * 0.22f).dp),
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
@@ -1005,6 +1068,7 @@ private fun BookResultCard(
                             fontFamily = fontFamily,
                             findQuery = findQuery,
                             bookFontCode = bookFontCode,
+                            referenceColumnWidth = referenceColumnWidth,
                             pieces = breadcrumbs[sec.lineId],
                             onRequestBreadcrumb = onRequestBreadcrumb,
                             onClick = { onOpenResult(sec) },
@@ -1159,6 +1223,7 @@ private fun SecondaryResultRow(
     fontFamily: FontFamily,
     findQuery: String?,
     bookFontCode: String,
+    referenceColumnWidth: Dp,
     pieces: List<String>?,
     onRequestBreadcrumb: (SearchResult) -> Unit,
     onClick: () -> Unit,
@@ -1183,8 +1248,9 @@ private fun SecondaryResultRow(
             color = JewelTheme.globalColors.text.disabledSelected,
             fontSize = (textSize * 0.72f).sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            modifier = Modifier.widthIn(min = (textSize * 4.4f).dp).padding(top = (textSize * 0.18f).dp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(referenceColumnWidth).padding(top = (textSize * 0.18f).dp),
         )
         Spacer(Modifier.width(14.dp))
         Text(

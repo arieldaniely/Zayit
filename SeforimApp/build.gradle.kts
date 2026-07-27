@@ -402,3 +402,17 @@ tasks.matching { it.name == "stabilityCheck" }.configureEach {
 tasks.matching { it.name == "createDistributable" }.configureEach {
     dependsOn(tasks.matching { task -> task.name == "createRuntimeImage" })
 }
+
+tasks.register<Test>("generateScreenshots") {
+    group = "verification"
+    description = "Generates application screenshots for the website and documentation"
+    testClassesDirs = kotlin.targets.getByName("jvm").compilations.getByName("test").output.classesDirs
+    classpath = kotlin.targets.getByName("jvm").compilations.getByName("test").runtimeDependencyFiles ?: files()
+    systemProperty("java.awt.headless", "false")
+    systemProperty("skiko.renderApi", "SOFTWARE_COMPAT")
+    systemProperty("skiko.linux.autodetect.software", "true")
+    filter {
+        includeTestsMatching("io.github.kdroidfilter.seforimapp.ScreenshotGeneratorTest")
+    }
+}
+

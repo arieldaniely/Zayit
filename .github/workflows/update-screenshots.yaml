@@ -1,0 +1,113 @@
+name: Update Application Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Target base branch for Pull Request (defaults to current branch)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-screenshots:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source (with submodules)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup Nucleus
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
+
+      - name: Install Linux Desktop / Skiko dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libgl1-mesa-dri libglx-mesa0 libxcursor1 libxi6 libxinerama1 libxrandr2 libxrender1 libxtst6 libx11-dev libfreetype6-dev libfontconfig1-dev
+
+      - name: Run Screenshot Generator
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          SKIKO_RENDER_API: "SOFTWARE_COMPAT"
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew :SeforimApp:generateScreenshots --no-daemon
+
+      - name: Upload Generated Screenshots Artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-screenshots
+          path: |
+            art/*.png
+            website/public/art/*.png
+          retention-days: 14
+
+      - name: Generate PR Description and Step Summary
+        id: pr_desc
+        run: |
+          python3 -c "
+          import os
+
+          scenarios = [
+              ('HOME-LIGHT.png', 'HOME-DARK.png', '1. Home Page (דף הבית)', 'Home page active with open background tabs: בראשית א, ברכות ב, שו\"ע או\"ח א'),
+              ('BOOK-SEARCH-LIGHT.png', 'BOOK-SEARCH-DARK.png', '2. Book Search (חיפוש ספרים)', 'Searching for \"שוע יוד\" with search suggestions list open'),
+              ('TOC-BOOK-SEARCH-LIGHT.png', 'TOC-BOOK-SEARCH-DARK.png', '3. Book Table of Contents Search (בחירת קטע/ספר)', 'Selected book result from search showing chapter/section table of contents'),
+              ('PIRUSHIM-TARGUMIM-LIGHT.png', 'PIRUSHIM-TARGUMIM-DARK.png', '4. Commentaries & Translations (פירושים ותרגומים)', 'Active on \"בראשית - פרק א\" with Rashi, Radak and Translations panel open'),
+              ('PIRUSHIM-LIGHT.png', 'PIRUSHIM-DARK.png', '5. Commentaries (פירושים)', 'Active on \"ברכות - דף ב.\" with Rashi, Tosafot, Pnei Yehoshua, Meiri, Ritva (max 2 per page)'),
+              ('INBOOK-SEARCH-LIGHT.png', 'INBOOK-SEARCH-DARK.png', '6. In-Book Search (חיפוש בתוך ספר)', 'Active on \"ברכות - דף ב.\" with in-book search bar searching for \"שמע\"'),
+              ('MEKOR-LIGHT.png', 'MEKOR-DARK.png', '7. Sources (מקורות)', 'Active on \"שולחן ערוך, אורח חיים - סימן א\'\" with sources panel scrolled to \"טור\"'),
+              ('DB-SEARCH-SIMPLE-LIGHT.png', 'DB-SEARCH-SIMPLE-DARK.png', '8. Simple Database Search (חיפוש פשוט במאגר)', 'Search for \"לחתוך צנון בסכין בשרי\" with expanded book tree results'),
+              ('DB-SEARCH-ADVANCED-LIGHT.png', 'DB-SEARCH-ADVANCED-DARK.png', '9. Advanced Database Search (חיפוש מתקדם במאגר)', 'Full database search mode enabled for \"לחתוך צנון בסכין בשרי\"'),
+              ('CLIPBOARD-DEMO-LIGHT.png', 'CLIPBOARD-DEMO-DARK.png', '10. Line Selection & Citation Copy (העתקה עם מקור)', 'Active on \"ברכות - דף ב\'\" with 3rd paragraph selected and copy context menu open')
+          ]
+
+          body = ['## 🎨 Automated Application & Website Screenshots Update\n']
+          body.append('This PR updates the application screenshots in `art/` and `website/public/art/` to match the latest software version.\n')
+          body.append('All images maintain the exact required scale of **1463 × 811 pixels**.\n')
+          body.append('### 📊 Image Comparison (Before & After)\n')
+
+          repo = os.environ.get('GITHUB_REPOSITORY', 'arieldaniely/Zayit')
+          base_ref = os.environ.get('GITHUB_REF_NAME', 'master')
+
+          for light, dark, title, desc in scenarios:
+              body.append(f'<details open>\n<summary><b>{title}</b></summary>\n')
+              body.append(f'*{desc}*\n\n')
+              body.append('<table>')
+              body.append('<tr><th>Mode</th><th>Before (Current)</th><th>After (New)</th></tr>')
+              body.append(f'<tr><td><b>Light Mode</b></td><td><img src=\"https://raw.githubusercontent.com/{repo}/{base_ref}/website/public/art/{light}\" width=\"400\" /></td><td><img src=\"https://raw.githubusercontent.com/{repo}/update-screenshots/website/public/art/{light}\" width=\"400\" /></td></tr>')
+              body.append(f'<tr><td><b>Dark Mode</b></td><td><img src=\"https://raw.githubusercontent.com/{repo}/{base_ref}/website/public/art/{dark}\" width=\"400\" /></td><td><img src=\"https://raw.githubusercontent.com/{repo}/update-screenshots/website/public/art/{dark}\" width=\"400\" /></td></tr>')
+              body.append('</table>\n</details>\n')
+
+          with open('/tmp/pr_body.md', 'w', encoding='utf-8') as f:
+              f.write('\n'.join(body))
+          "
+          cat /tmp/pr_body.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Set Base Branch
+        id: set_base
+        run: |
+          TARGET_BRANCH="${{ inputs.target_branch }}"
+          if [ -z "$TARGET_BRANCH" ]; then
+            TARGET_BRANCH="${{ github.ref_name }}"
+          fi
+          echo "base_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update application screenshots in art/ and website/public/art/"
+          title: "🎨 Update Application & Website Screenshots"
+          body-path: /tmp/pr_body.md
+          branch: update-screenshots
+          base: ${{ steps.set_base.outputs.base_branch }}
+          labels: |
+            screenshots
+            automated pr

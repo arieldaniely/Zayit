@@ -47,7 +47,7 @@ class CommentariesUseCase(
 ) {
     private val commentatorBookCache: MutableMap<Long, Book> = ConcurrentHashMap()
     private val defaultTargumCache: MutableMap<Long, List<Long>> = ConcurrentHashMap()
-
+    private val linePathCache: MutableMap<Long, String> = ConcurrentHashMap()
     // Memoizes the cached pager flows per (kind, line(s), commentator) so the SAME cachedIn flow
     // is reused whenever the same commentator column is requested again (re-selecting a line,
     // toggling the commentaries pane, or an actual composition teardown). Without this, each
@@ -1267,6 +1267,21 @@ class CommentariesUseCase(
             )
         }
     }
+
+    suspend fun getLinePath(lineId: Long): String =
+        linePathCache[lineId] ?: run {
+            val tocId = repository.getTocEntryIdForLine(lineId)
+            val path =
+                tocId
+                    ?.let { repository.getAncestorPath(it) }
+                    .orEmpty()
+                    .map { it.text.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString(" ← ")
+            linePathCache[lineId] = path
+            path
+        }
 
     private suspend fun resolveBaseLineIds(lineId: Long): List<Long> = resolveBaseLineResolution(lineId).baseLineIds
 

@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcon
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,12 +19,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -34,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.paging.LoadState
@@ -42,6 +47,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforim.htmlparser.SkiaHtmlImageBuilder
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
+import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -51,6 +57,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnecti
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.Filter
+import io.github.kdroidfilter.seforimapp.icons.FilterFilled
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
@@ -65,9 +73,9 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.CircularProgressIndicator
-import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.*
 import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.hide_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.links
 import seforimapp.seforimapp.generated.resources.mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
@@ -76,6 +84,7 @@ import seforimapp.seforimapp.generated.resources.no_sources_for_line
 import seforimapp.seforimapp.generated.resources.select_line_for_links
 import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.select_line_for_sources
+import seforimapp.seforimapp.generated.resources.show_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.sources
 
 // Per-side vertical padding applied by `LinkItem`'s Column. Exposed so the scrollbar
@@ -92,6 +101,7 @@ private fun SingleLineTargumView(
     buildLinksPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
     getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     getLinkCharCountsForLine: suspend (Long, Long, ConnectionType) -> List<Int>,
+    getLinePath: suspend (Long) -> String,
     showDiacritics: Boolean,
     commentariesScrollIndex: Int = 0,
     commentariesScrollOffset: Int = 0,
@@ -125,6 +135,7 @@ private fun SingleLineTargumView(
     )
 
     val currentGetAvailableLinksForLine by rememberUpdatedState(getAvailableLinksForLine)
+    val currentGetLinePath by rememberUpdatedState(getLinePath)
     val currentOnSelectedSourcesChange by rememberUpdatedState(onSelectedSourcesChange)
     val currentOnScroll by rememberUpdatedState(onScroll)
 
@@ -138,6 +149,10 @@ private fun SingleLineTargumView(
         }
 
     val paneInteractionSource = remember { MutableInteractionSource() }
+    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
+    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
+    var selectedFilterCategoryIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
+    var selectedFilterBookIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     Column(
         modifier =
@@ -149,6 +164,17 @@ private fun SingleLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
+            actions =
+                if (supportsBookFilter) {
+                    {
+                        LinkFilterSidebarToggleButton(
+                            isVisible = isFilterSidebarVisible,
+                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
+                        )
+                    }
+                } else {
+                    null
+                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -210,6 +236,18 @@ private fun SingleLineTargumView(
                             remember(titleToIdMap) {
                                 titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                             }
+                        val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
+                        val filteredBookIds =
+                            if (supportsBookFilter) {
+                                resolveLinkFilterBookIds(
+                                    availableBookIds,
+                                    selectedFilterCategoryIds,
+                                    selectedFilterBookIds,
+                                )
+                            } else {
+                                availableBookIds
+                            }
+                        val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                         val selectedSources =
                             remember(titleToIdMap, initiallySelectedSourceIds) {
@@ -223,7 +261,7 @@ private fun SingleLineTargumView(
                         }
 
                         val sourceSections =
-                            availableSources.mapNotNull { meta ->
+                            displayedSources.mapNotNull { meta ->
                                 val pagerFlow =
                                     remember(selectedLine.id, meta.bookId) {
                                         buildLinksPagerFor(selectedLine.id, meta.bookId).distinctUntilChanged()
@@ -325,115 +363,164 @@ private fun SingleLineTargumView(
                             }
                         }
 
-                        SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                                    state = listState,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    sourceSections.forEach { section ->
-                                        item(key = "header-${section.bookId}") {
-                                            SourceSectionHeader(
-                                                title = section.title,
-                                                textSize = commentTextSize,
-                                                onClick =
-                                                    when (availabilityType) {
-                                                        ConnectionType.SOURCE -> {
-                                                            {
-                                                                onEvent(
-                                                                    BookContentEvent.OpenSourceBookInNewTab(
-                                                                        bookId = section.bookId,
-                                                                        baseLineIds = listOf(selectedLine.id),
-                                                                    ),
-                                                                )
+                        LinkFilterScaffold(
+                            isVisible = isFilterSidebarVisible && supportsBookFilter,
+                            sidebarOnLeft = availabilityType == ConnectionType.MENTION,
+                            availableBookIds = availableBookIds,
+                            selectedCategoryIds = selectedFilterCategoryIds,
+                            selectedBookIds = selectedFilterBookIds,
+                            onCategoryCheckedChange = { id, checked ->
+                                selectedFilterCategoryIds =
+                                    if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
+                            },
+                            onBookCheckedChange = { id, checked ->
+                                selectedFilterBookIds =
+                                    if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
+                            },
+                        ) {
+                            SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                                        state = listState,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        sourceSections.forEach { section ->
+                                            item(key = "header-${section.bookId}") {
+                                                SourceSectionHeader(
+                                                    title = section.title,
+                                                    textSize = commentTextSize,
+                                                    onClick =
+                                                        when (availabilityType) {
+                                                            ConnectionType.SOURCE -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenSourceBookInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
                                                             }
-                                                        }
-                                                        ConnectionType.MENTION -> {
-                                                            {
-                                                                onEvent(
-                                                                    BookContentEvent.OpenBookByIdInNewTab(
-                                                                        bookId = section.bookId,
-                                                                        baseLineIds = listOf(selectedLine.id),
-                                                                    ),
-                                                                )
+                                                            ConnectionType.MENTION -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenBookByIdInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
                                                             }
-                                                        }
-                                                        else -> null
-                                                    },
-                                            )
-                                        }
-
-                                        items(
-                                            count = section.items.itemCount,
-                                            key = { index ->
-                                                section.items
-                                                    .peek(index)
-                                                    ?.link
-                                                    ?.id ?: "source-${section.bookId}-$index"
-                                            },
-                                        ) { index ->
-                                            section.items[index]?.let { item ->
-                                                LinkItem(
-                                                    linkId = item.link.id,
-                                                    targetText = item.targetText,
-                                                    commentTextSize = commentTextSize,
-                                                    lineHeight = lineHeight,
-                                                    fontFamily = targumFontFamily,
-                                                    boldScale = boldScaleForPlatform,
-                                                    highlightQuery = highlightQuery,
-                                                    onClick = { onLinkClick(item) },
-                                                    isExpanded = item.link.id in expandedItemIds,
-                                                    onToggleExpand = {
-                                                        val id = item.link.id
-                                                        expandedItemIds =
-                                                            if (id in expandedItemIds) {
-                                                                expandedItemIds - id
-                                                            } else {
-                                                                expandedItemIds + id
+                                                            else -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenBookByIdInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
                                                             }
-                                                    },
-                                                    showDiacritics = showDiacritics,
-                                                    annotationCache = annotationCache,
-                                                    onLayoutWidthMeasure = { width ->
-                                                        if (textLayoutWidthPx == 0 && width > 0) {
-                                                            textLayoutWidthPx = width
-                                                        }
-                                                    },
+                                                        },
                                                 )
                                             }
-                                        }
 
-                                        when (val state = section.items.loadState.append) {
-                                            is LoadState.Error ->
-                                                item(key = "append-error-${section.bookId}") {
-                                                    Box(
-                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                        contentAlignment = Alignment.Center,
-                                                    ) {
-                                                        Text(text = state.error.message ?: "Error loading more")
+                                            items(
+                                                count = section.items.itemCount,
+                                                key = { index ->
+                                                    section.items
+                                                        .peek(index)
+                                                        ?.link
+                                                        ?.id ?: "source-${section.bookId}-$index"
+                                                },
+                                            ) { index ->
+                                                section.items[index]?.let { item ->
+                                                    val targetPath by produceState("", item.link.targetLineId, availabilityType) {
+                                                        val tocPath =
+                                                            if (supportsBookFilter) {
+                                                                currentGetLinePath(
+                                                                    item.link.targetLineId,
+                                                                )
+                                                            } else {
+                                                                ""
+                                                            }
+                                                        value =
+                                                            listOf(
+                                                                item.targetBookTitle,
+                                                                tocPath,
+                                                            ).filter { it.isNotBlank() }.joinToString(" ← ")
                                                     }
+                                                    LinkItem(
+                                                        linkId = item.link.id,
+                                                        targetText = item.targetText,
+                                                        targetPath = if (supportsBookFilter) targetPath else "",
+                                                        onPathClick = {
+                                                            onEvent(
+                                                                BookContentEvent.OpenCommentaryTarget(
+                                                                    bookId = item.link.targetBookId,
+                                                                    lineId = item.link.targetLineId,
+                                                                ),
+                                                            )
+                                                        },
+                                                        commentTextSize = commentTextSize,
+                                                        lineHeight = lineHeight,
+                                                        fontFamily = targumFontFamily,
+                                                        boldScale = boldScaleForPlatform,
+                                                        highlightQuery = highlightQuery,
+                                                        onClick = { onLinkClick(item) },
+                                                        isExpanded = item.link.id in expandedItemIds,
+                                                        onToggleExpand = {
+                                                            val id = item.link.id
+                                                            expandedItemIds =
+                                                                if (id in expandedItemIds) {
+                                                                    expandedItemIds - id
+                                                                } else {
+                                                                    expandedItemIds + id
+                                                                }
+                                                        },
+                                                        showDiacritics = showDiacritics,
+                                                        annotationCache = annotationCache,
+                                                        onLayoutWidthMeasure = { width ->
+                                                            if (textLayoutWidthPx == 0 && width > 0) {
+                                                                textLayoutWidthPx = width
+                                                            }
+                                                        },
+                                                    )
                                                 }
+                                            }
 
-                                            is LoadState.Loading ->
-                                                item(key = "append-loading-${section.bookId}") {
-                                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                        CircularProgressIndicator()
+                                            when (val state = section.items.loadState.append) {
+                                                is LoadState.Error ->
+                                                    item(key = "append-error-${section.bookId}") {
+                                                        Box(
+                                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                            contentAlignment = Alignment.Center,
+                                                        ) {
+                                                            Text(text = state.error.message ?: "Error loading more")
+                                                        }
                                                     }
-                                                }
 
-                                            else -> {}
+                                                is LoadState.Loading ->
+                                                    item(key = "append-loading-${section.bookId}") {
+                                                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                            CircularProgressIndicator()
+                                                        }
+                                                    }
+
+                                                else -> {}
+                                            }
                                         }
                                     }
+                                    TargumScrollbar(
+                                        listState = listState,
+                                        allCharCounts = effectiveCharCounts,
+                                        capacity = capacity,
+                                        lineHeightPx = lineHeightPx,
+                                        paddingPerItemPx = paddingPerItemPx,
+                                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                                    )
                                 }
-                                TargumScrollbar(
-                                    listState = listState,
-                                    allCharCounts = effectiveCharCounts,
-                                    capacity = capacity,
-                                    lineHeightPx = lineHeightPx,
-                                    paddingPerItemPx = paddingPerItemPx,
-                                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                                )
                             }
                         }
                     }
@@ -571,6 +658,7 @@ fun LineTargumView(
             buildLinksPagerFor = buildPagerFor,
             getAvailableLinksForLine = getAvailableForLine,
             getLinkCharCountsForLine = providers.getLinkCharCountsForLine,
+            getLinePath = providers.getLinePath,
             commentariesScrollIndex = contentState.commentariesScrollIndex,
             commentariesScrollOffset = contentState.commentariesScrollOffset,
             initiallySelectedSourceIds = initiallySelectedIds,
@@ -635,6 +723,10 @@ private fun MultiLineTargumView(
         }
 
     val paneInteractionSource = remember { MutableInteractionSource() }
+    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
+    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
+    var selectedFilterCategoryIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
+    var selectedFilterBookIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     // Use multi-line provider to get aggregated available links
     val titleToIdMap by produceState<Map<String, Long>>(emptyMap(), selectedLineIds, availabilityType) {
@@ -669,6 +761,17 @@ private fun MultiLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
+            actions =
+                if (supportsBookFilter) {
+                    {
+                        LinkFilterSidebarToggleButton(
+                            isVisible = isFilterSidebarVisible,
+                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
+                        )
+                    }
+                } else {
+                    null
+                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -686,10 +789,22 @@ private fun MultiLineTargumView(
                     remember(titleToIdMap) {
                         titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                     }
+                val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
+                val filteredBookIds =
+                    if (supportsBookFilter) {
+                        resolveLinkFilterBookIds(
+                            availableBookIds,
+                            selectedFilterCategoryIds,
+                            selectedFilterBookIds,
+                        )
+                    } else {
+                        availableBookIds
+                    }
+                val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                 // Build pagers for each source using multi-line provider
                 val sourceSections =
-                    availableSources.mapNotNull { meta ->
+                    displayedSources.mapNotNull { meta ->
                         val pagerFlow =
                             remember(selectedLineIds, meta.bookId, availabilityType) {
                                 when (availabilityType) {
@@ -797,122 +912,160 @@ private fun MultiLineTargumView(
                     }
                 }
 
-                SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                            state = listState,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            sourceSections.forEach { section ->
-                                item(key = "header-${section.bookId}") {
-                                    SourceSectionHeader(
-                                        title = section.title,
-                                        textSize = commentTextSize,
-                                        onClick =
-                                            when (availabilityType) {
-                                                ConnectionType.SOURCE -> {
-                                                    {
-                                                        onEvent(
-                                                            BookContentEvent.OpenSourceBookInNewTab(
-                                                                bookId = section.bookId,
-                                                                baseLineIds = selectedLineIds,
-                                                            ),
-                                                        )
+                LinkFilterScaffold(
+                    isVisible = isFilterSidebarVisible && supportsBookFilter,
+                    sidebarOnLeft = availabilityType == ConnectionType.MENTION,
+                    availableBookIds = availableBookIds,
+                    selectedCategoryIds = selectedFilterCategoryIds,
+                    selectedBookIds = selectedFilterBookIds,
+                    onCategoryCheckedChange = { id, checked ->
+                        selectedFilterCategoryIds =
+                            if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
+                    },
+                    onBookCheckedChange = { id, checked ->
+                        selectedFilterBookIds =
+                            if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
+                    },
+                ) {
+                    SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                                state = listState,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                sourceSections.forEach { section ->
+                                    item(key = "header-${section.bookId}") {
+                                        SourceSectionHeader(
+                                            title = section.title,
+                                            textSize = commentTextSize,
+                                            onClick =
+                                                when (availabilityType) {
+                                                    ConnectionType.SOURCE -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenSourceBookInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
                                                     }
-                                                }
-                                                ConnectionType.MENTION -> {
-                                                    {
-                                                        onEvent(
-                                                            BookContentEvent.OpenBookByIdInNewTab(
-                                                                bookId = section.bookId,
-                                                                baseLineIds = selectedLineIds,
-                                                            ),
-                                                        )
+                                                    ConnectionType.MENTION -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenBookByIdInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
                                                     }
-                                                }
-                                                else -> null
-                                            },
-                                    )
-                                }
-
-                                items(
-                                    count = section.items.itemCount,
-                                    key = { index ->
-                                        section.items
-                                            .peek(index)
-                                            ?.link
-                                            ?.id ?: "multi-source-${section.bookId}-$index"
-                                    },
-                                ) { index ->
-                                    section.items[index]?.let { item ->
-                                        LinkItem(
-                                            linkId = item.link.id,
-                                            targetText = item.targetText,
-                                            commentTextSize = commentTextSize,
-                                            lineHeight = lineHeight,
-                                            fontFamily = targumFontFamily,
-                                            boldScale = boldScaleForPlatform,
-                                            highlightQuery = highlightQuery,
-                                            onClick = {
-                                                onEvent(
-                                                    BookContentEvent.OpenCommentaryTarget(
-                                                        bookId = item.link.targetBookId,
-                                                        lineId = item.link.targetLineId,
-                                                    ),
-                                                )
-                                            },
-                                            isExpanded = item.link.id in expandedItemIds,
-                                            onToggleExpand = {
-                                                val id = item.link.id
-                                                expandedItemIds =
-                                                    if (id in expandedItemIds) {
-                                                        expandedItemIds - id
-                                                    } else {
-                                                        expandedItemIds + id
+                                                    else -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenBookByIdInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
                                                     }
-                                            },
-                                            showDiacritics = showDiacritics,
-                                            annotationCache = annotationCache,
-                                            onLayoutWidthMeasure = { width ->
-                                                if (textLayoutWidthPx == 0 && width > 0) {
-                                                    textLayoutWidthPx = width
-                                                }
-                                            },
+                                                },
                                         )
                                     }
-                                }
 
-                                when (val state = section.items.loadState.append) {
-                                    is LoadState.Error ->
-                                        item(key = "append-error-${section.bookId}") {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Text(text = state.error.message ?: "Error loading more")
+                                    items(
+                                        count = section.items.itemCount,
+                                        key = { index ->
+                                            section.items
+                                                .peek(index)
+                                                ?.link
+                                                ?.id ?: "multi-source-${section.bookId}-$index"
+                                        },
+                                    ) { index ->
+                                        section.items[index]?.let { item ->
+                                            val targetPath by produceState("", item.link.targetLineId, availabilityType) {
+                                                val tocPath = if (supportsBookFilter) providers.getLinePath(item.link.targetLineId) else ""
+                                                value = listOf(item.targetBookTitle, tocPath).filter { it.isNotBlank() }.joinToString(" ← ")
                                             }
+                                            LinkItem(
+                                                linkId = item.link.id,
+                                                targetText = item.targetText,
+                                                targetPath = if (supportsBookFilter) targetPath else "",
+                                                onPathClick = {
+                                                    onEvent(
+                                                        BookContentEvent.OpenCommentaryTarget(
+                                                            bookId = item.link.targetBookId,
+                                                            lineId = item.link.targetLineId,
+                                                        ),
+                                                    )
+                                                },
+                                                commentTextSize = commentTextSize,
+                                                lineHeight = lineHeight,
+                                                fontFamily = targumFontFamily,
+                                                boldScale = boldScaleForPlatform,
+                                                highlightQuery = highlightQuery,
+                                                onClick = {
+                                                    onEvent(
+                                                        BookContentEvent.OpenCommentaryTarget(
+                                                            bookId = item.link.targetBookId,
+                                                            lineId = item.link.targetLineId,
+                                                        ),
+                                                    )
+                                                },
+                                                isExpanded = item.link.id in expandedItemIds,
+                                                onToggleExpand = {
+                                                    val id = item.link.id
+                                                    expandedItemIds =
+                                                        if (id in expandedItemIds) {
+                                                            expandedItemIds - id
+                                                        } else {
+                                                            expandedItemIds + id
+                                                        }
+                                                },
+                                                showDiacritics = showDiacritics,
+                                                annotationCache = annotationCache,
+                                                onLayoutWidthMeasure = { width ->
+                                                    if (textLayoutWidthPx == 0 && width > 0) {
+                                                        textLayoutWidthPx = width
+                                                    }
+                                                },
+                                            )
                                         }
+                                    }
 
-                                    is LoadState.Loading ->
-                                        item(key = "append-loading-${section.bookId}") {
-                                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                CircularProgressIndicator()
+                                    when (val state = section.items.loadState.append) {
+                                        is LoadState.Error ->
+                                            item(key = "append-error-${section.bookId}") {
+                                                Box(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Text(text = state.error.message ?: "Error loading more")
+                                                }
                                             }
-                                        }
 
-                                    else -> {}
+                                        is LoadState.Loading ->
+                                            item(key = "append-loading-${section.bookId}") {
+                                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                    CircularProgressIndicator()
+                                                }
+                                            }
+
+                                        else -> {}
+                                    }
                                 }
                             }
+                            TargumScrollbar(
+                                listState = listState,
+                                allCharCounts = effectiveCharCounts,
+                                capacity = capacity,
+                                lineHeightPx = lineHeightPx,
+                                paddingPerItemPx = paddingPerItemPx,
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                            )
                         }
-                        TargumScrollbar(
-                            listState = listState,
-                            allCharCounts = effectiveCharCounts,
-                            capacity = capacity,
-                            lineHeightPx = lineHeightPx,
-                            paddingPerItemPx = paddingPerItemPx,
-                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                        )
                     }
                 }
             }
@@ -935,6 +1088,8 @@ private data class SourceMeta(
 private fun LinkItem(
     linkId: Long,
     targetText: String,
+    targetPath: String,
+    onPathClick: () -> Unit,
     commentTextSize: Float,
     lineHeight: Float,
     fontFamily: FontFamily,
@@ -1047,6 +1202,27 @@ private fun LinkItem(
                 },
             )
         }
+
+        if (targetPath.isNotBlank()) {
+            val pathInteractionSource = remember { MutableInteractionSource() }
+            val isPathHovered by pathInteractionSource.collectIsHoveredAsState()
+            Text(
+                text = targetPath,
+                color = JewelTheme.globalColors.text.info,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Left,
+                textDecoration = if (isPathHovered) TextDecoration.Underline else TextDecoration.None,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .hoverable(pathInteractionSource)
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .pointerInput(targetPath) { detectTapGestures(onTap = { onPathClick() }) },
+            )
+        }
     }
 }
 
@@ -1084,6 +1260,78 @@ private fun SourceSectionHeader(
                     },
                 ),
     )
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun LinkFilterSidebarToggleButton(
+    isVisible: Boolean,
+    onToggle: () -> Unit,
+) {
+    val icon: ImageVector = if (isVisible) FilterFilled else Filter
+    val toggleText =
+        stringResource(
+            if (isVisible) Res.string.hide_links_filter_sidebar else Res.string.show_links_filter_sidebar,
+        )
+    Tooltip({ Text(toggleText) }) {
+        IconButton(onClick = onToggle) { _ ->
+            Icon(
+                painter = rememberVectorPainter(icon),
+                contentDescription = toggleText,
+                modifier = Modifier.size(16.dp),
+                tint = JewelTheme.globalColors.text.normal,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LinkFilterScaffold(
+    isVisible: Boolean,
+    sidebarOnLeft: Boolean,
+    availableBookIds: Set<Long>,
+    selectedCategoryIds: Set<Long>,
+    selectedBookIds: Set<Long>,
+    onCategoryCheckedChange: (Long, Boolean) -> Unit,
+    onBookCheckedChange: (Long, Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (!isVisible) {
+        content()
+        return
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        val sidebar: @Composable () -> Unit = {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                LinkFilterSidebar(
+                    availableBookIds = availableBookIds,
+                    selectedCategoryIds = selectedCategoryIds,
+                    selectedBookIds = selectedBookIds,
+                    onCategoryCheckedChange = onCategoryCheckedChange,
+                    onBookCheckedChange = onBookCheckedChange,
+                    modifier = Modifier.width(230.dp).fillMaxHeight(),
+                )
+            }
+        }
+        val mainContent: @Composable () -> Unit = {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Box(modifier = Modifier.fillMaxSize()) { content() }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (sidebarOnLeft) {
+                sidebar()
+                VerticalDivider()
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
+            } else {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
+                VerticalDivider()
+                sidebar()
+            }
+        }
+    }
 }
 
 private fun computeEffectiveCharCounts(

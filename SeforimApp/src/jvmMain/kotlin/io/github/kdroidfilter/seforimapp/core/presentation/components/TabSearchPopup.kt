@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +71,7 @@ import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.history_title
 import seforimapp.seforimapp.generated.resources.home
@@ -98,7 +100,10 @@ fun TabSearchButton() {
     val visible by openWindow.tabSearchVisible.collectAsState()
     val shortcutHint = if (PlatformInfo.isMacOS) "⌘⇧A" else "Ctrl+Shift+A"
 
-    Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+    Box(
+        modifier = Modifier.height(JewelTheme.defaultTabStyle.metrics.tabHeight),
+        contentAlignment = Alignment.CenterStart,
+    ) {
         TitleBarActionButton(
             key = AllIconsKeys.General.ChevronDown,
             contentDescription = stringResource(Res.string.tab_search_tooltip),

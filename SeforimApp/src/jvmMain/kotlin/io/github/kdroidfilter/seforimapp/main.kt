@@ -46,6 +46,7 @@ import io.github.vinceglb.filekit.FileKit
 import io.sentry.Sentry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -57,12 +58,26 @@ import seforimapp.seforimapp.generated.resources.*
 import java.awt.*
 import java.awt.datatransfer.StringSelection
 import java.awt.event.KeyEvent
+import java.io.File
 import java.util.*
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalFoundationApi::class)
 private val AOT_TRAINING_DURATION = 45.seconds
+
+private val isScreenshotAutomation =
+    System.getenv("SEFORIMAPP_SCREENSHOT_AUTOMATION")
+        ?.lowercase()
+        ?.let { it in setOf("1", "true", "yes") } == true
+
+private fun signalScreenshotAutomationReady() {
+    val markerPath = System.getenv("SEFORIMAPP_SCREENSHOT_READY_FILE")?.takeIf { it.isNotBlank() } ?: return
+    File(markerPath).apply {
+        parentFile?.mkdirs()
+        writeText("ready\n")
+    }
+}
 
 private data class StartupState(
     val showOnboarding: Boolean,
@@ -77,7 +92,7 @@ private data class StartupState(
 private fun computeStartupState(): StartupState =
     try {
         getDatabasePath()
-        val onboardingFinished = AppSettings.isOnboardingFinished()
+        val onboardingFinished = isScreenshotAutomation || AppSettings.isOnboardingFinished()
         if (!onboardingFinished) {
             StartupState(showOnboarding = true, showDatabaseUpdate = false, isDatabaseMissing = false)
         } else {
@@ -89,7 +104,7 @@ private fun computeStartupState(): StartupState =
             }
         }
     } catch (_: Exception) {
-        val onboardingFinished = AppSettings.isOnboardingFinished()
+        val onboardingFinished = isScreenshotAutomation || AppSettings.isOnboardingFinished()
         if (!onboardingFinished) {
             StartupState(showOnboarding = true, showDatabaseUpdate = false, isDatabaseMissing = false)
         } else {
@@ -128,7 +143,9 @@ fun main(args: Array<String>) {
     val loggingEnv = System.getenv("SEFORIMAPP_LOGGING")?.lowercase()
     isDevEnv = loggingEnv == "true" || loggingEnv == "1" || loggingEnv == "yes"
 
-    initializeSentry()
+    if (!isScreenshotAutomation) {
+        initializeSentry()
+    }
 
     // Roll back any half-applied seforim.db delta update from a previous
     // launch BEFORE the SQLDelight repository opens the DB. Cheap stat()
@@ -279,6 +296,12 @@ fun main(args: Array<String>) {
                 } else {
                     val desktopManager = appGraph.desktopManager
                     val windows by desktopManager.windows.collectAsState()
+                    LaunchedEffect(windows.isNotEmpty()) {
+                        if (isScreenshotAutomation && windows.isNotEmpty()) {
+                            delay(2.seconds)
+                            signalScreenshotAutomationReady()
+                        }
+                    }
                     val focusedWindowId by desktopManager.focusedWindowId.collectAsState()
                     val focusedWindow = windows.find { it.id == focusedWindowId } ?: windows.firstOrNull()
 
@@ -354,8 +377,10 @@ fun main(args: Array<String>) {
 
                     // Check for updates once at startup. PATCH updates are pre-downloaded
                     // here; MINOR/MAJOR surface the title-bar icon + UpdateDialog.
-                    LaunchedEffect(Unit) {
-                        appGraph.appUpdateService.checkOnStartup()
+                    if (!isScreenshotAutomation) {
+                        LaunchedEffect(Unit) {
+                            appGraph.appUpdateService.checkOnStartup()
+                        }
                     }
 
                     // Debounced session autosave: any tab/window change persists ~2s later, so a

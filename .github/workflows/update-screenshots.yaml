@@ -30,8 +30,109 @@ jobs:
       - name: Install deterministic Hebrew fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-core
+          sudo apt-get install -y --no-install-recommends fontconfig fonts-noto-core imagemagick sqlite3 xvfb zstd
           fc-cache -f
+
+      - name: Download and import latest database bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DB_REPOSITORY: kdroidFilter/SeforimLibrary
+          DB_DIR: ${{ runner.temp }}/zayit-screenshot-db
+        run: |
+          set -euo pipefail
+          mkdir -p "$DB_DIR"
+
+          RELEASE_JSON="$(gh api "repos/$DB_REPOSITORY/releases/latest")"
+          RELEASE_TAG="$(jq -r '.tag_name' <<<"$RELEASE_JSON")"
+          PART_ASSET_IDS="$(jq -r '[.assets[] | select(.name | test("\\.tar\\.zst\\.part[0-9]+$"))] | sort_by(.name) | .[].id' <<<"$RELEASE_JSON")"
+          SINGLE_ASSET_ID="$(jq -r '[.assets[] | select(.name | endswith(".tar.zst"))][0].id // empty' <<<"$RELEASE_JSON")"
+          echo "Streaming database bundle from $DB_REPOSITORY release $RELEASE_TAG"
+
+          if [ -n "$PART_ASSET_IDS" ]; then
+            while IFS= read -r asset_id; do
+              gh api \
+                -H "Accept: application/octet-stream" \
+                "repos/$DB_REPOSITORY/releases/assets/$asset_id"
+            done <<<"$PART_ASSET_IDS" | tar --use-compress-program=unzstd -xf - -C "$DB_DIR"
+          elif [ -n "$SINGLE_ASSET_ID" ]; then
+            gh api \
+              -H "Accept: application/octet-stream" \
+              "repos/$DB_REPOSITORY/releases/assets/$SINGLE_ASSET_ID" \
+              | tar --use-compress-program=unzstd -xf - -C "$DB_DIR"
+          else
+            echo "The latest release does not contain a database .tar.zst bundle." >&2
+            exit 1
+          fi
+
+          test -s "$DB_DIR/seforim.db"
+          test -s "$DB_DIR/catalog.pb"
+          TABLE_COUNT="$(sqlite3 "$DB_DIR/seforim.db" 'SELECT count(*) FROM sqlite_master;')"
+          if [ "${TABLE_COUNT:-0}" -le 0 ]; then
+            echo "Extracted seforim.db is not a readable SQLite database." >&2
+            exit 1
+          fi
+          echo "Database imported successfully: $TABLE_COUNT schema objects"
+
+      - name: Compile desktop application
+        run: ./gradlew :SeforimApp:jvmJar --no-daemon --stacktrace
+
+      - name: Start real application and wait until ready
+        env:
+          DISPLAY: ":101"
+          SEFORIMAPP_DATABASE_PATH: ${{ runner.temp }}/zayit-screenshot-db/seforim.db
+          SEFORIMAPP_SCREENSHOT_AUTOMATION: "1"
+          SEFORIMAPP_SCREENSHOT_READY_FILE: ${{ runner.temp }}/zayit-screenshot-ready
+          SEFORIMAPP_LOGGING: "true"
+          APP_LOG: ${{ runner.temp }}/zayit-screenshot-app.log
+          APP_READY_IMAGE: ${{ runner.temp }}/zayit-screenshot-app-ready.png
+        run: |
+          set -euo pipefail
+          rm -f "$SEFORIMAPP_SCREENSHOT_READY_FILE" "$APP_LOG"
+
+          Xvfb "$DISPLAY" -screen 0 1920x1080x24 -nolisten tcp >"${APP_LOG}.xvfb" 2>&1 &
+          XVFB_PID=$!
+          sleep 1
+          if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+            echo "Xvfb failed to start." >&2
+            cat "${APP_LOG}.xvfb" >&2
+            exit 1
+          fi
+
+          setsid ./gradlew :SeforimApp:run --no-daemon --stacktrace >"$APP_LOG" 2>&1 &
+          APP_PID=$!
+
+          cleanup() {
+            kill -- -"$APP_PID" 2>/dev/null || true
+            kill "$XVFB_PID" 2>/dev/null || true
+            wait "$APP_PID" 2>/dev/null || true
+            wait "$XVFB_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 120); do
+            if [ -s "$SEFORIMAPP_SCREENSHOT_READY_FILE" ]; then
+              echo "The application reported ready."
+              sleep 3
+              import -display "$DISPLAY" -window root "$APP_READY_IMAGE"
+              COLOR_COUNT="$(identify -format '%k' "$APP_READY_IMAGE")"
+              if [ "${COLOR_COUNT:-0}" -lt 8 ]; then
+                echo "The application window appears blank ($COLOR_COUNT colors)." >&2
+                exit 1
+              fi
+              echo "Visible application render verified: $COLOR_COUNT colors."
+              exit 0
+            fi
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "The application exited before becoming ready." >&2
+              tail -n 200 "$APP_LOG" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "The application did not become ready within 120 seconds." >&2
+          tail -n 200 "$APP_LOG" >&2
+          exit 1
 
       - name: Run Screenshot Generator
         env:
@@ -43,8 +144,31 @@ jobs:
           python3 <<'PY'
           import hashlib
           import struct
+          import zlib
           from pathlib import Path
 
+          def inspect_png(path):
+              data = path.read_bytes()
+              if data[:8] != b'\x89PNG\r\n\x1a\n':
+                  raise SystemExit(f'Not a valid PNG: {path}')
+              offset = 8
+              width = height = None
+              compressed = bytearray()
+              while offset < len(data):
+                  length = struct.unpack('>I', data[offset:offset + 4])[0]
+                  chunk_type = data[offset + 4:offset + 8]
+                  chunk_data = data[offset + 8:offset + 8 + length]
+                  offset += 12 + length
+                  if chunk_type == b'IHDR':
+                      width, height = struct.unpack('>II', chunk_data[:8])
+                  elif chunk_type == b'IDAT':
+                      compressed.extend(chunk_data)
+                  elif chunk_type == b'IEND':
+                      break
+              if width is None or not compressed:
+                  raise SystemExit(f'PNG is missing image data: {path}')
+              channel_diversity = len(set(zlib.decompress(compressed)))
+              return width, height, channel_diversity
           stems = [
               'HOME', 'BOOK-SEARCH', 'TOC-BOOK-SEARCH', 'PIRUSHIM-TARGUMIM', 'PIRUSHIM',
               'INBOOK-SEARCH', 'MEKOR', 'DB-SEARCH-SIMPLE', 'DB-SEARCH-ADVANCED', 'CLIPBOARD-DEMO',
@@ -58,13 +182,11 @@ jobs:
               for path in copies:
                   if not path.is_file():
                       raise SystemExit(f'Missing generated screenshot: {path}')
-                  with path.open('rb') as image:
-                      if image.read(8) != b'\x89PNG\r\n\x1a\n':
-                          raise SystemExit(f'Not a valid PNG: {path}')
-                      image.read(8)
-                      width, height = struct.unpack('>II', image.read(8))
+                  width, height, channel_diversity = inspect_png(path)
                   if (width, height) != (1463, 811):
                       raise SystemExit(f'Wrong dimensions for {path}: {width}x{height}')
+                  if channel_diversity < 8:
+                      raise SystemExit(f'Screenshot appears blank or monochrome: {path}')
               digests = [hashlib.sha256(path.read_bytes()).digest() for path in copies]
               if digests[0] != digests[1]:
                   raise SystemExit(f'Copies differ for {name}')
@@ -90,6 +212,9 @@ jobs:
           path: |
             SeforimApp/build/reports/tests/generateScreenshots/
             SeforimApp/build/test-results/generateScreenshots/
+            ${{ runner.temp }}/zayit-screenshot-app.log
+            ${{ runner.temp }}/zayit-screenshot-app.log.xvfb
+            ${{ runner.temp }}/zayit-screenshot-app-ready.png
           retention-days: 14
           if-no-files-found: ignore
       - name: Set Base Branch

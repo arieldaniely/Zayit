@@ -12,8 +12,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.test.waitUntilAtLeastOneExists
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -34,6 +39,11 @@ import kotlin.test.Test
  */
 @OptIn(ExperimentalTestApi::class)
 class ScreenshotGeneratorTest {
+
+    private companion object {
+        const val SCREENSHOT_ROOT_TAG = "screenshot-root"
+        const val RENDER_TIMEOUT_MILLIS = 120_000L
+    }
 
     private fun saveScreenshot(image: ImageBitmap, filename: String) {
         val awtImage = image.toAwtImage()
@@ -81,6 +91,7 @@ class ScreenshotGeneratorTest {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .testTag(SCREENSHOT_ROOT_TAG)
                 .background(bgColor)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -337,10 +348,11 @@ class ScreenshotGeneratorTest {
                         }
                     }
                 }
+                waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
                 waitForIdle()
-                // Capture the fixed-size backing surface. Capturing onRoot() crops to the
-                // semantics bounds, which can be empty in a headless desktop test on Linux.
-                saveScreenshot(captureToImage(), lightName)
+                mainClock.advanceTimeByFrame()
+                waitForIdle()
+                saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), lightName)
             }
 
             // Dark Mode
@@ -352,8 +364,11 @@ class ScreenshotGeneratorTest {
                         }
                     }
                 }
+                waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
                 waitForIdle()
-                saveScreenshot(captureToImage(), darkName)
+                mainClock.advanceTimeByFrame()
+                waitForIdle()
+                saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), darkName)
             }
         }
     }

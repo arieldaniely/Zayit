@@ -27,8 +27,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import io.github.kdroidfilter.seforimapp.features.settings.navigation.SettingsDestination
 import io.github.kdroidfilter.seforimapp.icons.BootstrapPersonLines
 import io.github.kdroidfilter.seforimapp.icons.FileArrowDown
-import io.github.kdroidfilter.seforimapp.icons.LucideInspectionPanel
 import io.github.kdroidfilter.seforimapp.icons.Library_books
+import io.github.kdroidfilter.seforimapp.icons.LucideInspectionPanel
 import io.github.kdroidfilter.seforimapp.icons.MaterialIconsDisplay_settings
 import io.github.kdroidfilter.seforimapp.icons.RadixFontRoman
 import io.github.kdroidfilter.seforimapp.icons.TablerInfoSquare
@@ -44,8 +44,8 @@ import seforimapp.seforimapp.generated.resources.settings_category_data
 import seforimapp.seforimapp.generated.resources.settings_category_display
 import seforimapp.seforimapp.generated.resources.settings_category_fonts
 import seforimapp.seforimapp.generated.resources.settings_category_general
-import seforimapp.seforimapp.generated.resources.settings_category_profile
 import seforimapp.seforimapp.generated.resources.settings_category_personal_library
+import seforimapp.seforimapp.generated.resources.settings_category_profile
 
 private data class SettingsItem(
     val label: String,

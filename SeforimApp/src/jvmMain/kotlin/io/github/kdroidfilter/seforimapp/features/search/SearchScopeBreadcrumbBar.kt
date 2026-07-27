@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -28,8 +29,8 @@ import androidx.compose.ui.window.PopupProperties
 import io.github.kdroidfilter.seforimapp.core.presentation.components.ChevronIcon
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.components.SelectableRow
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbItem
-import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel.SearchTreeCategory
 import io.github.kdroidfilter.seforimapp.icons.Book_2
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
@@ -46,24 +47,35 @@ import seforimapp.seforimapp.generated.resources.search_scope_sections
 @Composable
 internal fun SearchScopeBreadcrumbBar(
     state: SearchUiState,
-    searchTree: List<SearchTreeCategory>,
+    navigation: NavigationState,
     tocTree: io.github.kdroidfilter.seforimapp.features.search.domain.TocTree?,
     onCategorySelect: (Category) -> Unit,
     onBookSelect: (Book) -> Unit,
     onTocSelect: (TocEntry) -> Unit,
+    isIslands: Boolean,
 ) {
     val path =
-        remember(state.scopeCategoryPath, state.scopeBook, state.scopeTocId, searchTree, tocTree) {
-            buildScopePath(state, searchTree, tocTree)
+        remember(state.scopeCategoryPath, state.scopeBook, state.scopeTocId, navigation, tocTree) {
+            buildScopePath(state, navigation, tocTree)
         }
     if (path.isEmpty()) return
 
-    Column(modifier = Modifier.fillMaxWidth().background(JewelTheme.globalColors.panelBackground)) {
-        HorizontalDivider()
+    val sectionModifier =
+        if (isIslands) {
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp, start = 4.dp, end = 4.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(JewelTheme.globalColors.panelBackground)
+        } else {
+            Modifier.fillMaxWidth().background(JewelTheme.globalColors.panelBackground)
+        }
+    Column(modifier = sectionModifier) {
+        if (!isIslands) HorizontalDivider()
         SearchScopePath(
             path = path,
             state = state,
-            searchTree = searchTree,
+            navigation = navigation,
             tocTree = tocTree,
             onCategorySelect = onCategorySelect,
             onBookSelect = onBookSelect,
@@ -77,7 +89,7 @@ internal fun SearchScopeBreadcrumbBar(
 private fun SearchScopePath(
     path: List<BreadcrumbItem>,
     state: SearchUiState,
-    searchTree: List<SearchTreeCategory>,
+    navigation: NavigationState,
     tocTree: io.github.kdroidfilter.seforimapp.features.search.domain.TocTree?,
     onCategorySelect: (Category) -> Unit,
     onBookSelect: (Book) -> Unit,
@@ -113,7 +125,7 @@ private fun SearchScopePath(
                     SearchScopePopup(
                         item = item,
                         state = state,
-                        searchTree = searchTree,
+                        navigation = navigation,
                         tocTree = tocTree,
                         onCategorySelect = {
                             openItemKey = null
@@ -139,7 +151,7 @@ private fun SearchScopePath(
 private fun SearchScopePopup(
     item: BreadcrumbItem,
     state: SearchUiState,
-    searchTree: List<SearchTreeCategory>,
+    navigation: NavigationState,
     tocTree: io.github.kdroidfilter.seforimapp.features.search.domain.TocTree?,
     onCategorySelect: (Category) -> Unit,
     onBookSelect: (Book) -> Unit,
@@ -164,7 +176,8 @@ private fun SearchScopePopup(
                 is BreadcrumbItem.CategoryItem ->
                     ScopePopupPane(title = stringResource(Res.string.search_scope_catalog)) {
                         CatalogScopeTree(
-                            searchTree = searchTree,
+                            navigation = navigation,
+                            item = item,
                             state = state,
                             onCategorySelect = onCategorySelect,
                             onBookSelect = onBookSelect,
@@ -178,7 +191,8 @@ private fun SearchScopePopup(
                             modifier = Modifier.weight(1f),
                         ) {
                             CatalogScopeTree(
-                                searchTree = searchTree,
+                                navigation = navigation,
+                                item = item,
                                 state = state,
                                 onCategorySelect = onCategorySelect,
                                 onBookSelect = onBookSelect,
@@ -237,7 +251,7 @@ private sealed interface CatalogScopeRow {
     val level: Int
 
     data class CategoryRow(
-        val node: SearchTreeCategory,
+        val category: Category,
         override val level: Int,
     ) : CatalogScopeRow
 
@@ -249,52 +263,88 @@ private sealed interface CatalogScopeRow {
 
 @Composable
 private fun CatalogScopeTree(
-    searchTree: List<SearchTreeCategory>,
+    navigation: NavigationState,
+    item: BreadcrumbItem,
     state: SearchUiState,
     onCategorySelect: (Category) -> Unit,
     onBookSelect: (Book) -> Unit,
 ) {
     val selectedCategoryId = state.scopeCategoryPath.lastOrNull()?.id
-    val initialExpanded =
-        remember(searchTree, selectedCategoryId, state.scopeBook?.categoryId) {
-            val targetId = state.scopeBook?.categoryId ?: selectedCategoryId
-            targetId?.let { findCategoryPath(searchTree, it).mapTo(mutableSetOf()) { category -> category.id } }
-                ?: emptySet()
+    var expanded by remember(item.key) { mutableStateOf(emptySet<Long>()) }
+    val rows =
+        remember(
+            item.key,
+            expanded,
+            navigation.rootCategories,
+            navigation.categoryChildren,
+            navigation.booksInCategory,
+        ) {
+            when (item) {
+                is BreadcrumbItem.CategoryItem -> {
+                    val siblings =
+                        item.category.parentId?.let { navigation.categoryChildren[it].orEmpty() }
+                            ?: navigation.rootCategories
+                    buildCatalogRows(
+                        rootCategories = siblings,
+                        rootBooks = emptyList(),
+                        expanded = expanded,
+                        children = navigation.categoryChildren,
+                        books = navigation.booksInCategory,
+                    )
+                }
+
+                is BreadcrumbItem.BookItem ->
+                    buildCatalogRows(
+                        rootCategories = navigation.categoryChildren[item.book.categoryId].orEmpty(),
+                        rootBooks = navigation.booksInCategory.filter { it.categoryId == item.book.categoryId },
+                        expanded = expanded,
+                        children = navigation.categoryChildren,
+                        books = navigation.booksInCategory,
+                    )
+
+                is BreadcrumbItem.TocItem -> emptyList()
+            }
         }
-    var expanded by remember(searchTree, initialExpanded) { mutableStateOf(initialExpanded) }
-    val rows = remember(searchTree, expanded) { buildCatalogRows(searchTree, expanded) }
 
     LazyColumn(modifier = Modifier.widthIn(min = 200.dp, max = 280.dp).heightIn(max = 260.dp)) {
         items(
             items = rows,
             key = {
                 when (it) {
-                    is CatalogScopeRow.CategoryRow -> "category_${it.node.category.id}"
+                    is CatalogScopeRow.CategoryRow -> "category_${it.category.id}"
                     is CatalogScopeRow.BookRow -> "book_${it.book.id}"
                 }
             },
         ) { row ->
             when (row) {
                 is CatalogScopeRow.CategoryRow -> {
-                    val hasChildren = row.node.children.isNotEmpty() || row.node.books.isNotEmpty()
+                    val category = row.category
+                    val hasChildren =
+                        navigation.categoryChildren[category.id].orEmpty().isNotEmpty() ||
+                            navigation.booksInCategory.any { it.categoryId == category.id }
                     SelectableRow(
-                        isSelected = row.node.category.id == selectedCategoryId,
-                        onClick = { onCategorySelect(row.node.category) },
+                        isSelected = category.id == selectedCategoryId,
+                        onClick = { onCategorySelect(category) },
                         modifier = Modifier.fillMaxWidth().padding(start = (row.level * 16).dp),
                     ) {
                         if (hasChildren) {
                             ChevronIcon(
-                                expanded = row.node.category.id in expanded,
+                                expanded = category.id in expanded,
                                 contentDescription = "",
                                 modifier =
                                     Modifier
                                         .size(18.dp)
                                         .clickable {
                                             expanded =
-                                                if (row.node.category.id in expanded) {
-                                                    expanded - row.node.category.id
+                                                if (category.id in expanded) {
+                                                    expanded -
+                                                        category.id -
+                                                        categoryDescendantIds(
+                                                            category.id,
+                                                            navigation.categoryChildren,
+                                                        )
                                                 } else {
-                                                    expanded + row.node.category.id
+                                                    expanded + category.id
                                                 }
                                         },
                                 tint = JewelTheme.globalColors.text.normal,
@@ -304,7 +354,7 @@ private fun CatalogScopeTree(
                         }
                         Icon(key = AllIconsKeys.Nodes.Folder, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(row.node.category.title, fontSize = 12.sp)
+                        Text(category.title, fontSize = 12.sp)
                     }
                 }
 
@@ -376,13 +426,18 @@ private fun TocScopeTree(
 
 private fun buildScopePath(
     state: SearchUiState,
-    searchTree: List<SearchTreeCategory>,
+    navigation: NavigationState,
     tocTree: io.github.kdroidfilter.seforimapp.features.search.domain.TocTree?,
 ): List<BreadcrumbItem> {
     val book = state.scopeBook
     if (book == null) return state.scopeCategoryPath.map { BreadcrumbItem.CategoryItem(it) }
 
-    val categories = findCategoryPath(searchTree, book.categoryId).ifEmpty { state.scopeCategoryPath }
+    val categories =
+        findCategoryPath(
+            roots = navigation.rootCategories,
+            children = navigation.categoryChildren,
+            categoryId = book.categoryId,
+        ).ifEmpty { state.scopeCategoryPath }
     return buildList {
         categories.forEach { add(BreadcrumbItem.CategoryItem(it)) }
         add(BreadcrumbItem.BookItem(book))
@@ -393,33 +448,54 @@ private fun buildScopePath(
 }
 
 private fun findCategoryPath(
-    nodes: List<SearchTreeCategory>,
+    roots: List<Category>,
+    children: Map<Long, List<Category>>,
     categoryId: Long,
 ): List<Category> {
-    for (node in nodes) {
-        if (node.category.id == categoryId) return listOf(node.category)
-        val childPath = findCategoryPath(node.children, categoryId)
-        if (childPath.isNotEmpty()) return listOf(node.category) + childPath
+    for (category in roots) {
+        if (category.id == categoryId) return listOf(category)
+        val childPath = findCategoryPath(children[category.id].orEmpty(), children, categoryId)
+        if (childPath.isNotEmpty()) return listOf(category) + childPath
     }
     return emptyList()
 }
 
 private fun buildCatalogRows(
-    roots: List<SearchTreeCategory>,
+    rootCategories: List<Category>,
+    rootBooks: List<Book>,
     expanded: Set<Long>,
+    children: Map<Long, List<Category>>,
+    books: Set<Book>,
 ): List<CatalogScopeRow> =
     buildList {
-        fun addNode(
-            node: SearchTreeCategory,
+        rootBooks.distinctBy { it.id }.forEach { add(CatalogScopeRow.BookRow(it, 0)) }
+
+        fun addCategory(
+            category: Category,
             level: Int,
         ) {
-            add(CatalogScopeRow.CategoryRow(node, level))
-            if (node.category.id in expanded) {
-                node.books.forEach { add(CatalogScopeRow.BookRow(it.book, level + 1)) }
-                node.children.forEach { addNode(it, level + 1) }
+            add(CatalogScopeRow.CategoryRow(category, level))
+            if (category.id in expanded) {
+                books
+                    .filter { it.categoryId == category.id }
+                    .distinctBy { it.id }
+                    .forEach { add(CatalogScopeRow.BookRow(it, level + 1)) }
+                children[category.id].orEmpty().forEach { addCategory(it, level + 1) }
             }
         }
-        roots.forEach { addNode(it, 0) }
+
+        rootCategories.forEach { addCategory(it, 0) }
+    }
+
+private fun categoryDescendantIds(
+    id: Long,
+    children: Map<Long, List<Category>>,
+): Set<Long> =
+    buildSet {
+        children[id].orEmpty().forEach {
+            add(it.id)
+            addAll(categoryDescendantIds(it.id, children))
+        }
     }
 
 private fun buildTocPath(

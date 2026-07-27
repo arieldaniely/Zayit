@@ -32,7 +32,12 @@ class DisplaySettingsViewModel : ViewModel() {
 
     val state =
         combine(showZmanim, showHomeWallpaper, compactMode, maxCommentatorsPerPage, contextVisibility) {
-                z, wallpaper, compact, maxCommentators, context ->
+            z,
+            wallpaper,
+            compact,
+            maxCommentators,
+            context,
+            ->
             DisplaySettingsState(
                 showZmanimWidgets = z,
                 showHomeWallpaper = wallpaper,

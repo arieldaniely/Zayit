@@ -445,11 +445,7 @@ private fun SingleLineTargumView(
                                                             } else {
                                                                 ""
                                                             }
-                                                        value =
-                                                            listOf(
-                                                                item.targetBookTitle,
-                                                                tocPath,
-                                                            ).filter { it.isNotBlank() }.joinToString(" ← ")
+                                                        value = buildLinkTargetPath(item.targetBookTitle, tocPath)
                                                     }
                                                     LinkItem(
                                                         linkId = item.link.id,
@@ -987,7 +983,7 @@ private fun MultiLineTargumView(
                                         section.items[index]?.let { item ->
                                             val targetPath by produceState("", item.link.targetLineId, availabilityType) {
                                                 val tocPath = if (supportsBookFilter) providers.getLinePath(item.link.targetLineId) else ""
-                                                value = listOf(item.targetBookTitle, tocPath).filter { it.isNotBlank() }.joinToString(" ← ")
+                                                value = buildLinkTargetPath(item.targetBookTitle, tocPath)
                                             }
                                             LinkItem(
                                                 linkId = item.link.id,
@@ -1071,6 +1067,22 @@ private fun MultiLineTargumView(
             }
         }
     }
+}
+
+private fun buildLinkTargetPath(
+    bookTitle: String,
+    tocPath: String,
+): String {
+    val normalizedBookTitle = bookTitle.trim()
+    val normalizedTocPath = tocPath.trim().replace(" ← ", " > ")
+    val sectionPath =
+        when {
+            normalizedTocPath == normalizedBookTitle -> ""
+            normalizedTocPath.startsWith("$normalizedBookTitle > ") ->
+                normalizedTocPath.removePrefix("$normalizedBookTitle > ").trim()
+            else -> normalizedTocPath
+        }
+    return listOf(normalizedBookTitle, sectionPath).filter { it.isNotBlank() }.joinToString(" > ")
 }
 
 private data class SourceSection(

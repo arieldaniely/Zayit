@@ -105,9 +105,10 @@ object AppCoreBindings {
     @SingleIn(AppScope::class)
     fun provideRepository(personalLibrary: PersonalLibraryManager): SeforimRepository {
         val dbPath = getDatabasePath()
-        val personalArtifacts = runCatching { personalLibrary.synchronize().second }
-            .onFailure { PersonalLibraryRuntime.startupError = it.message }
-            .getOrElse { personalLibrary.activeArtifacts() }
+        val personalArtifacts =
+            runCatching { personalLibrary.synchronize().second }
+                .onFailure { PersonalLibraryRuntime.startupError = it.message }
+                .getOrElse { personalLibrary.activeArtifacts() }
         // Persistent single-connection driver with prepared-statement cache +
         // read-tuning PRAGMAs. Replaces `JdbcSqliteDriver` whose ThreadedConnectionManager
         // closes the SQLite connection after every non-transactional query (confirmed by
@@ -131,9 +132,10 @@ object AppCoreBindings {
         val dictionaryPath = indexPath.resolveSibling("lexical.db")
         val snippetProvider = RepositorySnippetSourceProvider(repository)
         val base = LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
-        val personal = personalLibrary.activeArtifacts()?.let {
-            LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
-        }
+        val personal =
+            personalLibrary.activeArtifacts()?.let {
+                LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
+            }
         return CompositeSearchEngine(base, personal)
     }
 

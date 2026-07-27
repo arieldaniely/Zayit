@@ -242,7 +242,7 @@ private fun TocBreadcrumbTree(
     onDismiss: () -> Unit,
 ) {
     val toc = uiState.toc
-    val initialExpansion =
+    val initialExpansion: Set<Long> =
         remember(activeEntry.id, toc.breadcrumbPath) {
             toc.breadcrumbPath.dropWhile { it.id != activeEntry.id }.mapTo(mutableSetOf()) { it.id }
         }

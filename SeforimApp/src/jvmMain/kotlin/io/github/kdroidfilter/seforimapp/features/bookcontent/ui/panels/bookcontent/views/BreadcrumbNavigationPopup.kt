@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
@@ -78,8 +79,8 @@ fun BreadcrumbNavigationPopup(
         Box(
             modifier =
                 Modifier
-                    .widthIn(min = 280.dp, max = 420.dp)
-                    .heightIn(max = 420.dp)
+                    .widthIn(min = 180.dp, max = 280.dp)
+                    .heightIn(max = 300.dp)
                     .shadow(12.dp, RoundedCornerShape(6.dp))
                     .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(6.dp))
                     .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(6.dp))
@@ -105,15 +106,7 @@ private fun CatalogBreadcrumbTree(
 ) {
     val navigation = uiState.navigation
     val activeCategory = (item as? BreadcrumbItem.CategoryItem)?.category
-    val initialExpansion =
-        remember(activeCategory?.id, navigation.selectedBook?.id, navigation.categoryChildren) {
-            val currentPath =
-                navigation.selectedBook?.let {
-                    buildCategoryPathIds(it.categoryId, navigation.rootCategories, navigation.categoryChildren)
-                }.orEmpty()
-            if (activeCategory == null) emptySet() else currentPath.dropWhile { it != activeCategory.id }.toSet()
-        }
-    var expanded by remember(item.key) { mutableStateOf(initialExpansion) }
+    var expanded by remember(item.key) { mutableStateOf(emptySet<Long>()) }
 
     val rows =
         remember(item.key, expanded, navigation.rootCategories, navigation.categoryChildren, navigation.booksInCategory) {
@@ -146,7 +139,7 @@ private fun CatalogBreadcrumbTree(
             }
         }
 
-    LazyColumn(modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)) {
+    LazyColumn(modifier = Modifier.widthIn(min = 180.dp, max = 280.dp)) {
         items(
             items = rows,
             key = {
@@ -203,16 +196,16 @@ private fun CatalogCategoryRow(
         ChevronIcon(
             expanded = expanded,
             contentDescription = "",
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(18.dp),
             tint = JewelTheme.globalColors.text.normal,
         )
         Icon(
             key = AllIconsKeys.Nodes.Folder,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(14.dp),
         )
-        Spacer(Modifier.width(6.dp))
-        Text(row.category.title)
+        Spacer(Modifier.width(4.dp))
+        Text(row.category.title, fontSize = 12.sp)
     }
 }
 
@@ -227,10 +220,10 @@ private fun CatalogBookRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(start = (row.level * 16).dp),
     ) {
-        Spacer(Modifier.width(24.dp))
-        Icon(imageVector = Book_2, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(row.book.title)
+        Spacer(Modifier.width(18.dp))
+        Icon(imageVector = Book_2, contentDescription = null, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(row.book.title, fontSize = 12.sp)
     }
 }
 
@@ -242,18 +235,14 @@ private fun TocBreadcrumbTree(
     onDismiss: () -> Unit,
 ) {
     val toc = uiState.toc
-    val initialExpansion: Set<Long> =
-        remember(activeEntry.id, toc.breadcrumbPath) {
-            toc.breadcrumbPath.dropWhile { it.id != activeEntry.id }.mapTo(mutableSetOf()) { it.id }
-        }
-    var expanded by remember(activeEntry.id) { mutableStateOf(initialExpansion) }
+    var expanded by remember(activeEntry.id) { mutableStateOf(emptySet<Long>()) }
     val siblings =
         remember(activeEntry.id, toc.entries, toc.children) {
             toc.children[activeEntry.parentId ?: -1L].orEmpty().ifEmpty { toc.entries }
         }
     val rows = remember(siblings, expanded, toc.children) { buildTocRows(siblings, expanded, toc.children) }
 
-    LazyColumn(modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)) {
+    LazyColumn(modifier = Modifier.widthIn(min = 180.dp, max = 280.dp)) {
         items(rows, key = { it.entry.id }) { row ->
             val selected = row.entry.id == toc.selectedEntryId || row.entry.id == activeEntry.id
             SelectableRow(
@@ -276,7 +265,7 @@ private fun TocBreadcrumbTree(
                         contentDescription = "",
                         modifier =
                             Modifier
-                                .size(24.dp)
+                                .size(18.dp)
                                 .clickable {
                                     expanded = toggleTocExpansion(row.entry, expanded, toc.children)
                                     requestTocChildrenIfNeeded(
@@ -289,9 +278,9 @@ private fun TocBreadcrumbTree(
                         tint = JewelTheme.globalColors.text.normal,
                     )
                 } else {
-                    Spacer(Modifier.width(24.dp))
+                    Spacer(Modifier.width(18.dp))
                 }
-                Text(row.entry.text)
+                Text(row.entry.text, fontSize = 12.sp)
             }
         }
     }
@@ -383,27 +372,6 @@ private fun tocDescendantIds(
             addAll(tocDescendantIds(it.id, children))
         }
     }
-
-private fun buildCategoryPathIds(
-    categoryId: Long,
-    roots: List<Category>,
-    children: Map<Long, List<Category>>,
-): List<Long> {
-    fun find(current: Category): List<Long> {
-        if (current.id == categoryId) return listOf(current.id)
-        children[current.id].orEmpty().forEach { child ->
-            val path = find(child)
-            if (path.isNotEmpty()) return listOf(current.id) + path
-        }
-        return emptyList()
-    }
-
-    roots.forEach { root ->
-        val path = find(root)
-        if (path.isNotEmpty()) return path
-    }
-    return emptyList()
-}
 
 private object BreadcrumbAboveAnchorPositionProvider : PopupPositionProvider {
     override fun calculatePosition(

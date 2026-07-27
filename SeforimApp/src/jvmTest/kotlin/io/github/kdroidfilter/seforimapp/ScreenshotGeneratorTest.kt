@@ -11,14 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.runDesktopComposeUiTest
-import androidx.compose.ui.test.waitUntilAtLeastOneExists
+import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.use
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -37,13 +33,7 @@ import kotlin.test.Test
  * Generates 10 scenarios (in Light and Dark mode, total 20 images)
  * matching exact dimensions 1463x811 pixels.
  */
-@OptIn(ExperimentalTestApi::class)
 class ScreenshotGeneratorTest {
-
-    private companion object {
-        const val SCREENSHOT_ROOT_TAG = "screenshot-root"
-        const val RENDER_TIMEOUT_MILLIS = 120_000L
-    }
 
     private fun saveScreenshot(image: ImageBitmap, filename: String) {
         val awtImage = image.toAwtImage()
@@ -91,7 +81,6 @@ class ScreenshotGeneratorTest {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .testTag(SCREENSHOT_ROOT_TAG)
                 .background(bgColor)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -340,43 +329,27 @@ class ScreenshotGeneratorTest {
 
         for ((lightName, darkName, composable) in scenarios) {
             // Light Mode
-            runDesktopComposeUiTest(width = 1463, height = 811) {
-                try {
-                    setContent {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                            IntUiTheme(isDark = false) {
-                                composable(false)
-                            }
+            ImageComposeScene(width = 1463, height = 811).use { scene ->
+                scene.setContent {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        IntUiTheme(isDark = false) {
+                            composable(false)
                         }
                     }
-                    waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
-                    waitForIdle()
-                    mainClock.advanceTimeByFrame()
-                    waitForIdle()
-                    saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), lightName)
-                } finally {
-                    setContent {}
                 }
+                saveScreenshot(scene.render().toComposeImageBitmap(), lightName)
             }
 
             // Dark Mode
-            runDesktopComposeUiTest(width = 1463, height = 811) {
-                try {
-                    setContent {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                            IntUiTheme(isDark = true) {
-                                composable(true)
-                            }
+            ImageComposeScene(width = 1463, height = 811).use { scene ->
+                scene.setContent {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        IntUiTheme(isDark = true) {
+                            composable(true)
                         }
                     }
-                    waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
-                    waitForIdle()
-                    mainClock.advanceTimeByFrame()
-                    waitForIdle()
-                    saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), darkName)
-                } finally {
-                    setContent {}
                 }
+                saveScreenshot(scene.render().toComposeImageBitmap(), darkName)
             }
         }
     }

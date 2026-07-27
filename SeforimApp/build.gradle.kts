@@ -226,6 +226,10 @@ nucleus.application {
         jvmVendor = JvmVendorSpec.BELLSOFT
         imageName = "zayit"
         buildArgs.addAll(
+            // Cap build-time JVM heap to 5.5GB and use active GC & thread limits to prevent OOM kill on CI runners
+            "-J-Xmx5500m",
+            "-J-XX:+UseG1GC",
+            "-J-Dnativeimage.compiler.threads=2",
             // Enable native access for classpath (unnamed-module) code at IMAGE BUILD TIME so the
             // generated binary never emits the JDK "restricted method ... System::load" warnings
             // (triggered by sqlite-jdbc loading its JNI lib). The runtime `--enable-native-access`

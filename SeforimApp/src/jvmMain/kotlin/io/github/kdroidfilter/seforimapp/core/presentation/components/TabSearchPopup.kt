@@ -100,8 +100,7 @@ fun TabSearchButton() {
 
     Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
         TitleBarActionButton(
-            // Vcs.History (clock): visually distinct from the find-in-page magnifier
-            key = AllIconsKeys.Vcs.History,
+            key = AllIconsKeys.General.ChevronDown,
             contentDescription = stringResource(Res.string.tab_search_tooltip),
             onClick = { openWindow.tabSearchVisible.value = !visible },
             tooltipText = stringResource(Res.string.tab_search_tooltip),

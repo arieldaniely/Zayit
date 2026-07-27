@@ -341,34 +341,42 @@ class ScreenshotGeneratorTest {
         for ((lightName, darkName, composable) in scenarios) {
             // Light Mode
             runDesktopComposeUiTest(width = 1463, height = 811) {
-                setContent {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        IntUiTheme(isDark = false) {
-                            composable(false)
+                try {
+                    setContent {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            IntUiTheme(isDark = false) {
+                                composable(false)
+                            }
                         }
                     }
+                    waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
+                    waitForIdle()
+                    mainClock.advanceTimeByFrame()
+                    waitForIdle()
+                    saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), lightName)
+                } finally {
+                    setContent {}
                 }
-                waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
-                waitForIdle()
-                mainClock.advanceTimeByFrame()
-                waitForIdle()
-                saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), lightName)
             }
 
             // Dark Mode
             runDesktopComposeUiTest(width = 1463, height = 811) {
-                setContent {
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        IntUiTheme(isDark = true) {
-                            composable(true)
+                try {
+                    setContent {
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            IntUiTheme(isDark = true) {
+                                composable(true)
+                            }
                         }
                     }
+                    waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
+                    waitForIdle()
+                    mainClock.advanceTimeByFrame()
+                    waitForIdle()
+                    saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), darkName)
+                } finally {
+                    setContent {}
                 }
-                waitUntilAtLeastOneExists(hasTestTag(SCREENSHOT_ROOT_TAG), RENDER_TIMEOUT_MILLIS)
-                waitForIdle()
-                mainClock.advanceTimeByFrame()
-                waitForIdle()
-                saveScreenshot(onNodeWithTag(SCREENSHOT_ROOT_TAG).captureToImage(), darkName)
             }
         }
     }

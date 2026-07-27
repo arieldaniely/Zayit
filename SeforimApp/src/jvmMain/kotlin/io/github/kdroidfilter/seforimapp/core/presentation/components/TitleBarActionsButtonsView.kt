@@ -53,12 +53,14 @@ fun TitleBarActionsButtonsView() {
         when (val dest = currentTab?.destination) {
             is TabsDestination.Search -> true
             is TabsDestination.BookContent -> {
-                dest.bookId > 0L || (
-                    appGraph.tabPersistedStateStore
-                        .get(dest.tabId)
-                        ?.bookContent
-                        ?.selectedBookId ?: -1L
-                ) > 0L
+                (dest.bookId != 0L && dest.bookId != -1L) ||
+                    (
+                        appGraph.tabPersistedStateStore
+                            .get(dest.tabId)
+                            ?.bookContent
+                            ?.selectedBookId
+                            ?.let { it != 0L && it != -1L } ?: false
+                    )
             }
             else -> false
         }

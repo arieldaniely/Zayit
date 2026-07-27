@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +50,7 @@ fun BreadcrumbView(
     categoryChildren: Map<Long, List<Category>>,
     onTocEntryClick: (TocEntry) -> Unit,
     onCategoryClick: (Category) -> Unit,
+    itemPopup: (@Composable (BreadcrumbItem, () -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Build the breadcrumb path from the category root through book to the owning TOC hierarchy
@@ -76,8 +80,10 @@ fun BreadcrumbView(
             result
         }
     val scrollState = rememberScrollState()
+    var openItemKey by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(breadcrumbPath) {
         scrollState.scrollTo(Int.MAX_VALUE)
+        if (breadcrumbPath.none { it.key == openItemKey }) openItemKey = null
     }
     Row(
         modifier = modifier.horizontalScroll(scrollState),
@@ -97,35 +103,59 @@ fun BreadcrumbView(
 
             // Display the item based on its type
             when (item) {
-                is BreadcrumbItem.CategoryItem -> {
-                    Text(
-                        text = item.category.title,
-                        fontWeight = if (index == breadcrumbPath.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                        modifier =
-                            Modifier
-                                .clickable { onCategoryClick(item.category) },
-                        fontSize = 12.sp,
+                is BreadcrumbItem.CategoryItem ->
+                    BreadcrumbItemAnchor(
+                        item = item,
+                        isLast = index == breadcrumbPath.lastIndex,
+                        open = openItemKey == item.key,
+                        itemPopup = itemPopup,
+                        onOpen = {
+                            if (itemPopup == null) onCategoryClick(item.category) else openItemKey = item.key
+                        },
+                        onDismiss = { openItemKey = null },
                     )
-                }
-                is BreadcrumbItem.BookItem -> {
-                    Text(
-                        text = item.book.title,
-                        fontWeight = if (index == breadcrumbPath.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 12.sp,
+                is BreadcrumbItem.BookItem ->
+                    BreadcrumbItemAnchor(
+                        item = item,
+                        isLast = index == breadcrumbPath.lastIndex,
+                        open = openItemKey == item.key,
+                        itemPopup = itemPopup,
+                        onOpen = { if (itemPopup != null) openItemKey = item.key },
+                        onDismiss = { openItemKey = null },
                     )
-                }
-                is BreadcrumbItem.TocItem -> {
-                    Text(
-                        text = item.tocEntry.text,
-                        fontWeight = if (index == breadcrumbPath.lastIndex) FontWeight.Bold else FontWeight.Normal,
-                        modifier =
-                            Modifier
-                                .clickable { onTocEntryClick(item.tocEntry) },
-                        fontSize = 12.sp,
+                is BreadcrumbItem.TocItem ->
+                    BreadcrumbItemAnchor(
+                        item = item,
+                        isLast = index == breadcrumbPath.lastIndex,
+                        open = openItemKey == item.key,
+                        itemPopup = itemPopup,
+                        onOpen = {
+                            if (itemPopup == null) onTocEntryClick(item.tocEntry) else openItemKey = item.key
+                        },
+                        onDismiss = { openItemKey = null },
                     )
-                }
             }
         }
+    }
+}
+
+@Composable
+private fun BreadcrumbItemAnchor(
+    item: BreadcrumbItem,
+    isLast: Boolean,
+    open: Boolean,
+    itemPopup: (@Composable (BreadcrumbItem, () -> Unit) -> Unit)?,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.foundation.layout.Box {
+        Text(
+            text = item.title,
+            fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.clickable(onClick = onOpen),
+            fontSize = 12.sp,
+        )
+        if (open && itemPopup != null) itemPopup(item, onDismiss)
     }
 }
 
@@ -162,6 +192,14 @@ fun BreadcrumbView(
         },
         onCategoryClick = { category ->
             onEvent(BookContentEvent.CategorySelected(category))
+        },
+        itemPopup = { item, dismiss ->
+            BreadcrumbNavigationPopup(
+                uiState = uiState,
+                item = item,
+                onEvent = onEvent,
+                onDismiss = dismiss,
+            )
         },
         modifier = modifier,
     )
@@ -235,4 +273,20 @@ sealed class BreadcrumbItem {
     class TocItem(
         val tocEntry: TocEntry,
     ) : BreadcrumbItem()
+
+    val key: String
+        get() =
+            when (this) {
+                is CategoryItem -> "category_${category.id}"
+                is BookItem -> "book_${book.id}"
+                is TocItem -> "toc_${tocEntry.id}"
+            }
+
+    val title: String
+        get() =
+            when (this) {
+                is CategoryItem -> category.title
+                is BookItem -> book.title
+                is TocItem -> tocEntry.text
+            }
 }

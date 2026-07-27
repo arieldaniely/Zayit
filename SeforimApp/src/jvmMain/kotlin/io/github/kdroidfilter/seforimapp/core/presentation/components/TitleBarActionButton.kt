@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,6 +23,7 @@ import org.jetbrains.jewel.ui.component.styling.IconButtonStyle
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.theme.iconButtonStyle
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TitleBarActionButton(
     key: IconKey,

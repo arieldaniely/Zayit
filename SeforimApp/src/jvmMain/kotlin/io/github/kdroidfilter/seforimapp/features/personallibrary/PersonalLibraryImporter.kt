@@ -27,7 +27,11 @@ class PersonalLibraryImporter(
     private val baseDatabase: Path,
     private val generationsDirectory: Path,
 ) {
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+        }
 
     fun fingerprint(folders: List<PersonalBookFolder>): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -35,11 +39,14 @@ class PersonalLibraryImporter(
         digest.add(Files.size(baseDatabase).toString())
         digest.add(Files.getLastModifiedTime(baseDatabase).toMillis().toString())
         folders.filter { it.enabled }.sortedBy { it.id }.forEach { folder ->
-            digest.add(folder.id); digest.add(folder.path); digest.add(folder.placement.name)
+            digest.add(folder.id)
+            digest.add(folder.path)
+            digest.add(folder.placement.name)
             val root = Path.of(folder.path)
             require(root.isDirectory()) { "תיקיית הספרים אינה זמינה: ${folder.path}" }
             Files.walk(root).use { stream ->
-                stream.filter { it.isRegularFile() }
+                stream
+                    .filter { it.isRegularFile() }
                     .filter { it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                     .sorted()
                     .forEach { file ->
@@ -79,7 +86,11 @@ class PersonalLibraryImporter(
 
     private fun createSchema(database: Path) {
         val driver = JdbcSqliteDriver("jdbc:sqlite:$database")
-        try { SeforimDb.Schema.create(driver) } finally { driver.close() }
+        try {
+            SeforimDb.Schema.create(driver)
+        } finally {
+            driver.close()
+        }
     }
 
     private fun importInto(
@@ -145,19 +156,23 @@ class PersonalLibraryImporter(
             val metadata = loadMetadata(root)
             val sourceId = ids.id("source:${folder.id}")
             execute("INSERT INTO source(id,name) VALUES(?,?)", sourceId, "Personal:${folder.id}")
-            val folderRoot = when (folder.placement) {
-                PersonalFolderPlacement.PERSONAL_BOOKS -> {
-                    val personalRoot = ensurePersonalCategory("global:personal", null, "ספרים אישיים", 0)
-                    ensurePersonalCategory("folder:${folder.id}", personalRoot, folder.displayName, 1)
+            val folderRoot =
+                when (folder.placement) {
+                    PersonalFolderPlacement.PERSONAL_BOOKS -> {
+                        val personalRoot = ensurePersonalCategory("global:personal", null, "ספרים אישיים", 0)
+                        ensurePersonalCategory("folder:${folder.id}", personalRoot, folder.displayName, 1)
+                    }
+                    PersonalFolderPlacement.MERGE_WITH_LIBRARY -> null
                 }
-                PersonalFolderPlacement.MERGE_WITH_LIBRARY -> null
-            }
-            val files = Files.walk(root).use { stream ->
-                stream.filter { it.isRegularFile() && it.extension.equals("txt", true) }
-                    .filter { !it.startsWith(root.resolve("links")) }
-                    .filter { !it.nameWithoutExtension.startsWith("הערות על ") }
-                    .sorted().toList()
-            }
+            val files =
+                Files.walk(root).use { stream ->
+                    stream
+                        .filter { it.isRegularFile() && it.extension.equals("txt", true) }
+                        .filter { !it.startsWith(root.resolve("links")) }
+                        .filter { !it.nameWithoutExtension.startsWith("הערות על ") }
+                        .sorted()
+                        .toList()
+                }
             var bookCount = 0
             files.forEach { file ->
                 val relative = root.relativize(file)
@@ -168,14 +183,27 @@ class PersonalLibraryImporter(
                 val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
                 val meta = metadata[rawTitle] ?: metadata[title]
                 val lines = Files.readAllLines(file, Charsets.UTF_8)
-                val notes = listOf(title, rawTitle).distinct().asSequence()
-                    .map { file.parent.resolve("הערות על $it.txt") }
-                    .firstOrNull { it.isRegularFile() }
-                    ?.readText(Charsets.UTF_8)
+                val notes =
+                    listOf(title, rawTitle)
+                        .distinct()
+                        .asSequence()
+                        .map { file.parent.resolve("הערות על $it.txt") }
+                        .firstOrNull { it.isRegularFile() }
+                        ?.readText(Charsets.UTF_8)
                 execute(
-                    """INSERT INTO book(id,categoryId,sourceId,title,heRef,heShortDesc,notesContent,orderIndex,totalLines)
-                       VALUES(?,?,?,?,?,?,?,?,?)""".trimIndent(),
-                    bookId, categoryId, sourceId, title, title, meta?.heShortDesc, notes, meta?.order?.toLong() ?: 999L, lines.size,
+                    """
+                    INSERT INTO book(id,categoryId,sourceId,title,heRef,heShortDesc,notesContent,orderIndex,totalLines)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                    """.trimIndent(),
+                    bookId,
+                    categoryId,
+                    sourceId,
+                    title,
+                    title,
+                    meta?.heShortDesc,
+                    notes,
+                    meta?.order?.toLong() ?: 999L,
+                    lines.size,
                 )
                 meta?.author?.takeIf { it.isNotBlank() }?.let { author ->
                     val authorId = ids.id("author:$author")
@@ -204,7 +232,11 @@ class PersonalLibraryImporter(
             return PersonalImportSummary(bookCount, 0)
         }
 
-        private fun resolveBookCategory(folder: PersonalBookFolder, folderRoot: Long?, segments: List<String>): Long {
+        private fun resolveBookCategory(
+            folder: PersonalBookFolder,
+            folderRoot: Long?,
+            segments: List<String>,
+        ): Long {
             if (segments.isEmpty()) {
                 if (folderRoot != null) return folderRoot
                 return ensurePersonalCategory("merge-root:${folder.id}", null, folder.displayName, 0)
@@ -214,18 +246,28 @@ class PersonalLibraryImporter(
             segments.forEachIndexed { index, raw ->
                 val title = normalizeLabel(raw)
                 logicalPath = if (logicalPath.isEmpty()) title else "$logicalPath/$title"
-                val baseMatch = if (folder.placement == PersonalFolderPlacement.MERGE_WITH_LIBRARY) {
-                    base.categoryByParentAndTitle[parent to comparable(title)]
-                } else null
+                val baseMatch =
+                    if (folder.placement == PersonalFolderPlacement.MERGE_WITH_LIBRARY) {
+                        base.categoryByParentAndTitle[parent to comparable(title)]
+                    } else {
+                        null
+                    }
                 parent = baseMatch ?: ensurePersonalCategory(
-                    "category:${folder.id}:$logicalPath", parent, title,
+                    "category:${folder.id}:$logicalPath",
+                    parent,
+                    title,
                     (parent?.let { categoryLevels[it] + 1 } ?: index),
                 )
             }
             return requireNotNull(parent)
         }
 
-        private fun ensurePersonalCategory(key: String, parent: Long?, title: String, level: Int): Long {
+        private fun ensurePersonalCategory(
+            key: String,
+            parent: Long?,
+            title: String,
+            level: Int,
+        ): Long {
             personalCategories[key]?.let { return it }
             val id = ids.id(key)
             execute("INSERT INTO category(id,parentId,title,level,orderIndex) VALUES(?,?,?,?,999)", id, parent, title, level)
@@ -242,7 +284,11 @@ class PersonalLibraryImporter(
             return id
         }
 
-        private fun insertLinesAndToc(bookId: Long, title: String, lines: List<String>): List<Long> {
+        private fun insertLinesAndToc(
+            bookId: Long,
+            title: String,
+            lines: List<String>,
+        ): List<Long> {
             val result = ArrayList<Long>(lines.size)
             val occurrences = HashMap<String, Int>()
             val parentStack = HashMap<Int, Long>()
@@ -250,7 +296,12 @@ class PersonalLibraryImporter(
             lines.forEachIndexed { index, content ->
                 val occurrence = occurrences.merge(content, 1, Int::plus)!! - 1
                 val lineId = ids.id("line:$bookId:${sha256(content)}:$occurrence")
-                val level = HEADER.find(content)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                val level =
+                    HEADER
+                        .find(content)
+                        ?.groupValues
+                        ?.get(1)
+                        ?.toIntOrNull() ?: 0
                 var tocId: Long? = currentToc
                 if (level > 0) {
                     val heading = Jsoup.clean(content, Safelist.none()).trim()
@@ -261,7 +312,12 @@ class PersonalLibraryImporter(
                         val entryId = ids.id("toc:$bookId:$level:$heading:$index")
                         execute(
                             "INSERT INTO tocEntry(id,bookId,parentId,textId,level,lineId) VALUES(?,?,?,?,?,?)",
-                            entryId, bookId, parent, textId, level, lineId,
+                            entryId,
+                            bookId,
+                            parent,
+                            textId,
+                            level,
+                            lineId,
                         )
                         parentStack.keys.filter { it >= level }.forEach(parentStack::remove)
                         parentStack[level] = entryId
@@ -271,19 +327,29 @@ class PersonalLibraryImporter(
                 }
                 execute(
                     "INSERT INTO line(id,bookId,lineIndex,content,heRef,tocEntryId,charCount) VALUES(?,?,?,?,?,?,?)",
-                    lineId, bookId, index, content, "$title ${index + 1}", tocId, visibleLength(content),
+                    lineId,
+                    bookId,
+                    index,
+                    content,
+                    "$title ${index + 1}",
+                    tocId,
+                    visibleLength(content),
                 )
                 tocId?.let { execute("INSERT INTO line_toc(lineId,tocEntryId) VALUES(?,?)", lineId, it) }
                 result += lineId
             }
             connection.createStatement().use { statement ->
                 statement.executeUpdate(
-                    """UPDATE tocEntry SET hasChildren=1 WHERE id IN
-                       (SELECT DISTINCT parentId FROM tocEntry WHERE bookId=$bookId AND parentId IS NOT NULL)""".trimIndent(),
+                    """
+                    UPDATE tocEntry SET hasChildren=1 WHERE id IN
+                    (SELECT DISTINCT parentId FROM tocEntry WHERE bookId=$bookId AND parentId IS NOT NULL)
+                    """.trimIndent(),
                 )
                 statement.executeUpdate(
-                    """UPDATE tocEntry SET isLastChild=1 WHERE id IN
-                       (SELECT MAX(id) FROM tocEntry WHERE bookId=$bookId GROUP BY parentId)""".trimIndent(),
+                    """
+                    UPDATE tocEntry SET isLastChild=1 WHERE id IN
+                    (SELECT MAX(id) FROM tocEntry WHERE bookId=$bookId GROUP BY parentId)
+                    """.trimIndent(),
                 )
             }
             return result
@@ -299,13 +365,20 @@ class PersonalLibraryImporter(
                     val source = personalBooksByFolderAndTitle[folder.id to sourceTitle] ?: booksByTitle[sourceTitle] ?: return@forEach
                     val links = runCatching { json.decodeFromString<List<PersonalLinkData>>(file.readText()) }.getOrDefault(emptyList())
                     links.forEachIndexed { index, data ->
-                        val targetTitle = comparable(data.path.substringAfterLast('\\').substringAfterLast('/').substringBeforeLast('.'))
+                        val targetTitle =
+                            comparable(
+                                data.path
+                                    .substringAfterLast('\\')
+                                    .substringAfterLast('/')
+                                    .substringBeforeLast('.'),
+                            )
                         val target = booksByTitle[targetTitle] ?: return@forEachIndexed
                         val sourceIndex = (data.sourceLine.toInt() - 1).coerceAtLeast(0)
                         val targetIndex = (data.targetLine.toInt() - 1).coerceAtLeast(0)
                         val sourceLineId = source.lineIds.getOrNull(sourceIndex) ?: return@forEachIndexed
-                        val targetLineId = target.lineIds.getOrNull(targetIndex)
-                            ?: base.lineId(target.id, targetIndex) ?: return@forEachIndexed
+                        val targetLineId =
+                            target.lineIds.getOrNull(targetIndex)
+                                ?: base.lineId(target.id, targetIndex) ?: return@forEachIndexed
                         val declaredType = ConnectionType.fromString(data.connectionType)
                         val isExplicitSource = declaredType == ConnectionType.SOURCE
                         val type = if (isExplicitSource) ConnectionType.COMMENTARY else declaredType
@@ -317,10 +390,18 @@ class PersonalLibraryImporter(
                         val typeId = base.connectionTypes[type.name] ?: return@forEachIndexed
                         val linkId = ids.id("link:${folder.id}:${file.fileName}:$index:$storedSourceLineId:$storedTargetLineId")
                         execute(
-                            """INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
-                               targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)""".trimIndent(),
-                            linkId, storedSourceBook.id, storedTargetBook.id, storedSourceLineId, storedTargetLineId,
-                            storedTargetIndex, storedTargetBook.order, typeId,
+                            """
+                            INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
+                            targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)
+                            """.trimIndent(),
+                            linkId,
+                            storedSourceBook.id,
+                            storedTargetBook.id,
+                            storedSourceLineId,
+                            storedTargetLineId,
+                            storedTargetIndex,
+                            storedTargetBook.order,
+                            typeId,
                         )
                         booksWithSourceLinks += storedSourceBook.id
                         booksWithTargetLinks += storedTargetBook.id
@@ -368,13 +449,17 @@ class PersonalLibraryImporter(
             (booksWithSourceLinks + booksWithTargetLinks).filter { it < 0 }.forEach { bookId ->
                 execute(
                     "INSERT INTO book_has_links(bookId,hasSourceLinks,hasTargetLinks) VALUES(?,?,?)",
-                    bookId, if (bookId in booksWithSourceLinks) 1 else 0, if (bookId in booksWithTargetLinks) 1 else 0,
+                    bookId,
+                    if (bookId in booksWithSourceLinks) 1 else 0,
+                    if (bookId in booksWithTargetLinks) 1 else 0,
                 )
             }
             flagsByBook.filterKeys { it < 0 }.forEach { (bookId, flags) ->
                 execute(
-                    """UPDATE book SET hasTargumConnection=?,hasReferenceConnection=?,hasSourceConnection=?,
-                       hasCommentaryConnection=?,hasOtherConnection=? WHERE id=?""".trimIndent(),
+                    """
+                    UPDATE book SET hasTargumConnection=?,hasReferenceConnection=?,hasSourceConnection=?,
+                    hasCommentaryConnection=?,hasOtherConnection=? WHERE id=?
+                    """.trimIndent(),
                     if (ConnectionType.TARGUM in flags) 1 else 0,
                     if (ConnectionType.REFERENCE in flags) 1 else 0,
                     if (ConnectionType.SOURCE in flags) 1 else 0,
@@ -385,7 +470,10 @@ class PersonalLibraryImporter(
             }
         }
 
-        private fun execute(sql: String, vararg values: Any?) {
+        private fun execute(
+            sql: String,
+            vararg values: Any?,
+        ) {
             connection.prepareStatement(sql).use { statement ->
                 values.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
                 statement.executeUpdate()
@@ -429,48 +517,60 @@ class PersonalLibraryImporter(
         private val lineIdsByBook = HashMap<Long, List<Long>>()
 
         @Synchronized
-        fun lineId(bookId: Long, lineIndex: Int): Long? = lineIdsByBook.getOrPut(bookId) {
-            DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
-                connection.prepareStatement("SELECT id FROM line WHERE bookId=? ORDER BY lineIndex").use { statement ->
-                    statement.setLong(1, bookId)
-                    statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getLong(1)) } }
-                }
-            }
-        }.getOrNull(lineIndex)
+        fun lineId(
+            bookId: Long,
+            lineIndex: Int,
+        ): Long? =
+            lineIdsByBook
+                .getOrPut(bookId) {
+                    DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                        connection.prepareStatement("SELECT id FROM line WHERE bookId=? ORDER BY lineIndex").use { statement ->
+                            statement.setLong(1, bookId)
+                            statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getLong(1)) } }
+                        }
+                    }
+                }.getOrNull(lineIndex)
 
         companion object {
-            fun load(database: Path): BaseLibraryIndex = DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
-                val parents = HashMap<Long, Long?>(); val levels = HashMap<Long, Int>(); val categories = HashMap<Pair<Long?, String>, Long>()
-                connection.createStatement().use { statement ->
-                    statement.executeQuery("SELECT id,parentId,title,level FROM category").use { rows ->
-                        while (rows.next()) {
-                            val id = rows.getLong(1); val parent = rows.getLong(2).let { if (rows.wasNull()) null else it }
-                            parents[id] = parent; levels[id] = rows.getInt(4); categories[parent to comparable(rows.getString(3))] = id
+            fun load(database: Path): BaseLibraryIndex =
+                DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                    val parents = HashMap<Long, Long?>()
+                    val levels = HashMap<Long, Int>()
+                    val categories = HashMap<Pair<Long?, String>, Long>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,parentId,title,level FROM category").use { rows ->
+                            while (rows.next()) {
+                                val id = rows.getLong(1)
+                                val parent = rows.getLong(2).let { if (rows.wasNull()) null else it }
+                                parents[id] = parent
+                                levels[id] = rows.getInt(4)
+                                categories[parent to comparable(rows.getString(3))] = id
+                            }
                         }
                     }
-                }
-                val books = HashMap<String, BookRef>()
-                connection.createStatement().use { statement ->
-                    statement.executeQuery("SELECT id,title,categoryId,orderIndex FROM book ORDER BY sourceId").use { rows ->
-                        while (rows.next()) {
-                            val ref = BookRef(rows.getLong(1), rows.getString(2), rows.getLong(3), rows.getInt(4))
-                            books.putIfAbsent(comparable(ref.title), ref)
+                    val books = HashMap<String, BookRef>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,title,categoryId,orderIndex FROM book ORDER BY sourceId").use { rows ->
+                            while (rows.next()) {
+                                val ref = BookRef(rows.getLong(1), rows.getString(2), rows.getLong(3), rows.getInt(4))
+                                books.putIfAbsent(comparable(ref.title), ref)
+                            }
                         }
                     }
-                }
-                val types = HashMap<String, Long>()
-                connection.createStatement().use { statement ->
-                    statement.executeQuery("SELECT id,name FROM connection_type").use { rows ->
-                        while (rows.next()) types[rows.getString(2)] = rows.getLong(1)
+                    val types = HashMap<String, Long>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,name FROM connection_type").use { rows ->
+                            while (rows.next()) types[rows.getString(2)] = rows.getLong(1)
+                        }
                     }
+                    BaseLibraryIndex(parents, levels, categories, books, types, database)
                 }
-                BaseLibraryIndex(parents, levels, categories, books, types, database)
-            }
         }
     }
 
     private class StableNegativeIds {
         private val keysById = HashMap<Long, String>()
+
         fun id(key: String): Long {
             var salt = 0
             while (true) {
@@ -486,16 +586,25 @@ class PersonalLibraryImporter(
     }
 
     private fun MessageDigest.add(value: String) = update(value.toByteArray(Charsets.UTF_8))
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
-        fun normalizeLabel(value: String): String = value.trim()
-            .replace('"', '״').replace('׳', '’').replace(Regex("\\s+"), " ")
+
+        fun normalizeLabel(value: String): String =
+            value
+                .trim()
+                .replace('"', '״')
+                .replace('׳', '’')
+                .replace(Regex("\\s+"), " ")
+
         fun comparable(value: String): String = normalizeLabel(value).replace("״", "").replace("’", "").lowercase()
+
         fun sha256(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).toHex()
+
         fun visibleLength(value: String): Int = Jsoup.clean(value, Safelist.none()).length
     }
 }

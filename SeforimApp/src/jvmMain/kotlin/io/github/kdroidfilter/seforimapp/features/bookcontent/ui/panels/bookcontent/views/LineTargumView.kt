@@ -70,11 +70,11 @@ import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.links
 import seforimapp.seforimapp.generated.resources.mentions
-import seforimapp.seforimapp.generated.resources.no_mentions_for_line
-import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
+import seforimapp.seforimapp.generated.resources.no_mentions_for_line
 import seforimapp.seforimapp.generated.resources.no_sources_for_line
 import seforimapp.seforimapp.generated.resources.select_line_for_links
+import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.select_line_for_sources
 import seforimapp.seforimapp.generated.resources.sources
 
@@ -534,21 +534,24 @@ fun LineTargumView(
         }
 
     // Titres et messages selon le type
-    val titleRes = when {
-        isSourceType -> Res.string.sources
-        isMentionType -> Res.string.mentions
-        else -> Res.string.links
-    }
-    val selectLineRes = when {
-        isSourceType -> Res.string.select_line_for_sources
-        isMentionType -> Res.string.select_line_for_mentions
-        else -> Res.string.select_line_for_links
-    }
-    val emptyRes = when {
-        isSourceType -> Res.string.no_sources_for_line
-        isMentionType -> Res.string.no_mentions_for_line
-        else -> Res.string.no_links_for_line
-    }
+    val titleRes =
+        when {
+            isSourceType -> Res.string.sources
+            isMentionType -> Res.string.mentions
+            else -> Res.string.links
+        }
+    val selectLineRes =
+        when {
+            isSourceType -> Res.string.select_line_for_sources
+            isMentionType -> Res.string.select_line_for_mentions
+            else -> Res.string.select_line_for_links
+        }
+    val emptyRes =
+        when {
+            isSourceType -> Res.string.no_sources_for_line
+            isMentionType -> Res.string.no_mentions_for_line
+            else -> Res.string.no_links_for_line
+        }
     val fontCodeFlow = if (isSourceType || isMentionType) AppSettings.sourceFontCodeFlow else AppSettings.targumFontCodeFlow
 
     if (isManualMultiSelection) {
@@ -966,9 +969,10 @@ private fun LinkItem(
             remember(linkId, targetText, showDiacritics) {
                 if (showDiacritics) targetText else HebrewTextUtils.removeAllDiacritics(targetText)
             }
-        val shouldCollapse = remember(processedText) {
-            processedText.length > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT
-        }
+        val shouldCollapse =
+            remember(processedText) {
+                processedText.length > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT
+            }
         val maxLines = if (shouldCollapse && !isExpanded) MAX_COLLAPSED_LINK_ITEM_LINES else Int.MAX_VALUE
         val overflow = if (shouldCollapse && !isExpanded) TextOverflow.Ellipsis else TextOverflow.Clip
 

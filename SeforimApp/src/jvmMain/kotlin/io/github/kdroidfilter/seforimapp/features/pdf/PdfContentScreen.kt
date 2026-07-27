@@ -1,39 +1,11 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Size
-import org.apache.pdfbox.text.TextPosition
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.zIndex
-import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
-import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import org.apache.pdfbox.text.PDFTextStripper
-import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,7 +27,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -61,9 +37,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -71,40 +49,62 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
+import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Book
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDNamedDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageDestination
-import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 import org.apache.pdfbox.rendering.ImageType
 import org.apache.pdfbox.rendering.PDFRenderer
+import org.apache.pdfbox.text.PDFTextStripper
+import org.apache.pdfbox.text.TextPosition
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
@@ -197,7 +197,7 @@ private fun PdfReader(
     onZoomChange: (Float) -> Unit,
     onLineSelected: (Long) -> Unit,
     isActive: Boolean,
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     val repository = LocalAppGraph.current.repository
     val textAnchors by produceState<List<PdfTextAnchor>>(emptyList(), bookId) {
@@ -208,9 +208,10 @@ private fun PdfReader(
                     .mapNotNull { entry -> entry.lineId?.let { PdfTextAnchor(entry.text, it) } }
             }
     }
-    val initialPage = remember(session, requestedReferences) {
-        session.outlineIndex.pageFor(requestedReferences)?.coerceIn(0, session.pageCount - 1) ?: 0
-    }
+    val initialPage =
+        remember(session, requestedReferences) {
+            session.outlineIndex.pageFor(requestedReferences)?.coerceIn(0, session.pageCount - 1) ?: 0
+        }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage)
     val currentSelectedLineId by rememberUpdatedState(selectedLineId)
     val currentOnLineSelected by rememberUpdatedState(onLineSelected)
@@ -264,7 +265,8 @@ private fun PdfReader(
         val matches = withContext(Dispatchers.IO) { session.searchPages(query) }
         searchMatches = matches
         selectedMatchIndex =
-            matches.indexOfFirst { it.pageIndex >= listState.mostVisiblePage() }
+            matches
+                .indexOfFirst { it.pageIndex >= listState.mostVisiblePage() }
                 .takeIf { it >= 0 }
                 ?: if (matches.isEmpty()) -1 else 0
     }
@@ -333,10 +335,11 @@ private fun PdfPages(
     val isScrolling by remember(listState) { derivedStateOf { listState.isScrollInProgress } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentOnZoomChange by rememberUpdatedState(onZoomChange)
-    val renderDpi = remember(zoom) {
-        val rawDpi = (PDF_BASE_DPI * max(1f, zoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
-        (rawDpi / PDF_DPI_STEP).roundToInt() * PDF_DPI_STEP
-    }
+    val renderDpi =
+        remember(zoom) {
+            val rawDpi = (PDF_BASE_DPI * max(1f, zoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
+            (rawDpi / PDF_DPI_STEP).roundToInt() * PDF_DPI_STEP
+        }
     LaunchedEffect(session, currentPage, renderDpi, isScrolling, isActive) {
         if (!isActive) return@LaunchedEffect
         withContext(Dispatchers.IO) {
@@ -350,79 +353,78 @@ private fun PdfPages(
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-    BoxWithConstraints(
-        modifier
-            .onPointerEvent(PointerEventType.Scroll) { event ->
-                val modifiers = event.keyboardModifiers
-                if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
-                val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
-                val zoomDelta = if (abs(delta.y) >= abs(delta.x)) delta.y else delta.x
-                if (zoomDelta == 0f) return@onPointerEvent
-                val exponent = (-zoomDelta * 0.08f).coerceIn(-0.25f, 0.25f)
-                currentOnZoomChange(
-                    (currentZoom * exp(exponent.toDouble()).toFloat()).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX),
-                )
-                event.changes.forEach { it.consume() }
+        BoxWithConstraints(
+            modifier
+                .onPointerEvent(PointerEventType.Scroll) { event ->
+                    val modifiers = event.keyboardModifiers
+                    if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
+                    val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
+                    val zoomDelta = if (abs(delta.y) >= abs(delta.x)) delta.y else delta.x
+                    if (zoomDelta == 0f) return@onPointerEvent
+                    val exponent = (-zoomDelta * 0.08f).coerceIn(-0.25f, 0.25f)
+                    currentOnZoomChange(
+                        (currentZoom * exp(exponent.toDouble()).toFloat()).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX),
+                    )
+                    event.changes.forEach { it.consume() }
+                }.pointerInput(Unit) {
+                    detectTransformGestures { _, _, gestureZoom, _ ->
+                        if (gestureZoom != 1f) {
+                            currentOnZoomChange((currentZoom * gestureZoom).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX))
+                        }
+                    }
+                },
+        ) {
+            val contentWidth = maxWidth * max(1f, zoom)
+            val pageWidthFraction = if (zoom < 1f) zoom else 0.96f
+            LaunchedEffect(zoom, horizontalScrollState.maxValue) {
+                if (horizontalScrollState.maxValue > 0) {
+                    horizontalScrollState.scrollTo(horizontalScrollState.maxValue / 2)
+                }
             }
-            .pointerInput(Unit) {
-                detectTransformGestures { _, _, gestureZoom, _ ->
-                    if (gestureZoom != 1f) {
-                        currentOnZoomChange((currentZoom * gestureZoom).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX))
+            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState, reverseScrolling = true)) {
+                LazyColumn(
+                    modifier = Modifier.width(contentWidth).fillMaxHeight(),
+                    state = listState,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                ) {
+                    items(session.pageCount, key = { it }) { pageIndex ->
+                        val renderedPage = renderSnapshot.pages[pageIndex]
+                        val pageState =
+                            when {
+                                renderedPage != null -> PdfPageState.Ready(renderedPage)
+                                pageIndex in renderSnapshot.failedPages -> PdfPageState.Failed("")
+                                else -> PdfPageState.Loading
+                            }
+                        val pageHighlights =
+                            searchMatches.mapIndexedNotNull { index, match ->
+                                if (match.pageIndex == pageIndex) {
+                                    PdfPageHighlight(match.bounds, index == selectedMatchIndex)
+                                } else {
+                                    null
+                                }
+                            }
+                        PdfPageCard(
+                            state = pageState,
+                            aspectRatio = session.displayAspectRatio,
+                            actualAspectRatio = session.pageAspectRatios[pageIndex],
+                            widthFraction = pageWidthFraction,
+                            highlights = pageHighlights,
+                            pageText = textPages[pageIndex],
+                        )
                     }
                 }
-            },
-    ) {
-        val contentWidth = maxWidth * max(1f, zoom)
-        val pageWidthFraction = if (zoom < 1f) zoom else 0.96f
-        LaunchedEffect(zoom, horizontalScrollState.maxValue) {
+            }
             if (horizontalScrollState.maxValue > 0) {
-                horizontalScrollState.scrollTo(horizontalScrollState.maxValue / 2)
+                HorizontalScrollbar(
+                    adapter = rememberScrollbarAdapter(horizontalScrollState),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp),
+                )
             }
-        }
-        Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState, reverseScrolling = true)) {
-            LazyColumn(
-                modifier = Modifier.width(contentWidth).fillMaxHeight(),
-                state = listState,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-            ) {
-                items(session.pageCount, key = { it }) { pageIndex ->
-                    val renderedPage = renderSnapshot.pages[pageIndex]
-                    val pageState =
-                        when {
-                            renderedPage != null -> PdfPageState.Ready(renderedPage)
-                            pageIndex in renderSnapshot.failedPages -> PdfPageState.Failed("")
-                            else -> PdfPageState.Loading
-                        }
-                    val pageHighlights =
-                        searchMatches.mapIndexedNotNull { index, match ->
-                            if (match.pageIndex == pageIndex) {
-                                PdfPageHighlight(match.bounds, index == selectedMatchIndex)
-                            } else {
-                                null
-                            }
-                        }
-                    PdfPageCard(
-                        state = pageState,
-                        aspectRatio = session.displayAspectRatio,
-                        actualAspectRatio = session.pageAspectRatios[pageIndex],
-                        widthFraction = pageWidthFraction,
-                        highlights = pageHighlights,
-                        pageText = textPages[pageIndex],
-                    )
-                }
-            }
-        }
-        if (horizontalScrollState.maxValue > 0) {
-            HorizontalScrollbar(
-                adapter = rememberScrollbarAdapter(horizontalScrollState),
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp),
-            )
         }
     }
 }
-    }
 
 @Composable
 private fun PdfPageCard(
@@ -553,8 +555,10 @@ private fun MissingPdfPanel(modifier: Modifier = Modifier) {
                 Modifier
                     .fillMaxWidth(0.55f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.14f))
-                    .padding(24.dp),
+                    .background(
+                        JewelTheme.globalColors.borders.disabled
+                            .copy(alpha = 0.14f),
+                    ).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -649,8 +653,7 @@ private class PdfDocumentSession private constructor(
     private var closed = false
     private val pageCache =
         object : LinkedHashMap<Int, CachedRenderedPdfPage>(PDF_CACHE_SIZE + 1, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedRenderedPdfPage>?): Boolean =
-                size > PDF_CACHE_SIZE
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedRenderedPdfPage>?): Boolean = size > PDF_CACHE_SIZE
         }
 
     private val mutableRenderSnapshot = MutableStateFlow(PdfRenderSnapshot())
@@ -712,7 +715,11 @@ private class PdfDocumentSession private constructor(
         synchronized(lock) {
             if (closed) return
             closed = true
-            pageCache.values.forEach { it.page.bitmap.asSkiaBitmap().close() }
+            pageCache.values.forEach {
+                it.page.bitmap
+                    .asSkiaBitmap()
+                    .close()
+            }
             pageCache.clear()
             mutableRenderSnapshot.value = PdfRenderSnapshot()
             searchIndex.close()
@@ -780,7 +787,6 @@ private class PdfTextSearchIndex(
             }
         }
 
-
     fun search(query: String): List<Int> =
         synchronized(lock) {
             val needle = normalizePdfSearchText(query)
@@ -814,12 +820,15 @@ private class PdfTextSearchIndex(
             pageCache.fill(null)
             mutablePages.value = emptyMap()
             document.close()
-}
+        }
 }
 
 private fun normalizePdfSearchText(text: String): String =
     text.replace(PDF_DIRECTIONAL_MARKS, "").replace(PDF_SEARCH_WHITESPACE, " ").trim()
-private class PositionCollectingPdfStripper(pageIndex: Int) : PDFTextStripper() {
+
+private class PositionCollectingPdfStripper(
+    pageIndex: Int,
+) : PDFTextStripper() {
     val glyphs = mutableListOf<PdfGlyph>()
 
     init {
@@ -847,7 +856,11 @@ private class PositionCollectingPdfStripper(pageIndex: Int) : PDFTextStripper() 
     }
 }
 
-private fun findMatches(pageIndex: Int, page: PdfPageText, needle: String): List<PdfSearchMatch> {
+private fun findMatches(
+    pageIndex: Int,
+    page: PdfPageText,
+    needle: String,
+): List<PdfSearchMatch> {
     val logicalGlyphs = page.glyphs.toLogicalPdfOrder()
     val searchable = logicalGlyphs.joinToString(separator = "") { it.text.lowercase() }
     return buildList {
@@ -872,11 +885,11 @@ private fun mergeGlyphBounds(glyphs: List<PdfGlyph>): List<PdfNormalizedRect> =
         }
     }
 
-private fun normalizePdfMatchKey(text: String): String =
-    text.filterNot { it.isWhitespace() || it.isPdfDirectionalMark() }.lowercase()
+private fun normalizePdfMatchKey(text: String): String = text.filterNot { it.isWhitespace() || it.isPdfDirectionalMark() }.lowercase()
 
 private fun Char.isPdfDirectionalMark(): Boolean =
     this == '\u200E' || this == '\u200F' || this in '\u202A'..'\u202E' || this in '\u2066'..'\u2069'
+
 private fun Char.isHebrewCharacter(): Boolean = this in '\u0590'..'\u05FF' || this in '\uFB1D'..'\uFB4F'
 
 /** PDF text streams commonly store Hebrew glyphs in visual order inside each word. */
@@ -909,7 +922,6 @@ private fun List<PdfGlyph>.toLogicalPdfOrder(): List<PdfGlyph> =
         flushWord()
     }
 
-
 /** Selects by reading lines and follows the overlapping text column where the drag began. */
 private fun PdfPageText.selectTextFlow(
     start: Offset,
@@ -918,6 +930,7 @@ private fun PdfPageText.selectTextFlow(
     aspectRatio: Float,
 ): List<PdfGlyph> {
     if (glyphs.isEmpty()) return emptyList()
+
     fun rect(glyph: PdfGlyph) = glyph.bounds.fitToPage(pageSize, aspectRatio)
     var startGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(start) } ?: return emptyList()
     var endGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(end) } ?: startGlyph
@@ -1003,11 +1016,20 @@ private fun List<PdfGlyph>.continuationScore(other: List<PdfGlyph>): Float {
     val centerDistance = abs((thisLeft + thisRight) / 2f - (otherLeft + otherRight) / 2f)
     return overlap / narrower - centerDistance
 }
-private data class PdfPageText(val glyphs: List<PdfGlyph>)
 
-private data class PdfGlyph(val text: String, val bounds: PdfNormalizedRect)
+private data class PdfPageText(
+    val glyphs: List<PdfGlyph>,
+)
 
-private data class PdfSearchMatch(val pageIndex: Int, val bounds: List<PdfNormalizedRect>)
+private data class PdfGlyph(
+    val text: String,
+    val bounds: PdfNormalizedRect,
+)
+
+private data class PdfSearchMatch(
+    val pageIndex: Int,
+    val bounds: List<PdfNormalizedRect>,
+)
 
 private data class PdfNormalizedRect(
     val left: Float,
@@ -1025,6 +1047,7 @@ private data class PdfNormalizedRect(
             bottom = max(bottom, other.bottom),
         )
 }
+
 private data class PdfPixelRect(
     val left: Float,
     val top: Float,
@@ -1035,24 +1058,34 @@ private data class PdfPixelRect(
         point.x in (left - PDF_SELECTION_HIT_SLOP)..(right + PDF_SELECTION_HIT_SLOP) &&
             point.y in (top - PDF_SELECTION_HIT_SLOP)..(bottom + PDF_SELECTION_HIT_SLOP)
 
-    fun intersects(left: Float, top: Float, right: Float, bottom: Float): Boolean =
-        this.right >= left && this.left <= right && this.bottom >= top && this.top <= bottom
+    fun intersects(
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ): Boolean = this.right >= left && this.left <= right && this.bottom >= top && this.top <= bottom
+
     fun distanceSquaredTo(point: Offset): Float {
-        val dx = when {
-            point.x < left -> left - point.x
-            point.x > right -> point.x - right
-            else -> 0f
-        }
-        val dy = when {
-            point.y < top -> top - point.y
-            point.y > bottom -> point.y - bottom
-            else -> 0f
-        }
+        val dx =
+            when {
+                point.x < left -> left - point.x
+                point.x > right -> point.x - right
+                else -> 0f
+            }
+        val dy =
+            when {
+                point.y < top -> top - point.y
+                point.y > bottom -> point.y - bottom
+                else -> 0f
+            }
         return dx * dx + dy * dy
     }
 }
 
-private fun PdfNormalizedRect.fitToPage(size: Size, actualAspectRatio: Float): PdfPixelRect {
+private fun PdfNormalizedRect.fitToPage(
+    size: Size,
+    actualAspectRatio: Float,
+): PdfPixelRect {
     if (size.width <= 0f || size.height <= 0f) return PdfPixelRect(0f, 0f, 0f, 0f)
     val cardAspectRatio = size.width / size.height
     val contentWidth: Float
@@ -1100,7 +1133,6 @@ private fun List<PdfGlyph>.toPdfSelectionText(): String {
             append(glyph.text)
         }
     }
-
 }
 
 private data class CachedRenderedPdfPage(
@@ -1120,7 +1152,10 @@ private fun progressiveRenderPlan(
     isScrolling: Boolean,
 ): List<RenderRequest> =
     buildList {
-        fun addIfValid(pageIndex: Int, dpi: Int) {
+        fun addIfValid(
+            pageIndex: Int,
+            dpi: Int,
+        ) {
             if (pageIndex in 0 until pageCount) add(RenderRequest(pageIndex, dpi))
         }
 
@@ -1153,7 +1188,9 @@ private fun progressiveRenderPlan(
 
 private fun readPdfOutline(document: PDDocument): List<PdfOutlineEntry> =
     buildList {
-        document.documentCatalog.documentOutline?.firstChild?.let { appendOutline(document, it, 0) }
+        document.documentCatalog.documentOutline
+            ?.firstChild
+            ?.let { appendOutline(document, it, 0) }
     }
 
 private fun MutableList<PdfOutlineEntry>.appendOutline(

@@ -15,9 +15,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.lifecycle.DEFAULT_ARGS_KEY
@@ -46,14 +46,14 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
+import io.github.kdroidfilter.seforimapp.features.favorites.FavoritesTabContent
+import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_DEFAULT_ZOOM
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MAX
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_STEP
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
-import io.github.kdroidfilter.seforimapp.features.favorites.FavoritesTabContent
-import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
@@ -459,6 +459,12 @@ private fun SearchTabContent(
                 onTocFilter = { entry ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByTocId(entry.id))
                 },
+                onCategoryFilter = { category ->
+                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByCategoryId(category.id))
+                },
+                onBookFilter = { book ->
+                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByBookId(book.id))
+                },
             )
         }
 
@@ -571,7 +577,9 @@ private fun PdfContentTabContent(
     val requestedReferences =
         remember(uiState.toc.breadcrumbPath, selectedLine?.heRef, selectedBook?.title) {
             buildList {
-                uiState.toc.breadcrumbPath.asReversed().mapTo(this) { it.text }
+                uiState.toc.breadcrumbPath
+                    .asReversed()
+                    .mapTo(this) { it.text }
                 selectedLine?.heRef?.let(::add)
                 selectedBook?.title?.let(::add)
             }

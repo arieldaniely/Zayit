@@ -4,7 +4,9 @@ import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriv
 import java.nio.file.Path
 
 /** Installs same-name TEMP views, so existing SQLDelight queries read a zero-copy union. */
-class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
+class PersonalLibraryOverlay(
+    private val driver: PersistentSqliteDriver,
+) {
     @Synchronized
     fun attach(database: Path?) {
         val connection = driver.getConnection()
@@ -30,16 +32,17 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
         val sourceTargetBookIds = HashSet<Long>()
         val mentionBookIds = HashSet<Long>()
         connection.createStatement().use { statement ->
-            statement.executeQuery(
-                "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
-            ).use { rows ->
-                while (rows.next()) {
-                    val bookId = rows.getLong(1)
-                    targetBookIds += bookId
-                    if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
-                    if (rows.getInt(3) != 0) mentionBookIds += bookId
+            statement
+                .executeQuery(
+                    "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
+                ).use { rows ->
+                    while (rows.next()) {
+                        val bookId = rows.getLong(1)
+                        targetBookIds += bookId
+                        if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
+                        if (rows.getInt(3) != 0) mentionBookIds += bookId
+                    }
                 }
-            }
         }
         TABLES.forEach { table ->
             connection.createStatement().use {
@@ -77,14 +80,16 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
                 )
             }
             val hintsReady =
-                statement.executeQuery(
-                    "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
-                ).use { rows -> rows.next() && rows.getString(1) == "1" }
+                statement
+                    .executeQuery(
+                        "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
+                    ).use { rows -> rows.next() && rows.getString(1) == "1" }
             if (!hintsReady) {
                 val legacyHintsReady =
-                    statement.executeQuery(
-                        "SELECT value FROM personal.schema_meta WHERE key='$LEGACY_TARGET_BOOK_HINTS_KEY'",
-                    ).use { rows -> rows.next() && rows.getString(1) == "1" }
+                    statement
+                        .executeQuery(
+                            "SELECT value FROM personal.schema_meta WHERE key='$LEGACY_TARGET_BOOK_HINTS_KEY'",
+                        ).use { rows -> rows.next() && rows.getString(1) == "1" }
                 if (!legacyHintsReady) {
                     statement.execute(
                         "INSERT OR IGNORE INTO personal.personal_link_target_book(bookId) " +
@@ -117,11 +122,33 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
     companion object {
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
         private const val LEGACY_TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
-        private val TABLES = listOf(
-            "category", "category_closure", "author", "topic", "pub_place", "pub_date", "source",
-            "book", "book_pub_place", "book_pub_date", "book_topic", "book_author", "line", "tocText",
-            "tocEntry", "connection_type", "link", "book_has_links", "line_toc", "alt_toc_structure",
-            "alt_toc_entry", "line_alt_toc", "book_acronym", "default_commentator", "default_targum",
-        )
+        private val TABLES =
+            listOf(
+                "category",
+                "category_closure",
+                "author",
+                "topic",
+                "pub_place",
+                "pub_date",
+                "source",
+                "book",
+                "book_pub_place",
+                "book_pub_date",
+                "book_topic",
+                "book_author",
+                "line",
+                "tocText",
+                "tocEntry",
+                "connection_type",
+                "link",
+                "book_has_links",
+                "line_toc",
+                "alt_toc_structure",
+                "alt_toc_entry",
+                "line_alt_toc",
+                "book_acronym",
+                "default_commentator",
+                "default_targum",
+            )
     }
 }

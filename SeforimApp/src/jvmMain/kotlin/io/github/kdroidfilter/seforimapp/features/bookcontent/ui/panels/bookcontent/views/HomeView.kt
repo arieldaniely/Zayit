@@ -254,7 +254,6 @@ private fun HomeBody(
     // Whether to show zmanim widgets
     val showZmanimWidgets by AppSettings.showZmanimWidgetsFlow.collectAsState()
 
-
     val celestialWidgetsState =
         if (homeCelestialWidgetsState != null) {
             homeCelestialWidgetsState
@@ -1365,15 +1364,16 @@ private fun SearchBar(
         isFieldFocused,
     ) {
         val shouldOpen =
-            isFieldFocused && when {
-                showTocSuggestions -> true
-                showCategorySuggestions -> true
-                showBookEmptyState -> true
-                showTocEmptyState -> true
-                showBookLoading -> true
-                showTocLoading -> true
-                else -> false
-            }
+            isFieldFocused &&
+                when {
+                    showTocSuggestions -> true
+                    showCategorySuggestions -> true
+                    showBookEmptyState -> true
+                    showTocEmptyState -> true
+                    showBookLoading -> true
+                    showTocLoading -> true
+                    else -> false
+                }
         popupVisible = shouldOpen
         focusedIndex = if (shouldOpen && (showTocSuggestions || showCategorySuggestions)) 0 else -1
     }

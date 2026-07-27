@@ -31,4 +31,7 @@ data class PersonalLibraryArtifacts(
     val indexPath: java.nio.file.Path,
 )
 
-data class PersonalImportSummary(val books: Int, val links: Int)
+data class PersonalImportSummary(
+    val books: Int,
+    val links: Int,
+)

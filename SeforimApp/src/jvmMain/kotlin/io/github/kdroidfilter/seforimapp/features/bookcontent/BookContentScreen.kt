@@ -649,11 +649,14 @@ fun BookContentScreen(
                                 )
                                 // Add note (main pane only): anchors a note to the selected text,
                                 // or to the whole right-clicked line when nothing is selected.
-                                if (bookId != 0L && bookId != -1L &&
+                                if (bookId != 0L &&
+                                    bookId != -1L &&
                                     selectionContext.activeCommentaryColumn.value
                                         .isEmpty() &&
-                                    (selectedText.isNotBlank() ||
-                                        selectionContext.currentLineId.value.let { it != 0L && it != -1L })
+                                    (
+                                        selectedText.isNotBlank() ||
+                                            selectionContext.currentLineId.value.let { it != 0L && it != -1L }
+                                    )
                                 ) {
                                     add(
                                         ContextMenuItemOptionWithKeybinding(
@@ -786,10 +789,10 @@ fun BookContentScreen(
                                     }
                                     true
                                 }
-                                    isCtrlOrCmd && keyEvent.key == Key.J -> {
-                                        onEvent(BookContentEvent.ToggleDiacritics)
-                                        true
-                                    }
+                                isCtrlOrCmd && keyEvent.key == Key.J -> {
+                                    onEvent(BookContentEvent.ToggleDiacritics)
+                                    true
+                                }
                                 else -> false
                             }
                         } else {

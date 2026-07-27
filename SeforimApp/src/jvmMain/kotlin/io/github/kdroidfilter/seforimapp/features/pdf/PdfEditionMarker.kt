@@ -21,7 +21,8 @@ fun PdfEditionMarker(
             if (selected) {
                 JewelTheme.globalColors.text.selected
             } else {
-                JewelTheme.globalColors.text.normal.copy(alpha = 0.7f)
+                JewelTheme.globalColors.text.normal
+                    .copy(alpha = 0.7f)
             },
     )
 }

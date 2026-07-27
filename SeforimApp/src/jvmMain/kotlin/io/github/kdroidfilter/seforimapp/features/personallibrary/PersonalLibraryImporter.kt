@@ -348,7 +348,7 @@ class PersonalLibraryImporter(
                 statement.executeUpdate(
                     """
                     UPDATE tocEntry SET isLastChild=1 WHERE id IN
-                    (SELECT MAX(id) FROM tocEntry WHERE bookId=$bookId GROUP BY parentId)
+                    (SELECT t.id FROM tocEntry t JOIN line l ON t.lineId = l.id WHERE t.bookId=$bookId GROUP BY t.parentId HAVING l.lineIndex = MAX(l.lineIndex))
                     """.trimIndent(),
                 )
             }

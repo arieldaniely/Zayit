@@ -91,4 +91,61 @@ class PersonalLibraryImporterTest {
             temp.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun preservesHeadingOrderWhenImporting() {
+        val temp = Files.createTempDirectory("personal-library-heading-order")
+        try {
+            val baseDatabase = temp.resolve("base.db")
+            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+
+            val books = Files.createDirectory(temp.resolve("books"))
+            val content = """
+                <h1>כותרת א</h1>
+                טקסט פרק א
+                <h1>כותרת ב</h1>
+                טקסט פרק ב
+                <h2>תת כותרת ב1</h2>
+                טקסט סעיף
+                <h1>כותרת ג</h1>
+                טקסט פרק ג
+            """.trimIndent()
+            books.resolve("ספר מרובה כותרות.txt").writeText(content)
+
+            val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
+            val folder =
+                PersonalBookFolder(
+                    id = "headings-folder",
+                    path = books.toString(),
+                    displayName = "הספרים שלי",
+                    placement = PersonalFolderPlacement.PERSONAL_BOOKS,
+                )
+
+            val (artifacts, _) = importer.build(listOf(folder), "test-headings")
+
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    val query = """
+                        SELECT tt.text, l.lineIndex
+                        FROM tocEntry t
+                        JOIN tocText tt ON t.textId = tt.id
+                        JOIN line l ON t.lineId = l.id
+                        ORDER BY l.lineIndex ASC
+                    """.trimIndent()
+                    statement.executeQuery(query).use { rows ->
+                        val titles = mutableListOf<String>()
+                        while (rows.next()) {
+                            titles.add(rows.getString("text"))
+                        }
+                        assertEquals(
+                            listOf("כותרת א", "כותרת ב", "תת כותרת ב1", "כותרת ג"),
+                            titles
+                        )
+                    }
+                }
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
 }

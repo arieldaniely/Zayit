@@ -120,6 +120,7 @@ private fun SingleLineTargumView(
     emptyRes: StringResource = Res.string.no_links_for_line,
 ) {
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
+    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -188,7 +189,7 @@ private fun SingleLineTargumView(
 
                 else -> {
                     val cachedSources =
-                        remember(selectedLine.id, lineConnections, availabilityType) {
+                        remember(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
@@ -198,11 +199,11 @@ private fun SingleLineTargumView(
                             }
                         }
 
-                    var titleToIdMap by remember(selectedLine.id, cachedSources) {
+                    var titleToIdMap by remember(selectedLine.id, cachedSources, linkLoadLevel) {
                         mutableStateOf<Map<String, Long>>(cachedSources ?: emptyMap())
                     }
 
-                    LaunchedEffect(selectedLine.id, lineConnections, availabilityType) {
+                    LaunchedEffect(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
                         val cached =
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
@@ -211,8 +212,8 @@ private fun SingleLineTargumView(
                                     else -> snapshot.targumSources
                                 }
                             }
-                        if (cached != null) {
-                            titleToIdMap = cached
+                        if (cached != null) titleToIdMap = cached
+                        if (cached != null && !supportsBookFilter) {
                             return@LaunchedEffect
                         }
 
@@ -264,7 +265,7 @@ private fun SingleLineTargumView(
                         val sourceSections =
                             displayedSources.mapNotNull { meta ->
                                 val pagerFlow =
-                                    remember(selectedLine.id, meta.bookId) {
+                                    remember(selectedLine.id, meta.bookId, availabilityType, linkLoadLevel) {
                                         buildLinksPagerFor(selectedLine.id, meta.bookId).distinctUntilChanged()
                                     }
                                 val lazyPagingItems = pagerFlow.collectAsLazyPagingItems()
@@ -309,6 +310,7 @@ private fun SingleLineTargumView(
                             selectedLine.id,
                             sectionBookIds,
                             availabilityType,
+                            linkLoadLevel,
                         ) {
                             value =
                                 runSuspendCatching {
@@ -695,6 +697,7 @@ private fun MultiLineTargumView(
     val currentOnEvent by rememberUpdatedState(onEvent)
 
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
+    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -726,7 +729,12 @@ private fun MultiLineTargumView(
     var selectedFilterBookIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     // Use multi-line provider to get aggregated available links
-    val titleToIdMap by produceState<Map<String, Long>>(emptyMap(), selectedLineIds, availabilityType) {
+    val titleToIdMap by produceState<Map<String, Long>>(
+        emptyMap(),
+        selectedLineIds,
+        availabilityType,
+        linkLoadLevel,
+    ) {
         value =
             when (availabilityType) {
                 ConnectionType.SOURCE -> providers.getAvailableSourcesForLines(selectedLineIds)
@@ -803,7 +811,7 @@ private fun MultiLineTargumView(
                 val sourceSections =
                     displayedSources.mapNotNull { meta ->
                         val pagerFlow =
-                            remember(selectedLineIds, meta.bookId, availabilityType) {
+                            remember(selectedLineIds, meta.bookId, availabilityType, linkLoadLevel) {
                                 when (availabilityType) {
                                     ConnectionType.SOURCE ->
                                         providers.buildSourcesPagerForLines(selectedLineIds, meta.bookId)
@@ -854,6 +862,7 @@ private fun MultiLineTargumView(
                     selectedLineIds,
                     sectionBookIds,
                     availabilityType,
+                    linkLoadLevel,
                 ) {
                     value =
                         runSuspendCatching {

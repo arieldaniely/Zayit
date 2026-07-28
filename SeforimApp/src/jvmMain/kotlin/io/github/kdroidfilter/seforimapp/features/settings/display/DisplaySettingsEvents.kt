@@ -17,19 +17,7 @@ sealed interface DisplaySettingsEvents {
         val value: Int,
     ) : DisplaySettingsEvents
 
-    data class SetShowContextTargumim(
-        val value: Boolean,
-    ) : DisplaySettingsEvents
-
-    data class SetShowContextMentions(
-        val value: Boolean,
-    ) : DisplaySettingsEvents
-
-    data class SetShowContextSources(
-        val value: Boolean,
-    ) : DisplaySettingsEvents
-
-    data class SetShowContextCommentaries(
-        val value: Boolean,
+    data class SetLinkLoadLevel(
+        val value: Int,
     ) : DisplaySettingsEvents
 }

@@ -2,6 +2,8 @@ package io.github.kdroidfilter.seforimapp.pagination
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkTypeClassification
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 
@@ -9,6 +11,7 @@ class MultiLineCommentsPagingSource(
     private val repository: SeforimRepository,
     private val lineIds: List<Long>,
     private val commentatorIds: Set<Long> = emptySet(),
+    private val linkLoadLevel: LinkLoadLevel = LinkLoadLevel.MINIMAL,
 ) : PagingSource<Int, CommentaryWithText>() {
     override fun getRefreshKey(state: PagingState<Int, CommentaryWithText>): Int? =
         state.anchorPosition?.let { anchorPosition ->
@@ -26,9 +29,10 @@ class MultiLineCommentsPagingSource(
                 repository.getCommentariesForLineRange(
                     lineIds = lineIds,
                     activeCommentatorIds = commentatorIds,
-                    connectionTypes = setOf(io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType.COMMENTARY),
+                    connectionTypes = LinkTypeClassification.commentaryTypes(linkLoadLevel),
                     offset = offset,
                     limit = limit,
+                    linkLoadLevel = linkLoadLevel,
                 )
 
             val prevKey = if (page == 0) null else page - 1

@@ -76,10 +76,7 @@ fun EndVerticalBar(
 ) {
     // Collect current text size from settings
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
-    val showContextTargumim by AppSettings.showContextTargumimFlow.collectAsState()
-    val showContextMentions by AppSettings.showContextMentionsFlow.collectAsState()
-    val showContextSources by AppSettings.showContextSourcesFlow.collectAsState()
-    val showContextCommentaries by AppSettings.showContextCommentariesFlow.collectAsState()
+    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
@@ -96,6 +93,7 @@ fun EndVerticalBar(
         initialValue = LineResourceAvailability(),
         key1 = selectedLine?.id,
         key2 = providers,
+        key3 = linkLoadLevel,
     ) {
         if (selectedLine == null || providers == null) {
             value = LineResourceAvailability()
@@ -235,14 +233,16 @@ fun EndVerticalBar(
 //            )
         },
         bottomContent = {
-            val targumEnabled = selectedBook?.hasTargumConnection == true
-            val commentaryEnabled = selectedBook?.hasCommentaryConnection == true
+            val targumEnabled = selectedBook?.hasTargumConnection == true || lineAvailability.targumAvailable == true
+            val commentaryEnabled =
+                selectedBook?.hasCommentaryConnection == true || lineAvailability.commentariesAvailable == true
             val sourcesEnabled =
                 selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
             val mentionsEnabled =
                 selectedBook?.hasReferenceConnection == true ||
                     selectedBook?.hasOtherConnection == true ||
-                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true)
+                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true) ||
+                    lineAvailability.mentionsAvailable == true
 
             // Hide both buttons on Home (no book selected)
             if (!noBookSelected) {
@@ -283,7 +283,7 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                if (showContextTargumim && targumEnabled) {
+                if (targumEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleTargum) },
@@ -296,7 +296,7 @@ fun EndVerticalBar(
                     )
                 }
 
-                if (showContextMentions && mentionsEnabled) {
+                if (mentionsEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText =
                             when {
@@ -313,7 +313,7 @@ fun EndVerticalBar(
                     )
                 }
 
-                if (showContextSources && sourcesEnabled) {
+                if (sourcesEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = sourcesTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleSources) },
@@ -327,7 +327,7 @@ fun EndVerticalBar(
                 }
 
                 // Show Commentaries only when available for the book
-                if (showContextCommentaries && commentaryEnabled) {
+                if (commentaryEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = commentaryTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleCommentaries) },

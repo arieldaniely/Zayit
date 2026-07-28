@@ -53,12 +53,12 @@ import seforimapp.seforimapp.generated.resources.accent_color_teal
 import seforimapp.seforimapp.generated.resources.settings_accent_color_label
 import seforimapp.seforimapp.generated.resources.settings_compact_mode
 import seforimapp.seforimapp.generated.resources.settings_compact_mode_description
-import seforimapp.seforimapp.generated.resources.settings_context_commentaries
-import seforimapp.seforimapp.generated.resources.settings_context_item_description
-import seforimapp.seforimapp.generated.resources.settings_context_mentions
-import seforimapp.seforimapp.generated.resources.settings_context_menu_title
-import seforimapp.seforimapp.generated.resources.settings_context_sources
-import seforimapp.seforimapp.generated.resources.settings_context_targumim
+import seforimapp.seforimapp.generated.resources.settings_link_load_description
+import seforimapp.seforimapp.generated.resources.settings_link_load_level_1
+import seforimapp.seforimapp.generated.resources.settings_link_load_level_2
+import seforimapp.seforimapp.generated.resources.settings_link_load_level_3
+import seforimapp.seforimapp.generated.resources.settings_link_load_level_4
+import seforimapp.seforimapp.generated.resources.settings_link_load_title
 import seforimapp.seforimapp.generated.resources.settings_max_commentators_per_page
 import seforimapp.seforimapp.generated.resources.settings_max_commentators_per_page_auto
 import seforimapp.seforimapp.generated.resources.settings_max_commentators_per_page_description
@@ -133,36 +133,56 @@ private fun DisplaySettingsView(
                 onCheckedChange = { onEvent(DisplaySettingsEvents.SetCompactMode(it)) },
             )
 
-            Text(text = stringResource(Res.string.settings_context_menu_title))
-            SettingCard(
-                title = Res.string.settings_context_targumim,
-                description = Res.string.settings_context_item_description,
-                checked = state.showContextTargumim,
-                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextTargumim(it)) },
-            )
-            SettingCard(
-                title = Res.string.settings_context_mentions,
-                description = Res.string.settings_context_item_description,
-                checked = state.showContextMentions,
-                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextMentions(it)) },
-            )
-            SettingCard(
-                title = Res.string.settings_context_sources,
-                description = Res.string.settings_context_item_description,
-                checked = state.showContextSources,
-                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextSources(it)) },
-            )
-            SettingCard(
-                title = Res.string.settings_context_commentaries,
-                description = Res.string.settings_context_item_description,
-                checked = state.showContextCommentaries,
-                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowContextCommentaries(it)) },
+            LinkLoadLevelCard(
+                value = state.linkLoadLevel,
+                onValueChange = { onEvent(DisplaySettingsEvents.SetLinkLoadLevel(it)) },
             )
 
             MaxCommentatorsPerPageCard(
                 value = state.maxCommentatorsPerPage,
                 onValueChange = { onEvent(DisplaySettingsEvents.SetMaxCommentatorsPerPage(it)) },
             )
+        }
+    }
+}
+
+@Composable
+private fun LinkLoadLevelCard(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    val labels =
+        listOf(
+            stringResource(Res.string.settings_link_load_level_1),
+            stringResource(Res.string.settings_link_load_level_2),
+            stringResource(Res.string.settings_link_load_level_3),
+            stringResource(Res.string.settings_link_load_level_4),
+        )
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = stringResource(Res.string.settings_link_load_title))
+        Text(
+            text = stringResource(Res.string.settings_link_load_description),
+            fontSize = 12.sp,
+            color = JewelTheme.globalColors.text.info,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            labels.forEachIndexed { index, label ->
+                val level = index + 1
+                RadioButtonRow(text = label, selected = value == level, onClick = { onValueChange(level) })
+            }
         }
     }
 }

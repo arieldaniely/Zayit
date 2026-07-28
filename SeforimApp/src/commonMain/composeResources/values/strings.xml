@@ -387,6 +387,12 @@
     <string name="settings_context_sources">הצג מקורות</string>
     <string name="settings_context_commentaries">הצג מפרשים</string>
     <string name="settings_context_item_description">קובע אם הקשר זה יוצג בתפריט הצד של הקורא.</string>
+    <string name="settings_link_load_title">עומס קישורים</string>
+    <string name="settings_link_load_description">קובע כמה סוגי מקורות ואזכורים יוצגו. פירושים ותרגומים מוצגים תמיד.</string>
+    <string name="settings_link_load_level_1">1 · מינימלי</string>
+    <string name="settings_link_load_level_2">2 · ממוקד</string>
+    <string name="settings_link_load_level_3">3 · מורחב</string>
+    <string name="settings_link_load_level_4">4 · הכול</string>
     <string name="settings_max_commentators_per_page_auto">אוטומטי</string>
     <!-- Theme style selector -->
     <string name="settings_theme_style_label">סגנון ערכת נושא</string>

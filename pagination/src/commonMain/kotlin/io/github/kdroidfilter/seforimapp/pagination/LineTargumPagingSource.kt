@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.pagination
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 
@@ -15,6 +16,7 @@ class LineTargumPagingSource(
     private val baseLineId: Long,
     private val sourceBookIds: Set<Long> = emptySet(),
     private val connectionTypes: Set<ConnectionType> = setOf(ConnectionType.TARGUM),
+    private val linkLoadLevel: LinkLoadLevel = LinkLoadLevel.MINIMAL,
 ) : PagingSource<Int, CommentaryWithText>() {
     private var resolvedLineIds: List<Long>? = null
 
@@ -48,6 +50,7 @@ class LineTargumPagingSource(
                     connectionTypes = connectionTypes,
                     offset = offset,
                     limit = limit,
+                    linkLoadLevel = linkLoadLevel,
                 )
 
             val prevKey = if (page == 0) null else page - 1

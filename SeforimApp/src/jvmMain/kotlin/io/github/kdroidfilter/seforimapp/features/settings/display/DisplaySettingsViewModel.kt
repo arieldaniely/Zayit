@@ -20,33 +20,21 @@ class DisplaySettingsViewModel : ViewModel() {
     private val showHomeWallpaper = MutableStateFlow(AppSettings.isShowHomeWallpaperEnabled())
     private val compactMode = MutableStateFlow(AppSettings.isCompactModeEnabled())
     private val maxCommentatorsPerPage = MutableStateFlow(AppSettings.getMaxCommentatorsPerPage())
-    private val contextVisibility =
-        combine(
-            AppSettings.showContextTargumimFlow,
-            AppSettings.showContextMentionsFlow,
-            AppSettings.showContextSourcesFlow,
-            AppSettings.showContextCommentariesFlow,
-        ) { targumim, mentions, sources, commentaries ->
-            listOf(targumim, mentions, sources, commentaries)
-        }
 
     val state =
-        combine(showZmanim, showHomeWallpaper, compactMode, maxCommentatorsPerPage, contextVisibility) {
+        combine(showZmanim, showHomeWallpaper, compactMode, maxCommentatorsPerPage, AppSettings.linkLoadLevelFlow) {
             z,
             wallpaper,
             compact,
             maxCommentators,
-            context,
+            linkLoadLevel,
             ->
             DisplaySettingsState(
                 showZmanimWidgets = z,
                 showHomeWallpaper = wallpaper,
                 compactMode = compact,
                 maxCommentatorsPerPage = maxCommentators,
-                showContextTargumim = context[0],
-                showContextMentions = context[1],
-                showContextSources = context[2],
-                showContextCommentaries = context[3],
+                linkLoadLevel = linkLoadLevel,
             )
         }.stateIn(
             viewModelScope,
@@ -77,10 +65,7 @@ class DisplaySettingsViewModel : ViewModel() {
                 AppSettings.setMaxCommentatorsPerPage(event.value)
                 maxCommentatorsPerPage.value = AppSettings.getMaxCommentatorsPerPage()
             }
-            is DisplaySettingsEvents.SetShowContextTargumim -> AppSettings.setContextTargumimVisible(event.value)
-            is DisplaySettingsEvents.SetShowContextMentions -> AppSettings.setContextMentionsVisible(event.value)
-            is DisplaySettingsEvents.SetShowContextSources -> AppSettings.setContextSourcesVisible(event.value)
-            is DisplaySettingsEvents.SetShowContextCommentaries -> AppSettings.setContextCommentariesVisible(event.value)
+            is DisplaySettingsEvents.SetLinkLoadLevel -> AppSettings.setLinkLoadLevel(event.value)
         }
     }
 }

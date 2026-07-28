@@ -226,10 +226,6 @@ nucleus.application {
         jvmVendor = JvmVendorSpec.BELLSOFT
         imageName = "zayit"
         buildArgs.addAll(
-            // Cap build-time JVM heap to 5.5GB and use active GC & thread limits to prevent OOM kill on CI runners
-            "-J-Xmx5500m",
-            "-J-XX:+UseG1GC",
-            "-J-Dnativeimage.compiler.threads=2",
             // Enable native access for classpath (unnamed-module) code at IMAGE BUILD TIME so the
             // generated binary never emits the JDK "restricted method ... System::load" warnings
             // (triggered by sqlite-jdbc loading its JNI lib). The runtime `--enable-native-access`
@@ -406,26 +402,3 @@ tasks.matching { it.name == "stabilityCheck" }.configureEach {
 tasks.matching { it.name == "createDistributable" }.configureEach {
     dependsOn(tasks.matching { task -> task.name == "createRuntimeImage" })
 }
-
-tasks.register("generateScreenshots") {
-    group = "verification"
-    description = "Generates application screenshots for the website and documentation"
-    dependsOn("jvmTest")
-}
-
-gradle.taskGraph.whenReady {
-    if (hasTask(":SeforimApp:generateScreenshots") || hasTask("generateScreenshots")) {
-        tasks.named<Test>("jvmTest") {
-            systemProperty("java.awt.headless", "true")
-            systemProperty("skiko.renderApi", "SOFTWARE_COMPAT")
-            systemProperty("skiko.linux.autodetect.software", "true")
-            systemProperty("screenshot.repositoryDir", rootProject.layout.projectDirectory.asFile.absolutePath)
-            outputs.upToDateWhen { false }
-            outputs.cacheIf { false }
-            filter {
-                includeTestsMatching("io.github.kdroidfilter.seforimapp.ScreenshotGeneratorTest")
-            }
-        }
-    }
-}
-

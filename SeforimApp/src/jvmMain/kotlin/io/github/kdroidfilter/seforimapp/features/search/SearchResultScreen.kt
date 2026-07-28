@@ -365,12 +365,20 @@ private fun SearchResultContentMvi(
     val lineToGroupIndex =
         remember(groups) {
             buildMap {
-                groups.forEachIndexed { gi, g -> g.allLineIds.forEach { put(it, gi) } }
+                groups.forEachIndexed { groupIndex, group ->
+                    group.allLineIds.forEach { put(it, groupIndex) }
+                }
             }
         }
-    // Expansion state, hoisted so it survives LazyColumn item recycling and regrouping.
-    val expandedBooks = remember { mutableStateMapOf<Long, Boolean>() }
-    val expandedHits = remember { mutableStateMapOf<Long, List<SearchResult>>() }
+    val bookToGroupIndex = remember(groups) { groups.mapIndexed { index, group -> group.bookId to index }.toMap() }
+    // Keep expansion state while this result set is displayed, but never reuse hits from
+    // a previous query or scope for a book with the same ID.
+    val expandedBooks = remember(
+        state.query, state.globalExtended, state.scopeCategoryPath.lastOrNull()?.id, state.scopeBook?.id, state.scopeTocId,
+    ) { mutableStateMapOf<Long, Boolean>() }
+    val expandedHits = remember(
+        state.query, state.globalExtended, state.scopeCategoryPath.lastOrNull()?.id, state.scopeBook?.id, state.scopeTocId,
+    ) { mutableStateMapOf<Long, List<SearchResult>>() }
     val contentScope = rememberCoroutineScope()
     val currentLoadBookHits by rememberUpdatedState(loadBookHits)
     val onToggleExpand: (BookGroup) -> Unit = { group ->
@@ -491,7 +499,7 @@ private fun SearchResultContentMvi(
                     ?.first ?: -1
             if (start >= 0) {
                 currentHitIndex = i
-                val groupIndex = lineToGroupIndex[vis[i].lineId] ?: 0
+                val groupIndex = lineToGroupIndex[vis[i].lineId] ?: bookToGroupIndex[vis[i].bookId] ?: return
                 scope.launch { listState.scrollToItem(groupIndex, 24) }
                 break
             }

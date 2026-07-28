@@ -92,13 +92,14 @@ class HistoryStore(
     suspend fun query(
         query: String,
         limit: Int,
+        offset: Int = 0,
     ): List<VisitEntry> =
         withContext(Dispatchers.IO) {
             val rows =
                 if (query.isBlank()) {
-                    queries.selectRecent(limit.toLong()).executeAsList()
+                    queries.selectRecent(limit.toLong(), offset.toLong()).executeAsList()
                 } else {
-                    queries.searchByTitle(query = query.trim(), limitCount = limit.toLong()).executeAsList()
+                    queries.searchByTitle(query = query.trim(), limitCount = limit.toLong(), offsetCount = offset.toLong()).executeAsList()
                 }
             rows.map { it.toEntry() }
         }

@@ -81,6 +81,7 @@ import seforimapp.seforimapp.generated.resources.mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
 import seforimapp.seforimapp.generated.resources.no_mentions_for_line
 import seforimapp.seforimapp.generated.resources.no_sources_for_line
+import seforimapp.seforimapp.generated.resources.paging_error_loading_more
 import seforimapp.seforimapp.generated.resources.select_line_for_links
 import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.select_line_for_sources
@@ -493,7 +494,7 @@ private fun SingleLineTargumView(
                                                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                                             contentAlignment = Alignment.Center,
                                                         ) {
-                                                            Text(text = state.error.message ?: "Error loading more")
+                                                            Text(text = state.error.message ?: stringResource(Res.string.paging_error_loading_more))
                                                         }
                                                     }
 
@@ -1038,7 +1039,7 @@ private fun MultiLineTargumView(
                                                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                                     contentAlignment = Alignment.Center,
                                                 ) {
-                                                    Text(text = state.error.message ?: "Error loading more")
+                                                    Text(text = state.error.message ?: stringResource(Res.string.paging_error_loading_more))
                                                 }
                                             }
 

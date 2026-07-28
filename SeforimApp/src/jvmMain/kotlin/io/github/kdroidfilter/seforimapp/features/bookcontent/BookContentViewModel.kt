@@ -23,6 +23,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationSt
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.Providers
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.BookContentUseCaseFactory
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
@@ -66,6 +67,7 @@ class BookContentViewModel(
     // True when this ViewModel was created by the boot session restore: its book was already
     // recorded when originally opened, so the first load must not re-enter the history.
     private val createdDuringSessionRestore = SessionManager.isRestoringSession.value
+    private val catalogRevisionAtCreation = CatalogCache.revision.value
 
     // Pre-set loading before uiState is initialized to avoid a single-frame Home flash.
     private val hasBookToLoad: Boolean =
@@ -258,7 +260,16 @@ class BookContentViewModel(
 
     init {
         initialize(savedStateHandle)
+        observeCatalogChanges()
         observeDiacriticsSettings()
+    }
+
+    private fun observeCatalogChanges() {
+        viewModelScope.launch {
+            CatalogCache.revision
+                .filter { it != catalogRevisionAtCreation }
+                .collectLatest { navigationUseCase.loadRootCategories() }
+        }
     }
 
     /** ViewModel initialization */

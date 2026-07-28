@@ -65,23 +65,28 @@ class PersonalLibraryImporter(
         generation: String,
         onProgress: ((Float) -> Unit)? = null,
     ): Pair<PersonalLibraryArtifacts, Map<String, PersonalImportSummary>> {
+        val progress = ProgressReporter(onProgress)
         val generationDir = generationsDirectory.resolve(generation)
         val database = generationDir.resolve("personal.db")
         val index = generationDir.resolve("personal.lucene")
         if (database.isRegularFile() && Files.isDirectory(index)) {
-            onProgress?.invoke(1f)
+            progress.report(1f)
             return PersonalLibraryArtifacts(generation, database, index) to emptyMap()
         }
         Files.createDirectories(generationDir)
         val stagingDb = generationDir.resolve("personal.db.building")
         Files.deleteIfExists(stagingDb)
         createSchema(stagingDb)
-        onProgress?.invoke(0.05f)
-        val summaries = importInto(stagingDb, folders.filter { it.enabled }, onProgress)
-        onProgress?.invoke(0.9f)
-        PersonalLuceneIndexBuilder.build(stagingDb, index)
+        progress.report(SCHEMA_END)
+        val summaries = importInto(stagingDb, folders.filter { it.enabled }) { fraction ->
+            progress.report(SCHEMA_END + fraction * (IMPORT_END - SCHEMA_END))
+        }
+        progress.report(IMPORT_END)
+        PersonalLuceneIndexBuilder.build(stagingDb, index) { current, total ->
+            progress.report(IMPORT_END + current.toFloat() / total * (INDEX_END - IMPORT_END))
+        }
         Files.move(stagingDb, database)
-        onProgress?.invoke(1f)
+        progress.report(1f, force = true)
         return PersonalLibraryArtifacts(generation, database, index) to summaries
     }
 
@@ -99,6 +104,12 @@ class PersonalLibraryImporter(
         folders: List<PersonalBookFolder>,
         onProgress: ((Float) -> Unit)? = null,
     ): Map<String, PersonalImportSummary> {
+        val totalBytes = folders.sumOf(::importableBytes).coerceAtLeast(1L)
+        var completedBytes = 0L
+        fun completed(bytes: Long) {
+            completedBytes = (completedBytes + bytes).coerceAtMost(totalBytes)
+            onProgress?.invoke(completedBytes.toFloat() / totalBytes)
+        }
         val base = BaseLibraryIndex.load(baseDatabase)
         val ids = StableNegativeIds()
         DriverManager.getConnection("jdbc:sqlite:$database").use { target ->
@@ -115,16 +126,11 @@ class PersonalLibraryImporter(
             target.autoCommit = false
             try {
                 val context = ImportContext(target, base, ids)
-                val totalFolders = folders.size.coerceAtLeast(1)
                 val counts = linkedMapOf<String, PersonalImportSummary>()
-                folders.forEachIndexed { index, folder ->
-                    val folderProgress = 0.1f + ((index.toFloat() + 0.5f) / totalFolders) * 0.8f
-                    onProgress?.invoke(folderProgress)
-                    counts[folder.id] = context.importFolder(folder)
-                    val added = context.importLinks(folder)
+                folders.forEach { folder ->
+                    counts[folder.id] = context.importFolder(folder, ::completed)
+                    val added = context.importLinks(folder, ::completed)
                     counts[folder.id] = counts.getValue(folder.id).copy(links = added)
-                    val nextProgress = 0.1f + ((index + 1).toFloat() / totalFolders) * 0.8f
-                    onProgress?.invoke(nextProgress)
                 }
                 context.finishLinks()
                 target.commit()
@@ -152,7 +158,10 @@ class PersonalLibraryImporter(
         private val mentionTargetBooks = HashSet<Long>()
         private val flagsByBook = HashMap<Long, MutableSet<ConnectionType>>()
 
-        fun importFolder(folder: PersonalBookFolder): PersonalImportSummary {
+        fun importFolder(
+            folder: PersonalBookFolder,
+            onBytesProcessed: (Long) -> Unit,
+        ): PersonalImportSummary {
             val root = Path.of(folder.path)
             val metadata = loadMetadata(root)
             val sourceId = ids.id("source:${folder.id}")
@@ -184,6 +193,9 @@ class PersonalLibraryImporter(
                 val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
                 val meta = metadata[rawTitle] ?: metadata[title]
                 val lines = Files.readAllLines(file, Charsets.UTF_8)
+                val fileBytes = Files.size(file).coerceAtLeast(1L)
+                val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
+                var reportedBytes = 0L
                 val notes =
                     listOf(title, rawTitle)
                         .distinct()
@@ -224,7 +236,14 @@ class PersonalLibraryImporter(
                 meta?.extraTitles.orEmpty().filter { it.isNotBlank() }.forEach { term ->
                     execute("INSERT OR IGNORE INTO book_acronym(bookId,term) VALUES(?,?)", bookId, term)
                 }
-                val lineIds = insertLinesAndToc(bookId, title, lines)
+                val lineIds = insertLinesAndToc(bookId, title, lines) { completedLines ->
+                    val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
+                    if (expected > reportedBytes) {
+                        onBytesProcessed(expected - reportedBytes)
+                        reportedBytes = expected
+                    }
+                }
+                if (reportedBytes < fileBytes) onBytesProcessed(fileBytes - reportedBytes)
                 val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
                 booksByTitle[comparable(title)] = ref
                 personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
@@ -289,6 +308,7 @@ class PersonalLibraryImporter(
             bookId: Long,
             title: String,
             lines: List<String>,
+            onLineProcessed: (Int) -> Unit,
         ): List<Long> {
             val result = ArrayList<Long>(lines.size)
             val occurrences = HashMap<String, Int>()
@@ -341,6 +361,7 @@ class PersonalLibraryImporter(
                 )
                 tocId?.let { execute("INSERT INTO line_toc(lineId,tocEntryId) VALUES(?,?)", lineId, it) }
                 result += lineId
+                onLineProcessed(index + 1)
             }
             connection.createStatement().use { statement ->
                 statement.executeUpdate(
@@ -359,12 +380,13 @@ class PersonalLibraryImporter(
             return result
         }
 
-        fun importLinks(folder: PersonalBookFolder): Int {
+        fun importLinks(folder: PersonalBookFolder, onBytesProcessed: (Long) -> Unit): Int {
             val linksDirectory = Path.of(folder.path).resolve("links")
             if (!linksDirectory.isDirectory()) return 0
             var count = 0
             Files.list(linksDirectory).use { stream ->
                 stream.filter { it.isRegularFile() && it.extension.equals("json", true) }.sorted().forEach { file ->
+                    val fileBytes = Files.size(file).coerceAtLeast(1L)
                     val sourceTitle = comparable(file.nameWithoutExtension.removeSuffix("_links"))
                     val source = personalBooksByFolderAndTitle[folder.id to sourceTitle] ?: booksByTitle[sourceTitle] ?: return@forEach
                     val links = runCatching { json.decodeFromString<List<PersonalLinkData>>(file.readText()) }.getOrDefault(emptyList())
@@ -429,6 +451,7 @@ class PersonalLibraryImporter(
                         )
                         count++
                     }
+                    onBytesProcessed(fileBytes)
                 }
             }
             return count
@@ -615,9 +638,39 @@ class PersonalLibraryImporter(
 
     private fun MessageDigest.add(value: String) = update(value.toByteArray(Charsets.UTF_8))
 
+    private fun importableBytes(folder: PersonalBookFolder): Long {
+        val root = Path.of(folder.path)
+        return Files.walk(root).use { stream ->
+            stream
+                .filter { it.isRegularFile() }
+                .filter { file ->
+                    (file.extension.equals("txt", true) && !file.startsWith(root.resolve("links"))) ||
+                        (file.extension.equals("json", true) && file.startsWith(root.resolve("links")))
+                }
+                .mapToLong { Files.size(it).coerceAtLeast(1L) }
+                .sum()
+        }
+    }
+
+    private class ProgressReporter(private val callback: ((Float) -> Unit)?) {
+        private var last = -1f
+
+        fun report(value: Float, force: Boolean = false) {
+            val next = value.coerceIn(0f, 1f).coerceAtLeast(last)
+            if (force || last < 0f || next - last >= MIN_PROGRESS_STEP) {
+                last = next
+                callback?.invoke(next)
+            }
+        }
+    }
+
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
+        private const val SCHEMA_END = 0.03f
+        private const val IMPORT_END = 0.62f
+        private const val INDEX_END = 0.98f
+        private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
         private const val IMPORT_FORMAT_VERSION = "personal-import-v2-ordered-toc"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")

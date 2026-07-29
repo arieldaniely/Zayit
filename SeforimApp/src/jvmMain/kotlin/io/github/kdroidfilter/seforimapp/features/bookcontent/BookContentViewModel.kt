@@ -151,6 +151,9 @@ class BookContentViewModel(
                             getAvailableLinksForLine = commentariesUseCase::getAvailableLinks,
                             buildSourcesPagerFor = commentariesUseCase::buildSourcesPager,
                             getAvailableSourcesForLine = commentariesUseCase::getAvailableSources,
+                            buildMentionsPagerFor = commentariesUseCase::buildMentionsPager,
+                            getAvailableMentionsForLine = commentariesUseCase::getAvailableMentions,
+                            hasAdditionalMentionsForBook = repository::hasAdditionalMentionLinksForBook,
                             // Multi-line providers
                             buildCommentariesPagerForLines = commentariesUseCase::buildCommentariesPagerForLines,
                             getCommentatorGroupsForLines = commentariesUseCase::getCommentatorGroupsForLines,
@@ -158,6 +161,8 @@ class BookContentViewModel(
                             getAvailableLinksForLines = commentariesUseCase::getAvailableLinksForLines,
                             buildSourcesPagerForLines = commentariesUseCase::buildSourcesPagerForLines,
                             getAvailableSourcesForLines = commentariesUseCase::getAvailableSourcesForLines,
+                            buildMentionsPagerForLines = commentariesUseCase::buildMentionsPagerForLines,
+                            getAvailableMentionsForLines = commentariesUseCase::getAvailableMentionsForLines,
                             getCommentaryCharCountsForLine = commentariesUseCase::getCommentaryCharCountsForLine,
                             getCommentaryCharCountsForLines = commentariesUseCase::getCommentaryCharCountsForLines,
                             getLinkCharCountsForLine = commentariesUseCase::getLinkCharCountsForLine,
@@ -214,6 +219,9 @@ class BookContentViewModel(
                                 getAvailableLinksForLine = commentariesUseCase::getAvailableLinks,
                                 buildSourcesPagerFor = commentariesUseCase::buildSourcesPager,
                                 getAvailableSourcesForLine = commentariesUseCase::getAvailableSources,
+                            buildMentionsPagerFor = commentariesUseCase::buildMentionsPager,
+                            getAvailableMentionsForLine = commentariesUseCase::getAvailableMentions,
+                            hasAdditionalMentionsForBook = repository::hasAdditionalMentionLinksForBook,
                                 // Multi-line providers
                                 buildCommentariesPagerForLines = commentariesUseCase::buildCommentariesPagerForLines,
                                 getCommentatorGroupsForLines = commentariesUseCase::getCommentatorGroupsForLines,
@@ -221,6 +229,8 @@ class BookContentViewModel(
                                 getAvailableLinksForLines = commentariesUseCase::getAvailableLinksForLines,
                                 buildSourcesPagerForLines = commentariesUseCase::buildSourcesPagerForLines,
                                 getAvailableSourcesForLines = commentariesUseCase::getAvailableSourcesForLines,
+                            buildMentionsPagerForLines = commentariesUseCase::buildMentionsPagerForLines,
+                            getAvailableMentionsForLines = commentariesUseCase::getAvailableMentionsForLines,
                                 getCommentaryCharCountsForLine = commentariesUseCase::getCommentaryCharCountsForLine,
                                 getCommentaryCharCountsForLines = commentariesUseCase::getCommentaryCharCountsForLines,
                                 getLinkCharCountsForLine = commentariesUseCase::getLinkCharCountsForLine,
@@ -506,6 +516,9 @@ class BookContentViewModel(
                 BookContentEvent.ToggleSources ->
                     contentUseCase.toggleSources()
 
+                BookContentEvent.ToggleMentions ->
+                    contentUseCase.toggleMentions()
+
                 BookContentEvent.ToggleDiacritics ->
                     toggleShowDiacriticsForCurrentCategory()
 
@@ -700,7 +713,7 @@ class BookContentViewModel(
                         val persisted = persistedBeforeLoad ?: persistedStore.get(tabId)?.bookContent
                         val shouldEnsureSelectionForPanes =
                             persisted?.let {
-                                it.showCommentaries || it.showTargum || it.showSources
+                                it.showCommentaries || it.showTargum || it.showSources || it.showMentions
                             } == true
                         // Restaurer la sélection multi-ligne ou simple
                         val selectedLineIds = persisted?.selectedLineIds?.takeIf { it.isNotEmpty() }
@@ -835,9 +848,6 @@ class BookContentViewModel(
         viewModelScope.launch {
             stateManager.setLoading(true)
             try {
-                // Pre-apply default commentators for this book (if defined in database)
-                runSuspendCatching { commentariesUseCase.applyDefaultCommentatorsForBook(book.id) }
-
                 val state = stateManager.state.value
                 // Always prefer an explicit anchor when present (e.g., opening from a commentary link)
                 val shouldUseAnchor = state.content.anchorId != -1L
@@ -898,6 +908,11 @@ class BookContentViewModel(
 
                 // Release loading indicator immediately so the user sees content
                 stateManager.setLoading(false)
+
+                // Defaults are optional pane state and must never delay the book itself.
+                viewModelScope.launch {
+                    runSuspendCatching { commentariesUseCase.applyDefaultCommentatorsForBook(book.id) }
+                }
 
                 // Load TOC, alt-TOC, and line selection in parallel
                 coroutineScope {

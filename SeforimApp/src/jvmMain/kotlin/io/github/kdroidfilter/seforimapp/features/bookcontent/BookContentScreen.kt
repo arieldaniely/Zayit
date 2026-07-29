@@ -735,7 +735,7 @@ fun BookContentScreen(
             ),
             SplitPaneConfig(
                 splitState = uiState.layout.targumSplitState,
-                isVisible = uiState.content.showTargum,
+                isVisible = uiState.content.showTargum || uiState.content.showMentions,
                 positionFilter = { it > 0 && it < 1 },
             ),
         )

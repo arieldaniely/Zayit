@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
+import io.github.kdroidfilter.seforimapp.core.presentation.components.AnimatedHorizontalProgressBar
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalFolderPlacement
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryViewModel
@@ -140,7 +141,15 @@ fun PersonalLibrarySettingsScreen() {
                     }
                 }
             }
-            if (state.isWorking) Text(stringResource(Res.string.personal_library_working))
+            if (state.isWorking) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(Res.string.personal_library_working))
+                    AnimatedHorizontalProgressBar(
+                        value = state.progress.coerceIn(0f, 1f),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             if (state.success) InlineSuccessBanner(stringResource(Res.string.personal_library_success), Modifier.fillMaxWidth())
             state.error?.let { InlineErrorBanner(it, Modifier.fillMaxWidth()) }
         }

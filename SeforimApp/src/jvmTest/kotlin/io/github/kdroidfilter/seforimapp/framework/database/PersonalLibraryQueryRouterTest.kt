@@ -145,4 +145,41 @@ class PersonalLibraryQueryRouterTest {
 
         assertTrue("FROM personal.\"link\"" in routed)
     }
+
+    @Test
+    fun `inverse partition index skips unrelated personal links`() {
+        val driver = PersistentSqliteDriver("jdbc:sqlite::memory:")
+        try {
+            driver.getConnection().createStatement().use { statement ->
+                statement.execute("ATTACH DATABASE ':memory:' AS personal")
+                statement.execute("CREATE TABLE personal.link(targetLineId INTEGER NOT NULL)")
+                statement.execute("CREATE INDEX personal.idx_personal_target_line ON link(targetLineId)")
+                statement.execute("INSERT INTO personal.link(targetLineId) VALUES(70)")
+            }
+            driver.setPersonalOverlayAttached(
+                attached = true,
+                targetBookIds = setOf(7L),
+            )
+
+            assertEquals(
+                listOf("hit"),
+                driver.queryEachLinkPartitionForTargetLines(listOf(60L)) { "hit" },
+            )
+            assertEquals(
+                listOf("hit", "hit"),
+                driver.queryEachLinkPartitionForTargetLines(listOf(70L)) { "hit" },
+            )
+            assertEquals(
+                listOf("hit"),
+                driver.queryEachLinkPartitionForTargetLines(listOf(-80L)) { "hit" },
+            )
+            assertTrue(driver.hasAdditionalLinksTargetingBook(7L))
+            assertTrue(!driver.hasAdditionalLinksTargetingBook(8L))
+            assertTrue(driver.hasAdditionalSourceLinksTargetingBook(7L))
+            assertTrue(!driver.hasAdditionalSourceLinksTargetingBook(9L))
+            assertTrue(driver.hasAdditionalMentionLinksForBook(9L))
+        } finally {
+            driver.close()
+        }
+    }
 }

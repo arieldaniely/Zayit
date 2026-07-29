@@ -343,7 +343,11 @@ class ContentUseCase(
         }
 
         stateManager.updateContent {
-            copy(showCommentaries = !isVisible, showSources = if (!isVisible) false else showSources)
+            copy(
+                showCommentaries = !isVisible,
+                showSources = if (!isVisible) false else showSources,
+                showMentions = showMentions,
+            )
         }
 
         return !isVisible
@@ -375,9 +379,31 @@ class ContentUseCase(
             copy(
                 showSources = !isVisible,
                 showCommentaries = if (!isVisible) false else showCommentaries,
+                showMentions = showMentions,
             )
         }
 
+        return !isVisible
+    }
+
+    fun toggleMentions(): Boolean {
+        val currentState = stateManager.state.value
+        val isVisible = currentState.content.showMentions
+        if (isVisible) {
+            val prev = currentState.layout.targumSplitState.positionPercentage
+            stateManager.updateLayout { copy(previousPositions = previousPositions.copy(links = prev)) }
+            currentState.layout.targumSplitState.positionPercentage = 1f
+        } else {
+            currentState.layout.targumSplitState.positionPercentage = currentState.layout.previousPositions.links
+        }
+        stateManager.updateContent {
+            copy(
+                showMentions = !isVisible,
+                showTargum = false,
+                showSources = showSources,
+                showCommentaries = showCommentaries,
+            )
+        }
         return !isVisible
     }
 
@@ -410,7 +436,10 @@ class ContentUseCase(
         }
 
         stateManager.updateContent {
-            copy(showTargum = !isVisible)
+            copy(
+                showTargum = !isVisible,
+                showMentions = if (!isVisible) false else showMentions,
+            )
         }
 
         return !isVisible

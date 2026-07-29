@@ -269,9 +269,17 @@ private fun BookContentPanelContent(
                             }
                         },
                         secondContent =
-                            if (uiState.content.showTargum) {
+                            if (uiState.content.showTargum || uiState.content.showMentions) {
                                 {
-                                    TargumPane(
+                                    if (uiState.content.showMentions) {
+                                        MentionsPane(
+                                            uiState = uiState,
+                                            onEvent = onEvent,
+                                            lineConnections = connectionsCache,
+                                            showDiacritics = showDiacritics,
+                                            modifier = topPaneCardModifier,
+                                        )
+                                    } else TargumPane(
                                         uiState = uiState,
                                         onEvent = onEvent,
                                         lineConnections = connectionsCache,
@@ -309,6 +317,7 @@ private fun BookContentPanelContent(
                                 )
                             }
                         }
+
 
                         else -> null
                     },
@@ -368,6 +377,25 @@ private fun SourcesPane(
             onEvent = onEvent,
             lineConnections = lineConnections,
             availabilityType = ConnectionType.SOURCE,
+            showDiacritics = showDiacritics,
+        )
+    }
+}
+
+@Composable
+private fun MentionsPane(
+    uiState: BookContentState,
+    onEvent: (BookContentEvent) -> Unit,
+    lineConnections: Map<Long, LineConnectionsSnapshot>,
+    showDiacritics: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        LineTargumView(
+            uiState = uiState,
+            onEvent = onEvent,
+            lineConnections = lineConnections,
+            availabilityType = ConnectionType.MENTION,
             showDiacritics = showDiacritics,
         )
     }

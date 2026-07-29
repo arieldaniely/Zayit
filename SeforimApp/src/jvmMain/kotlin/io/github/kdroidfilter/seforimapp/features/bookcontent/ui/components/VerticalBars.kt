@@ -76,6 +76,10 @@ fun EndVerticalBar(
 ) {
     // Collect current text size from settings
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
+    val showContextTargumim by AppSettings.showContextTargumimFlow.collectAsState()
+    val showContextMentions by AppSettings.showContextMentionsFlow.collectAsState()
+    val showContextSources by AppSettings.showContextSourcesFlow.collectAsState()
+    val showContextCommentaries by AppSettings.showContextCommentariesFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
@@ -228,8 +232,12 @@ fun EndVerticalBar(
         bottomContent = {
             val targumEnabled = selectedBook?.hasTargumConnection == true
             val commentaryEnabled = selectedBook?.hasCommentaryConnection == true
-            val sourcesEnabled = selectedBook?.hasSourceConnection == true
-            val linksEnabled = (selectedBook?.hasReferenceConnection == true) || (selectedBook?.hasOtherConnection == true)
+            val sourcesEnabled =
+                selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
+            val mentionsEnabled =
+                selectedBook?.hasReferenceConnection == true ||
+                    selectedBook?.hasOtherConnection == true ||
+                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true)
 
             // Hide both buttons on Home (no book selected)
             if (!noBookSelected) {
@@ -265,8 +273,7 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                // Show Targum only when available for the book
-                if (targumEnabled) {
+                if (showContextTargumim && targumEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleTargum) },
@@ -279,7 +286,24 @@ fun EndVerticalBar(
                     )
                 }
 
-                if (sourcesEnabled) {
+                if (showContextMentions && mentionsEnabled) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText =
+                            if (selectedLine == null) {
+                                stringResource(Res.string.select_line_for_mentions)
+                            } else {
+                                stringResource(Res.string.show_mentions_tooltip)
+                            },
+                        onClick = { onEvent(BookContentEvent.ToggleMentions) },
+                        isSelected = uiState.content.showMentions,
+                        icon = Quote,
+                        iconDescription = stringResource(Res.string.show_mentions),
+                        label = stringResource(Res.string.show_mentions),
+                        enabled = selectedLine != null,
+                    )
+                }
+
+                if (showContextSources && sourcesEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = sourcesTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleSources) },
@@ -293,7 +317,7 @@ fun EndVerticalBar(
                 }
 
                 // Show Commentaries only when available for the book
-                if (commentaryEnabled) {
+                if (showContextCommentaries && commentaryEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = commentaryTooltip,
                         onClick = { onEvent(BookContentEvent.ToggleCommentaries) },

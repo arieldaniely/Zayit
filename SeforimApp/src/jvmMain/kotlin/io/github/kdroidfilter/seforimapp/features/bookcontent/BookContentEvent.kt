@@ -117,6 +117,8 @@ sealed interface BookContentEvent {
 
     data object ToggleSources : BookContentEvent
 
+    data object ToggleMentions : BookContentEvent
+
     data object ToggleDiacritics : BookContentEvent
 
     data object OpenPdfEdition : BookContentEvent

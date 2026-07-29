@@ -7,6 +7,10 @@ import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
@@ -16,23 +20,44 @@ class PersonalLibraryService(
     private val search: CompositeSearchEngine,
     private val repository: SeforimRepository,
 ) {
-    fun configuration(): PersonalLibraryConfiguration = manager.store.load()
+    private val _state = MutableStateFlow(PersonalLibraryUiState(configuration = manager.store.load()))
+    val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
 
-    suspend fun synchronize(configuration: PersonalLibraryConfiguration, force: Boolean = false): PersonalLibraryConfiguration =
-        withContext(Dispatchers.IO) {
-            val (updated, artifacts) = manager.synchronize(configuration, force)
-            overlay.attach(artifacts?.databasePath)
-            val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
-            search.replacePersonal(
-                artifacts?.let {
-                    LuceneSearchEngine(
-                        indexDir = it.indexPath,
-                        snippetProvider = RepositorySnippetSourceProvider(repository),
-                        dictionaryPath = dictionary,
-                    )
-                },
-            )
-            CatalogCache.reloadCatalog()
-            updated
+    fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
+
+    suspend fun requestSynchronize(configuration: PersonalLibraryConfiguration, force: Boolean = false) {
+        if (_state.value.isWorking) return
+        _state.update { it.copy(isWorking = true, error = null, success = false, progress = 0f) }
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                val (updated, artifacts) = manager.synchronize(configuration, force) { progress ->
+                    _state.update { it.copy(progress = progress) }
+                }
+                overlay.attach(artifacts?.databasePath)
+                val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
+                search.replacePersonal(
+                    artifacts?.let {
+                        LuceneSearchEngine(
+                            indexDir = it.indexPath,
+                            snippetProvider = RepositorySnippetSourceProvider(repository),
+                            dictionaryPath = dictionary,
+                        )
+                    },
+                )
+                CatalogCache.reloadCatalog()
+                updated
+            }
         }
+        result.onSuccess { updated ->
+            _state.update { it.copy(configuration = updated, isWorking = false, success = true, progress = 1f) }
+        }.onFailure { error ->
+            _state.update {
+                it.copy(
+                    isWorking = false,
+                    error = error.message ?: error::class.simpleName,
+                    progress = 0f,
+                )
+            }
+        }
+    }
 }

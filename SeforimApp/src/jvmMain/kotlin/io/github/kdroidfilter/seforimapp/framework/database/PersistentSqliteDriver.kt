@@ -51,6 +51,12 @@ class PersistentSqliteDriver(
 
     @Volatile
     private var personalOverlayAttached = false
+    @Volatile
+    private var personalTargetBookIds: Set<Long> = emptySet()
+    @Volatile
+    private var personalSourceTargetBookIds: Set<Long> = emptySet()
+    @Volatile
+    private var personalMentionBookIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
@@ -63,8 +69,17 @@ class PersistentSqliteDriver(
     override fun getConnection(): Connection = connection
 
     /** Enables direct partition routing while the personal-library database is attached. */
-    fun setPersonalOverlayAttached(attached: Boolean) {
-        personalOverlayAttached = attached
+    fun setPersonalOverlayAttached(
+        attached: Boolean,
+        targetBookIds: Set<Long> = emptySet(),
+        sourceTargetBookIds: Set<Long> = emptySet(),
+        mentionBookIds: Set<Long> = emptySet(),
+    ) {
+        if (!attached) personalOverlayAttached = false
+        personalTargetBookIds = if (attached) targetBookIds else emptySet()
+        personalSourceTargetBookIds = if (attached) sourceTargetBookIds else emptySet()
+        personalMentionBookIds = if (attached) mentionBookIds else emptySet()
+        if (attached) personalOverlayAttached = true
     }
 
     override fun <T> queryEachLinkPartition(query: () -> T): List<T> {
@@ -74,6 +89,51 @@ class PersistentSqliteDriver(
             withForcedLinkSchema("personal", query),
         )
     }
+
+    override fun <T> queryEachLinkPartitionForTargetLines(
+        targetLineIds: Collection<Long>,
+        query: () -> T,
+    ): List<T> {
+        if (!personalOverlayAttached) return listOf(query())
+        if (targetLineIds.isEmpty()) return emptyList()
+
+        val results = ArrayList<T>(2)
+        // Main entities always have positive IDs; the immutable main database can
+        // never contain a link targeting a later personal (negative) line.
+        if (targetLineIds.any { it > 0L }) {
+            results += withForcedLinkSchema("main", query)
+        }
+        // Negative lines belong to the personal DB. Positive lines use a small,
+        // indexed targetLineId probe only after book-level hints allowed this path.
+        if (targetLineIds.any { it < 0L } || personalContainsAnyTargetLine(targetLineIds)) {
+            results += withForcedLinkSchema("personal", query)
+        }
+        return results
+    }
+
+    private fun personalContainsAnyTargetLine(targetLineIds: Collection<Long>): Boolean {
+        if (personalTargetBookIds.isEmpty()) return false
+        val mainLineIds = targetLineIds.filter { it > 0L }
+        if (mainLineIds.isEmpty()) return false
+        synchronized(connection) {
+            val placeholders = List(mainLineIds.size) { "?" }.joinToString(",")
+            val statement = prepare(
+                "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
+            )
+            statement.clearParameters()
+            mainLineIds.forEachIndexed { index, id -> statement.setLong(index + 1, id) }
+            statement.executeQuery().use { rows -> return rows.next() }
+        }
+    }
+
+    override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalTargetBookIds
+
+    override fun hasAdditionalSourceLinksTargetingBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalSourceTargetBookIds
+
+    override fun hasAdditionalMentionLinksForBook(bookId: Long): Boolean =
+        personalOverlayAttached && bookId in personalMentionBookIds
 
     private fun <T> withForcedLinkSchema(
         schema: String,

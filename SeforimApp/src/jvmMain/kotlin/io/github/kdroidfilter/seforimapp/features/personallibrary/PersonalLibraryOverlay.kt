@@ -25,6 +25,22 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
             statement.execute("PRAGMA personal.cache_size=-65536")
             statement.execute("PRAGMA personal.mmap_size=134217728")
         }
+        ensureTargetBookHints(connection)
+        val targetBookIds = HashSet<Long>()
+        val sourceTargetBookIds = HashSet<Long>()
+        val mentionBookIds = HashSet<Long>()
+        connection.createStatement().use { statement ->
+            statement.executeQuery(
+                "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
+            ).use { rows ->
+                while (rows.next()) {
+                    val bookId = rows.getLong(1)
+                    targetBookIds += bookId
+                    if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
+                    if (rows.getInt(3) != 0) mentionBookIds += bookId
+                }
+            }
+        }
         TABLES.forEach { table ->
             connection.createStatement().use {
                 it.execute(
@@ -33,10 +49,74 @@ class PersonalLibraryOverlay(private val driver: PersistentSqliteDriver) {
                 )
             }
         }
-        driver.setPersonalOverlayAttached(true)
+        driver.setPersonalOverlayAttached(
+            attached = true,
+            targetBookIds = targetBookIds,
+            sourceTargetBookIds = sourceTargetBookIds,
+            mentionBookIds = mentionBookIds,
+        )
+    }
+
+    private fun ensureTargetBookHints(connection: java.sql.Connection) {
+        connection.createStatement().use { statement ->
+            statement.execute(
+                "CREATE TABLE IF NOT EXISTS personal.personal_link_target_book " +
+                    "(bookId INTEGER PRIMARY KEY NOT NULL,hasSourceLinks INTEGER NOT NULL DEFAULT 0," +
+                    "hasMentionLinks INTEGER NOT NULL DEFAULT 0)",
+            )
+            runCatching {
+                statement.execute(
+                    "ALTER TABLE personal.personal_link_target_book " +
+                        "ADD COLUMN hasSourceLinks INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+            runCatching {
+                statement.execute(
+                    "ALTER TABLE personal.personal_link_target_book " +
+                        "ADD COLUMN hasMentionLinks INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+            val hintsReady =
+                statement.executeQuery(
+                    "SELECT value FROM personal.schema_meta WHERE key='$TARGET_BOOK_HINTS_KEY'",
+                ).use { rows -> rows.next() && rows.getString(1) == "1" }
+            if (!hintsReady) {
+                val legacyHintsReady =
+                    statement.executeQuery(
+                        "SELECT value FROM personal.schema_meta WHERE key='$LEGACY_TARGET_BOOK_HINTS_KEY'",
+                    ).use { rows -> rows.next() && rows.getString(1) == "1" }
+                if (!legacyHintsReady) {
+                    statement.execute(
+                        "INSERT OR IGNORE INTO personal.personal_link_target_book(bookId) " +
+                            "SELECT DISTINCT targetBookId FROM personal.link WHERE targetBookId > 0",
+                    )
+                }
+                statement.execute(
+                    "UPDATE personal.personal_link_target_book SET hasSourceLinks=EXISTS(" +
+                        "SELECT 1 FROM personal.link l " +
+                        "JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
+                        "WHERE l.targetBookId=personal_link_target_book.bookId " +
+                        "AND ct.name IN ('COMMENTARY','SUPER_COMMENTARY','TARGUM','MIDRASH'," +
+                        "'PARSHANUT','DIBUR_HAMATCHIL','EIN_MISHPAT') LIMIT 1)",
+                )
+                statement.execute(
+                    "UPDATE personal.personal_link_target_book SET hasMentionLinks=EXISTS(" +
+                        "SELECT 1 FROM personal.link l " +
+                        "JOIN personal.connection_type ct ON ct.id=l.connectionTypeId " +
+                        "WHERE l.targetBookId=personal_link_target_book.bookId " +
+                        "AND ct.name IN ('REFERENCE','OTHER') LIMIT 1)",
+                )
+                statement.execute(
+                    "INSERT INTO personal.schema_meta(key,value) VALUES('$TARGET_BOOK_HINTS_KEY','1') " +
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                )
+            }
+        }
     }
 
     companion object {
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
+        private const val LEGACY_TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v1"
         private val TABLES = listOf(
             "category", "category_closure", "author", "topic", "pub_place", "pub_date", "source",
             "book", "book_pub_place", "book_pub_date", "book_topic", "book_author", "line", "tocText",

@@ -1,0 +1,67 @@
+name: Portable Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - work
+    paths:
+      - 'SeforimApp/**'
+      - 'SeforimLibrary/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/portable-build.yaml'
+
+jobs:
+  portable-windows:
+    name: Build portable Windows distribution
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Build portable app directory
+        run: .\gradlew.bat --no-daemon :SeforimApp:createDistributable
+
+      - name: Stage portable Windows layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $portableRoot = 'portable-zayit-windows'
+          $appDir = 'SeforimApp/build/compose/binaries/main/app'
+          if (-not (Test-Path $appDir -PathType Container)) {
+            throw "Compose app directory was not found: $appDir"
+          }
+
+          New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
+          Copy-Item -Path (Join-Path $appDir '*') -Destination $portableRoot -Recurse -Force
+
+          $zayitRoot = Join-Path $portableRoot 'zayit'
+          New-Item -ItemType Directory -Force -Path (Join-Path $zayitRoot 'data/databases') | Out-Null
+          New-Item -ItemType File -Force -Path (Join-Path $zayitRoot 'zayit.portable') | Out-Null
+
+          @'
+          זית - מהדורה ניידת ל-Windows
+
+          כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
+          ניתן להפעיל גם עם SEFORIMAPP_PORTABLE=1 או עם ‎-Dseforimapp.portable=true.
+          '@ | Set-Content -Path (Join-Path $zayitRoot 'README-portable.txt') -Encoding UTF8
+
+          Compress-Archive -Path (Join-Path $portableRoot '*') -DestinationPath 'zayit-portable-windows.zip' -Force
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zayit-portable-windows
+          path: zayit-portable-windows.zip

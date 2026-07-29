@@ -87,6 +87,7 @@ object AppSettings {
 
     // Homepage wallpaper visibility
     private const val KEY_SHOW_HOME_WALLPAPER = "show_home_wallpaper"
+
     // Compact mode for vertical bars
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val KEY_SHOW_CONTEXT_TARGUMIM = "show_context_targumim"
@@ -159,6 +160,7 @@ object AppSettings {
     // StateFlow for homepage wallpaper visibility
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
     val showHomeWallpaperFlow: StateFlow<Boolean> = _showHomeWallpaperFlow.asStateFlow()
+
     // StateFlow for compact mode
     private val _compactModeFlow = MutableStateFlow(isCompactModeEnabled())
     val compactModeFlow: StateFlow<Boolean> = _compactModeFlow.asStateFlow()
@@ -387,24 +389,28 @@ object AppSettings {
     }
 
     fun isContextTargumimVisible(): Boolean = settings[KEY_SHOW_CONTEXT_TARGUMIM, true]
+
     fun setContextTargumimVisible(visible: Boolean) {
         settings[KEY_SHOW_CONTEXT_TARGUMIM] = visible
         _showContextTargumimFlow.value = visible
     }
 
     fun isContextMentionsVisible(): Boolean = settings[KEY_SHOW_CONTEXT_MENTIONS, true]
+
     fun setContextMentionsVisible(visible: Boolean) {
         settings[KEY_SHOW_CONTEXT_MENTIONS] = visible
         _showContextMentionsFlow.value = visible
     }
 
     fun isContextSourcesVisible(): Boolean = settings[KEY_SHOW_CONTEXT_SOURCES, true]
+
     fun setContextSourcesVisible(visible: Boolean) {
         settings[KEY_SHOW_CONTEXT_SOURCES] = visible
         _showContextSourcesFlow.value = visible
     }
 
     fun isContextCommentariesVisible(): Boolean = settings[KEY_SHOW_CONTEXT_COMMENTARIES, true]
+
     fun setContextCommentariesVisible(visible: Boolean) {
         settings[KEY_SHOW_CONTEXT_COMMENTARIES] = visible
         _showContextCommentariesFlow.value = visible

@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.*
-import kotlin.collections.ArrayDeque
 import kotlin.math.max
 
 @Immutable
@@ -37,7 +36,8 @@ class TabsViewModel(
 
     private var _nextTabId = 2
 
-    private val closedTabs = ArrayDeque<TabItem>()
+    private val _recentlyClosedTabs = MutableStateFlow<List<TabItem>>(emptyList())
+    val recentlyClosedTabs: StateFlow<List<TabItem>> = _recentlyClosedTabs.asStateFlow()
 
     private fun recordClosedTab(tab: TabItem) {
         val dest = tab.destination
@@ -51,10 +51,7 @@ class TabsViewModel(
         }
         if (!shouldRecord) return
 
-        closedTabs.addLast(tab)
-        if (closedTabs.size > 50) {
-            closedTabs.removeFirst()
-        }
+        _recentlyClosedTabs.update { closed -> listOf(tab) + closed.take(MAX_CLOSED_TABS - 1) }
     }
     /** When true, the next tab state change should not animate new tabs. Reset by the view after consuming. */
     private val _skipNextAnimation = MutableStateFlow(false)
@@ -299,8 +296,8 @@ class TabsViewModel(
     }
 
     private fun reopenLastClosedTab() {
-        if (closedTabs.isEmpty()) return
-        val restoredTab = closedTabs.removeLast()
+        val restoredTab = _recentlyClosedTabs.value.firstOrNull() ?: return
+        _recentlyClosedTabs.update { it.drop(1) }
         val newTab = TabItem(
             id = _nextTabId++,
             title = restoredTab.title,
@@ -547,6 +544,10 @@ class TabsViewModel(
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
         }
+
+    private companion object {
+        const val MAX_CLOSED_TABS = 50
+    }
 
     private fun updateTabTitle(
         tabId: String,

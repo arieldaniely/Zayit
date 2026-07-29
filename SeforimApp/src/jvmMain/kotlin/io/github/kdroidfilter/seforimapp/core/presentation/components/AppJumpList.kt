@@ -1,11 +1,13 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.launcher.windows.JumpListCategory
 import dev.nucleusframework.launcher.windows.JumpListItem
@@ -13,6 +15,10 @@ import dev.nucleusframework.launcher.windows.WindowsJumpListManager
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
+import io.github.kdroidfilter.seforimapp.core.deeplink.bookShareLink
+import io.github.kdroidfilter.seforimapp.core.deeplink.toShareLink
+import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteEntry
+import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.coroutines.flow.StateFlow
@@ -22,20 +28,24 @@ import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.desktop_default_name
 import seforimapp.seforimapp.generated.resources.desktop_new
 import seforimapp.seforimapp.generated.resources.desktops_label
+import seforimapp.seforimapp.generated.resources.favorites_title
 import seforimapp.seforimapp.generated.resources.home
 import seforimapp.seforimapp.generated.resources.menu_new_tab
 import seforimapp.seforimapp.generated.resources.open_tabs
+import seforimapp.seforimapp.generated.resources.recently_closed
 import seforimapp.seforimapp.generated.resources.search_results_tab_title
 
 private const val SCHEME_TAB = "seforim://tab/"
 private const val SCHEME_DESKTOP = "seforim://desktop/"
 private const val SCHEME_NEW_TAB = "seforim://new-tab"
 private const val SCHEME_NEW_DESKTOP = "seforim://new-desktop"
+private const val MAX_DYNAMIC_ITEMS = 4
 
 @Composable
 fun AppJumpList(
     desktopManager: DesktopManager,
     tabsViewModel: TabsViewModel,
+    favoritesStore: FavoritesStore,
     pendingDeepLink: StateFlow<String?>,
     onClearDeepLink: () -> Unit,
 ) {
@@ -44,9 +54,18 @@ fun AppJumpList(
     val desktops by desktopManager.desktops.collectAsState()
     val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
     val tabsState by tabsViewModel.state.collectAsState()
+    val recentlyClosedTabs by tabsViewModel.recentlyClosedTabs.collectAsState()
+    val favoritesRevision by favoritesStore.revision.collectAsState()
+    var favorites by remember { mutableStateOf<List<FavoriteEntry>>(emptyList()) }
+
+    LaunchedEffect(favoritesRevision) {
+        favorites = favoritesStore.query().take(MAX_DYNAMIC_ITEMS)
+    }
 
     val openTabsLabel = stringResource(Res.string.open_tabs)
     val desktopsLabel = stringResource(Res.string.desktops_label)
+    val favoritesLabel = stringResource(Res.string.favorites_title)
+    val recentlyClosedLabel = stringResource(Res.string.recently_closed)
     val homeLabel = stringResource(Res.string.home)
     val searchResultsFormat = stringResource(Res.string.search_results_tab_title, "%1\$s")
     val newTabLabel = stringResource(Res.string.menu_new_tab)
@@ -93,8 +112,8 @@ fun AppJumpList(
         }
     }
 
-    // Rebuild jump list whenever desktops, active desktop, or tabs change
-    LaunchedEffect(desktops, activeDesktopId, tabsState) {
+    // Rebuild the persisted Windows jump list whenever any displayed source changes.
+    LaunchedEffect(desktops, activeDesktopId, tabsState, favorites, recentlyClosedTabs) {
         val tabs = tabsState.tabs
 
         val tabItems =
@@ -118,8 +137,30 @@ fun AppJumpList(
                 )
             }
 
+        val favoriteItems =
+            favorites.map { favorite ->
+                JumpListItem(
+                    title = favorite.title,
+                    arguments = bookShareLink(favorite.bookId, favorite.lineId),
+                    description = favorite.title,
+                )
+            }
+
+        val recentlyClosedItems =
+            recentlyClosedTabs
+                .mapNotNull { tab ->
+                    tab.destination.toShareLink()?.let { link ->
+                        val title = tab.title.ifBlank { homeLabel }
+                        JumpListItem(title = title, arguments = link, description = title)
+                    }
+                }.take(MAX_DYNAMIC_ITEMS)
+
         val categories =
             buildList {
+                if (favoriteItems.isNotEmpty()) add(JumpListCategory(name = favoritesLabel, items = favoriteItems))
+                if (recentlyClosedItems.isNotEmpty()) {
+                    add(JumpListCategory(name = recentlyClosedLabel, items = recentlyClosedItems))
+                }
                 if (tabItems.isNotEmpty()) add(JumpListCategory(name = openTabsLabel, items = tabItems))
                 if (desktopItems.isNotEmpty()) add(JumpListCategory(name = desktopsLabel, items = desktopItems))
             }
@@ -131,9 +172,5 @@ fun AppJumpList(
             )
 
         WindowsJumpListManager.setJumpList(categories = categories, tasks = tasks)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { WindowsJumpListManager.clearJumpList() }
     }
 }

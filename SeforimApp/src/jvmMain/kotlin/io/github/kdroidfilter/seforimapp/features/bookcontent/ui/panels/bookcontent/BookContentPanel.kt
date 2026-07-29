@@ -279,13 +279,15 @@ private fun BookContentPanelContent(
                                             showDiacritics = showDiacritics,
                                             modifier = topPaneCardModifier,
                                         )
-                                    } else TargumPane(
-                                        uiState = uiState,
-                                        onEvent = onEvent,
-                                        lineConnections = connectionsCache,
-                                        showDiacritics = showDiacritics,
-                                        modifier = topPaneCardModifier,
-                                    )
+                                    } else {
+                                        TargumPane(
+                                            uiState = uiState,
+                                            onEvent = onEvent,
+                                            lineConnections = connectionsCache,
+                                            showDiacritics = showDiacritics,
+                                            modifier = topPaneCardModifier,
+                                        )
+                                    }
                                 }
                             } else {
                                 null
@@ -317,7 +319,6 @@ private fun BookContentPanelContent(
                                 )
                             }
                         }
-
 
                         else -> null
                     },

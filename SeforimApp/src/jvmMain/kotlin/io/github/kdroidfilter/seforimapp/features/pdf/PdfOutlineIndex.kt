@@ -33,7 +33,10 @@ internal class PdfOutlineIndex(
             .toMap()
 
     private val entriesByDaf: Map<DafReference, PdfOutlineEntry> =
-        this.entries.mapNotNull { entry -> parseDafReference(entry.title)?.let { it to entry } }.distinctBy { it.first }.toMap()
+        this.entries
+            .mapNotNull { entry -> parseDafReference(entry.title)?.let { it to entry } }
+            .distinctBy { it.first }
+            .toMap()
 
     fun pageFor(references: Iterable<String>): Int? {
         val values = references.filter { it.isNotBlank() }
@@ -107,8 +110,7 @@ private fun parseDafReference(value: String): DafReference? {
     return null
 }
 
-private fun normalizeDafNumber(value: String): String =
-    value.replace(Regex("[\\s׳״'\"]+"), "").trimStart('0').ifEmpty { "0" }
+private fun normalizeDafNumber(value: String): String = value.replace(Regex("[\\s׳״'\"]+"), "").trimStart('0').ifEmpty { "0" }
 
 private val PHRASE_DAF = Regex("(?:^|\\s)דף\\s+([א-תךםןףץ0-9׳״'\"]{1,8})\\s+עמוד\\s+([אב])(?:\\s|$)")
 private val SHORT_PHRASE_DAF =

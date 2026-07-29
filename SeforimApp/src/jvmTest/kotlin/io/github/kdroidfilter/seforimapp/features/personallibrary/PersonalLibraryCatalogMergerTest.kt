@@ -55,7 +55,10 @@ class PersonalLibraryCatalogMergerTest {
 
             assertEquals(
                 listOf(2L, 3L, -1L),
-                merged.rootCategories.single().subcategories.map(CatalogCategory::id),
+                merged.rootCategories
+                    .single()
+                    .subcategories
+                    .map(CatalogCategory::id),
             )
         } finally {
             Files.deleteIfExists(database)
@@ -66,13 +69,12 @@ class PersonalLibraryCatalogMergerTest {
         id: Long,
         title: String,
         children: List<CatalogCategory> = emptyList(),
-    ) =
-        CatalogCategory(
-            id = id,
-            title = title,
-            level = if (id == 1L) 0 else 1,
-            parentId = if (id == 1L) null else 1,
-            books = emptyList(),
-            subcategories = children,
-        )
+    ) = CatalogCategory(
+        id = id,
+        title = title,
+        level = if (id == 1L) 0 else 1,
+        parentId = if (id == 1L) null else 1,
+        books = emptyList(),
+        subcategories = children,
+    )
 }

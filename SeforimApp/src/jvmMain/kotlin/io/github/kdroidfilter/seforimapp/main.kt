@@ -321,6 +321,7 @@ fun main(args: Array<String>) {
                             AppJumpList(
                                 desktopManager = desktopManager,
                                 tabsViewModel = focusedWindow.tabsViewModel,
+                                favoritesStore = appGraph.favoritesStore,
                                 pendingDeepLink = pendingDeepLink,
                                 onClearDeepLink = { pendingDeepLink.value = null },
                             )

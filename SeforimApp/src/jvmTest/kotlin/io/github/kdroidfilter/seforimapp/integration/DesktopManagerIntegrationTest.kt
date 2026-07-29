@@ -50,7 +50,9 @@ class DesktopManagerIntegrationTest {
         assertEquals(desktop.id, window.desktopId.value)
         assertEquals(window.id, desktopManager.focusedWindowId.value)
         val initialDestination =
-            window.tabsViewModel.state.value.tabs.single().destination as TabsDestination.BookContent
+            window.tabsViewModel.state.value.tabs
+                .single()
+                .destination as TabsDestination.BookContent
         assertEquals(-1L, initialDestination.bookId)
     }
 
@@ -66,7 +68,9 @@ class DesktopManagerIntegrationTest {
         assertNotEquals(originalWindow.id, newWindow?.id)
         assertEquals(
             originalWindow.desktopId.value,
-            desktopManager.windows.value.first().desktopId.value,
+            desktopManager.windows.value
+                .first()
+                .desktopId.value,
         )
     }
 
@@ -81,8 +85,14 @@ class DesktopManagerIntegrationTest {
         assertNotNull(detached)
         assertEquals(source.desktopId.value, detached.desktopId.value)
         assertEquals(2, desktopManager.windows.value.size)
-        assertFalse(source.tabsViewModel.state.value.tabs.any { it.destination.tabId == tabId })
-        assertTrue(detached.tabsViewModel.state.value.tabs.any { it.destination.tabId == tabId })
+        assertFalse(
+            source.tabsViewModel.state.value.tabs
+                .any { it.destination.tabId == tabId },
+        )
+        assertTrue(
+            detached.tabsViewModel.state.value.tabs
+                .any { it.destination.tabId == tabId },
+        )
         assertEquals(detached.tabsViewModel, desktopManager.tabsViewModelFor(tabId))
     }
 
@@ -96,8 +106,14 @@ class DesktopManagerIntegrationTest {
 
         desktopManager.moveTabToWindow(tabId, source.id, target.id)
 
-        assertFalse(source.tabsViewModel.state.value.tabs.any { it.destination.tabId == tabId })
-        assertTrue(target.tabsViewModel.state.value.tabs.any { it.destination.tabId == tabId })
+        assertFalse(
+            source.tabsViewModel.state.value.tabs
+                .any { it.destination.tabId == tabId },
+        )
+        assertTrue(
+            target.tabsViewModel.state.value.tabs
+                .any { it.destination.tabId == tabId },
+        )
         assertEquals(target.tabsViewModel, desktopManager.tabsViewModelFor(tabId))
         assertEquals(target.id, desktopManager.focusedWindowId.value)
     }
@@ -119,11 +135,17 @@ class DesktopManagerIntegrationTest {
     @Test
     fun `closing the last tab replaces it with a fresh home tab`() {
         val window = desktopManager.windows.value.single()
-        val closedTabId = window.tabsViewModel.state.value.tabs.single().destination.tabId
+        val closedTabId =
+            window.tabsViewModel.state.value.tabs
+                .single()
+                .destination.tabId
 
         window.tabsViewModel.onEvent(TabsEvents.OnClose(0))
 
-        val replacement = window.tabsViewModel.state.value.tabs.single().destination
+        val replacement =
+            window.tabsViewModel.state.value.tabs
+                .single()
+                .destination
         assertTrue(replacement is TabsDestination.BookContent)
         assertEquals(-1L, replacement.bookId)
         assertNotEquals(closedTabId, replacement.tabId)

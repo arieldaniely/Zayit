@@ -173,6 +173,7 @@ class CommentariesUseCase(
             repository.getFirstSourceTargetLineId(baseLineIds, sourceBookId)
                 ?: repository.getFirstCommentaryTargetLineId(baseLineIds, sourceBookId)
         }.getOrNull()
+
     /**
      * Construit un Pager pour les liens/targum d'une ligne
      */
@@ -438,7 +439,13 @@ class CommentariesUseCase(
         return runSuspendCatching {
             val allBaseIds = lineIds.flatMap { resolveBaseLineIds(it) }.distinct()
             val links = repository.getMentionSummariesForLines(allBaseIds)
-            val currentTitle = stateManager.state.first().navigation.selectedBook?.title?.trim().orEmpty()
+            val currentTitle =
+                stateManager.state
+                    .first()
+                    .navigation.selectedBook
+                    ?.title
+                    ?.trim()
+                    .orEmpty()
             buildSourceMap(links, currentTitle)
         }.getOrElse { emptyMap() }
     }
@@ -1100,7 +1107,13 @@ class CommentariesUseCase(
         runSuspendCatching {
             val baseIds = resolveBaseLineIds(lineId)
             val links = repository.getMentionSummariesForLines(baseIds)
-            val currentTitle = stateManager.state.first().navigation.selectedBook?.title?.trim().orEmpty()
+            val currentTitle =
+                stateManager.state
+                    .first()
+                    .navigation.selectedBook
+                    ?.title
+                    ?.trim()
+                    .orEmpty()
             buildSourceMap(links, currentTitle)
         }.getOrElse { emptyMap() }
 

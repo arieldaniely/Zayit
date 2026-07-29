@@ -25,39 +25,45 @@ class PersonalLibraryService(
 
     fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
 
-    suspend fun requestSynchronize(configuration: PersonalLibraryConfiguration, force: Boolean = false) {
+    suspend fun requestSynchronize(
+        configuration: PersonalLibraryConfiguration,
+        force: Boolean = false,
+    ) {
         if (_state.value.isWorking) return
         _state.update { it.copy(isWorking = true, error = null, success = false, progress = 0f) }
-        val result = runCatching {
-            withContext(Dispatchers.IO) {
-                val (updated, artifacts) = manager.synchronize(configuration, force) { progress ->
-                    _state.update { it.copy(progress = progress) }
+        val result =
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val (updated, artifacts) =
+                        manager.synchronize(configuration, force) { progress ->
+                            _state.update { it.copy(progress = progress) }
+                        }
+                    overlay.attach(artifacts?.databasePath)
+                    val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
+                    search.replacePersonal(
+                        artifacts?.let {
+                            LuceneSearchEngine(
+                                indexDir = it.indexPath,
+                                snippetProvider = RepositorySnippetSourceProvider(repository),
+                                dictionaryPath = dictionary,
+                            )
+                        },
+                    )
+                    CatalogCache.reloadCatalog()
+                    updated
                 }
-                overlay.attach(artifacts?.databasePath)
-                val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
-                search.replacePersonal(
-                    artifacts?.let {
-                        LuceneSearchEngine(
-                            indexDir = it.indexPath,
-                            snippetProvider = RepositorySnippetSourceProvider(repository),
-                            dictionaryPath = dictionary,
-                        )
-                    },
-                )
-                CatalogCache.reloadCatalog()
-                updated
             }
-        }
-        result.onSuccess { updated ->
-            _state.update { it.copy(configuration = updated, isWorking = false, success = true, progress = 1f) }
-        }.onFailure { error ->
-            _state.update {
-                it.copy(
-                    isWorking = false,
-                    error = error.message ?: error::class.simpleName,
-                    progress = 0f,
-                )
+        result
+            .onSuccess { updated ->
+                _state.update { it.copy(configuration = updated, isWorking = false, success = true, progress = 1f) }
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        isWorking = false,
+                        error = error.message ?: error::class.simpleName,
+                        progress = 0f,
+                    )
+                }
             }
-        }
     }
 }

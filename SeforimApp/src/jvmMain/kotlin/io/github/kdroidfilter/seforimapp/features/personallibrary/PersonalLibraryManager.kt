@@ -35,21 +35,27 @@ class PersonalLibraryManager(
         val generation = if (force) "$fingerprint-${System.currentTimeMillis()}" else fingerprint
         val (artifacts, summaries) = importer.build(enabled, generation, onProgress)
         val now = System.currentTimeMillis()
-        val folders = requested.folders.map { folder ->
-            if (!folder.enabled) folder else summaries[folder.id]?.let { summary ->
-                folder.copy(
-                    lastBookCount = summary.books,
-                    lastLinkCount = summary.links,
-                    lastImportedAt = now,
-                    lastError = null,
-                )
-            } ?: folder.copy(lastImportedAt = folder.lastImportedAt ?: now, lastError = null)
-        }
-        val synchronized = requested.copy(
-            folders = folders,
-            activeGeneration = artifacts.generation,
-            synchronizedFingerprint = fingerprint,
-        )
+        val folders =
+            requested.folders.map { folder ->
+                if (!folder.enabled) {
+                    folder
+                } else {
+                    summaries[folder.id]?.let { summary ->
+                        folder.copy(
+                            lastBookCount = summary.books,
+                            lastLinkCount = summary.links,
+                            lastImportedAt = now,
+                            lastError = null,
+                        )
+                    } ?: folder.copy(lastImportedAt = folder.lastImportedAt ?: now, lastError = null)
+                }
+            }
+        val synchronized =
+            requested.copy(
+                folders = folders,
+                activeGeneration = artifacts.generation,
+                synchronizedFingerprint = fingerprint,
+            )
         store.save(synchronized)
         PersonalLibraryRuntime.activeDatabase = artifacts.databasePath
         return synchronized to artifacts
@@ -63,12 +69,13 @@ class PersonalLibraryManager(
         return PersonalLibraryArtifacts(generation, root.resolve("personal.db"), root.resolve("personal.lucene"))
     }
 
-    private fun PersonalLibraryArtifacts.isComplete(): Boolean =
-        Files.isRegularFile(databasePath) && Files.isDirectory(indexPath)
+    private fun PersonalLibraryArtifacts.isComplete(): Boolean = Files.isRegularFile(databasePath) && Files.isDirectory(indexPath)
 }
 
 object PersonalLibraryRuntime {
     @Volatile var overlay: PersonalLibraryOverlay? = null
+
     @Volatile var startupError: String? = null
+
     @Volatile var activeDatabase: Path? = null
 }

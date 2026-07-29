@@ -76,6 +76,7 @@
     <string name="desktop_default_name">מרחב %1$s</string>
     <string name="desktops_label">מרחבים</string>
     <string name="open_tabs">לשוניות פתוחות</string>
+    <string name="recently_closed">נסגרו לאחרונה</string>
     <string name="desktop_new">מרחב חדש</string>
     <string name="desktop_rename">שנה שם</string>
     <string name="desktop_delete">מחק</string>
@@ -511,6 +512,8 @@
     <string name="search_no_results">לא נמצאו תוצאות</string>
     <string name="search_searching">מחפש...</string>
     <string name="search_scope">בתוך:</string>
+    <string name="search_scope_catalog">קטגוריות וספרים</string>
+    <string name="search_scope_sections">קטעים בספר</string>
     <string name="breadcrumb_separator"> &gt; </string>
     <string name="chevron_icon_description">חץ</string>
     <string name="search_icon_description">חיפוש</string>

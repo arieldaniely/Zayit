@@ -1,7 +1,5 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,14 +9,8 @@ import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupPositionProvider
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.IconActionButton
@@ -30,7 +22,6 @@ import org.jetbrains.jewel.ui.component.styling.IconButtonStyle
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.theme.iconButtonStyle
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TitleBarActionButton(
     key: IconKey,
@@ -86,28 +77,6 @@ fun TitleBarActionButton(
             Modifier.width(40.dp).fillMaxHeight()
         }
 
-    val belowAnchorPlacement =
-        remember {
-            object : TooltipPlacement {
-                @Composable
-                override fun positionProvider(cursorPosition: Offset): PopupPositionProvider =
-                    object : PopupPositionProvider {
-                        override fun calculatePosition(
-                            anchorBounds: IntRect,
-                            windowSize: IntSize,
-                            layoutDirection: LayoutDirection,
-                            popupContentSize: IntSize,
-                        ): IntOffset =
-                            IntOffset(
-                                x =
-                                    (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
-                                        .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
-                                y = anchorBounds.bottom,
-                            )
-                    }
-            }
-        }
-
     Tooltip(
         tooltip = {
             if (shortcutHint.isNullOrBlank()) {
@@ -119,7 +88,6 @@ fun TitleBarActionButton(
                 }
             }
         },
-        tooltipPlacement = belowAnchorPlacement,
     ) {
         IconActionButton(
             key = key,

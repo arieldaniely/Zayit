@@ -21,12 +21,13 @@ class PersonalLibraryImporterTest {
             books.resolve("ספר בדיקה.txt").writeText("שורה ראשונה\nשורה שנייה")
 
             val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
-            val folder = PersonalBookFolder(
-                id = "plain-folder",
-                path = books.toString(),
-                displayName = "הספרים שלי",
-                placement = PersonalFolderPlacement.PERSONAL_BOOKS,
-            )
+            val folder =
+                PersonalBookFolder(
+                    id = "plain-folder",
+                    path = books.toString(),
+                    displayName = "הספרים שלי",
+                    placement = PersonalFolderPlacement.PERSONAL_BOOKS,
+                )
 
             val (artifacts, summaries) = importer.build(listOf(folder), "test-generation")
 
@@ -39,18 +40,20 @@ class PersonalLibraryImporterTest {
                         assertEquals("ספר בדיקה", rows.getString("title"))
                         assertEquals(2, rows.getInt("totalLines"))
                     }
-                    statement.executeQuery(
-                        "SELECT value FROM schema_meta WHERE key='personal_target_book_hints_v2'",
-                    ).use { rows ->
-                        assertTrue(rows.next())
-                        assertEquals("1", rows.getString(1))
-                    }
-                    statement.executeQuery(
-                        "SELECT COUNT(*) FROM personal_link_target_book",
-                    ).use { rows ->
-                        assertTrue(rows.next())
-                        assertEquals(0, rows.getInt(1))
-                    }
+                    statement
+                        .executeQuery(
+                            "SELECT value FROM schema_meta WHERE key='personal_target_book_hints_v2'",
+                        ).use { rows ->
+                            assertTrue(rows.next())
+                            assertEquals("1", rows.getString(1))
+                        }
+                    statement
+                        .executeQuery(
+                            "SELECT COUNT(*) FROM personal_link_target_book",
+                        ).use { rows ->
+                            assertTrue(rows.next())
+                            assertEquals(0, rows.getInt(1))
+                        }
                 }
             }
         } finally {
@@ -69,12 +72,13 @@ class PersonalLibraryImporterTest {
             books.resolve("ספר בדיקה.txt").writeText("שורה ראשונה")
 
             val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
-            val folder = PersonalBookFolder(
-                id = "progress-folder",
-                path = books.toString(),
-                displayName = "הספרים שלי",
-                placement = PersonalFolderPlacement.PERSONAL_BOOKS,
-            )
+            val folder =
+                PersonalBookFolder(
+                    id = "progress-folder",
+                    path = books.toString(),
+                    displayName = "הספרים שלי",
+                    placement = PersonalFolderPlacement.PERSONAL_BOOKS,
+                )
             val progressValues = mutableListOf<Float>()
 
             importer.build(listOf(folder), "test-progress") { progress ->

@@ -8,6 +8,7 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
 import java.io.File
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Path
 
 /**
@@ -56,7 +57,10 @@ object DbDeltaRecoveryBootstrap {
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() && !it.endsWith("lexical.db", ignoreCase = true) }
         if (settings != null) return settings
-        return runCatching { File(FileKit.databasesDir.path, "seforim.db").absolutePath }
+        return runCatching { File(portableDatabasesDirPath(), "seforim.db").absolutePath }
             .getOrNull()
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

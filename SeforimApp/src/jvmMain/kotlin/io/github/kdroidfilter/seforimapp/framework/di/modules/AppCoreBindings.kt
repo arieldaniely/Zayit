@@ -24,6 +24,8 @@ import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
+import io.github.kdroidfilter.seforimapp.framework.portable.PortableSettings
 import io.github.kdroidfilter.seforimapp.framework.search.AcronymFrequencyCache
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourceProvider
@@ -60,7 +62,7 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSettings(): Settings = Settings()
+    fun provideSettings(): Settings = if (PortablePaths.isPortable) PortableSettings() else Settings()
 
     @Provides
     @SingleIn(AppScope::class)

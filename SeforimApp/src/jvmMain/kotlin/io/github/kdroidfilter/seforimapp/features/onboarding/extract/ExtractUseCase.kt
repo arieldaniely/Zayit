@@ -14,6 +14,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.InputStream
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.io.SequenceInputStream
 
 class ExtractUseCase {
@@ -22,8 +23,7 @@ class ExtractUseCase {
         onProgress: (Float) -> Unit,
     ): String =
         withContext(Dispatchers.Default) {
-            val dbDirV = FileKit.databasesDir
-            val dbDir = File(dbDirV.path).apply { mkdirs() }
+            val dbDir = File(portableDatabasesDirPath()).apply { mkdirs() }
             val source = File(sourcePath)
             require(source.exists()) { "Selected file not found" }
 
@@ -308,3 +308,6 @@ class ExtractUseCase {
         }
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

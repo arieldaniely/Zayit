@@ -23,6 +23,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.util.Locale
 
 @ContributesIntoMap(AppScope::class)
@@ -100,7 +101,7 @@ class DataSettingsViewModel : ViewModel() {
      */
     fun resetApp() {
         viewModelScope.launch(Dispatchers.IO) {
-            val dbDir = File(FileKit.databasesDir.path)
+            val dbDir = File(portableDatabasesDirPath())
             // Read the custom DB path before clearing settings (clearAll() drops it).
             val customDbPath = runCatching { AppSettings.getDatabasePath() }.getOrNull()
 
@@ -142,3 +143,6 @@ class DataSettingsViewModel : ViewModel() {
         }
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

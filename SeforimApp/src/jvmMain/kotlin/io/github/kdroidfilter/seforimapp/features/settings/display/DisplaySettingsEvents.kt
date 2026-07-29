@@ -5,6 +5,10 @@ sealed interface DisplaySettingsEvents {
         val value: Boolean,
     ) : DisplaySettingsEvents
 
+    data class SetShowTempleCountdown(
+        val value: Boolean,
+    ) : DisplaySettingsEvents
+
     data class SetShowHomeWallpaper(
         val value: Boolean,
     ) : DisplaySettingsEvents

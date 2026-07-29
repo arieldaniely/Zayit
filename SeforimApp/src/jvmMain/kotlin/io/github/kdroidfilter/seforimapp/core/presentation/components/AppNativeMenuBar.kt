@@ -44,6 +44,7 @@ fun AppNativeMenuBar(
     val themeStyle by mainAppState.themeStyle.collectAsState()
     val accentColor by mainAppState.accentColor.collectAsState()
     val showZmanim by AppSettings.showZmanimWidgetsFlow.collectAsState()
+    val showTempleCountdown by AppSettings.showTempleCountdownFlow.collectAsState()
     val compactMode by AppSettings.compactModeFlow.collectAsState()
     val persistSession by AppSettings.persistSessionFlow.collectAsState()
     val closeTreeOnNewBook by AppSettings.closeBookTreeOnNewBookSelectedFlow.collectAsState()
@@ -130,6 +131,7 @@ fun AppNativeMenuBar(
     val themeIslands = stringResource(Res.string.settings_theme_style_islands)
     val menuAppearance = stringResource(Res.string.menu_appearance)
     val showZmanimLabel = stringResource(Res.string.settings_show_zmanim_widgets)
+    val showTempleCountdownLabel = stringResource(Res.string.settings_show_temple_countdown)
     val compactModeLabel = stringResource(Res.string.settings_compact_mode)
     val menuZoomIn = stringResource(Res.string.menu_zoom_in)
     val menuZoomOut = stringResource(Res.string.menu_zoom_out)
@@ -272,6 +274,12 @@ fun AppNativeMenuBar(
                 text = showZmanimLabel,
                 checked = showZmanim,
                 onCheckedChange = { AppSettings.setShowZmanimWidgetsEnabled(it) },
+            )
+
+            CheckboxItem(
+                text = showTempleCountdownLabel,
+                checked = showTempleCountdown,
+                onCheckedChange = { AppSettings.setShowTempleCountdownEnabled(it) },
             )
 
             CheckboxItem(

@@ -88,6 +88,7 @@ object AppSettings {
 
     // Zmanim widgets visibility
     private const val KEY_SHOW_ZMANIM_WIDGETS = "show_zmanim_widgets"
+    private const val KEY_SHOW_TEMPLE_COUNTDOWN = "show_temple_countdown"
 
     // Homepage wallpaper visibility
     private const val KEY_SHOW_HOME_WALLPAPER = "show_home_wallpaper"
@@ -117,6 +118,8 @@ object AppSettings {
         _targumFontCodeFlow.value = getTargumFontCode()
         _sourceFontCodeFlow.value = getSourceFontCode()
         _linkLoadLevelFlow.value = getLinkLoadLevel()
+        _showZmanimWidgetsFlow.value = isShowZmanimWidgetsEnabled()
+        _showTempleCountdownFlow.value = isShowTempleCountdownEnabled()
         // User profile reactive values
         _userFirstNameFlow.value = getUserFirstName() ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""
@@ -154,6 +157,9 @@ object AppSettings {
     // StateFlow for zmanim widgets visibility
     private val _showZmanimWidgetsFlow = MutableStateFlow(isShowZmanimWidgetsEnabled())
     val showZmanimWidgetsFlow: StateFlow<Boolean> = _showZmanimWidgetsFlow.asStateFlow()
+
+    private val _showTempleCountdownFlow = MutableStateFlow(isShowTempleCountdownEnabled())
+    val showTempleCountdownFlow: StateFlow<Boolean> = _showTempleCountdownFlow.asStateFlow()
 
     // StateFlow for homepage wallpaper visibility
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
@@ -377,6 +383,14 @@ object AppSettings {
         _showZmanimWidgetsFlow.value = enabled
     }
 
+    // Temple destruction countdown visibility; inherit the legacy combined setting on first use.
+    fun isShowTempleCountdownEnabled(): Boolean = settings[KEY_SHOW_TEMPLE_COUNTDOWN, isShowZmanimWidgetsEnabled()]
+
+    fun setShowTempleCountdownEnabled(enabled: Boolean) {
+        settings[KEY_SHOW_TEMPLE_COUNTDOWN] = enabled
+        _showTempleCountdownFlow.value = enabled
+    }
+
     // Homepage wallpaper visibility
     fun isShowHomeWallpaperEnabled(): Boolean = settings[KEY_SHOW_HOME_WALLPAPER, true]
 
@@ -576,6 +590,7 @@ object AppSettings {
         _databasePathFlow.value = null
         _persistSessionFlow.value = true
         _showZmanimWidgetsFlow.value = true
+        _showTempleCountdownFlow.value = true
         _showHomeWallpaperFlow.value = true
         _compactModeFlow.value = false
         _linkLoadLevelFlow.value = DEFAULT_LINK_LOAD_LEVEL

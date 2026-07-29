@@ -375,6 +375,8 @@
     <string name="settings_keep_screen_awake_description">כאשר אפשרות זו מופעלת, המסך לא ייכבה ולא ייכנס למצב שינה כל עוד ספר פתוח בלשונית הנוכחית והחלון פעיל.</string>
     <string name="settings_show_zmanim_widgets">הצג זמנים הלכתיים בדף הבית</string>
     <string name="settings_show_zmanim_widgets_description">כאשר אפשרות זו מופעלת, יוצגו בדף הבית וידג'טים עם זמני היום ההלכתיים (נץ החמה, שקיעה, זמני תפילה וכו').</string>
+    <string name="settings_show_temple_countdown">&#x5D4;&#x5E6;&#x5D2; &#x5D6;&#x5DE;&#x5DF; &#x5E9;&#x5D7;&#x5DC;&#x5E3; &#x5DE;&#x5D4;&#x5D7;&#x5D5;&#x5E8;&#x5D1;&#x5DF; &#x5D1;&#x5D3;&#x5E3; &#x5D4;&#x5D1;&#x5D9;&#x5EA;</string>
+    <string name="settings_show_temple_countdown_description">&#x5DB;&#x5D0;&#x5E9;&#x5E8; &#x5D0;&#x5E4;&#x5E9;&#x5E8;&#x5D5;&#x5EA; &#x5D6;&#x5D5; &#x5DE;&#x5D5;&#x5E4;&#x5E2;&#x5DC;&#x5EA;, &#x5D9;&#x5D5;&#x5E6;&#x5D2; &#x5D1;&#x5D3;&#x5E3; &#x5D4;&#x5D1;&#x5D9;&#x5EA; &#x5D4;&#x5D5;&#x5D5;&#x5D9;&#x5D3;&#x5D2;&#x5F3;&#x5D8; &#x5D4;&#x5DE;&#x5E6;&#x5D9;&#x5D2; &#x5D0;&#x5EA; &#x5D4;&#x5D6;&#x5DE;&#x5DF; &#x5E9;&#x5D7;&#x5DC;&#x5E3; &#x5DE;&#x5D0;&#x5D6; &#x5D7;&#x5D5;&#x5E8;&#x5D1;&#x5DF; &#x5D1;&#x5D9;&#x5EA; &#x5D4;&#x5DE;&#x5E7;&#x5D3;&#x5E9; &#x5D4;&#x5E9;&#x5E0;&#x5D9;.</string>
     <string name="settings_show_home_wallpaper">הצג תמונת רקע בדף הבית</string>
     <string name="settings_show_home_wallpaper_description">כאשר אפשרות זו מופעלת, יוצג נוף של כרם זיתים כרקע דקורטיבי בדף הבית.</string>
     <string name="settings_compact_mode">מצב קומפקטי לסרגל הצדדי</string>

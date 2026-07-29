@@ -66,6 +66,8 @@ import seforimapp.seforimapp.generated.resources.settings_show_home_wallpaper
 import seforimapp.seforimapp.generated.resources.settings_show_home_wallpaper_description
 import seforimapp.seforimapp.generated.resources.settings_show_zmanim_widgets
 import seforimapp.seforimapp.generated.resources.settings_show_zmanim_widgets_description
+import seforimapp.seforimapp.generated.resources.settings_show_temple_countdown
+import seforimapp.seforimapp.generated.resources.settings_show_temple_countdown_description
 import seforimapp.seforimapp.generated.resources.settings_theme_style_classic
 import seforimapp.seforimapp.generated.resources.settings_theme_style_islands
 import seforimapp.seforimapp.generated.resources.settings_theme_style_label
@@ -117,6 +119,13 @@ private fun DisplaySettingsView(
                 description = Res.string.settings_show_zmanim_widgets_description,
                 checked = state.showZmanimWidgets,
                 onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowZmanimWidgets(it)) },
+            )
+
+            SettingCard(
+                title = Res.string.settings_show_temple_countdown,
+                description = Res.string.settings_show_temple_countdown_description,
+                checked = state.showTempleCountdown,
+                onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowTempleCountdown(it)) },
             )
 
             SettingCard(

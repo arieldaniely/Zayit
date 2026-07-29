@@ -253,6 +253,7 @@ private fun HomeBody(
 ) {
     // Whether to show zmanim widgets
     val showZmanimWidgets by AppSettings.showZmanimWidgetsFlow.collectAsState()
+    val showTempleCountdown by AppSettings.showTempleCountdownFlow.collectAsState()
 
     val celestialWidgetsState =
         if (homeCelestialWidgetsState != null) {
@@ -610,6 +611,8 @@ private fun HomeBody(
                             )
                         }
                     }
+                }
+                if (showTempleCountdown) {
                     item {
                         Box(
                             modifier =

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +28,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +52,7 @@ import org.jetbrains.jewel.ui.component.OutlinedSplitButton
 import org.jetbrains.jewel.ui.component.SegmentedControl
 import org.jetbrains.jewel.ui.component.SegmentedControlButtonData
 import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.styling.MenuStyle
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.theme.menuStyle
@@ -55,6 +62,9 @@ import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_mode_gregori
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_mode_hebrew
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_next_month
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_prev_month
+import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_search_date
+import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_search_date_invalid
+import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_search_date_placeholder
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -91,6 +101,8 @@ fun HebrewCalendarPicker(
         mutableStateOf(hebrewYearMonthFromLocalDate(initialDate))
     }
     var selectedDate by remember(initialDate) { mutableStateOf(initialDate) }
+    val dateSearchState = remember { TextFieldState() }
+    var dateSearchError by remember { mutableStateOf(false) }
 
     val hebrewDateFormatter =
         remember {
@@ -129,6 +141,17 @@ fun HebrewCalendarPicker(
             }
         }
 
+    fun submitDateSearch() {
+        val parsedDate = parseFlexibleDate(dateSearchState.text.toString(), calendarMode)
+        dateSearchError = parsedDate == null
+        if (parsedDate != null) {
+            selectedDate = parsedDate
+            displayedMonth = YearMonth.from(parsedDate)
+            displayedHebrewMonth = hebrewYearMonthFromLocalDate(parsedDate)
+            onDateSelect(parsedDate)
+        }
+    }
+
     Column(
         modifier = modifier.width(CALENDAR_MENU_WIDTH),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -142,6 +165,7 @@ fun HebrewCalendarPicker(
                         onSelect = {
                             calendarMode = CalendarMode.HEBREW
                             displayedHebrewMonth = hebrewYearMonthFromLocalDate(selectedDate)
+                            dateSearchError = false
                         },
                     ),
                     SegmentedControlButtonData(
@@ -150,11 +174,46 @@ fun HebrewCalendarPicker(
                         onSelect = {
                             calendarMode = CalendarMode.GREGORIAN
                             displayedMonth = YearMonth.from(selectedDate)
+                            dateSearchError = false
                         },
                     ),
                 ),
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
+
+        TextField(
+            state = dateSearchState,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .onPreviewKeyEvent { event ->
+                        if (
+                            event.type == KeyEventType.KeyUp &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            submitDateSearch()
+                            true
+                        } else {
+                            false
+                        }
+                    },
+            placeholder = { Text(stringResource(Res.string.hebrewcalendar_search_date_placeholder)) },
+            leadingIcon = {
+                IconButton(onClick = ::submitDateSearch) {
+                    Icon(
+                        key = AllIconsKeys.Actions.Find,
+                        contentDescription = stringResource(Res.string.hebrewcalendar_search_date),
+                    )
+                }
+            },
+        )
+        if (dateSearchError) {
+            Text(
+                text = stringResource(Res.string.hebrewcalendar_search_date_invalid),
+                color = JewelTheme.globalColors.text.info,
+                fontSize = 12.sp,
+            )
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),

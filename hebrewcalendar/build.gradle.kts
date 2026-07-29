@@ -26,5 +26,9 @@ kotlin {
             }
             implementation(libs.zmanim)
         }
+
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+        }
     }
 }

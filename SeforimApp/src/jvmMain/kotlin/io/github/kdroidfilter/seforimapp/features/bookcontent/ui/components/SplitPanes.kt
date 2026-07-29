@@ -38,6 +38,7 @@ private enum class ResizeAxis {
 @Composable
 private fun ResizeGlow(
     axis: ResizeAxis,
+    enabled: Boolean,
     highlighted: Boolean,
     dragging: Boolean,
     pointerPosition: Float,
@@ -48,6 +49,7 @@ private fun ResizeGlow(
         animateFloatAsState(
             targetValue =
                 when {
+                    !enabled -> 0f
                     dragging -> 1f
                     highlighted -> 0.72f
                     else -> 0f
@@ -56,7 +58,7 @@ private fun ResizeGlow(
         )
 
     Canvas(modifier) {
-        if (intensity <= 0.01f) return@Canvas
+        if (!enabled || intensity <= 0.01f) return@Canvas
 
         val horizontalMovement = axis == ResizeAxis.Horizontal
         val primarySize = if (horizontalMovement) size.height else size.width
@@ -214,6 +216,7 @@ fun EnhancedHorizontalSplitPane(
                 handle {
                     ResizeGlow(
                         axis = ResizeAxis.Horizontal,
+                        enabled = isIslands,
                         highlighted = splitterHighlighted,
                         dragging = splitterDragging,
                         pointerPosition = pointerPosition,
@@ -316,6 +319,7 @@ fun EnhancedVerticalSplitPane(
                 handle {
                     ResizeGlow(
                         axis = ResizeAxis.Vertical,
+                        enabled = isIslands,
                         highlighted = splitterHighlighted,
                         dragging = splitterDragging,
                         pointerPosition = pointerPosition,

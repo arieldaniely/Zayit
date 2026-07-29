@@ -44,6 +44,7 @@ class TabsViewModel(
         val shouldRecord = when (dest) {
             is TabsDestination.Home -> false
             is TabsDestination.History -> false
+            is TabsDestination.Favorites -> false
             is TabsDestination.Search -> dest.searchQuery.isNotBlank()
             is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
             is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
@@ -234,6 +235,7 @@ class TabsViewModel(
                 is TabsDestination.BookContent -> TabsDestination.BookContent(destination.bookId, destination.tabId, destination.lineId)
                 is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
                 is TabsDestination.History -> TabsDestination.History(destination.tabId)
+                is TabsDestination.Favorites -> TabsDestination.Favorites(destination.tabId)
             }
 
         val newTab =
@@ -366,6 +368,7 @@ class TabsViewModel(
                         TabsDestination.History(
                             tabId = tab.destination.tabId,
                         )
+                    is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = tab.destination.tabId)
                 }
 
             val isEditionSwitchForSameBook =
@@ -434,6 +437,7 @@ class TabsViewModel(
                         TabsDestination.History(
                             tabId = newTabId,
                         )
+                    is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = newTabId)
                 }
 
             val updated =
@@ -542,6 +546,7 @@ class TabsViewModel(
         when (destination) {
             is TabsDestination.Home -> TabType.SEARCH
             is TabsDestination.History -> TabType.HISTORY
+            is TabsDestination.Favorites -> TabType.FAVORITES
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
@@ -550,7 +555,8 @@ class TabsViewModel(
     private fun getTabTitle(destination: TabsDestination): String =
         when (destination) {
             is TabsDestination.Home -> ""
-            is TabsDestination.History -> "\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8\u05D9\u05D4"
+            is TabsDestination.History -> ""
+            is TabsDestination.Favorites -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""

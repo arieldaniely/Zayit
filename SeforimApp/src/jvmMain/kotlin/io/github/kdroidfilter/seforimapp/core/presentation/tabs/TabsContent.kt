@@ -43,7 +43,6 @@ import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
-import io.github.kdroidfilter.seforimapp.features.history.HistoryView
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
@@ -53,6 +52,8 @@ import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_STEP
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.favorites.FavoritesTabContent
+import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
@@ -82,12 +83,13 @@ private fun TabsDestination.typeKey(): String =
         is TabsDestination.Search -> "search"
         is TabsDestination.BookContent -> "book"
         is TabsDestination.PdfContent -> "pdf"
+        is TabsDestination.Favorites -> "favorites"
     }
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
 
 private fun saveableKeysFor(tabId: String): List<String> =
-    listOf("$tabId:home", "$tabId:history", "$tabId:search", "$tabId:book", "$tabId:pdf")
+    listOf("$tabId:home", "$tabId:history", "$tabId:favorites", "$tabId:search", "$tabId:book", "$tabId:pdf")
 
 /**
  * Simplified tab content renderer without Compose Navigation.
@@ -332,7 +334,11 @@ fun TabsContent() {
                                 }
 
                                 is TabsDestination.History -> {
-                                    HistoryView()
+                                    HistoryTabContent(tabId = tabId)
+                                }
+
+                                is TabsDestination.Favorites -> {
+                                    FavoritesTabContent(tabId = tabId)
                                 }
                             }
                         }

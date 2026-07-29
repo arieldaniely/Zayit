@@ -381,16 +381,16 @@ class TabsViewModel(
         when (destination) {
             is TabsDestination.Home -> TabType.SEARCH
             is TabsDestination.Search -> TabType.SEARCH
-            is TabsDestination.BookContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
-            is TabsDestination.PdfContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
+            is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
+            is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
         }
 
     private fun getTabTitle(destination: TabsDestination): String =
         when (destination) {
             is TabsDestination.Home -> ""
             is TabsDestination.Search -> destination.searchQuery
-            is TabsDestination.BookContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
-            is TabsDestination.PdfContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
+            is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
+            is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
         }
 
     private fun updateTabTitle(
@@ -411,3 +411,6 @@ class TabsViewModel(
         }
     }
 }
+
+/** Zero and -1 are legacy empty sentinels; personal-library IDs are valid negative values. */
+private fun Long.isDatabaseId(): Boolean = this != 0L && this != -1L

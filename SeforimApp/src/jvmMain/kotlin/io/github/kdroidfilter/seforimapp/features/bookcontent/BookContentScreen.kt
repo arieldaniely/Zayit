@@ -378,7 +378,7 @@ private fun resolveWholeLineNoteDraft(
     lineId: Long,
     lines: List<io.github.kdroidfilter.seforimlibrary.core.models.Line>,
 ): NoteDraftAnchor? {
-    if (lineId <= 0) return null
+    if (lineId == 0L || lineId == -1L) return null
     val line = lines.firstOrNull { it.id == lineId } ?: return null
     val plain = buildAnnotatedFromHtml(line.content, baseTextSize = 16f, boldScale = 1f).text
     if (plain.isEmpty()) return null
@@ -612,7 +612,7 @@ fun BookContentScreen(
                                                         selectionContext.visibleLines.value.lines,
                                                     )?.first?.id
                                                 } else {
-                                                    selectionContext.currentLineId.value.takeIf { it > 0 }
+                                                    selectionContext.currentLineId.value.takeIf { it != 0L && it != -1L }
                                                 }
                                             val link = bookShareLink(bookForCopy.id, lineId)
                                             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
@@ -649,10 +649,11 @@ fun BookContentScreen(
                                 )
                                 // Add note (main pane only): anchors a note to the selected text,
                                 // or to the whole right-clicked line when nothing is selected.
-                                if (bookId > 0 &&
+                                if (bookId != 0L && bookId != -1L &&
                                     selectionContext.activeCommentaryColumn.value
                                         .isEmpty() &&
-                                    (selectedText.isNotBlank() || selectionContext.currentLineId.value > 0)
+                                    (selectedText.isNotBlank() ||
+                                        selectionContext.currentLineId.value.let { it != 0L && it != -1L })
                                 ) {
                                     add(
                                         ContextMenuItemOptionWithKeybinding(
@@ -676,7 +677,7 @@ fun BookContentScreen(
                                 }
                                 // Highlight color picker (last item): persists a position-based
                                 // highlight for the selected text on its resolved line.
-                                if (selectedText.isNotBlank() && bookId > 0) {
+                                if (selectedText.isNotBlank() && bookId != 0L && bookId != -1L) {
                                     add(
                                         ContextMenuHighlightColorPicker(
                                             colors = HighlightColors.allWithClear,

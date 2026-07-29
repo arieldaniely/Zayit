@@ -622,12 +622,12 @@ class SearchResultViewModel(
                 anchorId = persisted.anchorId,
                 anchorIndex = persisted.anchorIndex,
                 textSize = AppSettings.getTextSize(),
-                scopeTocId = persisted.filterTocId.takeIf { it > 0 },
+                scopeTocId = persisted.filterTocId.takeIf { it != 0L },
             )
 
-        val filterCategoryId = persisted.filterCategoryId.takeIf { it > 0 }
-        val filterBookId = persisted.filterBookId.takeIf { it > 0 }
-        val filterTocId = persisted.filterTocId.takeIf { it > 0 }
+        val filterCategoryId = persisted.filterCategoryId.takeIf { it != 0L }
+        val filterBookId = persisted.filterBookId.takeIf { it != 0L }
+        val filterTocId = persisted.filterTocId.takeIf { it != 0L }
 
         // Restore scope book from either book filter or TOC filter.
         when {
@@ -680,9 +680,9 @@ class SearchResultViewModel(
                     val q = initialQuery
                     val baseBookOnly = !_uiState.value.globalExtended
                     // Re-open session with same filters for lazy loading continuation
-                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-                    val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-                    val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+                    val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+                    val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
                     // Collect line IDs for TOC filter if applicable
                     val lineIds: Set<Long>? =
                         if (fetchTocId != null && fetchBookId != null) {
@@ -700,7 +700,7 @@ class SearchResultViewModel(
                         }
                     val finalBookIds: List<Long>? =
                         when {
-                            fetchBookId != null && fetchBookId > 0 -> listOf(fetchBookId)
+                            fetchBookId != null -> listOf(fetchBookId)
                             !allowedBooks.isNullOrEmpty() -> allowedBooks
                             else -> null
                         }
@@ -752,9 +752,9 @@ class SearchResultViewModel(
                 facetsComputed = true
             }
             // Reconstruct currentKey from fetch scope.
-            val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-            val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-            val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+            val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+            val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+            val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
             currentKey =
                 SearchParamsKey(
                     query = _uiState.value.query,
@@ -866,9 +866,9 @@ class SearchResultViewModel(
                 }
                 try {
                     val persisted = persistedSearchState()
-                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-                    val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-                    val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+                    val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+                    val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
                     // Apply persisted/initial global-extended flag to UI state so toolbar reflects it
                     val extended = persisted.globalExtended
                     if (_uiState.value.globalExtended != extended) {
@@ -890,7 +890,8 @@ class SearchResultViewModel(
                         }
                     val persistedScopeBook =
                         when {
-                            persisted.filterBookId > 0 -> repository.getBookCore(persisted.filterBookId)
+                            persisted.filterBookId != 0L && persisted.filterBookId != -1L ->
+                                repository.getBookCore(persisted.filterBookId)
                             else -> null
                         }
                     val resolvedScopeBook =
@@ -1591,7 +1592,7 @@ class SearchResultViewModel(
                             tocBookCache.getOrPut(tocId) {
                                 runSuspendCatching { repository.getTocEntry(tocId)?.bookId }.getOrNull() ?: -1L
                             }
-                        if (bookId > 0) {
+                        if (bookId != 0L && bookId != -1L) {
                             lineIdsToFilter += collectLineIdsForTocSubtree(tocId, bookId)
                         }
                     }
@@ -1701,7 +1702,7 @@ class SearchResultViewModel(
             if (hasAnyChecked) return@launch
             val persistedFilterBook = persistedSearchState().filterBookId
             val hasExplicitToc = _uiState.value.scopeTocId != null
-            if (persistedFilterBook <= 0L && !hasExplicitToc) {
+            if (persistedFilterBook == 0L && !hasExplicitToc) {
                 _uiState.value = _uiState.value.copy(scopeBook = null)
             }
         }

@@ -30,7 +30,7 @@ fun bookShareLink(
 ): String =
     buildString {
         append(PREFIX).append(HOST_BOOK).append('/').append(bookId)
-        if (lineId != null && lineId > 0) append('/').append(SEGMENT_LINE).append('/').append(lineId)
+        if (lineId != null && lineId != 0L && lineId != -1L) append('/').append(SEGMENT_LINE).append('/').append(lineId)
     }
 
 /** Builds a shareable link to a search query. */
@@ -42,8 +42,8 @@ fun searchShareLink(query: String): String = PREFIX + HOST_SEARCH + "/" + URLEnc
  */
 fun TabsDestination.toShareLink(): String? =
     when (this) {
-        is TabsDestination.BookContent -> if (bookId > 0) bookShareLink(bookId, lineId) else null
-        is TabsDestination.PdfContent -> if (bookId > 0) bookShareLink(bookId, lineId) else null
+        is TabsDestination.BookContent -> if (bookId != 0L && bookId != -1L) bookShareLink(bookId, lineId) else null
+        is TabsDestination.PdfContent -> if (bookId != 0L && bookId != -1L) bookShareLink(bookId, lineId) else null
         is TabsDestination.Search -> searchShareLink(searchQuery)
         is TabsDestination.Home -> null
     }

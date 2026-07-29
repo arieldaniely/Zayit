@@ -53,7 +53,7 @@ class BookContentStateManager(
                 TocState(
                     expandedEntries = persisted.expandedTocEntryIds,
                     children = emptyMap(),
-                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it > 0 },
+                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it != 0L && it != -1L },
                     isVisible = tocVisible,
                     scrollIndex = persisted.tocScrollIndex,
                     scrollOffset = persisted.tocScrollOffset,
@@ -68,7 +68,7 @@ class BookContentStateManager(
             content =
                 ContentState(
                     selectedLines = emptySet(), // Les objets Line seront chargés par le ViewModel
-                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it > 0 },
+                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it != 0L && it != -1L },
                     isTocEntrySelection = persisted.isTocEntrySelection,
                     showCommentaries = persisted.showCommentaries,
                     showTargum = persisted.showTargum,

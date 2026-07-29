@@ -78,12 +78,12 @@ class PersonalLibraryImporter(
         val base = BaseLibraryIndex.load(baseDatabase)
         val ids = StableNegativeIds()
         DriverManager.getConnection("jdbc:sqlite:$database").use { target ->
-            target.autoCommit = false
             target.createStatement().use {
                 it.execute("PRAGMA foreign_keys=OFF")
                 it.execute("PRAGMA journal_mode=DELETE")
                 it.execute("PRAGMA synchronous=NORMAL")
             }
+            target.autoCommit = false
             try {
                 val context = ImportContext(target, base, ids)
                 val counts = folders.associate { folder -> folder.id to context.importFolder(folder) }.toMutableMap()
@@ -412,7 +412,8 @@ class PersonalLibraryImporter(
             var salt = 0
             while (true) {
                 val bytes = MessageDigest.getInstance("SHA-256").digest("$key#$salt".toByteArray())
-                val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(1L)
+                // Reserve -1 for legacy UI/session sentinels.
+                val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(2L)
                 val candidate = -positive
                 val previous = keysById.putIfAbsent(candidate, key)
                 if (previous == null || previous == key) return candidate

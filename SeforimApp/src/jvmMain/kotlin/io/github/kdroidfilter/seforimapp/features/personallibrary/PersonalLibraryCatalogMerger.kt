@@ -14,7 +14,7 @@ object PersonalLibraryCatalogMerger {
         return runCatching { merge(base, database) }.getOrDefault(base)
     }
 
-    private fun merge(base: PrecomputedCatalog, database: Path): PrecomputedCatalog {
+    internal fun merge(base: PrecomputedCatalog, database: Path): PrecomputedCatalog {
         data class CategoryRow(val id: Long, val parentId: Long?, val title: String, val level: Int)
         val categories = ArrayList<CategoryRow>()
         val books = ArrayList<CatalogBook>()
@@ -58,9 +58,10 @@ object PersonalLibraryCatalogMerger {
         )
         fun augment(node: CatalogCategory): CatalogCategory = node.copy(
             books = (node.books + booksByCategory[node.id].orEmpty()).sortedBy(CatalogBook::order),
-            subcategories = (
-                node.subcategories.map(::augment) + children[node.id].orEmpty().map(::personalNode)
-            ).sortedBy(CatalogCategory::title),
+            // The precomputed catalog already carries the canonical category order. The personal
+            // query above already orders newly imported siblings, so preserve existing children
+            // and append only the genuinely new personal nodes.
+            subcategories = node.subcategories.map(::augment) + children[node.id].orEmpty().map(::personalNode),
         )
         val roots = base.rootCategories.map(::augment) + children[null].orEmpty().map(::personalNode)
         return base.copy(

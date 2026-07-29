@@ -62,53 +62,59 @@ private fun ResizeGlow(
 
         val horizontalMovement = axis == ResizeAxis.Horizontal
         val primarySize = if (horizontalMovement) size.height else size.width
-        val rawCenter = if (pointerPosition.isFinite()) pointerPosition else primarySize / 2f
-        val centerAlongLine = rawCenter.coerceIn(0f, primarySize)
-        val center =
-            if (horizontalMovement) {
-                Offset(size.width / 2f, centerAlongLine)
-            } else {
-                Offset(centerAlongLine, size.height / 2f)
-            }
+        val panelPadding = if (horizontalMovement) 6.dp else 4.dp
+        val straightEdgeInset = (12.dp + panelPadding).toPx().coerceAtMost(primarySize / 2f)
+        val rangeStart = straightEdgeInset
+        val rangeEnd = primarySize - straightEdgeInset
+        val rangeLength = rangeEnd - rangeStart
+        if (rangeLength <= 1f) return@Canvas
 
-        val glowRadius = 150.dp.toPx()
+        val edgeFade = 28.dp.toPx().coerceAtMost(rangeLength / 2f)
+        val rawCenter = if (pointerPosition.isFinite()) pointerPosition else primarySize / 2f
+        val centerAlongLine =
+            if (rangeLength > edgeFade * 2f) {
+                rawCenter.coerceIn(rangeStart + edgeFade, rangeEnd - edgeFade)
+            } else {
+                (rangeStart + rangeEnd) / 2f
+            }
+        val centerFraction = (centerAlongLine - rangeStart) / rangeLength
+        val edgeFadeFraction = (edgeFade / rangeLength).coerceAtLeast(0.001f)
         val glowColors =
-            listOf(
-                accent.copy(alpha = 0f),
-                accent.copy(alpha = 0.45f * intensity),
-                accent.copy(alpha = intensity),
-                accent.copy(alpha = 0.45f * intensity),
-                accent.copy(alpha = 0f),
-            )
+            List(17) { index ->
+                val position = index / 16f
+                val edgeProgress =
+                    (minOf(position, 1f - position) / edgeFadeFraction).coerceIn(0f, 1f)
+                val smoothEdge = edgeProgress * edgeProgress * (3f - 2f * edgeProgress)
+                val distanceFromPointer = kotlin.math.abs(position - centerFraction)
+                val pointerProgress = 1f - (distanceFromPointer / 0.62f).coerceIn(0f, 1f)
+                val pointerGlow = 0.12f + 0.88f * pointerProgress * pointerProgress
+                accent.copy(alpha = intensity * smoothEdge * pointerGlow)
+            }
         val glowBrush =
             if (horizontalMovement) {
-                Brush.verticalGradient(
-                    colors = glowColors,
-                    startY = center.y - glowRadius,
-                    endY = center.y + glowRadius,
-                )
+                Brush.verticalGradient(colors = glowColors, startY = rangeStart, endY = rangeEnd)
             } else {
-                Brush.horizontalGradient(
-                    colors = glowColors,
-                    startX = center.x - glowRadius,
-                    endX = center.x + glowRadius,
-                )
+                Brush.horizontalGradient(colors = glowColors, startX = rangeStart, endX = rangeEnd)
             }
 
-        val lineStart = if (horizontalMovement) Offset(center.x, 0f) else Offset(0f, center.y)
-        val lineEnd = if (horizontalMovement) Offset(center.x, size.height) else Offset(size.width, center.y)
+        val crossAxisCenter = if (horizontalMovement) size.width / 2f else size.height / 2f
+        val lineStart =
+            if (horizontalMovement) Offset(crossAxisCenter, rangeStart) else Offset(rangeStart, crossAxisCenter)
+        val lineEnd =
+            if (horizontalMovement) Offset(crossAxisCenter, rangeEnd) else Offset(rangeEnd, crossAxisCenter)
         drawLine(
-            color = accent.copy(alpha = 0.18f * intensity),
+            brush = glowBrush,
             start = lineStart,
             end = lineEnd,
             strokeWidth = 1.dp.toPx(),
+            alpha = 0.18f,
         )
         drawLine(
             brush = glowBrush,
             start = lineStart,
             end = lineEnd,
             strokeWidth = 14.dp.toPx(),
-            cap = StrokeCap.Round,
+            cap = StrokeCap.Butt,
             alpha = 0.12f,
         )
         drawLine(
@@ -116,7 +122,7 @@ private fun ResizeGlow(
             start = lineStart,
             end = lineEnd,
             strokeWidth = 7.dp.toPx(),
-            cap = StrokeCap.Round,
+            cap = StrokeCap.Butt,
             alpha = 0.28f,
         )
         drawLine(
@@ -124,7 +130,7 @@ private fun ResizeGlow(
             start = lineStart,
             end = lineEnd,
             strokeWidth = 2.dp.toPx(),
-            cap = StrokeCap.Round,
+            cap = StrokeCap.Butt,
         )
     }
 }

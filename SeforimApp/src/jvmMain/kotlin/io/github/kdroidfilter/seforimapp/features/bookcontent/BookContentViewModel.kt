@@ -22,6 +22,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationSt
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.Providers
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.BookContentUseCaseFactory
+import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimapp.logger.debugln
@@ -44,7 +45,7 @@ class BookContentViewModel(
     private val repository: SeforimRepository,
     private val useCaseFactory: BookContentUseCaseFactory,
     private val titleUpdateManager: TabTitleUpdateManager,
-    private val tabsViewModel: TabsViewModel,
+    private val desktopManager: DesktopManager,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(BookContentViewModel::class)
@@ -377,7 +378,7 @@ class BookContentViewModel(
                         java.util.UUID
                             .randomUUID()
                             .toString()
-                    tabsViewModel.openTab(
+                    desktopManager.tabsViewModelFor(tabId)?.openTab(
                         TabsDestination.Search(
                             searchQuery = event.query,
                             tabId = newTabId,
@@ -617,6 +618,7 @@ class BookContentViewModel(
         val targetBookId =
             bookId ?: stateManager.state.value.navigation.selectedBook
                 ?.id ?: return
+        val tabsViewModel = desktopManager.tabsViewModelFor(tabId) ?: return
         tabsViewModel.replaceCurrentTabDestination(
             TabsDestination.PdfContent(
                 bookId = targetBookId,
@@ -629,6 +631,7 @@ class BookContentViewModel(
     private fun openTextEdition() {
         val state = stateManager.state.value
         val bookId = state.navigation.selectedBook?.id ?: return
+        val tabsViewModel = desktopManager.tabsViewModelFor(tabId) ?: return
         tabsViewModel.replaceCurrentTabDestination(
             TabsDestination.BookContent(
                 bookId = bookId,
@@ -639,8 +642,11 @@ class BookContentViewModel(
     }
 
     private suspend fun openSelectedBookAsText(book: Book) {
-        val tabsState = tabsViewModel.state.value
-        val selectedDestination = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.destination
+        val tabsViewModel = desktopManager.tabsViewModelFor(tabId)
+        val selectedDestination =
+            tabsViewModel?.state?.value?.let { state ->
+                state.tabs.getOrNull(state.selectedTabIndex)?.destination
+            }
         if (selectedDestination is TabsDestination.PdfContent) {
             tabsViewModel.replaceCurrentTabDestination(
                 TabsDestination.BookContent(bookId = book.id, tabId = tabId),
@@ -1067,7 +1073,7 @@ class BookContentViewModel(
         }
 
         // Navigate directly to book content in the new tab
-        tabsViewModel.openTab(
+        desktopManager.tabsViewModelFor(tabId)?.openTab(
             TabsDestination.BookContent(
                 bookId = book.id,
                 tabId = newTabId,
@@ -1105,7 +1111,7 @@ class BookContentViewModel(
             )
         }
 
-        tabsViewModel.openTab(
+        desktopManager.tabsViewModelFor(tabId)?.openTab(
             TabsDestination.BookContent(
                 bookId = bookId,
                 tabId = newTabId,

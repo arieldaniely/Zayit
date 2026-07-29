@@ -57,6 +57,7 @@ import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEve
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.features.search.SearchShellActions
+import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -100,15 +101,16 @@ private fun saveableKeysFor(tabId: String): List<String> =
 @Composable
 fun TabsContent() {
     val appGraph = LocalAppGraph.current
-    val tabsViewModel: TabsViewModel = appGraph.tabsViewModel
-    val searchHomeViewModel = appGraph.searchHomeViewModel
+    val openWindow = LocalOpenWindow.current
+    val tabsViewModel: TabsViewModel = openWindow.tabsViewModel
+    val searchHomeViewModel = openWindow.searchHomeViewModel
     val persistedStore = appGraph.tabPersistedStateStore
 
     val tabsState by tabsViewModel.state.collectAsState()
     val tabs = tabsState.tabs
     val selectedTabIndex = tabsState.selectedTabIndex
     val isRestoringSession by SessionManager.isRestoringSession.collectAsState()
-    val isSwitchingDesktop by appGraph.desktopManager.isSwitching.collectAsState()
+    val isSwitchingDesktop by openWindow.isSwitching.collectAsState()
     val isTransitioning = isRestoringSession || isSwitchingDesktop
 
     val searchUi by remember(searchHomeViewModel) { searchHomeViewModel.uiState }.collectAsState()
@@ -208,13 +210,16 @@ fun TabsContent() {
     // Holds per-tab saveable UI state across the teardown/rebuild that happens on switch.
     val saveableStateHolder = rememberSaveableStateHolder()
 
-    // Cleanup removed tabs
+    // Cleanup removed tabs. A tab that just moved to another window keeps its persisted state
+    // (the store is app-wide, keyed by tabId); only truly closed tabs are purged.
     LaunchedEffect(tabs) {
         val activeTabIds = tabs.map { it.destination.tabId }.toSet()
         val removed = (knownTabIds + tabOwners.keys) - activeTabIds
         removed.forEach { tabId ->
             tabOwners.remove(tabId)?.clear()
-            persistedStore.remove(tabId)
+            if (!appGraph.desktopManager.isTabOpenInAnotherWindow(tabId, openWindow.id)) {
+                persistedStore.remove(tabId)
+            }
             saveableKeysFor(tabId).forEach(saveableStateHolder::removeState)
         }
         knownTabIds.clear()
@@ -233,7 +238,7 @@ fun TabsContent() {
         if (isSwitchingDesktop) {
             // Wait one frame for ViewModels to initialize with persisted state
             kotlinx.coroutines.delay(100)
-            appGraph.desktopManager.clearSwitching()
+            openWindow.clearSwitching()
         }
     }
 
@@ -401,6 +406,7 @@ private fun SearchTabContent(
     val selectedTocIds by viewModel.selectedTocIdsFlow.collectAsState()
     val tocCounts by viewModel.tocCountsFlow.collectAsState()
     val tocTree by viewModel.tocTreeFlow.collectAsState()
+    val bookCounts by viewModel.bookFacetCountsFlow.collectAsState()
 
     val actions =
         remember(viewModel) {
@@ -464,6 +470,8 @@ private fun SearchTabContent(
         selectedTocIds = selectedTocIds,
         tocCounts = tocCounts,
         tocTree = tocTree,
+        bookCounts = bookCounts,
+        loadBookHits = viewModel::loadAllHitsForBook,
         actions = actions,
     )
 }

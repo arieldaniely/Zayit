@@ -705,7 +705,7 @@ private fun openHistoryItem(
     appGraph: io.github.kdroidfilter.seforimapp.framework.di.AppGraph,
     inNewTab: Boolean,
 ) {
-    val tabsVm = appGraph.tabsViewModel
+    val tabsVm = appGraph.desktopManager.focusedWindow()?.tabsViewModel ?: return
     when (entry.type) {
         HistoryType.BOOK -> {
             val bookId = entry.bookId ?: return

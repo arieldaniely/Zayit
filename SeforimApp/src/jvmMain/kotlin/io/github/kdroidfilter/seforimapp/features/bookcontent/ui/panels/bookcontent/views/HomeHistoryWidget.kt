@@ -130,7 +130,7 @@ fun HomeHistoryWidget(modifier: Modifier = Modifier) {
                 modifier =
                     Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable { appGraph.tabsViewModel.openHistoryTab() }
+                        .clickable { appGraph.desktopManager.focusedWindow()?.tabsViewModel?.openHistoryTab() }
                         .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
@@ -287,7 +287,7 @@ private fun openHistoryEntry(
     entry: HistoryEntry,
     appGraph: io.github.kdroidfilter.seforimapp.framework.di.AppGraph,
 ) {
-    val tabsVm = appGraph.tabsViewModel
+    val tabsVm = appGraph.desktopManager.focusedWindow()?.tabsViewModel ?: return
     when (entry.type) {
         HistoryType.BOOK -> {
             val bookId = entry.bookId ?: return

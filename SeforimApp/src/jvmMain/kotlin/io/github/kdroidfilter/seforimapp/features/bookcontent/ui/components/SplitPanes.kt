@@ -1,5 +1,8 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -8,9 +11,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
@@ -24,6 +29,103 @@ import org.jetbrains.compose.splitpane.VerticalSplitPane
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
+
+private enum class ResizeAxis {
+    Horizontal,
+    Vertical,
+}
+
+@Composable
+private fun ResizeGlow(
+    axis: ResizeAxis,
+    highlighted: Boolean,
+    dragging: Boolean,
+    pointerPosition: Float,
+    modifier: Modifier = Modifier,
+) {
+    val accent = JewelTheme.globalColors.outlines.focused
+    val intensity by
+        animateFloatAsState(
+            targetValue =
+                when {
+                    dragging -> 1f
+                    highlighted -> 0.72f
+                    else -> 0f
+                },
+            animationSpec = tween(durationMillis = 140),
+        )
+
+    Canvas(modifier) {
+        if (intensity <= 0.01f) return@Canvas
+
+        val horizontalMovement = axis == ResizeAxis.Horizontal
+        val primarySize = if (horizontalMovement) size.height else size.width
+        val rawCenter = if (pointerPosition.isFinite()) pointerPosition else primarySize / 2f
+        val centerAlongLine = rawCenter.coerceIn(0f, primarySize)
+        val center =
+            if (horizontalMovement) {
+                Offset(size.width / 2f, centerAlongLine)
+            } else {
+                Offset(centerAlongLine, size.height / 2f)
+            }
+
+        val glowRadius = 150.dp.toPx()
+        val glowColors =
+            listOf(
+                accent.copy(alpha = 0f),
+                accent.copy(alpha = 0.45f * intensity),
+                accent.copy(alpha = intensity),
+                accent.copy(alpha = 0.45f * intensity),
+                accent.copy(alpha = 0f),
+            )
+        val glowBrush =
+            if (horizontalMovement) {
+                Brush.verticalGradient(
+                    colors = glowColors,
+                    startY = center.y - glowRadius,
+                    endY = center.y + glowRadius,
+                )
+            } else {
+                Brush.horizontalGradient(
+                    colors = glowColors,
+                    startX = center.x - glowRadius,
+                    endX = center.x + glowRadius,
+                )
+            }
+
+        val lineStart = if (horizontalMovement) Offset(center.x, 0f) else Offset(0f, center.y)
+        val lineEnd = if (horizontalMovement) Offset(center.x, size.height) else Offset(size.width, center.y)
+        drawLine(
+            color = accent.copy(alpha = 0.18f * intensity),
+            start = lineStart,
+            end = lineEnd,
+            strokeWidth = 1.dp.toPx(),
+        )
+        drawLine(
+            brush = glowBrush,
+            start = lineStart,
+            end = lineEnd,
+            strokeWidth = 14.dp.toPx(),
+            cap = StrokeCap.Round,
+            alpha = 0.12f,
+        )
+        drawLine(
+            brush = glowBrush,
+            start = lineStart,
+            end = lineEnd,
+            strokeWidth = 7.dp.toPx(),
+            cap = StrokeCap.Round,
+            alpha = 0.28f,
+        )
+        drawLine(
+            brush = glowBrush,
+            start = lineStart,
+            end = lineEnd,
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+    }
+}
 
 @Stable
 @JvmInline
@@ -54,6 +156,7 @@ fun EnhancedHorizontalSplitPane(
     val splitterVisible = showSplitter && secondContent != null
     var splitterHovered by remember { mutableStateOf(false) }
     var splitterDragging by remember { mutableStateOf(false) }
+    var pointerPosition by remember { mutableStateOf(Float.NaN) }
     val splitterHighlighted = splitterHovered || splitterDragging
 
     // When the second pane is hidden, expand the first to 100% to avoid blank space
@@ -100,32 +203,37 @@ fun EnhancedHorizontalSplitPane(
         if (splitterVisible) {
             splitter {
                 visiblePart {
-                    if (!isIslands || splitterHighlighted) {
+                    if (!isIslands) {
                         Divider(
                             Orientation.Vertical,
-                            Modifier.fillMaxHeight().width(if (splitterHighlighted) 2.dp else 1.dp),
-                            color =
-                                if (splitterHighlighted) {
-                                    JewelTheme.globalColors.outlines.focused
-                                } else {
-                                    JewelTheme.globalColors.borders.disabled
-                                },
+                            Modifier.fillMaxHeight().width(1.dp),
+                            color = JewelTheme.globalColors.borders.disabled,
                         )
                     }
                 }
                 handle {
-                    Box(
-                        Modifier
-                            .width(7.dp)
-                            .fillMaxHeight()
-                            .onPointerEvent(PointerEventType.Enter) { splitterHovered = true }
-                            .onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
-                            .onPointerEvent(PointerEventType.Press) { splitterDragging = true }
-                            .onPointerEvent(PointerEventType.Release) { splitterDragging = false }
-                            .markAsHandle()
-                            .cursorForHorizontalResize(),
-                        contentAlignment = Alignment.Center,
-                    ) {}
+                    ResizeGlow(
+                        axis = ResizeAxis.Horizontal,
+                        highlighted = splitterHighlighted,
+                        dragging = splitterDragging,
+                        pointerPosition = pointerPosition,
+                        modifier =
+                            Modifier
+                                .width(7.dp)
+                                .fillMaxHeight()
+                                .onPointerEvent(PointerEventType.Enter) { event ->
+                                    splitterHovered = true
+                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Move) { event ->
+                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
+                                .onPointerEvent(PointerEventType.Press) { event ->
+                                    splitterDragging = true
+                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Release) { splitterDragging = false }
+                                .markAsHandle()
+                                .cursorForHorizontalResize(),
+                    )
                 }
             }
         }
@@ -150,6 +258,7 @@ fun EnhancedVerticalSplitPane(
     val splitterVisible = showSplitter && secondContent != null
     var splitterHovered by remember { mutableStateOf(false) }
     var splitterDragging by remember { mutableStateOf(false) }
+    var pointerPosition by remember { mutableStateOf(Float.NaN) }
     val splitterHighlighted = splitterHovered || splitterDragging
 
     // When the second pane is hidden, expand the first to 100% to avoid blank space
@@ -196,32 +305,37 @@ fun EnhancedVerticalSplitPane(
         if (splitterVisible) {
             splitter {
                 visiblePart {
-                    if (!isIslands || splitterHighlighted) {
+                    if (!isIslands) {
                         Divider(
                             Orientation.Horizontal,
-                            Modifier.fillMaxWidth().height(if (splitterHighlighted) 2.dp else 1.dp),
-                            color =
-                                if (splitterHighlighted) {
-                                    JewelTheme.globalColors.outlines.focused
-                                } else {
-                                    JewelTheme.globalColors.borders.disabled
-                                },
+                            Modifier.fillMaxWidth().height(1.dp),
+                            color = JewelTheme.globalColors.borders.disabled,
                         )
                     }
                 }
                 handle {
-                    Box(
-                        Modifier
-                            .height(7.dp)
-                            .fillMaxWidth()
-                            .onPointerEvent(PointerEventType.Enter) { splitterHovered = true }
-                            .onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
-                            .onPointerEvent(PointerEventType.Press) { splitterDragging = true }
-                            .onPointerEvent(PointerEventType.Release) { splitterDragging = false }
-                            .markAsHandle()
-                            .cursorForVerticalResize(),
-                        contentAlignment = Alignment.Center,
-                    ) {}
+                    ResizeGlow(
+                        axis = ResizeAxis.Vertical,
+                        highlighted = splitterHighlighted,
+                        dragging = splitterDragging,
+                        pointerPosition = pointerPosition,
+                        modifier =
+                            Modifier
+                                .height(7.dp)
+                                .fillMaxWidth()
+                                .onPointerEvent(PointerEventType.Enter) { event ->
+                                    splitterHovered = true
+                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Move) { event ->
+                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
+                                .onPointerEvent(PointerEventType.Press) { event ->
+                                    splitterDragging = true
+                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                }.onPointerEvent(PointerEventType.Release) { splitterDragging = false }
+                                .markAsHandle()
+                                .cursorForVerticalResize(),
+                    )
                 }
             }
         }

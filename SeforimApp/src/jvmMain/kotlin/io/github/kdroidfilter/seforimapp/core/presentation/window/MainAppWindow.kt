@@ -42,6 +42,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
@@ -171,10 +172,14 @@ fun NucleusApplicationScope.MainAppWindow(
                     openFavoritesTab()
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.T) {
-                    tabsVm.onEvent(TabsEvents.OnAdd)
+                    tabsVm.onEvent(
+                        if (keyEvent.isShiftPressed) TabsEvents.ReopenLastClosedTab else TabsEvents.OnAdd,
+                    )
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.W) {
-                    tabsVm.onEvent(TabsEvents.OnClose(currentIndex))
+                    tabsVm.onEvent(
+                        if (keyEvent.isShiftPressed) TabsEvents.CloseAll else TabsEvents.OnClose(currentIndex),
+                    )
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.Tab) {
                     val count = currentTabs.size
@@ -238,6 +243,17 @@ fun NucleusApplicationScope.MainAppWindow(
             }
         }
 
+        // Settings dialog, composed inside the window it was opened from so it
+        // picks up this window's modal counter and native transient-for
+        // relationship — modal to this window only, the others stay usable.
+        val settingsDialogState by settingsWindowViewModel.state.collectAsState()
+        if (settingsDialogState.isVisible && settingsDialogState.ownerWindowId == openWindow.id) {
+            SettingsWindow(
+                onClose = { settingsWindowViewModel.onEvent(SettingsWindowEvents.OnClose) },
+                initialDestination = settingsDialogState.initialDestination,
+            )
+        }
+
         CompositionLocalProvider(
             LocalOpenWindow provides openWindow,
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
@@ -292,9 +308,15 @@ fun NucleusApplicationScope.MainAppWindow(
                             if (keyEvent.type == KeyEventType.KeyDown) {
                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                 when {
-                                    // Ctrl/Cmd + W => close current tab
+                                    // Ctrl/Cmd + W closes the current tab; Shift closes all tabs.
                                     isCtrlOrCmd && keyEvent.key == Key.W -> {
-                                        tabsVm.onEvent(TabsEvents.OnClose(selectedIndex))
+                                        tabsVm.onEvent(
+                                            if (keyEvent.isShiftPressed) {
+                                                TabsEvents.CloseAll
+                                            } else {
+                                                TabsEvents.OnClose(selectedIndex)
+                                            },
+                                        )
                                         true
                                     }
                                     // Ctrl/Cmd + Shift + Tab => previous tab
@@ -344,9 +366,15 @@ fun NucleusApplicationScope.MainAppWindow(
                                         openFavoritesTab()
                                         true
                                     }
-                                    // Ctrl/Cmd + T => new tab
+                                    // Ctrl/Cmd + T opens a tab; Shift reopens the most recently closed tab.
                                     isCtrlOrCmd && keyEvent.key == Key.T -> {
-                                        tabsVm.onEvent(TabsEvents.OnAdd)
+                                        tabsVm.onEvent(
+                                            if (keyEvent.isShiftPressed) {
+                                                TabsEvents.ReopenLastClosedTab
+                                            } else {
+                                                TabsEvents.OnAdd
+                                            },
+                                        )
                                         true
                                     }
                                     // Alt + Home (Windows) or Cmd + Shift + H (macOS) => go Home on current tab

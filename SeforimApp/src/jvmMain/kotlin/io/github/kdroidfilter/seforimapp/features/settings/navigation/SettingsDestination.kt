@@ -24,4 +24,7 @@ sealed interface SettingsDestination {
 
     @Serializable
     data object Data : SettingsDestination
+
+    @Serializable
+    data object PersonalLibrary : SettingsDestination
 }

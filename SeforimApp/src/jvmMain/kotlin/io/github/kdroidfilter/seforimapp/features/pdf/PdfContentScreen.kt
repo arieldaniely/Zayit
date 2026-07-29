@@ -88,7 +88,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Book
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -127,14 +126,8 @@ internal const val PDF_ZOOM_MIN = 0.55f
 internal const val PDF_ZOOM_MAX = 1.8f
 internal const val PDF_ZOOM_STEP = 0.1f
 internal const val PDF_DEFAULT_ZOOM = 0.92f
-private const val PDF_COLUMN_GAP = 0.012f
-private const val PDF_BLOCK_CONTINUATION_THRESHOLD = 0.44f
-private const val PDF_MIN_BLOCK_OVERLAP = 0.18f
-private const val PDF_MAX_BLOCK_FONT_RATIO = 1.38f
-private const val PDF_MAX_BLOCK_WIDTH_RATIO = 2.35f
-private const val PDF_INLINE_FONT_SPLIT_RATIO = 1.32f
-private const val PDF_MIN_LINE_TOLERANCE = 0.0025f
-private const val PDF_LINE_HEIGHT_TOLERANCE = 0.48f
+private const val PDF_COLUMN_GAP = 0.022f
+private const val PDF_BLOCK_CONTINUATION_THRESHOLD = 0.12f
 
 /**
  * The printed-edition content pane. The regular book screen supplies the surrounding library,
@@ -153,7 +146,6 @@ fun PdfContentView(
     isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!isActive) return
     if (file == null) {
         MissingPdfPanel(modifier)
         return
@@ -170,7 +162,7 @@ fun PdfContentView(
         try {
             awaitCancellation()
         } finally {
-            withContext(NonCancellable + Dispatchers.IO) { session.close() }
+            session.close()
         }
     }
 
@@ -187,6 +179,7 @@ fun PdfContentView(
                 zoom = zoom,
                 onZoomChange = onZoomChange,
                 onLineSelected = onLineSelected,
+                isActive = isActive,
                 modifier = modifier,
             )
     }
@@ -203,6 +196,7 @@ private fun PdfReader(
     zoom: Float,
     onZoomChange: (Float) -> Unit,
     onLineSelected: (Long) -> Unit,
+    isActive: Boolean,
     modifier: Modifier,
 ) {
     val repository = LocalAppGraph.current.repository
@@ -296,6 +290,7 @@ private fun PdfReader(
             onZoomChange = onZoomChange,
             searchMatches = searchMatches,
             selectedMatchIndex = selectedMatchIndex,
+            isActive = isActive,
             modifier = Modifier.fillMaxSize(),
         )
         if (showFind) {
@@ -328,6 +323,7 @@ private fun PdfPages(
     onZoomChange: (Float) -> Unit,
     searchMatches: List<PdfSearchMatch>,
     selectedMatchIndex: Int,
+    isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val horizontalScrollState = rememberScrollState()
@@ -341,16 +337,11 @@ private fun PdfPages(
         val rawDpi = (PDF_BASE_DPI * max(1f, zoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
         (rawDpi / PDF_DPI_STEP).roundToInt() * PDF_DPI_STEP
     }
-    LaunchedEffect(session, currentPage, renderDpi, isScrolling) {
+    LaunchedEffect(session, currentPage, renderDpi, isScrolling, isActive) {
+        if (!isActive) return@LaunchedEffect
         withContext(Dispatchers.IO) {
-            val plan = progressiveRenderPlan(currentPage, renderDpi, session.pageCount, isScrolling)
-            plan.firstOrNull()?.let { request ->
-                runCatching { session.render(request.pageIndex, request.dpi) }
-                    .onFailure { session.recordRenderFailure(request.pageIndex) }
-            }
-            currentCoroutineContext().ensureActive()
             runCatching { session.loadTextPage(currentPage) }
-            plan.drop(1).forEach { request ->
+            progressiveRenderPlan(currentPage, renderDpi, session.pageCount, isScrolling).forEach { request ->
                 currentCoroutineContext().ensureActive()
                 runCatching { session.render(request.pageIndex, request.dpi) }
                     .onFailure { session.recordRenderFailure(request.pageIndex) }
@@ -456,7 +447,8 @@ private fun PdfPageCard(
                 emptyList()
             } else {
                 val size = Size(cardSize.width.toFloat(), cardSize.height.toFloat())
-                pageText.selectTextFlow(start, end, size, actualAspectRatio)
+                val selected = pageText.selectTextFlow(start, end, size, actualAspectRatio).toSet()
+                pageText.glyphs.filter(selected::contains)
             }
         }
     val selectedText = remember(selectedGlyphs) { selectedGlyphs.toPdfSelectionText() }
@@ -766,22 +758,14 @@ private class PdfTextSearchIndex(
     val pages: StateFlow<Map<Int, PdfPageText>> = mutablePages
     private var pageTexts: List<String>? = null
 
-    fun page(
-        pageIndex: Int,
-        publish: Boolean = true,
-    ): PdfPageText =
+    fun page(pageIndex: Int): PdfPageText =
         synchronized(lock) {
-            pageCache[pageIndex]?.let { cached ->
-                if (publish && pageIndex !in mutablePages.value) {
-                    mutablePages.value = mutablePages.value + (pageIndex to cached)
-                }
-                return@synchronized cached
-            }
+            pageCache[pageIndex]?.let { return@synchronized it }
             val stripper = PositionCollectingPdfStripper(pageIndex)
             stripper.getText(document)
             val page = PdfPageText(stripper.glyphs.toList())
             pageCache[pageIndex] = page
-            if (publish) mutablePages.value = mutablePages.value + (pageIndex to page)
+            mutablePages.value = mutablePages.value + (pageIndex to page)
             page
         }
 
@@ -791,7 +775,7 @@ private class PdfTextSearchIndex(
             if (needle.length < 2) return@synchronized emptyList()
             buildList {
                 for (pageIndex in pageCache.indices) {
-                    addAll(findMatches(pageIndex, page(pageIndex, publish = false), needle))
+                    addAll(findMatches(pageIndex, page(pageIndex), needle))
                 }
             }
         }
@@ -837,7 +821,6 @@ private fun normalizePdfSearchText(text: String): String =
     text.replace(PDF_DIRECTIONAL_MARKS, "").replace(PDF_SEARCH_WHITESPACE, " ").trim()
 private class PositionCollectingPdfStripper(pageIndex: Int) : PDFTextStripper() {
     val glyphs = mutableListOf<PdfGlyph>()
-    private var sourceOrder = 0
 
     init {
         startPage = pageIndex + 1
@@ -857,13 +840,7 @@ private class PositionCollectingPdfStripper(pageIndex: Int) : PDFTextStripper() 
             )
         text.unicode.orEmpty().forEach { character ->
             if (!character.isWhitespace() && !character.isPdfDirectionalMark()) {
-                glyphs +=
-                    PdfGlyph(
-                        text = character.toString(),
-                        bounds = bounds,
-                        sourceOrder = sourceOrder++,
-                        fontHeight = (text.heightDir / pageHeight).coerceAtLeast(0.0001f),
-                    )
+                glyphs += PdfGlyph(character.toString(), bounds)
             }
         }
         super.processTextPosition(text)
@@ -933,10 +910,7 @@ private fun List<PdfGlyph>.toLogicalPdfOrder(): List<PdfGlyph> =
     }
 
 
-/**
- * Selects along one typographic flow. Geometry decides membership, while source order is retained
- * for copying; sorting Hebrew glyphs by X would reverse the words that PDFBox already ordered.
- */
+/** Selects by reading lines and follows the overlapping text column where the drag began. */
 private fun PdfPageText.selectTextFlow(
     start: Offset,
     end: Offset,
@@ -945,109 +919,61 @@ private fun PdfPageText.selectTextFlow(
 ): List<PdfGlyph> {
     if (glyphs.isEmpty()) return emptyList()
     fun rect(glyph: PdfGlyph) = glyph.bounds.fitToPage(pageSize, aspectRatio)
-
     var startGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(start) } ?: return emptyList()
-    val endGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(end) } ?: startGlyph
+    var endGlyph = glyphs.minByOrNull { rect(it).distanceSquaredTo(end) } ?: startGlyph
     val baselines = glyphs.toPdfBaselines()
-    var startBaseline = baselines.indexOfFirst { baseline -> baseline.any { startGlyph in it.glyphs } }
-    var endBaseline = baselines.indexOfFirst { baseline -> baseline.any { endGlyph in it.glyphs } }
+    var startBaseline = baselines.indexOfFirst { baseline -> baseline.any { segment -> startGlyph in segment } }
+    var endBaseline = baselines.indexOfFirst { baseline -> baseline.any { segment -> endGlyph in segment } }
     if (startBaseline < 0) return emptyList()
     if (endBaseline < 0) endBaseline = startBaseline
-
     var startPoint = start
     var endPoint = end
     if (startBaseline > endBaseline) {
+        val glyphSwap = startGlyph
         startGlyph = endGlyph
-        val originalStartBaseline = startBaseline
+        endGlyph = glyphSwap
+        val baselineSwap = startBaseline
         startBaseline = endBaseline
-        endBaseline = originalStartBaseline
+        endBaseline = baselineSwap
         startPoint = end
         endPoint = start
     }
-
-    val chosen = mutableListOf<PdfTextSegment>()
-    var segment = baselines[startBaseline].first { startGlyph in it.glyphs }
-    val anchor = segment
+    val chosen = mutableListOf<List<PdfGlyph>>()
+    var segment = baselines[startBaseline].first { startGlyph in it }
     chosen += segment
-    for (lineIndex in (startBaseline + 1)..endBaseline) {
-        val candidate =
-            baselines[lineIndex]
-                .map { it to (segment.continuationScore(it) + anchor.anchorScore(it)) }
-                .maxByOrNull { it.second }
-        if (candidate == null || candidate.second < PDF_BLOCK_CONTINUATION_THRESHOLD) break
-        segment = candidate.first
-        chosen += segment
+    var lineIndex = startBaseline + 1
+    while (lineIndex <= endBaseline) {
+        val candidate = baselines[lineIndex].maxByOrNull(segment::continuationScore)
+        if (candidate != null && segment.continuationScore(candidate) >= PDF_BLOCK_CONTINUATION_THRESHOLD) {
+            segment = candidate
+            chosen += candidate
+        }
+        lineIndex += 1
     }
-
-    val selected =
-        if (chosen.size == 1) {
-            val low = min(startPoint.x, endPoint.x)
-            val high = max(startPoint.x, endPoint.x)
-            chosen.single().glyphs.filter { rect(it).right >= low && rect(it).left <= high }
-        } else {
-            buildList {
-                chosen.forEachIndexed { index, selectedSegment ->
-                    val line = selectedSegment.glyphs
-                    val rtl = line.count { it.text.any(Char::isHebrewCharacter) } * 2 >= line.size
-                    addAll(
-                        when (index) {
-                            0 -> line.filter {
-                                rect(it).let { bounds ->
-                                    if (rtl) bounds.left <= startPoint.x else bounds.right >= startPoint.x
-                                }
-                            }
-                            chosen.lastIndex -> line.filter {
-                                rect(it).let { bounds ->
-                                    if (rtl) bounds.right >= endPoint.x else bounds.left <= endPoint.x
-                                }
-                            }
-                            else -> line
-                        },
-                    )
-                }
-            }
-        }
-    return selected.distinctBy(PdfGlyph::sourceOrder).sortedBy(PdfGlyph::sourceOrder)
-}
-
-private data class PdfTextSegment(
-    val glyphs: List<PdfGlyph>,
-) {
-    val left = glyphs.minOf { it.bounds.left }
-    val right = glyphs.maxOf { it.bounds.right }
-    val width = (right - left).coerceAtLeast(0.001f)
-    val center = (left + right) / 2f
-    val fontHeight = glyphs.map { it.fontHeight }.average().toFloat().coerceAtLeast(0.001f)
-    val firstSourceOrder = glyphs.minOf(PdfGlyph::sourceOrder)
-
-    fun continuationScore(other: PdfTextSegment): Float {
-        val overlap = (min(right, other.right) - max(left, other.left)).coerceAtLeast(0f)
-        val overlapRatio = overlap / max(width, other.width)
-        val fontRatio = max(fontHeight, other.fontHeight) / min(fontHeight, other.fontHeight)
-        val widthRatio = max(width, other.width) / min(width, other.width)
-        if (overlapRatio < PDF_MIN_BLOCK_OVERLAP || fontRatio > PDF_MAX_BLOCK_FONT_RATIO) {
-            return Float.NEGATIVE_INFINITY
-        }
-        if (widthRatio > PDF_MAX_BLOCK_WIDTH_RATIO && overlapRatio < 0.62f) {
-            return Float.NEGATIVE_INFINITY
-        }
-        val sourceDistance = abs(firstSourceOrder - other.firstSourceOrder)
-        val sourceContinuity = 1f / (1f + sourceDistance / 24f)
-        return overlapRatio * 1.45f + sourceContinuity * 0.3f - abs(center - other.center) * 2f
+    if (chosen.size == 1) {
+        val low = min(startPoint.x, endPoint.x)
+        val high = max(startPoint.x, endPoint.x)
+        return chosen.single().filter { rect(it).right >= low && rect(it).left <= high }
     }
-
-    fun anchorScore(other: PdfTextSegment): Float {
-        val overlap = (min(right, other.right) - max(left, other.left)).coerceAtLeast(0f)
-        return (overlap / max(width, other.width)) * 0.35f - abs(center - other.center) * 0.5f
+    return buildList {
+        chosen.forEachIndexed { index, line ->
+            val rtl = line.count { it.text.any(Char::isHebrewCharacter) } * 2 >= line.size
+            addAll(
+                when (index) {
+                    0 -> line.filter { rect(it).let { r -> if (rtl) r.left <= startPoint.x else r.right >= startPoint.x } }
+                    chosen.lastIndex -> line.filter { rect(it).let { r -> if (rtl) r.right >= endPoint.x else r.left <= endPoint.x } }
+                    else -> line
+                },
+            )
+        }
     }
 }
 
-private fun List<PdfGlyph>.toPdfBaselines(): List<List<PdfTextSegment>> {
+private fun List<PdfGlyph>.toPdfBaselines(): List<List<List<PdfGlyph>>> {
     val lines = mutableListOf<MutableList<PdfGlyph>>()
     sortedWith(compareBy<PdfGlyph> { it.bounds.verticalCenter }.thenBy { it.bounds.left }).forEach { glyph ->
         val line = lines.lastOrNull()
-        val tolerance = max(PDF_MIN_LINE_TOLERANCE, glyph.fontHeight * PDF_LINE_HEIGHT_TOLERANCE)
-        if (line == null || abs(line.first().bounds.verticalCenter - glyph.bounds.verticalCenter) > tolerance) {
+        if (line == null || abs(line.first().bounds.verticalCenter - glyph.bounds.verticalCenter) > PDF_LINE_TOLERANCE) {
             lines += mutableListOf(glyph)
         } else {
             line += glyph
@@ -1057,30 +983,29 @@ private fun List<PdfGlyph>.toPdfBaselines(): List<List<PdfTextSegment>> {
         val segments = mutableListOf<MutableList<PdfGlyph>>()
         line.sortedBy { it.bounds.left }.forEach { glyph ->
             val segment = segments.lastOrNull()
-            val previous = segment?.lastOrNull()
-            val fontRatio =
-                previous?.let { max(it.fontHeight, glyph.fontHeight) / min(it.fontHeight, glyph.fontHeight) } ?: 1f
-            if (
-                segment == null || previous == null ||
-                glyph.bounds.left - previous.bounds.right > PDF_COLUMN_GAP ||
-                fontRatio > PDF_INLINE_FONT_SPLIT_RATIO
-            ) {
+            if (segment == null || glyph.bounds.left - segment.last().bounds.right > PDF_COLUMN_GAP) {
                 segments += mutableListOf(glyph)
             } else {
                 segment += glyph
             }
         }
-        segments.map { segment -> PdfTextSegment(segment.sortedBy(PdfGlyph::sourceOrder)) }
+        segments
     }
+}
+
+private fun List<PdfGlyph>.continuationScore(other: List<PdfGlyph>): Float {
+    val thisLeft = minOf { it.bounds.left }
+    val thisRight = maxOf { it.bounds.right }
+    val otherLeft = other.minOf { it.bounds.left }
+    val otherRight = other.maxOf { it.bounds.right }
+    val overlap = (min(thisRight, otherRight) - max(thisLeft, otherLeft)).coerceAtLeast(0f)
+    val narrower = min(thisRight - thisLeft, otherRight - otherLeft).coerceAtLeast(0.001f)
+    val centerDistance = abs((thisLeft + thisRight) / 2f - (otherLeft + otherRight) / 2f)
+    return overlap / narrower - centerDistance
 }
 private data class PdfPageText(val glyphs: List<PdfGlyph>)
 
-private data class PdfGlyph(
-    val text: String,
-    val bounds: PdfNormalizedRect,
-    val sourceOrder: Int,
-    val fontHeight: Float,
-)
+private data class PdfGlyph(val text: String, val bounds: PdfNormalizedRect)
 
 private data class PdfSearchMatch(val pageIndex: Int, val bounds: List<PdfNormalizedRect>)
 
@@ -1200,25 +1125,32 @@ private fun progressiveRenderPlan(
         }
 
         addIfValid(currentPage, if (isScrolling) min(targetDpi, PDF_ACTIVE_PREVIEW_DPI) else targetDpi)
+
         for (distance in 1..PDF_PREFETCH_DISTANCE) {
             val dpi =
-                if (!isScrolling && distance <= PDF_QUALITY_UPGRADE_DISTANCE) {
+                when (distance) {
+                    1, 2 -> PDF_SCROLL_PREVIEW_NEAR_DPI
+                    in 3..5 -> PDF_SCROLL_PREVIEW_MID_DPI
+                    else -> PDF_SCROLL_PREVIEW_FAR_DPI
+                }
+            addIfValid(currentPage + distance, dpi)
+            addIfValid(currentPage - distance, dpi)
+        }
+
+        if (!isScrolling) {
+            for (distance in 1..PDF_QUALITY_UPGRADE_DISTANCE) {
+                val dpi =
                     when (distance) {
                         1 -> PDF_NEARBY_DPI
                         2 -> PDF_DISTANT_DPI
                         else -> PDF_FAR_DPI
                     }
-                } else {
-                    when (distance) {
-                        1, 2 -> PDF_SCROLL_PREVIEW_NEAR_DPI
-                        in 3..4 -> PDF_SCROLL_PREVIEW_MID_DPI
-                        else -> PDF_SCROLL_PREVIEW_FAR_DPI
-                    }
-                }
-            addIfValid(currentPage + distance, dpi)
-            addIfValid(currentPage - distance, dpi)
+                addIfValid(currentPage + distance, dpi)
+                addIfValid(currentPage - distance, dpi)
+            }
         }
-    }
+    }.distinct()
+
 private fun readPdfOutline(document: PDDocument): List<PdfOutlineEntry> =
     buildList {
         document.documentCatalog.documentOutline?.firstChild?.let { appendOutline(document, it, 0) }
@@ -1271,6 +1203,6 @@ private const val PDF_FAR_DPI = 54
 private const val PDF_SCROLL_PREVIEW_NEAR_DPI = 48
 private const val PDF_SCROLL_PREVIEW_MID_DPI = 36
 private const val PDF_SCROLL_PREVIEW_FAR_DPI = 30
-private const val PDF_PREFETCH_DISTANCE = 5
+private const val PDF_PREFETCH_DISTANCE = 10
 private const val PDF_QUALITY_UPGRADE_DISTANCE = 3
-private const val PDF_CACHE_SIZE = 10
+private const val PDF_CACHE_SIZE = 24

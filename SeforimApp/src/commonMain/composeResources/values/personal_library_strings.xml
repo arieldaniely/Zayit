@@ -1,0 +1,17 @@
+<resources>
+    <string name="settings_category_personal_library">ספרים אישיים</string>
+    <string name="personal_library_title">ספרים אישיים</string>
+    <string name="personal_library_description">הוסיפו תיקיות בפורמט אוצריא. כל תיקייה נשמרת ומאונדקסת בנפרד מספריית הבסיס.</string>
+    <string name="personal_library_add_folder">הוספת תיקייה</string>
+    <string name="personal_library_reindex">אינדוקס מחדש</string>
+    <string name="personal_library_working">מייבא ומאנדקס ספרים…</string>
+    <string name="personal_library_success">הספרייה האישית עודכנה בהצלחה</string>
+    <string name="personal_library_remove">הסרה</string>
+    <string name="personal_library_personal_mode">תחת ״ספרים אישיים״</string>
+    <string name="personal_library_merge_mode">מיזוג בשורש הספרייה</string>
+    <string name="personal_library_change_to_personal">העבר ל״ספרים אישיים״</string>
+    <string name="personal_library_change_to_merge">מזג בשורש</string>
+    <string name="personal_library_stats">%1$d ספרים, %2$d קישורים</string>
+    <string name="personal_library_empty">עדיין לא נוספו תיקיות ספרים.</string>
+    <string name="personal_library_folder_dialog">בחירת תיקיית ספרים</string>
+</resources>

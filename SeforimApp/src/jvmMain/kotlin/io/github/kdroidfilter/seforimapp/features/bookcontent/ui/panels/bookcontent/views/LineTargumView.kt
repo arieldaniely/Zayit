@@ -78,6 +78,7 @@ private val LinkItemVerticalPaddingPerSide = 8.dp
 @Composable
 private fun SingleLineTargumView(
     selectedLine: Line?,
+    onEvent: (BookContentEvent) -> Unit,
     buildLinksPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
     getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     getLinkCharCountsForLine: suspend (Long, Long, ConnectionType) -> List<Int>,
@@ -313,12 +314,22 @@ private fun SingleLineTargumView(
                                 ) {
                                     sourceSections.forEach { section ->
                                         item(key = "header-${section.bookId}") {
-                                            Text(
-                                                text = section.title,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = (commentTextSize * 1.1f).sp,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.fillMaxWidth(),
+                                            SourceSectionHeader(
+                                                title = section.title,
+                                                textSize = commentTextSize,
+                                                onClick =
+                                                    if (availabilityType == ConnectionType.SOURCE) {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenSourceBookInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = listOf(selectedLine.id),
+                                                                ),
+                                                            )
+                                                        }
+                                                    } else {
+                                                        null
+                                                    },
                                             )
                                         }
 
@@ -488,6 +499,7 @@ fun LineTargumView(
     } else {
         SingleLineTargumView(
             selectedLine = contentState.primaryLine,
+            onEvent = onEvent,
             buildLinksPagerFor = buildPagerFor,
             getAvailableLinksForLine = getAvailableForLine,
             getLinkCharCountsForLine = providers.getLinkCharCountsForLine,
@@ -712,12 +724,22 @@ private fun MultiLineTargumView(
                         ) {
                             sourceSections.forEach { section ->
                                 item(key = "header-${section.bookId}") {
-                                    Text(
-                                        text = section.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = (commentTextSize * 1.1f).sp,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth(),
+                                    SourceSectionHeader(
+                                        title = section.title,
+                                        textSize = commentTextSize,
+                                        onClick =
+                                            if (availabilityType == ConnectionType.SOURCE) {
+                                                {
+                                                    onEvent(
+                                                        BookContentEvent.OpenSourceBookInNewTab(
+                                                            bookId = section.bookId,
+                                                            baseLineIds = selectedLineIds,
+                                                        ),
+                                                    )
+                                                }
+                                            } else {
+                                                null
+                                            },
                                     )
                                 }
 
@@ -905,4 +927,28 @@ private fun LinkItem(
             )
         }
     }
+}
+
+@Composable
+private fun SourceSectionHeader(
+    title: String,
+    textSize: Float,
+    onClick: (() -> Unit)?,
+) {
+    Text(
+        text = title,
+        fontWeight = FontWeight.Bold,
+        fontSize = (textSize * 1.1f).sp,
+        textAlign = TextAlign.Center,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onClick != null) {
+                        Modifier.pointerInput(title) { detectTapGestures(onTap = { onClick() }) }
+                    } else {
+                        Modifier
+                    },
+                ),
+    )
 }

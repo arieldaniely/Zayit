@@ -106,6 +106,11 @@ sealed interface BookContentEvent {
         val baseLineIds: List<Long> = emptyList(),
     ) : BookContentEvent
 
+    data class OpenSourceBookInNewTab(
+        val bookId: Long,
+        val baseLineIds: List<Long>,
+    ) : BookContentEvent
+
     data object ToggleCommentaries : BookContentEvent
 
     data object ToggleTargum : BookContentEvent

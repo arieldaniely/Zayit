@@ -175,6 +175,42 @@ class CommentariesUseCase(
                 ?.targetLineId
         }.getOrNull()
 
+    suspend fun resolveSourceTargetLine(
+        lineIds: List<Long>,
+        sourceBookId: Long,
+    ): Long? =
+        runSuspendCatching {
+            if (lineIds.isEmpty()) return@runSuspendCatching null
+            val source =
+                if (lineIds.size == 1) {
+                    LineTargumPagingSource(
+                        repository,
+                        lineIds.first(),
+                        setOf(sourceBookId),
+                        setOf(ConnectionType.SOURCE),
+                    )
+                } else {
+                    MultiLineLinksPagingSource(
+                        repository,
+                        lineIds,
+                        setOf(sourceBookId),
+                        setOf(ConnectionType.SOURCE),
+                    )
+                }
+            val result =
+                source.load(
+                    PagingSource.LoadParams.Refresh(
+                        key = 0,
+                        loadSize = PagingDefaults.COMMENTS.INITIAL_LOAD_SIZE,
+                        placeholdersEnabled = false,
+                    ),
+                )
+            (result as? PagingSource.LoadResult.Page)
+                ?.data
+                ?.firstOrNull()
+                ?.link
+                ?.targetLineId
+        }.getOrNull()
     /**
      * Construit un Pager pour les liens/targum d'une ligne
      */

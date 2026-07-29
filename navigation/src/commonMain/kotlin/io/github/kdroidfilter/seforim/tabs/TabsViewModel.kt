@@ -30,6 +30,9 @@ class TabsViewModel(
     private val titleUpdateManager: TabTitleUpdateManager,
     startDestination: TabsDestination,
 ) : ViewModel() {
+    var onTabClosedListener: ((TabItem) -> Unit)? = null
+    var onTabDestinationReplacedListener: ((oldTab: TabItem, newDestination: TabsDestination) -> Unit)? = null
+
     private var _nextTabId = 2
 
     /** When true, the next tab state change should not animate new tabs. Reset by the view after consuming. */
@@ -95,6 +98,8 @@ class TabsViewModel(
         val currentTabs = currentState.tabs
 
         if (index < 0 || index >= currentTabs.size) return
+
+        onTabClosedListener?.invoke(currentTabs[index])
 
         if (currentTabs.size == 1) {
             replaceCurrentTabWithNewTabId(
@@ -195,6 +200,7 @@ class TabsViewModel(
     }
 
     private fun closeAllTabs() {
+        _state.value.tabs.forEach { onTabClosedListener?.invoke(it) }
         val destination = TabsDestination.BookContent(bookId = -1, tabId = UUID.randomUUID().toString())
         val newTab =
             TabItem(
@@ -207,6 +213,8 @@ class TabsViewModel(
     }
 
     private fun closeOthers(index: Int) {
+        val currentTabs = _state.value.tabs
+        currentTabs.filterIndexed { idx, _ -> idx != index }.forEach { onTabClosedListener?.invoke(it) }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             TabsState(tabs = listOf(current.tabs[index]), selectedTabIndex = 0)
@@ -214,6 +222,8 @@ class TabsViewModel(
     }
 
     private fun closeLeft(index: Int) {
+        val currentTabs = _state.value.tabs
+        currentTabs.take(index).forEach { onTabClosedListener?.invoke(it) }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             val newTabs = current.tabs.drop(index)
@@ -228,6 +238,8 @@ class TabsViewModel(
     }
 
     private fun closeRight(index: Int) {
+        val currentTabs = _state.value.tabs
+        currentTabs.drop(index + 1).forEach { onTabClosedListener?.invoke(it) }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             val newTabs = current.tabs.take(index + 1)
@@ -241,6 +253,10 @@ class TabsViewModel(
     }
 
     fun replaceCurrentTabDestination(destination: TabsDestination) {
+        val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
+        if (currentTab != null) {
+            onTabDestinationReplacedListener?.invoke(currentTab, destination)
+        }
         _state.update { current ->
             val index = current.selectedTabIndex
             if (index !in 0..current.tabs.lastIndex) return@update current
@@ -301,6 +317,10 @@ class TabsViewModel(
     }
 
     fun replaceCurrentTabWithNewTabId(destination: TabsDestination) {
+        val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
+        if (currentTab != null) {
+            onTabDestinationReplacedListener?.invoke(currentTab, destination)
+        }
         _state.update { current ->
             val index = current.selectedTabIndex
             if (index !in 0..current.tabs.lastIndex) return@update current

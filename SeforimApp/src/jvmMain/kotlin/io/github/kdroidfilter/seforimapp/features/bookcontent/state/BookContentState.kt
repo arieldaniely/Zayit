@@ -85,6 +85,7 @@ data class BookContentState
         val navigation: NavigationState = NavigationState(),
         val toc: TocState = TocState(),
         val notes: NotesState = NotesState(),
+        val history: HistoryState = HistoryState(),
         val altToc: AltTocState = AltTocState(),
         val content: ContentState = ContentState(),
         val layout: LayoutState = LayoutState(),
@@ -125,6 +126,13 @@ data class TocState(
 @Immutable
 data class NotesState(
     // UI only: the notes themselves live in NoteStore's per-book cache.
+    val isVisible: Boolean = false,
+    val scrollIndex: Int = 0,
+    val scrollOffset: Int = 0,
+)
+
+@Immutable
+data class HistoryState(
     val isVisible: Boolean = false,
     val scrollIndex: Int = 0,
     val scrollOffset: Int = 0,

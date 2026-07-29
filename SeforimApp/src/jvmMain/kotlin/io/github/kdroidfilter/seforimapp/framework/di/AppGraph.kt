@@ -41,6 +41,7 @@ abstract class AppGraph : ViewModelGraph {
     abstract val searchEngine: SearchEngine
     abstract val tabsViewModel: TabsViewModel
     abstract val desktopManager: DesktopManager
+    abstract val historyManager: io.github.kdroidfilter.seforimapp.framework.history.HistoryManager
     abstract val searchHomeViewModel: SearchHomeViewModel
 
     abstract val onboardingProcessRepository: OnboardingProcessRepository

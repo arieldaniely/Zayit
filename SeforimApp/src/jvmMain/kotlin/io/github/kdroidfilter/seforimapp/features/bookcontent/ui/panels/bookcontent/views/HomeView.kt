@@ -592,6 +592,15 @@ private fun HomeBody(
                             }
                         }
                     }
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(homeContentModifier) {
+                            HomeHistoryWidget()
+                        }
+                    }
                 }
                 if (showZmanimWidgets) {
                     item {

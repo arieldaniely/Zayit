@@ -17,10 +17,13 @@ import kotlinx.coroutines.flow.stateIn
 @Inject
 class DisplaySettingsViewModel : ViewModel() {
     private val showZmanim = MutableStateFlow(AppSettings.isShowZmanimWidgetsEnabled())
+    private val showTempleCountdown = MutableStateFlow(AppSettings.isShowTempleCountdownEnabled())
     private val showHomeWallpaper = MutableStateFlow(AppSettings.isShowHomeWallpaperEnabled())
     private val showHomeHistory = MutableStateFlow(AppSettings.isShowHomeHistoryEnabled())
     private val compactMode = MutableStateFlow(AppSettings.isCompactModeEnabled())
     private val maxCommentatorsPerPage = MutableStateFlow(AppSettings.getMaxCommentatorsPerPage())
+    private val homeWidgetsVisibility =
+        combine(showZmanim, showTempleCountdown) { zmanim, temple -> listOf(zmanim, temple) }
     private val contextVisibility =
         combine(
             showHomeHistory,
@@ -33,10 +36,11 @@ class DisplaySettingsViewModel : ViewModel() {
         }
 
     val state =
-        combine(showZmanim, showHomeWallpaper, compactMode, maxCommentatorsPerPage, contextVisibility) {
-                z, wallpaper, compact, maxCommentators, context ->
+        combine(homeWidgetsVisibility, showHomeWallpaper, compactMode, maxCommentatorsPerPage, contextVisibility) {
+                widgets, wallpaper, compact, maxCommentators, context ->
             DisplaySettingsState(
-                showZmanimWidgets = z,
+                showZmanimWidgets = widgets[0],
+                showTempleCountdown = widgets[1],
                 showHomeWallpaper = wallpaper,
                 compactMode = compact,
                 showHomeHistory = context[0],
@@ -51,6 +55,7 @@ class DisplaySettingsViewModel : ViewModel() {
             SharingStarted.WhileSubscribed(5_000),
             DisplaySettingsState(
                 showZmanimWidgets = showZmanim.value,
+                showTempleCountdown = showTempleCountdown.value,
                 showHomeWallpaper = showHomeWallpaper.value,
                 compactMode = compactMode.value,
                 maxCommentatorsPerPage = maxCommentatorsPerPage.value,
@@ -63,6 +68,10 @@ class DisplaySettingsViewModel : ViewModel() {
             is DisplaySettingsEvents.SetShowZmanimWidgets -> {
                 AppSettings.setShowZmanimWidgetsEnabled(event.value)
                 showZmanim.value = event.value
+            }
+            is DisplaySettingsEvents.SetShowTempleCountdown -> {
+                AppSettings.setShowTempleCountdownEnabled(event.value)
+                showTempleCountdown.value = event.value
             }
             is DisplaySettingsEvents.SetShowHomeWallpaper -> {
                 AppSettings.setShowHomeWallpaperEnabled(event.value)

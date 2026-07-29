@@ -4,4 +4,7 @@
     <string name="hebrewcalendar_next_month">החודש הבא</string>
     <string name="hebrewcalendar_mode_gregorian">לועזי</string>
     <string name="hebrewcalendar_mode_hebrew">עברי</string>
+    <string name="hebrewcalendar_search_date">&#x5D7;&#x5D9;&#x5E4;&#x5D5;&#x5E9; &#x5EA;&#x5D0;&#x5E8;&#x5D9;&#x5DA;</string>
+    <string name="hebrewcalendar_search_date_placeholder">&#x5D4;&#x5E7;&#x5DC;&#x5D3;&#x5EA; &#x5EA;&#x5D0;&#x5E8;&#x5D9;&#x5DA;&#x2026;</string>
+    <string name="hebrewcalendar_search_date_invalid">&#x5DC;&#x5D0; &#x5D6;&#x5D5;&#x5D4;&#x5D4; &#x5EA;&#x5D0;&#x5E8;&#x5D9;&#x5DA; &#x5EA;&#x5E7;&#x5D9;&#x5DF;</string>
 </resources>

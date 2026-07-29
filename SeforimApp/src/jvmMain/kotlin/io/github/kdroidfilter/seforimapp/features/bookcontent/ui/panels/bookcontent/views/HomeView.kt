@@ -253,6 +253,7 @@ private fun HomeBody(
 ) {
     // Whether to show zmanim widgets
     val showZmanimWidgets by AppSettings.showZmanimWidgetsFlow.collectAsState()
+    val showTempleCountdown by AppSettings.showTempleCountdownFlow.collectAsState()
     val showHomeHistory by AppSettings.showHomeHistoryFlow.collectAsState()
     val historyEntries by LocalAppGraph.current.historyManager.entries.collectAsState()
 
@@ -625,6 +626,8 @@ private fun HomeBody(
                             )
                         }
                     }
+                }
+                if (showTempleCountdown) {
                     item {
                         Box(
                             modifier =

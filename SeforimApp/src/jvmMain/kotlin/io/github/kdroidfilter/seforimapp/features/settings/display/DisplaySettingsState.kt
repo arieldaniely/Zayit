@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 @Immutable
 data class DisplaySettingsState(
     val showZmanimWidgets: Boolean = true,
+    val showTempleCountdown: Boolean = true,
     val showHomeWallpaper: Boolean = true,
     val showHomeHistory: Boolean = true,
     val compactMode: Boolean = false,

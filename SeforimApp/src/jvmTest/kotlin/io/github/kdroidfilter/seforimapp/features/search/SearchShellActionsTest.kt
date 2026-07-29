@@ -40,6 +40,8 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = { ensureScopeBookCalled = true },
                 onTocToggle = { _, _ -> tocToggleCalled = true },
                 onTocFilter = { tocFilterCalled = true },
+                onCategoryFilter = {},
+                onBookFilter = {},
             )
 
         assertNotNull(actions)
@@ -97,6 +99,8 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = {},
                 onTocToggle = noOpTocToggle,
                 onTocFilter = noOpTocFilter,
+                onCategoryFilter = {},
+                onBookFilter = {},
             )
 
         // Each lambda is a unique instance, so equality will not match
@@ -124,6 +128,8 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = {},
                 onTocToggle = { _, _ -> },
                 onTocFilter = {},
+                onCategoryFilter = {},
+                onBookFilter = {},
             )
 
         val modified = original.copy(onSubmit = { newSubmitCalled = true })

@@ -1115,12 +1115,19 @@ class SearchResultViewModel(
         val q = currentSearchQuery.takeIf { it.isNotBlank() } ?: _uiState.value.query.trim()
         if (q.isBlank()) return emptyList()
         val baseBookOnly = !_uiState.value.globalExtended
+        val scopeTocId = _uiState.value.scopeTocId
         return withContext(Dispatchers.Default) {
+            val tocLineIds =
+                scopeTocId?.let { tocId ->
+                    val toc = repository.getTocEntry(tocId) ?: return@let emptySet()
+                    collectLineIdsForTocSubtree(toc.id, toc.bookId)
+                }
             val session =
                 lucene.openSession(
                     query = q,
                     near = DEFAULT_NEAR,
-                    bookIds = listOf(bookId),
+                    bookIds = if (tocLineIds == null) listOf(bookId) else null,
+                    lineIds = tocLineIds,
                     baseBookOnly = baseBookOnly,
                 ) ?: return@withContext emptyList()
             try {

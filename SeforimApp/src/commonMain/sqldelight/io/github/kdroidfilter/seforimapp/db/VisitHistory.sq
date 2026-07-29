@@ -24,13 +24,13 @@ ON CONFLICT(key) DO UPDATE SET
     visitCount = visitCount + 1;
 
 selectRecent:
-SELECT * FROM visit_history ORDER BY visitedAt DESC LIMIT :limitCount;
+SELECT * FROM visit_history ORDER BY visitedAt DESC, key ASC LIMIT :limitCount OFFSET :offsetCount;
 
 searchByTitle:
 SELECT * FROM visit_history
 WHERE title LIKE '%' || :query || '%'
-ORDER BY visitedAt DESC
-LIMIT :limitCount;
+ORDER BY visitedAt DESC, key ASC
+LIMIT :limitCount OFFSET :offsetCount;
 
 deleteByKey:
 DELETE FROM visit_history WHERE key = :key;

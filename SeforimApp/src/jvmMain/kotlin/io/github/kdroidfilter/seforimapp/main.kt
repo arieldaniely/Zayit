@@ -413,10 +413,18 @@ fun main(args: Array<String>) {
                                 val currentIndex = currentState.selectedTabIndex
                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                 if (isCtrlOrCmd && keyEvent.key == Key.T) {
-                                    tabsVm.onEvent(TabsEvents.OnAdd)
+                                    if (keyEvent.isShiftPressed) {
+                                        tabsVm.onEvent(TabsEvents.ReopenLastClosedTab)
+                                    } else {
+                                        tabsVm.onEvent(TabsEvents.OnAdd)
+                                    }
                                     true
                                 } else if (isCtrlOrCmd && keyEvent.key == Key.W) {
-                                    tabsVm.onEvent(TabsEvents.OnClose(currentIndex))
+                                    if (keyEvent.isShiftPressed) {
+                                        tabsVm.onEvent(TabsEvents.CloseAll)
+                                    } else {
+                                        tabsVm.onEvent(TabsEvents.OnClose(currentIndex))
+                                    }
                                     true
                                 } else if (isCtrlOrCmd && keyEvent.key == Key.Tab) {
                                     val count = currentTabs.size

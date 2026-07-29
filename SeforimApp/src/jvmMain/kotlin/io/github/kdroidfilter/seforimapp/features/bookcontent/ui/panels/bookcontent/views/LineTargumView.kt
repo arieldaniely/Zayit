@@ -165,7 +165,7 @@ private fun SingleLineTargumView(
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
-                                    ConnectionType.MENTION -> null
+                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }
@@ -180,7 +180,7 @@ private fun SingleLineTargumView(
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
-                                    ConnectionType.MENTION -> null
+                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }

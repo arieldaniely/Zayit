@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.*
+import kotlin.collections.ArrayDeque
 import kotlin.math.max
 
 @Immutable
@@ -34,6 +35,24 @@ class TabsViewModel(
     var onTabDestinationReplacedListener: ((oldTab: TabItem, newDestination: TabsDestination) -> Unit)? = null
 
     private var _nextTabId = 2
+
+    private val closedTabs = ArrayDeque<TabItem>()
+
+    private fun recordClosedTab(tab: TabItem) {
+        val dest = tab.destination
+        val shouldRecord = when (dest) {
+            is TabsDestination.Home -> false
+            is TabsDestination.Search -> dest.searchQuery.isNotBlank()
+            is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
+            is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
+        }
+        if (!shouldRecord) return
+
+        closedTabs.addLast(tab)
+        if (closedTabs.size > 50) {
+            closedTabs.removeFirst()
+        }
+    }
 
     /** When true, the next tab state change should not animate new tabs. Reset by the view after consuming. */
     private val _skipNextAnimation = MutableStateFlow(false)
@@ -90,6 +109,7 @@ class TabsViewModel(
             is TabsEvents.CloseOthers -> closeOthers(event.index)
             is TabsEvents.CloseLeft -> closeLeft(event.index)
             is TabsEvents.CloseRight -> closeRight(event.index)
+            TabsEvents.ReopenLastClosedTab -> reopenLastClosedTab()
         }
     }
 
@@ -99,7 +119,10 @@ class TabsViewModel(
 
         if (index < 0 || index >= currentTabs.size) return
 
-        onTabClosedListener?.invoke(currentTabs[index])
+        val tabToClose = currentTabs[index]
+        recordClosedTab(tabToClose)
+
+        onTabClosedListener?.invoke(tabToClose)
 
         if (currentTabs.size == 1) {
             replaceCurrentTabWithNewTabId(
@@ -200,7 +223,11 @@ class TabsViewModel(
     }
 
     private fun closeAllTabs() {
-        _state.value.tabs.forEach { onTabClosedListener?.invoke(it) }
+        val currentTabs = _state.value.tabs
+        currentTabs.forEach { tab ->
+            recordClosedTab(tab)
+            onTabClosedListener?.invoke(tab)
+        }
         val destination = TabsDestination.BookContent(bookId = -1, tabId = UUID.randomUUID().toString())
         val newTab =
             TabItem(
@@ -214,7 +241,10 @@ class TabsViewModel(
 
     private fun closeOthers(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.filterIndexed { idx, _ -> idx != index }.forEach { onTabClosedListener?.invoke(it) }
+        currentTabs.filterIndexed { idx, _ -> idx != index }.forEach { tab ->
+            recordClosedTab(tab)
+            onTabClosedListener?.invoke(tab)
+        }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             TabsState(tabs = listOf(current.tabs[index]), selectedTabIndex = 0)
@@ -223,7 +253,10 @@ class TabsViewModel(
 
     private fun closeLeft(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.take(index).forEach { onTabClosedListener?.invoke(it) }
+        currentTabs.take(index).forEach { tab ->
+            recordClosedTab(tab)
+            onTabClosedListener?.invoke(tab)
+        }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             val newTabs = current.tabs.drop(index)
@@ -239,12 +272,29 @@ class TabsViewModel(
 
     private fun closeRight(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.drop(index + 1).forEach { onTabClosedListener?.invoke(it) }
+        currentTabs.drop(index + 1).forEach { tab ->
+            recordClosedTab(tab)
+            onTabClosedListener?.invoke(tab)
+        }
         _state.update { current ->
             if (index !in 0..current.tabs.lastIndex) return@update current
             val newTabs = current.tabs.take(index + 1)
             val newSelected = if (current.selectedTabIndex <= index) current.selectedTabIndex else newTabs.lastIndex
             TabsState(tabs = newTabs, selectedTabIndex = newSelected)
+        }
+    }
+
+    private fun reopenLastClosedTab() {
+        if (closedTabs.isEmpty()) return
+        val restoredTab = closedTabs.removeLast()
+        val newTab = TabItem(
+            id = _nextTabId++,
+            title = restoredTab.title,
+            destination = restoredTab.destination,
+            tabType = restoredTab.tabType,
+        )
+        _state.update { current ->
+            TabsState(tabs = listOf(newTab) + current.tabs, selectedTabIndex = 0)
         }
     }
 

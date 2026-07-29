@@ -193,6 +193,7 @@ class DesktopManager(
         return DesktopTabsSnapshot(
             destinations = destinations,
             selectedIndex = tabsState.selectedTabIndex.coerceIn(0, destinations.lastIndex.coerceAtLeast(0)),
+            pinnedTabIds = tabs.filter { it.isPinned }.mapTo(mutableSetOf()) { it.destination.tabId },
             titles = titles,
             tabStates = tabStates,
         )
@@ -212,6 +213,7 @@ class DesktopManager(
             destinations = snapshot.destinations,
             selectedIndex = snapshot.selectedIndex,
             titles = titles,
+            pinnedTabIds = snapshot.pinnedTabIds,
             skipAnimation = true,
         )
     }

@@ -4,6 +4,7 @@ import io.github.kdroidfilter.seforim.desktop.VirtualDesktop
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.session.BookContentPersistedState
@@ -496,6 +497,24 @@ class DesktopManagerIntegrationTest {
 
             assertEquals(tabsViewModel.state.value.tabs.size, snapshot.destinations.size)
             assertEquals(tabsViewModel.state.value.selectedTabIndex, snapshot.selectedIndex)
+        }
+
+    @Test
+    fun `pinned tabs are restored only in their desktop`() =
+        runTest {
+            val originalDesktopId = desktopManager.activeDesktopId.value
+            val pinnedTabId = tabsViewModel.state.value.tabs.single().destination.tabId
+            tabsViewModel.onEvent(TabsEvents.OnTogglePin(0))
+
+            desktopManager.createDesktop("Desktop 2")
+            desktopManager.clearSwitching()
+            assertTrue(tabsViewModel.state.value.tabs.none { it.isPinned })
+
+            desktopManager.switchTo(originalDesktopId)
+            assertEquals(
+                setOf(pinnedTabId),
+                tabsViewModel.state.value.tabs.filter { it.isPinned }.map { it.destination.tabId }.toSet(),
+            )
         }
 
     @Test

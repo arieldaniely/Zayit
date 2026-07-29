@@ -16,6 +16,10 @@ sealed class TabsEvents {
         val toIndex: Int,
     ) : TabsEvents()
 
+    data class OnTogglePin(
+        val index: Int,
+    ) : TabsEvents()
+
     // Bulk/advanced close operations
     data object CloseAll : TabsEvents()
 

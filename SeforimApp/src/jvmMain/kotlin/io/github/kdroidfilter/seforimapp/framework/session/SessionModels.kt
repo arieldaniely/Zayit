@@ -103,6 +103,8 @@ data class DesktopTabsSnapshot(
     val selectedIndex: Int = 0,
     val titles: Map<String, SerializableTabTitle> = emptyMap(),
     val tabStates: Map<String, TabPersistedState> = emptyMap(),
+    // Keep new fields appended so ProtoBuf field numbers remain backward-compatible.
+    val pinnedTabIds: Set<String> = emptySet(),
 )
 
 @Serializable

@@ -87,6 +87,10 @@ class PersonalLibraryImporterTest {
 
             assertTrue(progressValues.isNotEmpty())
             assertTrue(progressValues.last() >= 1f)
+            assertTrue(progressValues.size > 4, "Progress should be reported throughout import and indexing")
+            assertEquals(progressValues.sorted(), progressValues, "Progress must never move backwards")
+            assertTrue(progressValues.any { it in 0.03f..0.62f }, "Import should report intermediate progress")
+            assertTrue(progressValues.any { it in 0.62f..0.98f }, "Indexing should report intermediate progress")
         } finally {
             temp.toFile().deleteRecursively()
         }

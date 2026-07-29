@@ -17,6 +17,9 @@ import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 private const val DEFAULT_DB_NAME = "seforim.db"
@@ -88,7 +91,7 @@ private fun resolveDatabasePath(): String {
 
 /**
  * Singleton holder for the precomputed catalog and its extracted data.
- * The catalog is loaded once at application startup and cached for the entire session.
+ * The catalog is loaded lazily and cached until an explicit reload publishes a new revision.
  * Extracted data (categories, books) is also cached to avoid re-traversing the tree on each tab open.
  */
 object CatalogCache {
@@ -100,6 +103,8 @@ object CatalogCache {
     private var _categoriesById: Map<Long, Category>? = null
     private var _allBooks: Set<Book>? = null
     private var _allBooksWithAltFlags: Set<Book>? = null
+    private val _revision = MutableStateFlow(0L)
+    val revision: StateFlow<Long> = _revision.asStateFlow()
 
     /**
      * Gets the cached catalog, loading it if necessary.
@@ -233,6 +238,8 @@ object CatalogCache {
         _categoryChildren = null
         _categoriesById = null
         _allBooks = null
+        _allBooksWithAltFlags = null
+        _revision.value++
     }
 
     /**

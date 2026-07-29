@@ -536,7 +536,8 @@ private fun CommentatorsGrid(
     columnScroll: CommentariesColumnScroll,
     onEvent: (BookContentEvent) -> Unit,
 ) {
-    val pagerFlowCache = remember(selection) { mutableMapOf<Long, Flow<PagingData<CommentaryWithText>>>() }
+    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
+    val pagerFlowCache = remember(selection, linkLoadLevel) { mutableMapOf<Long, Flow<PagingData<CommentaryWithText>>>() }
     val listStateCache = remember(selection) { mutableMapOf<Long, LazyListState>() }
     val restoredCommentatorIds = remember(selection) { mutableStateMapOf<Long, Boolean>() }
 
@@ -547,7 +548,7 @@ private fun CommentatorsGrid(
         onFlushPersist = { onEvent(BookContentEvent.FlushCommentariesState) },
     ) { commentatorId ->
         val pagerFlow =
-            remember(commentatorId, pagerFlowCache) {
+            remember(commentatorId, pagerFlowCache, linkLoadLevel) {
                 // The open commentator's TEXT is built lazily here, on first display — it is NOT
                 // covered by the connections prefetch (which only loads the commentator list).
                 pagerFlowCache.getOrPut(commentatorId) {

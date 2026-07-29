@@ -5,6 +5,7 @@ import androidx.paging.PagingData
 import androidx.paging.PagingSource
 import androidx.paging.cachedIn
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.CommentatorGroup
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.CommentatorItem
@@ -18,6 +19,8 @@ import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkTypeClassification
 import io.github.kdroidfilter.seforimlibrary.core.models.PubDate
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentarySummary
@@ -48,6 +51,7 @@ class CommentariesUseCase(
     private val commentatorBookCache: MutableMap<Long, Book> = ConcurrentHashMap()
     private val defaultTargumCache: MutableMap<Long, List<Long>> = ConcurrentHashMap()
     private val linePathCache: MutableMap<Long, String> = ConcurrentHashMap()
+    private var cachedLinkLoadLevel = AppSettings.getLinkLoadLevel()
 
     // Memoizes the cached pager flows per (kind, line(s), commentator) so the SAME cachedIn flow
     // is reused whenever the same commentator column is requested again (re-selecting a line,
@@ -69,6 +73,16 @@ class CommentariesUseCase(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, LineConnectionsSnapshot>?): Boolean =
                 size > MAX_CACHED_LINE_CONNECTIONS
         }
+
+    private fun currentLinkLoadLevel(): LinkLoadLevel {
+        val value = AppSettings.getLinkLoadLevel()
+        if (value != cachedLinkLoadLevel) {
+            synchronized(pagerFlowCache) { pagerFlowCache.clear() }
+            synchronized(lineConnectionsCache) { lineConnectionsCache.clear() }
+            cachedLinkLoadLevel = value
+        }
+        return LinkLoadLevel.fromValue(value)
+    }
 
     @Synchronized
     private fun cachedPager(
@@ -106,12 +120,12 @@ class CommentariesUseCase(
         lineId: Long,
         commentatorId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("com:$lineId:${commentatorId ?: -1L}") {
+        cachedPager("com:$lineId:${commentatorId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = commentatorId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    CommentsForLineOrTocPagingSource(repository, lineId, ids)
+                    CommentsForLineOrTocPagingSource(repository, lineId, ids, currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -130,7 +144,7 @@ class CommentariesUseCase(
         for (commentatorId in commentatorIds) {
             currentCoroutineContext().ensureActive()
             runSuspendCatching {
-                CommentsForLineOrTocPagingSource(repository, lineId, setOf(commentatorId))
+                CommentsForLineOrTocPagingSource(repository, lineId, setOf(commentatorId), currentLinkLoadLevel())
                     .load(
                         PagingSource.LoadParams.Refresh(
                             key = 0,
@@ -196,12 +210,12 @@ class CommentariesUseCase(
         lineId: Long,
         sourceBookId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("src:$lineId:${sourceBookId ?: -1L}") {
+        cachedPager("src:$lineId:${sourceBookId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.SOURCE))
+                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.SOURCE), currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -210,12 +224,12 @@ class CommentariesUseCase(
         lineId: Long,
         sourceBookId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("men:$lineId:${sourceBookId ?: -1L}") {
+        cachedPager("men:$lineId:${sourceBookId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.MENTION))
+                    LineTargumPagingSource(repository, lineId, ids, setOf(ConnectionType.MENTION), currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -229,12 +243,12 @@ class CommentariesUseCase(
         lineIds: List<Long>,
         commentatorId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("comL:${lineIds.joinToString(",")}:${commentatorId ?: -1L}") {
+        cachedPager("comL:${lineIds.joinToString(",")}:${commentatorId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = commentatorId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    MultiLineCommentsPagingSource(repository, lineIds, ids)
+                    MultiLineCommentsPagingSource(repository, lineIds, ids, currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -263,12 +277,12 @@ class CommentariesUseCase(
         lineIds: List<Long>,
         sourceBookId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("srcL:${lineIds.joinToString(",")}:${sourceBookId ?: -1L}") {
+        cachedPager("srcL:${lineIds.joinToString(",")}:${sourceBookId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.SOURCE))
+                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.SOURCE), currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -277,12 +291,12 @@ class CommentariesUseCase(
         lineIds: List<Long>,
         sourceBookId: Long? = null,
     ): Flow<PagingData<CommentaryWithText>> =
-        cachedPager("menL:${lineIds.joinToString(",")}:${sourceBookId ?: -1L}") {
+        cachedPager("menL:${lineIds.joinToString(",")}:${sourceBookId ?: -1L}:${currentLinkLoadLevel().value}") {
             val ids = sourceBookId?.let { setOf(it) } ?: emptySet()
             Pager(
                 config = PagingDefaults.COMMENTS.config(placeholders = false),
                 pagingSourceFactory = {
-                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.MENTION))
+                    MultiLineLinksPagingSource(repository, lineIds, ids, setOf(ConnectionType.MENTION), currentLinkLoadLevel())
                 },
             ).flow.cachedIn(scope)
         }
@@ -300,6 +314,8 @@ class CommentariesUseCase(
             repository.getCommentaryCharCountsForLineOrSection(
                 baseLineId = lineId,
                 activeCommentatorIds = setOf(commentatorId),
+                connectionTypes = LinkTypeClassification.commentaryTypes(currentLinkLoadLevel()),
+                linkLoadLevel = currentLinkLoadLevel(),
             )
         }.getOrElse { emptyList() }
 
@@ -315,6 +331,8 @@ class CommentariesUseCase(
             repository.getCommentaryCharCountsForLines(
                 lineIds = lineIds,
                 activeCommentatorIds = setOf(commentatorId),
+                connectionTypes = LinkTypeClassification.commentaryTypes(currentLinkLoadLevel()),
+                linkLoadLevel = currentLinkLoadLevel(),
             )
         }.getOrElse { emptyList() }
 
@@ -334,6 +352,7 @@ class CommentariesUseCase(
                 activeCommentatorIds = setOf(sourceBookId),
                 connectionTypes =
                     if (connectionType == ConnectionType.TARGUM) DISPLAYED_LINK_TYPES else setOf(connectionType),
+                linkLoadLevel = currentLinkLoadLevel(),
             )
         }.getOrElse { emptyList() }
 
@@ -353,6 +372,7 @@ class CommentariesUseCase(
                 activeCommentatorIds = setOf(sourceBookId),
                 connectionTypes =
                     if (connectionType == ConnectionType.TARGUM) DISPLAYED_LINK_TYPES else setOf(connectionType),
+                linkLoadLevel = currentLinkLoadLevel(),
             )
         }.getOrElse { emptyList() }
 
@@ -439,7 +459,7 @@ class CommentariesUseCase(
         if (lineIds.isEmpty()) return emptyMap()
         return runSuspendCatching {
             val allBaseIds = lineIds.flatMap { resolveBaseLineIds(it) }.distinct()
-            val links = repository.getMentionSummariesForLines(allBaseIds)
+            val links = repository.getMentionSummariesForLines(allBaseIds, currentLinkLoadLevel())
             val currentTitle =
                 stateManager.state
                     .first()
@@ -459,16 +479,6 @@ class CommentariesUseCase(
                     .first()
                     .navigation.selectedBook
                     ?: return@runSuspendCatching emptyMap<String, Long>()
-            if (
-                !selectedBook.hasSourceConnection &&
-                !selectedBook.hasReferenceConnection &&
-                !selectedBook.hasOtherConnection &&
-                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id) &&
-                !repository.hasAdditionalMentionLinksForBook(selectedBook.id)
-            ) {
-                return@runSuspendCatching emptyMap<String, Long>()
-            }
-
             val allBaseIds =
                 lineIds
                     .flatMap { resolveBaseLineIds(it) }
@@ -476,7 +486,7 @@ class CommentariesUseCase(
             if (allBaseIds.isEmpty()) return@runSuspendCatching emptyMap<String, Long>()
 
             val links =
-                repository.getSourceSummariesForLines(allBaseIds)
+                repository.getSourceSummariesForLines(allBaseIds, currentLinkLoadLevel())
 
             buildSourceMap(links, selectedBook.title.trim())
         }.getOrElse { emptyMap() }
@@ -1021,7 +1031,8 @@ class CommentariesUseCase(
     ): LineConnectionsSnapshot {
         if (connections.isEmpty()) return LineConnectionsSnapshot()
 
-        val commentaries = connections.filter { it.link.connectionType == ConnectionType.COMMENTARY }
+        val commentaryTypes = LinkTypeClassification.commentaryTypes(currentLinkLoadLevel())
+        val commentaries = connections.filter { it.link.connectionType in commentaryTypes }
         val targumLinks = connections.filter { it.link.connectionType in DISPLAYED_LINK_TYPES }
         val sourceLinks = connections.filter { it.link.connectionType == ConnectionType.SOURCE }
         val mentionLinks = connections.filter { it.link.connectionType == ConnectionType.MENTION }
@@ -1048,7 +1059,7 @@ class CommentariesUseCase(
         val commentaries =
             repository
                 .getCommentarySummariesForLines(baseIds)
-                .filter { it.link.connectionType == ConnectionType.COMMENTARY }
+                .filter { it.link.connectionType in LinkTypeClassification.commentaryTypes(currentLinkLoadLevel()) }
 
         if (commentaries.isEmpty()) return emptyList()
 
@@ -1107,7 +1118,7 @@ class CommentariesUseCase(
     suspend fun getAvailableMentions(lineId: Long): Map<String, Long> =
         runSuspendCatching {
             val baseIds = resolveBaseLineIds(lineId)
-            val links = repository.getMentionSummariesForLines(baseIds)
+            val links = repository.getMentionSummariesForLines(baseIds, currentLinkLoadLevel())
             val currentTitle =
                 stateManager.state
                     .first()
@@ -1125,21 +1136,9 @@ class CommentariesUseCase(
                     .first()
                     .navigation.selectedBook
                     ?: return@runSuspendCatching emptyMap<String, Long>()
-            // The immutable book flag cannot reflect links added later by the personal overlay.
-            // Its exact side index keeps the old fast path for every unaffected main book.
-            if (
-                !selectedBook.hasSourceConnection &&
-                !selectedBook.hasReferenceConnection &&
-                !selectedBook.hasOtherConnection &&
-                !repository.hasAdditionalSourceLinksTargetingBook(selectedBook.id) &&
-                !repository.hasAdditionalMentionLinksForBook(selectedBook.id)
-            ) {
-                return@runSuspendCatching emptyMap<String, Long>()
-            }
-
             val baseIds = resolveBaseLineIds(lineId)
             val links =
-                repository.getSourceSummariesForLines(baseIds)
+                repository.getSourceSummariesForLines(baseIds, currentLinkLoadLevel())
 
             val currentBookTitle = selectedBook.title.trim()
             buildSourceMap(links, currentBookTitle)
@@ -1147,6 +1146,7 @@ class CommentariesUseCase(
 
     suspend fun loadLineConnections(lineIds: List<Long>): Map<Long, LineConnectionsSnapshot> {
         if (lineIds.isEmpty()) return emptyMap()
+        val linkLoadLevel = currentLinkLoadLevel()
         val distinctIds = lineIds.distinct()
 
         // Read-through cache: only query the DB for lines we have not resolved yet.
@@ -1179,7 +1179,12 @@ class CommentariesUseCase(
         val currentState = stateManager.state.first()
         val selectedBook = currentState.navigation.selectedBook
 
-        val allConnections = repository.getCommentarySummariesForLines(allBaseIds, includeSources = true, includeMentions = true)
+        val allConnections = repository.getCommentarySummariesForLines(
+            allBaseIds,
+            includeSources = true,
+            includeMentions = true,
+            linkLoadLevel = linkLoadLevel,
+        )
         if (allConnections.isEmpty()) return storeAndMerge(missing.associateWith { LineConnectionsSnapshot() })
 
         val connectionsBySource = allConnections.groupBy { it.link.sourceLineId }

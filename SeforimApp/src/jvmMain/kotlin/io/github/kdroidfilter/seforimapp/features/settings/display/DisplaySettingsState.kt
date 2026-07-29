@@ -8,10 +8,7 @@ data class DisplaySettingsState(
     val showHomeWallpaper: Boolean = true,
     val compactMode: Boolean = false,
     val maxCommentatorsPerPage: Int = 0,
-    val showContextTargumim: Boolean = true,
-    val showContextMentions: Boolean = true,
-    val showContextSources: Boolean = true,
-    val showContextCommentaries: Boolean = true,
+    val linkLoadLevel: Int = 2,
 ) {
     companion object {
         val preview =

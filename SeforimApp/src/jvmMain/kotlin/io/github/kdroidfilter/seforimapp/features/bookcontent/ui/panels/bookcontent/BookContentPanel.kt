@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
@@ -131,6 +133,7 @@ private fun BookContentPanelContent(
 ) {
     val providers = uiState.providers ?: return
     val selectedBook = uiState.navigation.selectedBook ?: return
+    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
     var isBookContentZoomInProgress by remember { mutableStateOf(false) }
 
     // Create LazyListState AFTER loading check, so anchorId is correctly set
@@ -147,7 +150,7 @@ private fun BookContentPanelContent(
         }
 
     val connectionsCache =
-        remember(selectedBook.id) {
+        remember(selectedBook.id, linkLoadLevel) {
             mutableStateMapOf<Long, LineConnectionsSnapshot>()
         }
     val prefetchScope = rememberCoroutineScope()
@@ -156,7 +159,7 @@ private fun BookContentPanelContent(
     // check is not enough: two requests that arrive before the first load resolves both see the id
     // as missing and each launch a redundant DB load (the race). Guarding on this set both detects
     // (logged) and dedups concurrent loads. Mutated only on the composition (Main) thread.
-    val inFlight = remember(selectedBook.id) { mutableSetOf<Long>() }
+    val inFlight = remember(selectedBook.id, linkLoadLevel) { mutableSetOf<Long>() }
 
     fun prefetch(
         @StructuredScope scope: CoroutineScope,
@@ -186,7 +189,12 @@ private fun BookContentPanelContent(
     // tab (composed but not displayed) has its open commentaries ready and the on-demand pager load
     // is instant once the tab is shown. Gated on the pane actually being open.
     val openCommentatorIds = uiState.content.selectedCommentatorIds
-    LaunchedEffect(uiState.content.primarySelectedLineId, openCommentatorIds, uiState.content.showCommentaries) {
+    LaunchedEffect(
+        uiState.content.primarySelectedLineId,
+        openCommentatorIds,
+        uiState.content.showCommentaries,
+        linkLoadLevel,
+    ) {
         val lineId = uiState.content.primarySelectedLineId ?: return@LaunchedEffect
         if (!uiState.content.showCommentaries || openCommentatorIds.isEmpty()) return@LaunchedEffect
         providers.prefetchCommentaries(lineId, openCommentatorIds)

@@ -159,6 +159,8 @@ class PersonalLibraryQueryRouterTest {
             driver.setPersonalOverlayAttached(
                 attached = true,
                 targetBookIds = setOf(7L),
+                sourceTargetBookIds = setOf(7L),
+                mentionBookIds = setOf(9L),
             )
 
             assertEquals(

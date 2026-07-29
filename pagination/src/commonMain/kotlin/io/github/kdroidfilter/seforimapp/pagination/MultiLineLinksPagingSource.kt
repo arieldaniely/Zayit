@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.pagination
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 
@@ -15,6 +16,7 @@ class MultiLineLinksPagingSource(
     private val lineIds: List<Long>,
     private val sourceBookIds: Set<Long> = emptySet(),
     private val connectionTypes: Set<ConnectionType> = setOf(ConnectionType.TARGUM),
+    private val linkLoadLevel: LinkLoadLevel = LinkLoadLevel.MINIMAL,
 ) : PagingSource<Int, CommentaryWithText>() {
     override fun getRefreshKey(state: PagingState<Int, CommentaryWithText>): Int? =
         state.anchorPosition?.let { anchorPosition ->
@@ -39,6 +41,7 @@ class MultiLineLinksPagingSource(
                     // selection. Otherwise a single sugya referenced by multiple
                     // halakhot in a TOC heading appears N times in the panel.
                     distinctByTargetLine = lineIds.size > 1,
+                    linkLoadLevel = linkLoadLevel,
                 )
 
             val prevKey = if (page == 0) null else page - 1

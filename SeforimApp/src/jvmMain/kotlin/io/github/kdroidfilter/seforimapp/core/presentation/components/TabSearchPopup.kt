@@ -109,6 +109,7 @@ fun TabSearchButton() {
             onClick = { openWindow.tabSearchVisible.value = !visible },
             tooltipText = stringResource(Res.string.tab_search_tooltip),
             shortcutHint = shortcutHint,
+            isActive = visible,
         )
         if (visible) {
             Popup(

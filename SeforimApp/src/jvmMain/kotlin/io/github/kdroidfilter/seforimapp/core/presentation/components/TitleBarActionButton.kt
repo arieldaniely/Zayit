@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,8 +21,11 @@ import org.jetbrains.jewel.ui.component.styling.IconButtonColors
 import org.jetbrains.jewel.ui.component.styling.IconButtonMetrics
 import org.jetbrains.jewel.ui.component.styling.IconButtonStyle
 import org.jetbrains.jewel.ui.icon.IconKey
+import org.jetbrains.jewel.ui.component.styling.TabState
+import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import org.jetbrains.jewel.ui.theme.iconButtonStyle
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TitleBarActionButton(
     key: IconKey,
@@ -30,24 +34,41 @@ fun TitleBarActionButton(
     tooltipText: String,
     shortcutHint: String? = null,
     enabled: Boolean = true,
+    isActive: Boolean = false,
 ) {
     val accent = JewelTheme.globalColors.outlines.focused
     val baseStyle = JewelTheme.iconButtonStyle
     val isIslands = ThemeUtils.isIslandsStyle()
+    val activeTabBg = JewelTheme.defaultTabStyle.colors.backgroundFor(TabState.of(selected = true, active = true)).value
+
     val style =
-        remember(accent, baseStyle, isIslands) {
+        remember(accent, baseStyle, isIslands, isActive, activeTabBg) {
             val c = baseStyle.colors
+            val normalBg =
+                if (isActive) {
+                    if (isIslands) accent.copy(alpha = 0.20f) else activeTabBg
+                } else {
+                    c.background
+                }
+            val hoverBg =
+                if (isActive) {
+                    if (isIslands) accent.copy(alpha = 0.25f) else activeTabBg
+                } else {
+                    accent.copy(alpha = 0.12f)
+                }
+            val pressBg = accent.copy(alpha = 0.20f)
+
             IconButtonStyle(
                 colors =
                     IconButtonColors(
                         foregroundSelectedActivated = c.foregroundSelectedActivated,
-                        background = c.background,
+                        background = normalBg,
                         backgroundDisabled = c.backgroundDisabled,
-                        backgroundSelected = c.backgroundSelected,
-                        backgroundSelectedActivated = c.backgroundSelectedActivated,
+                        backgroundSelected = normalBg,
+                        backgroundSelectedActivated = normalBg,
                         backgroundFocused = c.backgroundFocused,
-                        backgroundPressed = accent.copy(alpha = 0.20f),
-                        backgroundHovered = accent.copy(alpha = 0.12f),
+                        backgroundPressed = pressBg,
+                        backgroundHovered = hoverBg,
                         border = c.border,
                         borderDisabled = c.borderDisabled,
                         borderSelected = c.borderSelected,

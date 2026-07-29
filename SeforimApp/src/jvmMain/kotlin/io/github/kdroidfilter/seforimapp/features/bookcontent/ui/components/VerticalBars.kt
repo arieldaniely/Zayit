@@ -114,12 +114,17 @@ fun EndVerticalBar(
             runSuspendCatching {
                 providers.getAvailableSourcesForLine(selectedLine.id)
             }.getOrNull()?.isNotEmpty()
+        val mentionsAvailable =
+            runSuspendCatching {
+                providers.getAvailableMentionsForLine(selectedLine.id)
+            }.getOrNull()?.isNotEmpty()
 
         value =
             LineResourceAvailability(
                 targumAvailable = targumAvailable,
                 commentariesAvailable = commentariesAvailable,
                 sourcesAvailable = sourcesAvailable,
+                mentionsAvailable = mentionsAvailable,
             )
     }
 
@@ -254,6 +259,11 @@ fun EndVerticalBar(
                         lineAvailability.sourcesAvailable == false &&
                         !uiState.content.showSources
 
+                val mentionsDisabledForLine =
+                    selectedLine != null &&
+                        lineAvailability.mentionsAvailable == false &&
+                        !uiState.content.showMentions
+
                 val targumTooltip =
                     when {
                         targumDisabledForLine -> stringResource(Res.string.no_links_for_line)
@@ -289,17 +299,17 @@ fun EndVerticalBar(
                 if (showContextMentions && mentionsEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText =
-                            if (selectedLine == null) {
-                                stringResource(Res.string.select_line_for_mentions)
-                            } else {
-                                stringResource(Res.string.show_mentions_tooltip)
+                            when {
+                                mentionsDisabledForLine -> stringResource(Res.string.no_mentions_for_line)
+                                selectedLine == null -> stringResource(Res.string.select_line_for_mentions)
+                                else -> stringResource(Res.string.show_mentions_tooltip)
                             },
                         onClick = { onEvent(BookContentEvent.ToggleMentions) },
                         isSelected = uiState.content.showMentions,
                         icon = Quote,
                         iconDescription = stringResource(Res.string.show_mentions),
                         label = stringResource(Res.string.show_mentions),
-                        enabled = selectedLine != null,
+                        enabled = selectedLine != null && !mentionsDisabledForLine,
                     )
                 }
 
@@ -352,6 +362,7 @@ private data class LineResourceAvailability(
     val targumAvailable: Boolean? = null,
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
+    val mentionsAvailable: Boolean? = null,
 )
 
 private data class PdfAvailability(

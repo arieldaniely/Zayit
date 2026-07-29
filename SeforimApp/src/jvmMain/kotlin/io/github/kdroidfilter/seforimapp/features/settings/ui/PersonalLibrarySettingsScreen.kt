@@ -96,27 +96,37 @@ fun PersonalLibrarySettingsScreen() {
             state.configuration.folders.forEach { folder ->
                 val shape = RoundedCornerShape(8.dp)
                 Column(
-                    modifier = Modifier.fillMaxWidth().clip(shape)
-                        .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
-                        .background(JewelTheme.globalColors.panelBackground).padding(12.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(shape)
+                            .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                            .background(JewelTheme.globalColors.panelBackground)
+                            .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(folder.displayName, fontSize = 15.sp)
                     Text(
-                        folder.path, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        fontSize = 11.sp, color = JewelTheme.globalColors.text.info,
+                        folder.path,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 11.sp,
+                        color = JewelTheme.globalColors.text.info,
                     )
                     Text(
                         stringResource(
                             if (folder.placement == PersonalFolderPlacement.PERSONAL_BOOKS) {
                                 Res.string.personal_library_personal_mode
-                            } else Res.string.personal_library_merge_mode,
+                            } else {
+                                Res.string.personal_library_merge_mode
+                            },
                         ),
                         fontSize = 12.sp,
                     )
                     Text(
                         stringResource(Res.string.personal_library_stats, folder.lastBookCount, folder.lastLinkCount),
-                        fontSize = 11.sp, color = JewelTheme.globalColors.text.info,
+                        fontSize = 11.sp,
+                        color = JewelTheme.globalColors.text.info,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -124,16 +134,23 @@ fun PersonalLibrarySettingsScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedButton(enabled = !state.isWorking, onClick = {
-                            val next = if (folder.placement == PersonalFolderPlacement.PERSONAL_BOOKS) {
-                                PersonalFolderPlacement.MERGE_WITH_LIBRARY
-                            } else PersonalFolderPlacement.PERSONAL_BOOKS
+                            val next =
+                                if (folder.placement == PersonalFolderPlacement.PERSONAL_BOOKS) {
+                                    PersonalFolderPlacement.MERGE_WITH_LIBRARY
+                                } else {
+                                    PersonalFolderPlacement.PERSONAL_BOOKS
+                                }
                             viewModel.setPlacement(folder.id, next)
                         }) {
-                            Text(stringResource(
-                                if (folder.placement == PersonalFolderPlacement.PERSONAL_BOOKS) {
-                                    Res.string.personal_library_change_to_merge
-                                } else Res.string.personal_library_change_to_personal,
-                            ))
+                            Text(
+                                stringResource(
+                                    if (folder.placement == PersonalFolderPlacement.PERSONAL_BOOKS) {
+                                        Res.string.personal_library_change_to_merge
+                                    } else {
+                                        Res.string.personal_library_change_to_personal
+                                    },
+                                ),
+                            )
                         }
                         OutlinedButton(enabled = !state.isWorking, onClick = { viewModel.remove(folder.id) }) {
                             Text(stringResource(Res.string.personal_library_remove))

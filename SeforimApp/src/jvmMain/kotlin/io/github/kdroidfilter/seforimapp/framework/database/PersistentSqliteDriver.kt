@@ -40,7 +40,8 @@ import java.util.concurrent.ConcurrentHashMap
 class PersistentSqliteDriver(
     url: String,
     properties: Properties = Properties(),
-) : JdbcDriver(), LinkPartitionQueryDriver {
+) : JdbcDriver(),
+    LinkPartitionQueryDriver {
     private val connection: Connection = DriverManager.getConnection(url, properties)
 
     // Statement cache keyed by SQL text — SqlDelight sometimes reuses the same
@@ -51,10 +52,13 @@ class PersistentSqliteDriver(
 
     @Volatile
     private var personalOverlayAttached = false
+
     @Volatile
     private var personalTargetBookIds: Set<Long> = emptySet()
+
     @Volatile
     private var personalSourceTargetBookIds: Set<Long> = emptySet()
+
     @Volatile
     private var personalMentionBookIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
@@ -117,23 +121,22 @@ class PersistentSqliteDriver(
         if (mainLineIds.isEmpty()) return false
         synchronized(connection) {
             val placeholders = List(mainLineIds.size) { "?" }.joinToString(",")
-            val statement = prepare(
-                "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
-            )
+            val statement =
+                prepare(
+                    "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
+                )
             statement.clearParameters()
             mainLineIds.forEachIndexed { index, id -> statement.setLong(index + 1, id) }
             statement.executeQuery().use { rows -> return rows.next() }
         }
     }
 
-    override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean =
-        personalOverlayAttached && bookId in personalTargetBookIds
+    override fun hasAdditionalLinksTargetingBook(bookId: Long): Boolean = personalOverlayAttached && bookId in personalTargetBookIds
 
     override fun hasAdditionalSourceLinksTargetingBook(bookId: Long): Boolean =
         personalOverlayAttached && bookId in personalSourceTargetBookIds
 
-    override fun hasAdditionalMentionLinksForBook(bookId: Long): Boolean =
-        personalOverlayAttached && bookId in personalMentionBookIds
+    override fun hasAdditionalMentionLinksForBook(bookId: Long): Boolean = personalOverlayAttached && bookId in personalMentionBookIds
 
     private fun <T> withForcedLinkSchema(
         schema: String,
@@ -263,18 +266,40 @@ private class FirstBindingProbe : SqlPreparedStatement {
     var firstBinding: Any? = null
         private set
 
-    private fun record(index: Int, value: Any?) {
+    private fun record(
+        index: Int,
+        value: Any?,
+    ) {
         if (index == 0) {
             firstBinding = value
             throw FirstBindingCaptured
         }
     }
 
-    override fun bindBytes(index: Int, bytes: ByteArray?) = record(index, bytes)
-    override fun bindLong(index: Int, long: Long?) = record(index, long)
-    override fun bindDouble(index: Int, double: Double?) = record(index, double)
-    override fun bindString(index: Int, string: String?) = record(index, string)
-    override fun bindBoolean(index: Int, boolean: Boolean?) = record(index, boolean)
+    override fun bindBytes(
+        index: Int,
+        bytes: ByteArray?,
+    ) = record(index, bytes)
+
+    override fun bindLong(
+        index: Int,
+        long: Long?,
+    ) = record(index, long)
+
+    override fun bindDouble(
+        index: Int,
+        double: Double?,
+    ) = record(index, double)
+
+    override fun bindString(
+        index: Int,
+        string: String?,
+    ) = record(index, string)
+
+    override fun bindBoolean(
+        index: Int,
+        boolean: Boolean?,
+    ) = record(index, boolean)
 }
 
 /** Link routing needs numeric selector parameters only; never retain text or binary query payloads. */
@@ -282,14 +307,32 @@ private class LinkBindingProbe : SqlPreparedStatement {
     private val mutableBindings = HashMap<Int, Long>()
     val bindings: Map<Int, Long> get() = mutableBindings
 
-    override fun bindLong(index: Int, long: Long?) {
+    override fun bindLong(
+        index: Int,
+        long: Long?,
+    ) {
         if (long != null) mutableBindings[index] = long
     }
 
-    override fun bindBytes(index: Int, bytes: ByteArray?) = Unit
-    override fun bindDouble(index: Int, double: Double?) = Unit
-    override fun bindString(index: Int, string: String?) = Unit
-    override fun bindBoolean(index: Int, boolean: Boolean?) = Unit
+    override fun bindBytes(
+        index: Int,
+        bytes: ByteArray?,
+    ) = Unit
+
+    override fun bindDouble(
+        index: Int,
+        double: Double?,
+    ) = Unit
+
+    override fun bindString(
+        index: Int,
+        string: String?,
+    ) = Unit
+
+    override fun bindBoolean(
+        index: Int,
+        boolean: Boolean?,
+    ) = Unit
 }
 
 /**
@@ -359,26 +402,39 @@ internal object PersonalLibraryQueryRouter {
             Regex("""(?i)\b(FROM|JOIN)\s+\"?${Regex.escape(table)}\"?\b""")
         }
 
-    fun route(sql: String, firstBinding: Any?, attached: Boolean): String {
+    fun route(
+        sql: String,
+        firstBinding: Any?,
+        attached: Boolean,
+    ): String {
         if (!attached || isLinkQuery(sql)) return sql
         return routeEntityQuery(sql, firstBinding, attached = true)
     }
 
-    fun isLinkQuery(sql: String): Boolean =
-        linkQueryPresence.computeIfAbsent(sql) { candidate -> linkQuery.containsMatchIn(candidate) }
+    fun isLinkQuery(sql: String): Boolean = linkQueryPresence.computeIfAbsent(sql) { candidate -> linkQuery.containsMatchIn(candidate) }
 
     /** Used by partitioned inverse-link reads; source-side JOINs live with their link row. */
-    fun routeLinkQueryToSchema(sql: String, schema: String): String =
-        routeLinkQuery(sql, emptyMap(), forcedLinkSchema = schema)
+    fun routeLinkQueryToSchema(
+        sql: String,
+        schema: String,
+    ): String = routeLinkQuery(sql, emptyMap(), forcedLinkSchema = schema)
 
-    fun route(sql: String, bindings: Map<Int, Any?>, attached: Boolean): String {
+    fun route(
+        sql: String,
+        bindings: Map<Int, Any?>,
+        attached: Boolean,
+    ): String {
         if (!attached) return sql
         if (isLinkQuery(sql)) return routeLinkQuery(sql, bindings)
 
         return routeEntityQuery(sql, bindings[0], attached = true)
     }
 
-    fun routeEntityQuery(sql: String, firstBinding: Any?, attached: Boolean): String {
+    fun routeEntityQuery(
+        sql: String,
+        firstBinding: Any?,
+        attached: Boolean,
+    ): String {
         if (!attached || firstBinding !is Long) return sql
         val schema = if (firstBinding < 0) "personal" else "main"
         val cache = if (schema == "personal") personalEntityRoutes else mainEntityRoutes

@@ -47,11 +47,13 @@ fun TitleBarActionsButtonsView() {
     val tabsViewModel: TabsViewModel = LocalOpenWindow.current.tabsViewModel
     val tabsState = tabsViewModel.state.collectAsState().value
     val currentTab = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)
+    val currentTabId = currentTab?.destination?.tabId
+    val isFindOpen = currentTabId?.let { AppSettings.findBarOpenFlow(it).collectAsState().value } ?: false
     val findEnabled =
         when (val dest = currentTab?.destination) {
             is TabsDestination.Search -> true
             is TabsDestination.BookContent -> {
-                (
+                dest.bookId > 0L || (
                     appGraph.tabPersistedStateStore
                         .get(dest.tabId)
                         ?.bookContent
@@ -142,6 +144,7 @@ fun TitleBarActionsButtonsView() {
             },
         shortcutHint = findShortcutHint,
         enabled = findEnabled,
+        isActive = isFindOpen,
     )
 
     // On macOS the native Favorites menu covers this; shortcuts still work.

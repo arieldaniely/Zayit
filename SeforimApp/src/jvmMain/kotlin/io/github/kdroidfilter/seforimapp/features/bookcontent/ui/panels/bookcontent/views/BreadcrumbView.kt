@@ -14,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -152,7 +154,7 @@ private fun BreadcrumbItemAnchor(
         Text(
             text = item.title,
             fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-            modifier = Modifier.clickable(onClick = onOpen),
+            modifier = Modifier.pointerHoverIcon(PointerIcon.Hand).clickable(onClick = onOpen),
             fontSize = 12.sp,
         )
         if (open && itemPopup != null) itemPopup(item, onDismiss)

@@ -65,8 +65,8 @@ import seforimapp.seforimapp.generated.resources.pdf_remove_failed
 import seforimapp.seforimapp.generated.resources.pdf_remove_library
 import seforimapp.seforimapp.generated.resources.pdf_remove_success
 import seforimapp.seforimapp.generated.resources.pdf_removing_library
-import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
 import seforimapp.seforimapp.generated.resources.settings_reset_app
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_no
@@ -226,10 +226,14 @@ private fun PdfLibrarySettingsCard() {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(text = stringResource(Res.string.settings_pdf_library_title), fontSize = 15.sp)
                 Text(
-                    text = stringResource(
-                        if (installed) Res.string.settings_pdf_library_installed_description
-                        else Res.string.settings_pdf_library_description,
-                    ),
+                    text =
+                        stringResource(
+                            if (installed) {
+                                Res.string.settings_pdf_library_installed_description
+                            } else {
+                                Res.string.settings_pdf_library_description
+                            },
+                        ),
                     fontSize = 12.sp,
                     color = JewelTheme.globalColors.text.info,
                 )
@@ -265,9 +269,10 @@ private fun PdfLibrarySettingsCard() {
                     }) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.pdf_download_library)) }
                     OutlinedButton(enabled = !working, onClick = {
                         scope.launch {
-                            val file = withContext(Dispatchers.IO) {
-                                FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
-                            }
+                            val file =
+                                withContext(Dispatchers.IO) {
+                                    FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
+                                }
                             if (file != null) {
                                 working = true
                                 successMessage = null
@@ -289,6 +294,7 @@ private fun PdfLibrarySettingsCard() {
         }
     }
 }
+
 @Composable
 private fun ResetCard(
     resetDone: Boolean,

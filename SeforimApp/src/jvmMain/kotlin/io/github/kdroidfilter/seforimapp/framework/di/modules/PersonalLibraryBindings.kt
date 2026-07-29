@@ -22,7 +22,12 @@ object PersonalLibraryBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun providePersonalLibraryManager(settings: Settings): PersonalLibraryManager {
-        val storage = Path.of(getUserSettingsDatabasePath()).toAbsolutePath().parent.resolve("personal-library")
+        val storage =
+            Path
+                .of(getUserSettingsDatabasePath())
+                .toAbsolutePath()
+                .parent
+                .resolve("personal-library")
         return PersonalLibraryManager(settings, Path.of(getDatabasePath()), storage)
     }
 

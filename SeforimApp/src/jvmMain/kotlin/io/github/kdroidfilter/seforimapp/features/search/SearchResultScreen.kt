@@ -301,18 +301,28 @@ fun SearchResultInBookShellMvi(
                                 showDiacritics = showDiacritics,
                             )
                         } else {
-                            Box(modifier = panelCardModifier) {
-                                SearchResultContentMvi(
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SearchResultContentMvi(
+                                        state = searchUi,
+                                        visibleResults = visibleResults,
+                                        isFiltering = isFiltering,
+                                        breadcrumbs = breadcrumbs,
+                                        bookCounts = bookCounts,
+                                        loadBookHits = loadBookHits,
+                                        actions = actions,
+                                        tabId = tabId,
+                                        modifier = panelCardModifier,
+                                    )
+                                }
+                                SearchScopeBreadcrumbBar(
                                     state = searchUi,
-                                    visibleResults = visibleResults,
-                                    isFiltering = isFiltering,
-                                    breadcrumbs = breadcrumbs,
-                                    searchTree = searchTree,
+                                    navigation = bookUiState.navigation,
                                     tocTree = tocTree,
-                                    bookCounts = bookCounts,
-                                    loadBookHits = loadBookHits,
-                                    actions = actions,
-                                    tabId = tabId,
+                                    onCategorySelect = actions.onCategoryFilter,
+                                    onBookSelect = actions.onBookFilter,
+                                    onTocSelect = actions.onTocFilter,
+                                    isIslands = isIslands,
                                 )
                             }
                         }
@@ -342,12 +352,11 @@ private fun SearchResultContentMvi(
     visibleResults: ImmutableList<SearchResult>,
     isFiltering: Boolean,
     breadcrumbs: ImmutableMap<Long, List<String>>,
-    searchTree: ImmutableList<SearchResultViewModel.SearchTreeCategory>,
-    tocTree: TocTree?,
     bookCounts: Map<Long, Int>,
     loadBookHits: suspend (Long) -> List<SearchResult>,
     actions: SearchShellActions,
     tabId: String,
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     // Group consecutive same-book results into Google-style cards. Cards are derived
@@ -491,7 +500,7 @@ private fun SearchResultContentMvi(
 
     val keyHandler = remember { { _: KeyEvent -> false } }
 
-    Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
+    Box(modifier = modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
@@ -699,15 +708,6 @@ private fun SearchResultContentMvi(
                     }
                 }
             }
-
-            SearchScopeBreadcrumbBar(
-                state = state,
-                searchTree = searchTree,
-                tocTree = tocTree,
-                onCategorySelect = actions.onCategoryFilter,
-                onBookSelect = actions.onBookFilter,
-                onTocSelect = actions.onTocFilter,
-            )
         }
 
         // Find bar overlay

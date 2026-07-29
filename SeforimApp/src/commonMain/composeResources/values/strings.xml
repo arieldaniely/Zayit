@@ -200,6 +200,9 @@
     <string name="columns_gap">מבנה עמודות</string>
     <string name="filter_commentators_tooltip">סנן את המפרשים</string>
     <string name="filter">סנן</string>
+    <string name="filter_books">סינון לפי תיקיות וספרים</string>
+    <string name="show_links_filter_sidebar">הצג סרגל סינון</string>
+    <string name="hide_links_filter_sidebar">הסתר סרגל סינון</string>
     <!-- Toggle commentators sidebar (used for contentDescription and tooltip) -->
     <string name="toggle_commentators_sidebar">הצג/הסתר סרגל מפרשים</string>
     <string name="show_commentators_sidebar">הצג סרגל מפרשים</string>

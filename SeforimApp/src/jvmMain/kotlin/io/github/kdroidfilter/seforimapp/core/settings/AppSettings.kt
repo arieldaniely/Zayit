@@ -90,6 +90,7 @@ object AppSettings {
 
     // Compact mode for vertical bars
     private const val KEY_COMPACT_MODE = "compact_mode"
+    private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
 
     // Backing Settings storage (can be replaced at startup if needed)
     @Volatile
@@ -368,6 +369,12 @@ object AppSettings {
     fun setCompactModeEnabled(enabled: Boolean) {
         settings[KEY_COMPACT_MODE] = enabled
         _compactModeFlow.value = enabled
+    }
+
+    fun isTalmudPdfInstallSkipped(): Boolean = settings[KEY_TALMUD_PDF_INSTALL_SKIPPED, false]
+
+    fun setTalmudPdfInstallSkipped(skipped: Boolean) {
+        settings[KEY_TALMUD_PDF_INSTALL_SKIPPED] = skipped
     }
 
     // Saved session blob (JSON)

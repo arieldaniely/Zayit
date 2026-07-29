@@ -33,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
+import java.util.UUID
 
 /** Simplified ViewModel for the book content screen */
 @OptIn(ExperimentalSplitPaneApi::class)
@@ -352,7 +353,7 @@ class BookContentViewModel(
                     navigationUseCase.selectCategory(event.category)
 
                 is BookContentEvent.BookSelected ->
-                    loadBook(event.book)
+                    openSelectedBookAsText(event.book)
 
                 is BookContentEvent.BookSelectedInNewTab ->
                     openBookInNewTab(event.book)
@@ -495,6 +496,15 @@ class BookContentViewModel(
                 BookContentEvent.ToggleDiacritics ->
                     toggleShowDiacriticsForCurrentCategory()
 
+                BookContentEvent.OpenPdfEdition ->
+                    openPdfEdition()
+
+                BookContentEvent.OpenTextEdition ->
+                    openTextEdition()
+
+                is BookContentEvent.OpenPdfEditionForBook ->
+                    openPdfEdition(event.book.id, null)
+
                 is BookContentEvent.ContentScrolled ->
                     contentUseCase.updateContentScrollPosition(
                         event.anchorId,
@@ -567,6 +577,47 @@ class BookContentViewModel(
                     stateManager.saveAllStates()
             }
         }
+    }
+
+    private fun openPdfEdition(
+        bookId: Long? = null,
+        lineId: Long? =
+            stateManager.state.value.content.primaryLine
+                ?.id,
+    ) {
+        val targetBookId =
+            bookId ?: stateManager.state.value.navigation.selectedBook
+                ?.id ?: return
+        tabsViewModel.replaceCurrentTabDestination(
+            TabsDestination.PdfContent(
+                bookId = targetBookId,
+                tabId = tabId,
+                lineId = lineId,
+            ),
+        )
+    }
+
+    private fun openTextEdition() {
+        val state = stateManager.state.value
+        val bookId = state.navigation.selectedBook?.id ?: return
+        tabsViewModel.replaceCurrentTabDestination(
+            TabsDestination.BookContent(
+                bookId = bookId,
+                tabId = tabId,
+                lineId = state.content.primaryLine?.id,
+            ),
+        )
+    }
+
+    private suspend fun openSelectedBookAsText(book: Book) {
+        val tabsState = tabsViewModel.state.value
+        val selectedDestination = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.destination
+        if (selectedDestination is TabsDestination.PdfContent) {
+            tabsViewModel.replaceCurrentTabDestination(
+                TabsDestination.BookContent(bookId = book.id, tabId = tabId),
+            )
+        }
+        loadBook(book)
     }
 
     private suspend fun toggleShowDiacriticsForCurrentCategory() {

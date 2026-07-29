@@ -15,6 +15,7 @@ class SearchShellActionsTest {
         var scrollCalled = false
         var cancelCalled = false
         var openResultCalled = false
+        var openPdfResultCalled = false
         var requestBreadcrumbCalled = false
         var loadMoreCalled = false
         var categoryCheckedCalled = false
@@ -31,6 +32,7 @@ class SearchShellActionsTest {
                 onScroll = { _, _, _, _ -> scrollCalled = true },
                 onCancelSearch = { cancelCalled = true },
                 onOpenResult = { _, _ -> openResultCalled = true },
+                onOpenPdfResult = { _, _ -> openPdfResultCalled = true },
                 onRequestBreadcrumb = { requestBreadcrumbCalled = true },
                 onLoadMore = { loadMoreCalled = true },
                 onCategoryCheckedChange = { _, _ -> categoryCheckedCalled = true },
@@ -87,6 +89,7 @@ class SearchShellActionsTest {
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = noOp,
                 onOpenResult = noOpResult,
+                onOpenPdfResult = noOpResult,
                 onRequestBreadcrumb = noOpBreadcrumb,
                 onLoadMore = noOp,
                 onCategoryCheckedChange = { _, _ -> },
@@ -113,6 +116,7 @@ class SearchShellActionsTest {
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = {},
                 onOpenResult = { _, _ -> },
+                onOpenPdfResult = { _, _ -> },
                 onRequestBreadcrumb = {},
                 onLoadMore = {},
                 onCategoryCheckedChange = { _, _ -> },

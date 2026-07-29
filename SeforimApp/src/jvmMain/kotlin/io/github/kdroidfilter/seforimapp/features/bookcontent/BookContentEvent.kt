@@ -114,6 +114,14 @@ sealed interface BookContentEvent {
 
     data object ToggleDiacritics : BookContentEvent
 
+    data object OpenPdfEdition : BookContentEvent
+
+    data object OpenTextEdition : BookContentEvent
+
+    data class OpenPdfEditionForBook(
+        val book: io.github.kdroidfilter.seforimlibrary.core.models.Book,
+    ) : BookContentEvent
+
     data class ContentScrolled(
         val anchorId: Long,
         val anchorIndex: Int,

@@ -29,6 +29,9 @@ sealed interface OnBoardingDestination {
     data object VersionVerificationScreen : OnBoardingDestination
 
     @Serializable
+    data object PdfLibrarySetupScreen : OnBoardingDestination
+
+    @Serializable
     data object UserProfilScreen : OnBoardingDestination
 
     @Serializable

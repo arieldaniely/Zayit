@@ -9,6 +9,7 @@ import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.deeplink.parseZayitDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -63,6 +64,12 @@ sealed class SearchHomeNavigationEvent {
         val lineId: Long?,
     ) : SearchHomeNavigationEvent()
 
+    data class NavigateToPdfContent(
+        val bookId: Long,
+        val tabId: String,
+        val lineId: Long?,
+    ) : SearchHomeNavigationEvent()
+
     /**
      * Navigate to a destination resolved from a zayit:// deep link pasted into the search bar.
      * @param destination The parsed destination (book/line or search)
@@ -82,6 +89,7 @@ data class CategorySuggestionDto(
 data class BookSuggestionDto(
     val book: Book,
     val path: List<String>,
+    val isPdf: Boolean = false,
 )
 
 @Immutable
@@ -103,6 +111,7 @@ data class SearchHomeUiState(
     val tocSuggestions: List<TocSuggestionDto> = emptyList(),
     val selectedScopeCategory: Category? = null,
     val selectedScopeBook: Book? = null,
+    val selectedScopeIsPdf: Boolean = false,
     val selectedScopeToc: TocEntry? = null,
     val userDisplayName: String = "",
     val userCommunityCode: String? = null,
@@ -290,10 +299,11 @@ class SearchHomeViewModel(
                                                 emptyList<BookSuggestionDto>()
                                             } else {
                                                 val bookHits = lookup.searchBooksWithScoring(qNorm, limit = maxBookPredictive)
+                                                val pdfTitles = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
                                                 bookHits
                                                     // Already sorted by score in searchBooksWithScoring, no need to re-sort
                                                     .take(maxBookPredictive)
-                                                    .map { hit ->
+                                                    .flatMap { hit ->
                                                         val book =
                                                             Book(
                                                                 id = hit.id,
@@ -304,7 +314,15 @@ class SearchHomeViewModel(
                                                                 isBaseBook = hit.isBaseBook,
                                                             )
                                                         val catPath = buildCategoryPathTitlesCached(book.categoryId)
-                                                        BookSuggestionDto(book, catPath + book.title)
+                                                        val textSuggestion = BookSuggestionDto(book, catPath + book.title)
+                                                        val hasPdfEdition =
+                                                            pdfTitles.contains(book.title.trim()) &&
+                                                                TalmudPdfService.isTalmudBavliCategoryPath(catPath)
+                                                        if (hasPdfEdition) {
+                                                            listOf(textSuggestion, textSuggestion.copy(isPdf = true))
+                                                        } else {
+                                                            listOf(textSuggestion)
+                                                        }
                                                     }
                                             }
                                         }
@@ -385,6 +403,7 @@ class SearchHomeViewModel(
                 _uiState.value.copy(
                     selectedScopeCategory = null,
                     selectedScopeBook = null,
+                    selectedScopeIsPdf = false,
                     selectedScopeToc = null,
                     tocPreviewHints = emptyList(),
                     isReferenceLoading = false,
@@ -409,6 +428,7 @@ class SearchHomeViewModel(
             _uiState.value.copy(
                 selectedScopeCategory = category,
                 selectedScopeBook = null,
+                selectedScopeIsPdf = false,
                 selectedScopeToc = null,
                 suggestionsVisible = false,
                 tocSuggestionsVisible = false,
@@ -419,12 +439,16 @@ class SearchHomeViewModel(
             )
     }
 
-    fun onPickBook(book: Book) {
+    fun onPickBook(
+        book: Book,
+        isPdf: Boolean = false,
+    ) {
         // Update synchronously first
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = null,
                 selectedScopeBook = book,
+                selectedScopeIsPdf = isPdf,
                 selectedScopeToc = null,
                 suggestionsVisible = false,
                 tocSuggestionsVisible = false,
@@ -612,6 +636,7 @@ class SearchHomeViewModel(
     suspend fun openSelectedReferenceInCurrentTab(currentTabId: String) {
         val selectedToc = _uiState.value.selectedScopeToc
         val selectedBook = _uiState.value.selectedScopeBook
+        val selectedIsPdf = _uiState.value.selectedScopeIsPdf
 
         // Resolve book and optional line anchor
         val book =
@@ -633,13 +658,23 @@ class SearchHomeViewModel(
         }
 
         // Emit navigation event - UI layer handles actual navigation
-        _navigationEvents.send(
-            SearchHomeNavigationEvent.NavigateToBookContent(
-                bookId = book.id,
-                tabId = currentTabId,
-                lineId = anchorLineId,
-            ),
-        )
+        if (selectedIsPdf) {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToPdfContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        } else {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToBookContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        }
     }
 
     private suspend fun buildCategoryPathTitles(catId: Long): List<String> {

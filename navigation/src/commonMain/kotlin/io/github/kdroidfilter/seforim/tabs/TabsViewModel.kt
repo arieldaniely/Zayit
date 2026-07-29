@@ -179,6 +179,7 @@ class TabsViewModel(
                 is TabsDestination.Home -> TabsDestination.Home(destination.tabId, destination.version)
                 is TabsDestination.Search -> TabsDestination.Search(destination.searchQuery, destination.tabId)
                 is TabsDestination.BookContent -> TabsDestination.BookContent(destination.bookId, destination.tabId, destination.lineId)
+                is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
             }
 
         val newTab =
@@ -263,11 +264,30 @@ class TabsViewModel(
                             tabId = tab.destination.tabId,
                             lineId = destination.lineId,
                         )
+                    is TabsDestination.PdfContent ->
+                        TabsDestination.PdfContent(
+                            bookId = destination.bookId,
+                            tabId = tab.destination.tabId,
+                            lineId = destination.lineId,
+                        )
                 }
 
+            val isEditionSwitchForSameBook =
+                when {
+                    tab.destination is TabsDestination.BookContent && newDestination is TabsDestination.PdfContent ->
+                        tab.destination.bookId == newDestination.bookId
+                    tab.destination is TabsDestination.PdfContent && newDestination is TabsDestination.BookContent ->
+                        tab.destination.bookId == newDestination.bookId
+                    else -> false
+                }
             val updated =
                 tab.copy(
-                    title = getTabTitle(newDestination),
+                    title =
+                        if (isEditionSwitchForSameBook) {
+                            tab.title
+                        } else {
+                            getTabTitle(newDestination)
+                        },
                     destination = newDestination,
                     tabType = tabTypeFor(newDestination),
                 )
@@ -300,6 +320,12 @@ class TabsViewModel(
                         )
                     is TabsDestination.BookContent ->
                         TabsDestination.BookContent(
+                            bookId = destination.bookId,
+                            tabId = newTabId,
+                            lineId = destination.lineId,
+                        )
+                    is TabsDestination.PdfContent ->
+                        TabsDestination.PdfContent(
                             bookId = destination.bookId,
                             tabId = newTabId,
                             lineId = destination.lineId,
@@ -356,6 +382,7 @@ class TabsViewModel(
             is TabsDestination.Home -> TabType.SEARCH
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
+            is TabsDestination.PdfContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
         }
 
     private fun getTabTitle(destination: TabsDestination): String =
@@ -363,6 +390,7 @@ class TabsViewModel(
             is TabsDestination.Home -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
+            is TabsDestination.PdfContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
         }
 
     private fun updateTabTitle(

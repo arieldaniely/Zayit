@@ -456,6 +456,12 @@ fun BookContentScreen(
     isRestoringSession: Boolean = false,
     isSelected: Boolean = true,
     bookCharCounts: IntArray? = null,
+    isPdfEdition: Boolean = false,
+    pdfCanZoomIn: Boolean = false,
+    pdfCanZoomOut: Boolean = false,
+    onPdfZoomIn: () -> Unit = {},
+    onPdfZoomOut: () -> Unit = {},
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val currentOnEvent by rememberUpdatedState(onEvent)
     val searchSelectedLabel = stringResource(Res.string.context_menu_search_selected_text)
@@ -811,7 +817,7 @@ fun BookContentScreen(
                 firstMinSize = if (uiState.navigation.isVisible) SplitDefaults.MIN_MAIN else 0f,
                 firstContent = {
                     if (uiState.navigation.isVisible) {
-                        CategoryTreePanel(uiState = uiState, onEvent = onEvent, modifier = panelCardModifier)
+                        CategoryTreePanel(uiState = uiState, onEvent = onEvent, isPdfEdition = isPdfEdition, modifier = panelCardModifier)
                     }
                 },
                 secondContent = {
@@ -853,6 +859,7 @@ fun BookContentScreen(
                                         isSelected = isSelected,
                                         bookCharCounts = bookCharCounts,
                                         noteDraft = noteDraft,
+                                        mainContentOverride = mainContentOverride,
                                     )
                                 },
                                 showSplitter = uiState.notes.isVisible,
@@ -865,7 +872,16 @@ fun BookContentScreen(
             )
 
             if (!isHome) {
-                EndVerticalBar(uiState = uiState, onEvent = onEvent, showDiacritics = showDiacritics)
+                EndVerticalBar(
+                    uiState = uiState,
+                    onEvent = onEvent,
+                    showDiacritics = showDiacritics,
+                    isPdfEdition = isPdfEdition,
+                    pdfCanZoomIn = pdfCanZoomIn,
+                    pdfCanZoomOut = pdfCanZoomOut,
+                    onPdfZoomIn = onPdfZoomIn,
+                    onPdfZoomOut = onPdfZoomOut,
+                )
             }
         }
     }

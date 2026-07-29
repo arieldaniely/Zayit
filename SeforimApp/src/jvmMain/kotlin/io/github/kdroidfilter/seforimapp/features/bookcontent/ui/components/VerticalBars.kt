@@ -11,10 +11,13 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLa
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
+import io.github.kdroidfilter.seforimlibrary.core.models.Book as SeforimBook
 
 @Composable
 fun StartVerticalBar(
@@ -65,16 +68,22 @@ fun EndVerticalBar(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
+    isPdfEdition: Boolean = false,
+    pdfCanZoomIn: Boolean = false,
+    pdfCanZoomOut: Boolean = false,
+    onPdfZoomIn: () -> Unit = {},
+    onPdfZoomOut: () -> Unit = {},
 ) {
     // Collect current text size from settings
     val rawTextSize by AppSettings.textSizeFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
-    val canZoomIn = rawTextSize < AppSettings.MAX_TEXT_SIZE
-    val canZoomOut = rawTextSize > AppSettings.MIN_TEXT_SIZE
+    val canZoomIn = if (isPdfEdition) pdfCanZoomIn else rawTextSize < AppSettings.MAX_TEXT_SIZE
+    val canZoomOut = if (isPdfEdition) pdfCanZoomOut else rawTextSize > AppSettings.MIN_TEXT_SIZE
 
     val selectedBook = uiState.navigation.selectedBook
+    val pdfLibraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     val noBookSelected = selectedBook == null
     val selectedLine = uiState.content.primaryLine
     val providers = uiState.providers
@@ -116,12 +125,14 @@ fun EndVerticalBar(
             // Platform-specific shortcut hint for Zoom In
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomIn) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_in_tooltip)
+                    } else if (canZoomIn) {
                         stringResource(Res.string.zoom_in_tooltip)
                     } else {
                         stringResource(Res.string.zoom_in_tooltip) + " (${AppSettings.MAX_TEXT_SIZE.toInt()}sp max)"
                     },
-                onClick = { AppSettings.increaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomIn() else AppSettings.increaseTextSize() },
                 isSelected = false,
                 enabled = canZoomIn,
                 icon = ZoomIn,
@@ -131,12 +142,14 @@ fun EndVerticalBar(
             )
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomOut) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_out_tooltip)
+                    } else if (canZoomOut) {
                         stringResource(Res.string.zoom_out_tooltip)
                     } else {
                         stringResource(Res.string.zoom_out_tooltip) + " (${AppSettings.MIN_TEXT_SIZE.toInt()}sp min)"
                     },
-                onClick = { AppSettings.decreaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomOut() else AppSettings.decreaseTextSize() },
                 isSelected = false,
                 enabled = canZoomOut,
                 icon = ZoomOut,
@@ -145,8 +158,41 @@ fun EndVerticalBar(
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
 
+            if (!noBookSelected && isPdfEdition) {
+                SelectableIconButtonWithToolip(
+                    toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
+                    onClick = { onEvent(BookContentEvent.OpenTextEdition) },
+                    isSelected = false,
+                    icon = Book_2,
+                    iconDescription = stringResource(Res.string.back_to_text_edition),
+                    label = stringResource(Res.string.back_to_text_edition),
+                )
+            } else if (!noBookSelected) {
+                val pdfAvailability by produceState(
+                    initialValue = PdfAvailability(),
+                    key1 = selectedBook.id,
+                    key2 = selectedBook.title,
+                    key3 = pdfLibraryVersion,
+                ) {
+                    val isBavli = isTalmudBavliBook(selectedBook)
+                    val hasFile = TalmudPdfService.hasPdfForTitle(selectedBook.title)
+                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && hasFile)
+                }
+                if (pdfAvailability.isSupported && pdfAvailability.isActionAvailable) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
+                        onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
+                        isSelected = false,
+                        enabled = true,
+                        icon = JournalText,
+                        iconDescription = stringResource(Res.string.open_pdf_edition),
+                        label = stringResource(Res.string.open_pdf_edition),
+                    )
+                }
+            }
+
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
-            if (!noBookSelected) {
+            if (!noBookSelected && !isPdfEdition) {
                 val bookHasDiacritics = selectedBook.hasNekudot || selectedBook.hasTeamim
                 if (bookHasDiacritics) {
                     SelectableIconButtonWithToolip(
@@ -283,3 +329,21 @@ private data class LineResourceAvailability(
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
 )
+
+private data class PdfAvailability(
+    val isSupported: Boolean = false,
+    val isActionAvailable: Boolean = false,
+)
+
+private fun isTalmudBavliBook(book: SeforimBook): Boolean {
+    val categoriesById = CatalogCache.getCategoriesById() ?: return false
+    val titles = mutableListOf<String>()
+    var currentId: Long? = book.categoryId
+    var safety = 64
+    while (currentId != null && safety-- > 0) {
+        val category = categoriesById[currentId] ?: return false
+        titles += category.title
+        currentId = category.parentId
+    }
+    return TalmudPdfService.isTalmudBavliCategoryPath(titles)
+}

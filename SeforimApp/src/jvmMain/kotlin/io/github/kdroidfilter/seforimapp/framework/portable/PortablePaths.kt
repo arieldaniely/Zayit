@@ -18,10 +18,12 @@ object PortablePaths {
 
     val dataDir: File by lazy {
         val explicit =
-            System.getenv("SEFORIMAPP_PORTABLE_DIR")
+            System
+                .getenv("SEFORIMAPP_PORTABLE_DIR")
                 ?.takeIf { it.isNotBlank() }
                 ?.let(::File)
-                ?: System.getProperty("seforimapp.portable.dir")
+                ?: System
+                    .getProperty("seforimapp.portable.dir")
                     ?.takeIf { it.isNotBlank() }
                     ?.let(::File)
 
@@ -44,13 +46,16 @@ object PortablePaths {
     }
 
     private fun resolveAppDir(): File {
-        val codeSource = PortablePaths::class.java.protectionDomain.codeSource?.location
+        val codeSource =
+            PortablePaths::class.java.protectionDomain.codeSource
+                ?.location
         val location = codeSource?.toURI()?.let(::File)
-        val base = when {
-            location == null -> File(System.getProperty("user.dir"))
-            location.isFile -> location.parentFile
-            else -> location
-        }
+        val base =
+            when {
+                location == null -> File(System.getProperty("user.dir"))
+                location.isFile -> location.parentFile
+                else -> location
+            }
         return normalizePackagedAppDir(base).absoluteFile
     }
 

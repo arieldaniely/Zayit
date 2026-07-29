@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.database.update
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
 import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.vinceglb.filekit.FileKit
@@ -11,7 +12,6 @@ import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import java.nio.file.Files
 import kotlin.coroutines.cancellation.CancellationException
 

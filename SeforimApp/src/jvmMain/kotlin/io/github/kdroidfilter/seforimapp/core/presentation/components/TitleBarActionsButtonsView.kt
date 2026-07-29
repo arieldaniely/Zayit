@@ -144,11 +144,10 @@ fun TitleBarActionsButtonsView() {
         enabled = findEnabled,
     )
 
-    // Chrome-like Tab Search (open tabs + visit history) and Favorites menu.
-    // On macOS the native History/Favorites menus (searchable) cover them; shortcuts still work.
+    // On macOS the native Favorites menu covers this; shortcuts still work.
+    // Tab Search is placed immediately before the tabs in MainTitleBar.
     if (!PlatformInfo.isMacOS) {
         FavoritesMenuButton()
-        TabSearchButton()
     }
     // On macOS, theme toggle and settings are handled by the native menu bar
     if (!PlatformInfo.isMacOS) {

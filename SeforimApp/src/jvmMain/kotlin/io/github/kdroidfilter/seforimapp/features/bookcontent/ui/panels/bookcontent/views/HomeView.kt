@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1317,6 +1318,7 @@ private fun SearchBar(
     val minTocPrefixLen = 1
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var popupVisible by remember { mutableStateOf(false) }
+    var isFieldFocused by remember { mutableStateOf(false) }
     val categoriesCount = categorySuggestions.size
     val totalCatBook = categoriesCount + bookSuggestions.size
     // Keyboard navigation must operate on the exact list that TocSuggestionsPanel
@@ -1360,9 +1362,10 @@ private fun SearchBar(
         showTocEmptyState,
         showBookLoading,
         showTocLoading,
+        isFieldFocused,
     ) {
         val shouldOpen =
-            when {
+            isFieldFocused && when {
                 showTocSuggestions -> true
                 showCategorySuggestions -> true
                 showBookEmptyState -> true
@@ -1427,6 +1430,12 @@ private fun SearchBar(
                                 windowOffset = IntOffset(pos.x.roundToInt(), pos.y.roundToInt()),
                                 size = IntSize(coords.size.width, coords.size.height),
                             )
+                    }.onFocusChanged { focusState ->
+                        isFieldFocused = focusState.isFocused
+                        if (!focusState.isFocused) {
+                            popupVisible = false
+                            focusedIndex = -1
+                        }
                     }.onPreviewKeyEvent { ev ->
                         val isRef = isReference
                         when {

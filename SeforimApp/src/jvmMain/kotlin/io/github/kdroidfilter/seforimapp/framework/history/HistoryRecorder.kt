@@ -7,10 +7,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+import io.github.santimattius.structured.annotations.StructuredScope
+
 fun recordTabToHistory(
     tab: TabItem,
     appGraph: AppGraph,
-    scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
+    @StructuredScope scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) {
     val dest = tab.destination
     if (dest is TabsDestination.Home) return
@@ -32,7 +34,25 @@ fun recordTabToHistory(
             is TabsDestination.Search -> {
                 val query = dest.searchQuery.ifBlank { tabState?.search?.query.orEmpty() }
                 if (query.isNotBlank()) {
-                    val scopeText = tabState?.search?.datasetScope ?: "global"
+                    val searchState = tabState?.search
+                    val datasetScope = searchState?.datasetScope ?: "global"
+                    val scopeText =
+                        when (datasetScope) {
+                            "category" -> {
+                                val catId = searchState?.filterCategoryId?.takeIf { it > 0 } ?: searchState?.fetchCategoryId ?: 0L
+                                val cat = if (catId > 0) repository.getCategory(catId) else null
+                                if (cat != null) "קטגוריית ${cat.title}" else "קטגוריה"
+                            }
+                            "book", "toc" -> {
+                                val bookId = searchState?.filterBookId?.takeIf { it > 0 } ?: searchState?.fetchBookId ?: 0L
+                                val book = if (bookId > 0) repository.getBookCore(bookId) else null
+                                if (book != null) "ספר ${book.title}" else "ספר"
+                            }
+                            else -> {
+                                if (searchState?.globalExtended == true) "מאגר מלא" else "ספרי יסוד"
+                            }
+                        }
+
                     historyManager.addEntry(
                         HistoryEntry(
                             desktopName = activeDesktopName,
@@ -54,8 +74,35 @@ fun recordTabToHistory(
                     val lineId = dest.lineId ?: tabState?.bookContent?.primarySelectedLineId?.takeIf { it != -1L }
                     val lineLabel =
                         if (lineId != null && lineId != -1L) {
-                            repository.getLineByIdCore(lineId)?.let { line ->
-                                "\u05E9\u05D5\u05E8\u05D4 ${line.lineIndex}"
+                            val tocId = runCatching { repository.getTocEntryIdForLine(lineId) }.getOrNull()
+                            val tocPath =
+                                if (tocId != null) {
+                                    val path = mutableListOf<io.github.kdroidfilter.seforimlibrary.core.models.TocEntry>()
+                                    var current: Long? = tocId
+                                    var guard = 0
+                                    while (current != null && guard++ < 200) {
+                                        val entry = repository.getTocEntry(current)
+                                        if (entry != null) {
+                                            path.add(0, entry)
+                                            current = entry.parentId
+                                        } else {
+                                            break
+                                        }
+                                    }
+                                    if (path.firstOrNull()?.text == bookTitle) path.drop(1) else path
+                                } else {
+                                    emptyList()
+                                }
+                            val line = repository.getLine(lineId)
+                            val heRef = line?.heRef?.takeIf { it.isNotBlank() }
+                            val tocText = tocPath.joinToString(" > ") { it.text }.takeIf { it.isNotBlank() }
+
+                            when {
+                                tocText != null && heRef != null && !tocText.endsWith(heRef) -> "$tocText · $heRef"
+                                tocText != null -> tocText
+                                heRef != null -> heRef
+                                line != null -> "שורה ${line.lineIndex}"
+                                else -> null
                             }
                         } else {
                             null

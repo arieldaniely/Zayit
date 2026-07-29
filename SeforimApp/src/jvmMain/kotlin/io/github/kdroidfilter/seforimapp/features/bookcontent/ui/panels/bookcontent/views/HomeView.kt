@@ -52,6 +52,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.components.CatalogRow
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
@@ -252,6 +253,9 @@ private fun HomeBody(
 ) {
     // Whether to show zmanim widgets
     val showZmanimWidgets by AppSettings.showZmanimWidgetsFlow.collectAsState()
+    val showHomeHistory by AppSettings.showHomeHistoryFlow.collectAsState()
+    val historyEntries by LocalAppGraph.current.historyManager.entries.collectAsState()
+
 
     val celestialWidgetsState =
         if (homeCelestialWidgetsState != null) {
@@ -592,13 +596,16 @@ private fun HomeBody(
                             }
                         }
                     }
-                item {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(homeContentModifier) {
-                            HomeHistoryWidget()
+                }
+                if (showHomeHistory && historyEntries.isNotEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(homeContentModifier) {
+                                HomeHistoryWidget()
+                            }
                         }
                     }
                 }

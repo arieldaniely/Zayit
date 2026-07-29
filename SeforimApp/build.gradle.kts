@@ -398,3 +398,7 @@ kover {
 tasks.matching { it.name == "stabilityCheck" }.configureEach {
     dependsOn(tasks.matching { task -> task.name == "compileTestKotlinJvm" })
 }
+
+tasks.matching { it.name == "createDistributable" }.configureEach {
+    dependsOn(tasks.matching { task -> task.name == "createRuntimeImage" })
+}

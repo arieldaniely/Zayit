@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 data class DisplaySettingsState(
     val showZmanimWidgets: Boolean = true,
     val showHomeWallpaper: Boolean = true,
+    val showHomeHistory: Boolean = true,
     val compactMode: Boolean = false,
     val maxCommentatorsPerPage: Int = 0,
     val showContextTargumim: Boolean = true,

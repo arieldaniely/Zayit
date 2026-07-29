@@ -40,26 +40,61 @@ import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
-import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.delete_history_item
-import seforimapp.seforimapp.generated.resources.history_in_desktop
-import seforimapp.seforimapp.generated.resources.recent_history
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.delete_history_item
+import seforimapp.seforimapp.generated.resources.history_in_desktop
+import seforimapp.seforimapp.generated.resources.history_scope_basic_books
+import seforimapp.seforimapp.generated.resources.history_scope_book
+import seforimapp.seforimapp.generated.resources.history_scope_category
+import seforimapp.seforimapp.generated.resources.history_scope_toc
+import seforimapp.seforimapp.generated.resources.history_other_workspaces
+import seforimapp.seforimapp.generated.resources.recent_history
+import seforimapp.seforimapp.generated.resources.to_full_history
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+@Composable
+private fun formatScope(scopeText: String?): String? {
+    if (scopeText.isNullOrBlank()) return null
+    return when (scopeText) {
+        "global" -> stringResource(Res.string.history_scope_basic_books)
+        "category" -> stringResource(Res.string.history_scope_category)
+        "book" -> stringResource(Res.string.history_scope_book)
+        "toc" -> stringResource(Res.string.history_scope_toc)
+        else -> scopeText
+    }
+}
 
 @Composable
 fun HomeHistoryWidget(modifier: Modifier = Modifier) {
     val appGraph = LocalAppGraph.current
     val historyManager = appGraph.historyManager
+    val desktopManager = appGraph.desktopManager
+
     val entries by historyManager.entries.collectAsState()
+    val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
+    val desktops by desktopManager.desktops.collectAsState()
 
-    val recentEntries = remember(entries) { entries.take(4) }
-    if (recentEntries.isEmpty()) return
+    val activeDesktopName = remember(activeDesktopId, desktops) {
+        desktops.find { it.id == activeDesktopId }?.name ?: ""
+    }
 
+    val workspaceEntries = remember(entries, activeDesktopName) {
+        entries.filter { entry ->
+            entry.desktopName.isBlank() || entry.desktopName == activeDesktopName
+        }
+    }
+
+    if (entries.isEmpty()) return
+
+    val showingOtherWorkspaces = workspaceEntries.isEmpty()
+    val recentEntries = remember(entries, workspaceEntries) {
+        (workspaceEntries.ifEmpty { entries }).take(4)
+    }
     val recentHistoryTitle = stringResource(Res.string.recent_history)
 
     Column(
@@ -68,20 +103,44 @@ fun HomeHistoryWidget(modifier: Modifier = Modifier) {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
         ) {
-            Icon(
-                imageVector = History,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = JewelTheme.globalColors.text.info,
-            )
-            Spacer(Modifier.width(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = History,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = JewelTheme.globalColors.text.info,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = recentHistoryTitle,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = JewelTheme.globalColors.text.info,
+                )
+            }
+
             Text(
-                text = recentHistoryTitle,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
+                text = stringResource(Res.string.to_full_history),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = JewelTheme.globalColors.text.info,
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { appGraph.tabsViewModel.openHistoryTab() }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+
+        if (showingOtherWorkspaces) {
+            Text(
+                text = stringResource(Res.string.history_other_workspaces),
+                fontSize = 11.sp,
+                color = JewelTheme.globalColors.text.info.copy(alpha = 0.75f),
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
 
@@ -150,13 +209,21 @@ private fun HomeHistoryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                val iconKey = if (entry.type == HistoryType.BOOK) Book else History
-                Icon(
-                    imageVector = iconKey,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp),
-                    tint = JewelTheme.globalColors.text.info,
-                )
+                if (entry.type == HistoryType.BOOK) {
+                    Icon(
+                        imageVector = Book,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = JewelTheme.globalColors.text.info,
+                    )
+                } else {
+                    Icon(
+                        key = AllIconsKeys.Actions.Find,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = JewelTheme.globalColors.text.info,
+                    )
+                }
                 Spacer(Modifier.width(6.dp))
 
                 val titleText =
@@ -186,7 +253,7 @@ private fun HomeHistoryCard(
             val detailText =
                 when (entry.type) {
                     HistoryType.BOOK -> entry.lineDisplayLabel
-                    HistoryType.SEARCH -> entry.searchScope
+                    HistoryType.SEARCH -> formatScope(entry.searchScope)
                 }
             if (!detailText.isNullOrBlank()) {
                 Text(

@@ -42,6 +42,7 @@ class TabsViewModel(
         val dest = tab.destination
         val shouldRecord = when (dest) {
             is TabsDestination.Home -> false
+            is TabsDestination.History -> false
             is TabsDestination.Search -> dest.searchQuery.isNotBlank()
             is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
             is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
@@ -110,6 +111,16 @@ class TabsViewModel(
             is TabsEvents.CloseLeft -> closeLeft(event.index)
             is TabsEvents.CloseRight -> closeRight(event.index)
             TabsEvents.ReopenLastClosedTab -> reopenLastClosedTab()
+        }
+    }
+
+    fun openHistoryTab() {
+        val currentTabs = _state.value.tabs
+        val existingIndex = currentTabs.indexOfFirst { it.destination is TabsDestination.History }
+        if (existingIndex != -1) {
+            selectTab(existingIndex)
+        } else {
+            openTab(TabsDestination.History(UUID.randomUUID().toString()))
         }
     }
 
@@ -208,6 +219,7 @@ class TabsViewModel(
                 is TabsDestination.Search -> TabsDestination.Search(destination.searchQuery, destination.tabId)
                 is TabsDestination.BookContent -> TabsDestination.BookContent(destination.bookId, destination.tabId, destination.lineId)
                 is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
+                is TabsDestination.History -> TabsDestination.History(destination.tabId)
             }
 
         val newTab =
@@ -336,6 +348,10 @@ class TabsViewModel(
                             tabId = tab.destination.tabId,
                             lineId = destination.lineId,
                         )
+                    is TabsDestination.History ->
+                        TabsDestination.History(
+                            tabId = tab.destination.tabId,
+                        )
                 }
 
             val isEditionSwitchForSameBook =
@@ -400,6 +416,10 @@ class TabsViewModel(
                             tabId = newTabId,
                             lineId = destination.lineId,
                         )
+                    is TabsDestination.History ->
+                        TabsDestination.History(
+                            tabId = newTabId,
+                        )
                 }
 
             val updated =
@@ -450,6 +470,7 @@ class TabsViewModel(
     private fun tabTypeFor(destination: TabsDestination): TabType =
         when (destination) {
             is TabsDestination.Home -> TabType.SEARCH
+            is TabsDestination.History -> TabType.HISTORY
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
@@ -458,6 +479,7 @@ class TabsViewModel(
     private fun getTabTitle(destination: TabsDestination): String =
         when (destination) {
             is TabsDestination.Home -> ""
+            is TabsDestination.History -> "\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8\u05D9\u05D4"
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""

@@ -18,16 +18,18 @@ import kotlinx.coroutines.flow.stateIn
 class DisplaySettingsViewModel : ViewModel() {
     private val showZmanim = MutableStateFlow(AppSettings.isShowZmanimWidgetsEnabled())
     private val showHomeWallpaper = MutableStateFlow(AppSettings.isShowHomeWallpaperEnabled())
+    private val showHomeHistory = MutableStateFlow(AppSettings.isShowHomeHistoryEnabled())
     private val compactMode = MutableStateFlow(AppSettings.isCompactModeEnabled())
     private val maxCommentatorsPerPage = MutableStateFlow(AppSettings.getMaxCommentatorsPerPage())
     private val contextVisibility =
         combine(
+            showHomeHistory,
             AppSettings.showContextTargumimFlow,
             AppSettings.showContextMentionsFlow,
             AppSettings.showContextSourcesFlow,
             AppSettings.showContextCommentariesFlow,
-        ) { targumim, mentions, sources, commentaries ->
-            listOf(targumim, mentions, sources, commentaries)
+        ) { history, targumim, mentions, sources, commentaries ->
+            listOf(history, targumim, mentions, sources, commentaries)
         }
 
     val state =
@@ -37,11 +39,12 @@ class DisplaySettingsViewModel : ViewModel() {
                 showZmanimWidgets = z,
                 showHomeWallpaper = wallpaper,
                 compactMode = compact,
+                showHomeHistory = context[0],
                 maxCommentatorsPerPage = maxCommentators,
-                showContextTargumim = context[0],
-                showContextMentions = context[1],
-                showContextSources = context[2],
-                showContextCommentaries = context[3],
+                showContextTargumim = context[1],
+                showContextMentions = context[2],
+                showContextSources = context[3],
+                showContextCommentaries = context[4],
             )
         }.stateIn(
             viewModelScope,
@@ -51,6 +54,7 @@ class DisplaySettingsViewModel : ViewModel() {
                 showHomeWallpaper = showHomeWallpaper.value,
                 compactMode = compactMode.value,
                 maxCommentatorsPerPage = maxCommentatorsPerPage.value,
+                showHomeHistory = showHomeHistory.value,
             ),
         )
 
@@ -67,6 +71,10 @@ class DisplaySettingsViewModel : ViewModel() {
             is DisplaySettingsEvents.SetCompactMode -> {
                 AppSettings.setCompactModeEnabled(event.value)
                 compactMode.value = event.value
+            }
+            is DisplaySettingsEvents.SetShowHomeHistory -> {
+                AppSettings.setShowHomeHistoryEnabled(event.value)
+                showHomeHistory.value = event.value
             }
             is DisplaySettingsEvents.SetMaxCommentatorsPerPage -> {
                 AppSettings.setMaxCommentatorsPerPage(event.value)

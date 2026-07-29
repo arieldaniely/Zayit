@@ -7,7 +7,9 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
-import io.github.kdroidfilter.seforimapp.core.deeplink.parseZayitDeepLink
+import io.github.kdroidfilter.seforimapp.core.deeplink.applyDeepLinkHighlight
+import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
+import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
@@ -549,15 +551,11 @@ class SearchHomeViewModel(
         query: String,
         currentTabId: String,
     ) {
-        // A zayit:// link pasted into the search bar opens the target instead of running a search.
-        parseZayitDeepLink(query.trim())?.let { destination ->
-            val resolvable =
-                when (destination) {
-                    is TabsDestination.BookContent ->
-                        runSuspendCatching { repository.getBookCore(destination.bookId) }.getOrNull() != null
-                    else -> true
-                }
-            if (resolvable) {
+        // A supported content link pasted into the search bar opens the target instead of running a search.
+        parseContentDeepLink(query.trim())?.let { parsed ->
+            val destination = runSuspendCatching { resolveContentDeepLink(parsed, repository) }.getOrNull()
+            if (destination != null) {
+                applyDeepLinkHighlight(parsed, destination)
                 _navigationEvents.send(SearchHomeNavigationEvent.NavigateToDeepLink(destination))
                 return
             }

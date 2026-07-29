@@ -36,6 +36,7 @@ class PersonalLibraryImporter(
     fun fingerprint(folders: List<PersonalBookFolder>): String {
         val digest = MessageDigest.getInstance("SHA-256")
         digest.add(baseDatabase.toAbsolutePath().normalize().toString())
+        digest.add(IMPORT_FORMAT_VERSION)
         digest.add(Files.size(baseDatabase).toString())
         digest.add(Files.getLastModifiedTime(baseDatabase).toMillis().toString())
         folders.filter { it.enabled }.sortedBy { it.id }.forEach { folder ->
@@ -309,7 +310,10 @@ class PersonalLibraryImporter(
                         val textId = ids.id("toc-text:$heading")
                         execute("INSERT OR IGNORE INTO tocText(id,text) VALUES(?,?)", textId, heading)
                         val parent = (level - 1 downTo 1).firstNotNullOfOrNull { parentStack[it] }
-                        val entryId = ids.id("toc:$bookId:$level:$heading:$index")
+                        // TOC queries use the primary key as their cheap, indexed display order.
+                        // Generic hashed negative IDs would scramble sibling headings, so encode
+                        // the source line position for personal TOC entries.
+                        val entryId = ids.orderedTocId(bookId, index)
                         execute(
                             "INSERT INTO tocEntry(id,bookId,parentId,textId,level,lineId) VALUES(?,?,?,?,?,?)",
                             entryId,
@@ -578,10 +582,34 @@ class PersonalLibraryImporter(
                 // Reserve -1 for legacy UI/session sentinels.
                 val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(2L)
                 val candidate = -positive
-                val previous = keysById.putIfAbsent(candidate, key)
-                if (previous == null || previous == key) return candidate
+                if (claim(candidate, key)) return candidate
                 salt++
             }
+        }
+
+        /** Allocates a stable TOC id whose numeric order matches the heading's line order. */
+        fun orderedTocId(
+            bookId: Long,
+            lineIndex: Int,
+        ): Long {
+            require(bookId in -Int.MAX_VALUE.toLong()..-2L) { "Unexpected personal book id: $bookId" }
+            require(lineIndex >= 0) { "Negative TOC line index: $lineIndex" }
+
+            // Generic hashed ids occupy [-Int.MAX_VALUE, -2]. This 64-bit range is
+            // separate, and reversing the low bits makes earlier negative ids sort first.
+            val bookPart = -bookId
+            val reversedLineIndex = Int.MAX_VALUE.toLong() - lineIndex.toLong()
+            val candidate = -((bookPart shl 31) or reversedLineIndex)
+            check(claim(candidate, "toc:$bookId:$lineIndex")) { "Duplicate TOC entry at line $lineIndex" }
+            return candidate
+        }
+
+        private fun claim(
+            candidate: Long,
+            key: String,
+        ): Boolean {
+            val previous = keysById.putIfAbsent(candidate, key)
+            return previous == null || previous == key
         }
     }
 
@@ -591,6 +619,7 @@ class PersonalLibraryImporter(
 
     private companion object {
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v2-ordered-toc"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 

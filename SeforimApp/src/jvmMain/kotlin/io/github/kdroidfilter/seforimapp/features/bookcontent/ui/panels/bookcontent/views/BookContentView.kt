@@ -635,6 +635,7 @@ fun BookContentView(
     // Find-in-page UI state (scoped per tab)
     val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
     val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")
+    val deepLinkMarkedLineId by AppSettings.deepLinkMarkedLineFlow(tabId).collectAsState()
     val smartModeEnabled by AppSettings.findSmartModeFlow(tabId).collectAsState()
     val findState = remember(tabId) { TextFieldState() }
     LaunchedEffect(persistedFindQuery) {
@@ -1010,7 +1011,15 @@ fun BookContentView(
                                         }
                                     }
                                 }
-                                Box(modifier = Modifier.padding(vertical = LineItemVerticalPaddingPerSide)) {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (deepLinkMarkedLineId == line.id) Color(0x66FFD54F) else Color.Transparent,
+                                            ).padding(vertical = LineItemVerticalPaddingPerSide),
+                                ) {
                                     // Stable per-line list: unhighlighted lines get the emptyList()
                                     // singleton, so only lines whose highlights changed recompose.
                                     val lineHighlights = highlightsByLine[line.id] ?: emptyList()

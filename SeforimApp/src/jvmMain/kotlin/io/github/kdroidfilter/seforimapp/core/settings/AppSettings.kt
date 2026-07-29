@@ -183,12 +183,16 @@ object AppSettings {
     private val findQueryFlowByTab = mutableMapOf<String, MutableStateFlow<String>>()
     private val findBarOpenFlowByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
     private val findSmartModeByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
+    private val deepLinkMarkedLineByTab = mutableMapOf<String, MutableStateFlow<Long?>>()
 
     private fun queryFlowFor(tabId: String): MutableStateFlow<String> = findQueryFlowByTab.getOrPut(tabId) { MutableStateFlow("") }
 
     private fun findOpenFlowFor(tabId: String): MutableStateFlow<Boolean> = findBarOpenFlowByTab.getOrPut(tabId) { MutableStateFlow(false) }
 
     private fun smartModeFlowFor(tabId: String): MutableStateFlow<Boolean> = findSmartModeByTab.getOrPut(tabId) { MutableStateFlow(false) }
+
+    private fun markedLineFlowFor(tabId: String): MutableStateFlow<Long?> =
+        deepLinkMarkedLineByTab.getOrPut(tabId) { MutableStateFlow(null) }
 
     fun findQueryFlow(tabId: String): StateFlow<String> = queryFlowFor(tabId).asStateFlow()
 
@@ -219,6 +223,15 @@ object AppSettings {
     }
 
     fun findSmartModeFlow(tabId: String): StateFlow<Boolean> = smartModeFlowFor(tabId).asStateFlow()
+
+    fun deepLinkMarkedLineFlow(tabId: String): StateFlow<Long?> = markedLineFlowFor(tabId).asStateFlow()
+
+    fun setDeepLinkMarkedLine(
+        tabId: String,
+        lineId: Long?,
+    ) {
+        markedLineFlowFor(tabId).value = lineId
+    }
 
     fun setFindSmartMode(
         tabId: String,

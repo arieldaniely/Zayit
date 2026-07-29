@@ -60,6 +60,8 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.Bookmark
+import io.github.kdroidfilter.seforimapp.icons.BookmarkFilled
 import io.github.kdroidfilter.seforimapp.icons.CloseAll
 import io.github.kdroidfilter.seforimapp.icons.Link
 import io.github.kdroidfilter.seforimapp.icons.Tab_close
@@ -101,6 +103,8 @@ private data class TabEntry(
     val key: String,
     val data: TabData,
     val labelProvider: @Composable () -> String,
+    val isPinned: Boolean,
+    val onTogglePin: () -> Unit,
     val onClose: () -> Unit,
     val onClick: () -> Unit,
     val onCloseAll: () -> Unit,
@@ -209,6 +213,8 @@ private fun DefaultTabShowcase(
                             key = tabItem.destination.tabId,
                             data = tabData,
                             labelProvider = labelProvider,
+                            isPinned = tabItem.isPinned,
+                            onTogglePin = { onEvents(TabsEvents.OnTogglePin(actualIndex)) },
                             onClose = { onEvents(TabsEvents.OnClose(actualIndex)) },
                             onClick = { onEvents(TabsEvents.OnSelect(actualIndex)) },
                             onCloseAll = { onEvents(TabsEvents.CloseAll) },
@@ -285,6 +291,8 @@ private fun DefaultTabShowcase(
                             key = tabItem.destination.tabId,
                             data = tabData,
                             labelProvider = labelProvider,
+                            isPinned = tabItem.isPinned,
+                            onTogglePin = { onEvents(TabsEvents.OnTogglePin(index)) },
                             onClose = { onEvents(TabsEvents.OnClose(index)) },
                             onClick = { onEvents(TabsEvents.OnSelect(index)) },
                             onCloseAll = { onEvents(TabsEvents.CloseAll) },
@@ -534,6 +542,8 @@ private fun RtlAwareTabStripContent(
                                             tabCount = tabs.size,
                                             tabWidth = tabWidth,
                                             labelProvider = tabEntry.labelProvider,
+                                            isPinned = tabEntry.isPinned,
+                                            onTogglePin = tabEntry.onTogglePin,
                                             onClick = tabEntry.onClick,
                                             onClose = {
                                                 if (!closingKeys.contains(tabEntry.key)) {
@@ -650,6 +660,8 @@ private fun RtlAwareTab(
     tabCount: Int,
     tabWidth: Dp,
     labelProvider: @Composable () -> String,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
     onClick: () -> Unit,
     onClose: () -> Unit,
     onCloseAll: () -> Unit,
@@ -785,7 +797,7 @@ private fun RtlAwareTab(
                     }.padding(tabStyle.metrics.tabPadding)
                     .onPointerEvent(PointerEventType.Release) { ev ->
                         // Middle-click closes tab (Chrome-like)
-                        if (ev.button.isTertiary) onClose()
+                        if (ev.button.isTertiary && !isPinned) onClose()
                         // Right-click opens context menu
                         if (ev.button.isSecondary) {
                             val p = ev.changes.firstOrNull()?.position ?: Offset.Zero
@@ -806,7 +818,7 @@ private fun RtlAwareTab(
                 val isSelected = tabData.selected
                 // Hide close for non-selected tabs when space is tight, always show for selected
                 val showCloseIcon =
-                    tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
+                    !isPinned && tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
 
                 val closeIconComposable: @Composable () -> Unit = {
                     if (showCloseIcon) {
@@ -917,6 +929,8 @@ private fun RtlAwareTab(
 
         if (contextMenuOpen) {
             // Resource strings must be resolved outside MenuScope
+            val closeLabel = stringResource(Res.string.close_tab)
+            val pinLabel = stringResource(if (isPinned) Res.string.unpin_tab else Res.string.pin_tab)
             val closeAllLabel = stringResource(Res.string.close_all_tabs)
             val closeOthersLabel = stringResource(Res.string.close_other_tabs)
             val closeLeftLabel = stringResource(Res.string.close_tabs_left)
@@ -929,6 +943,24 @@ private fun RtlAwareTab(
                 contextClickOffset = contextClickOffset,
                 onDismissRequest = { contextMenuOpen = false },
             ) {
+                tabContextMenuItem(
+                    label = pinLabel,
+                    icon = if (isPinned) BookmarkFilled else Bookmark,
+                    onClick = {
+                        contextMenuOpen = false
+                        onTogglePin()
+                    },
+                )
+                if (!isPinned) {
+                    tabContextMenuItem(
+                        label = closeLabel,
+                        icon = Tab_close,
+                        onClick = {
+                            contextMenuOpen = false
+                            onClose()
+                        },
+                    )
+                }
                 if (onDetach != null) {
                     tabContextMenuItem(
                         label = detachLabel,

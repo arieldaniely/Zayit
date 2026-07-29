@@ -4,8 +4,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.cursorForHorizontalResize
@@ -29,7 +36,7 @@ value class StableSplitPaneState
 @OptIn(ExperimentalSplitPaneApi::class)
 fun SplitPaneState.asStable(): StableSplitPaneState = StableSplitPaneState(this)
 
-@OptIn(ExperimentalSplitPaneApi::class)
+@OptIn(ExperimentalSplitPaneApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun EnhancedHorizontalSplitPane(
     splitPaneState: StableSplitPaneState,
@@ -45,6 +52,9 @@ fun EnhancedHorizontalSplitPane(
     val state = splitPaneState.value
     val effectiveSecondMin = if (secondContent == null) 0f else secondMinSize
     val splitterVisible = showSplitter && secondContent != null
+    var splitterHovered by remember { mutableStateOf(false) }
+    var splitterDragging by remember { mutableStateOf(false) }
+    val splitterHighlighted = splitterHovered || splitterDragging
 
     // When the second pane is hidden, expand the first to 100% to avoid blank space
     LaunchedEffect(secondContent == null) {
@@ -90,19 +100,28 @@ fun EnhancedHorizontalSplitPane(
         if (splitterVisible) {
             splitter {
                 visiblePart {
-                    if (!isIslands) {
+                    if (!isIslands || splitterHighlighted) {
                         Divider(
                             Orientation.Vertical,
-                            Modifier.fillMaxHeight().width(1.dp),
-                            color = JewelTheme.globalColors.borders.disabled,
+                            Modifier.fillMaxHeight().width(if (splitterHighlighted) 2.dp else 1.dp),
+                            color =
+                                if (splitterHighlighted) {
+                                    JewelTheme.globalColors.outlines.focused
+                                } else {
+                                    JewelTheme.globalColors.borders.disabled
+                                },
                         )
                     }
                 }
                 handle {
                     Box(
                         Modifier
-                            .width(5.dp)
+                            .width(7.dp)
                             .fillMaxHeight()
+                            .onPointerEvent(PointerEventType.Enter) { splitterHovered = true }
+                            .onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
+                            .onPointerEvent(PointerEventType.Press) { splitterDragging = true }
+                            .onPointerEvent(PointerEventType.Release) { splitterDragging = false }
                             .markAsHandle()
                             .cursorForHorizontalResize(),
                         contentAlignment = Alignment.Center,
@@ -113,7 +132,7 @@ fun EnhancedHorizontalSplitPane(
     }
 }
 
-@OptIn(ExperimentalSplitPaneApi::class)
+@OptIn(ExperimentalSplitPaneApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun EnhancedVerticalSplitPane(
     splitPaneState: StableSplitPaneState,
@@ -129,6 +148,9 @@ fun EnhancedVerticalSplitPane(
     val state = splitPaneState.value
     val effectiveSecondMin = if (secondContent == null) 0f else secondMinSize
     val splitterVisible = showSplitter && secondContent != null
+    var splitterHovered by remember { mutableStateOf(false) }
+    var splitterDragging by remember { mutableStateOf(false) }
+    val splitterHighlighted = splitterHovered || splitterDragging
 
     // When the second pane is hidden, expand the first to 100% to avoid blank space
     LaunchedEffect(secondContent == null) {
@@ -174,19 +196,28 @@ fun EnhancedVerticalSplitPane(
         if (splitterVisible) {
             splitter {
                 visiblePart {
-                    if (!isIslands) {
+                    if (!isIslands || splitterHighlighted) {
                         Divider(
                             Orientation.Horizontal,
-                            Modifier.fillMaxWidth().height(1.dp),
-                            color = JewelTheme.globalColors.borders.disabled,
+                            Modifier.fillMaxWidth().height(if (splitterHighlighted) 2.dp else 1.dp),
+                            color =
+                                if (splitterHighlighted) {
+                                    JewelTheme.globalColors.outlines.focused
+                                } else {
+                                    JewelTheme.globalColors.borders.disabled
+                                },
                         )
                     }
                 }
                 handle {
                     Box(
                         Modifier
-                            .height(5.dp)
+                            .height(7.dp)
                             .fillMaxWidth()
+                            .onPointerEvent(PointerEventType.Enter) { splitterHovered = true }
+                            .onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
+                            .onPointerEvent(PointerEventType.Press) { splitterDragging = true }
+                            .onPointerEvent(PointerEventType.Release) { splitterDragging = false }
                             .markAsHandle()
                             .cursorForVerticalResize(),
                         contentAlignment = Alignment.Center,

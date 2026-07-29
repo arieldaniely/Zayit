@@ -292,6 +292,7 @@ class DesktopManager(
                 destinations = listOf(item.destination),
                 selectedIndex = 0,
                 titles = mapOf(tabId to SerializableTabTitle(item.title, item.tabType)),
+                pinnedTabIds = if (item.isPinned) setOf(tabId) else emptySet(),
                 geometry = geometry,
             )
         val spawned = spawnWindow(desktopId, snapshot)
@@ -460,6 +461,8 @@ class DesktopManager(
                         tabsState.tabs.associate {
                             it.destination.tabId to SerializableTabTitle(title = it.title, tabType = it.tabType)
                         },
+                    pinnedTabIds =
+                        tabsState.tabs.filter { it.isPinned }.mapTo(mutableSetOf()) { it.destination.tabId },
                     geometry = w.windowState.toSavedGeometry(),
                 )
             }
@@ -482,6 +485,7 @@ class DesktopManager(
                 destinations = snapshot.destinations,
                 selectedIndex = snapshot.selectedIndex,
                 titles = snapshot.titles.mapValues { (_, t) -> t.title to t.tabType },
+                pinnedTabIds = snapshot.pinnedTabIds,
                 skipAnimation = true,
             )
         }
@@ -555,6 +559,7 @@ class DesktopManager(
             destinations = snapshot.destinations,
             selectedIndex = snapshot.selectedIndex,
             titles = snapshot.titles.mapValues { (_, t) -> t.title to t.tabType },
+            pinnedTabIds = snapshot.pinnedTabIds,
             skipAnimation = true,
         )
     }

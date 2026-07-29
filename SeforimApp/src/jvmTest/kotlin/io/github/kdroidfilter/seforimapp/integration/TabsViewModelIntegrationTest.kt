@@ -298,6 +298,50 @@ class TabsViewModelIntegrationTest {
             assertEquals(2, viewModel.state.value.tabs.size)
         }
 
+    @Test
+    fun `pinned tab cannot be closed until it is unpinned`() =
+        runTest {
+            viewModel.onEvent(TabsEvents.OnTogglePin(0))
+            viewModel.onEvent(TabsEvents.OnClose(0))
+
+            assertEquals(1, viewModel.state.value.tabs.size)
+            assertTrue(viewModel.state.value.tabs.single().isPinned)
+
+            viewModel.onEvent(TabsEvents.OnTogglePin(0))
+            viewModel.onEvent(TabsEvents.OnClose(0))
+
+            assertEquals(1, viewModel.state.value.tabs.size)
+            assertTrue(!viewModel.state.value.tabs.single().isPinned)
+        }
+
+    @Test
+    fun `bulk close operations preserve pinned tabs`() =
+        runTest {
+            repeat(3) { viewModel.onEvent(TabsEvents.OnAdd) }
+            val pinnedId = viewModel.state.value.tabs[2].id
+            viewModel.onEvent(TabsEvents.OnTogglePin(2))
+
+            viewModel.onEvent(TabsEvents.CloseAll)
+
+            assertEquals(listOf(pinnedId), viewModel.state.value.tabs.map { it.id })
+            assertTrue(viewModel.state.value.tabs.single().isPinned)
+        }
+
+    @Test
+    fun `restoreTabs restores pin state by tab id`() =
+        runTest {
+            val destinations =
+                listOf(
+                    TabsDestination.BookContent(bookId = 1, tabId = "tab1"),
+                    TabsDestination.Search(searchQuery = "Torah", tabId = "tab2"),
+                )
+
+            viewModel.restoreTabs(destinations, selectedIndex = 0, pinnedTabIds = setOf("tab2"))
+
+            assertTrue(!viewModel.state.value.tabs[0].isPinned)
+            assertTrue(viewModel.state.value.tabs[1].isPinned)
+        }
+
     // ==================== Tab Reordering Tests ====================
 
     @Test

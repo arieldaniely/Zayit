@@ -121,6 +121,7 @@ data class WindowSnapshot(
     val selectedIndex: Int = 0,
     val titles: Map<String, SerializableTabTitle> = emptyMap(),
     val geometry: SavedGeometry? = null,
+    val pinnedTabIds: Set<String> = emptySet(),
 )
 
 @Serializable
@@ -130,13 +131,22 @@ data class DesktopTabsSnapshot(
     val selectedIndex: Int = 0,
     val titles: Map<String, SerializableTabTitle> = emptyMap(),
     val tabStates: Map<String, TabPersistedState> = emptyMap(),
-    // New multi-window layout (appended field; absent in legacy files).
+    // Field 5 existed in the single-window pinned-tabs format; keep it for migration.
+    val pinnedTabIds: Set<String> = emptySet(),
+    // Multi-window layout follows the legacy fields to preserve ProtoBuf numbering.
     val windows: List<WindowSnapshot> = emptyList(),
 ) {
     /** Multi-window view of the snapshot, wrapping legacy single-window data if needed. */
     fun effectiveWindows(): List<WindowSnapshot> =
         windows.ifEmpty {
-            listOf(WindowSnapshot(destinations = destinations, selectedIndex = selectedIndex, titles = titles))
+            listOf(
+                WindowSnapshot(
+                    destinations = destinations,
+                    selectedIndex = selectedIndex,
+                    titles = titles,
+                    pinnedTabIds = pinnedTabIds,
+                ),
+            )
         }
 }
 

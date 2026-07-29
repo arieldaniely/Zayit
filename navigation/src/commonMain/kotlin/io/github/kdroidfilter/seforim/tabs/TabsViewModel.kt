@@ -24,6 +24,7 @@ data class TabItem(
     val title: String = "Default Tab",
     val destination: TabsDestination = TabsDestination.Home(UUID.randomUUID().toString()),
     val tabType: TabType = TabType.SEARCH,
+    val isPinned: Boolean = false,
 )
 
 @Stable
@@ -104,6 +105,7 @@ class TabsViewModel(
             is TabsEvents.OnSelect -> selectTab(event.index)
             TabsEvents.OnAdd -> addTab()
             is TabsEvents.OnReorder -> reorderTabs(event.fromIndex, event.toIndex)
+            is TabsEvents.OnTogglePin -> togglePin(event.index)
             TabsEvents.CloseAll -> closeAllTabs()
             is TabsEvents.CloseOthers -> closeOthers(event.index)
             is TabsEvents.CloseLeft -> closeLeft(event.index)
@@ -129,6 +131,7 @@ class TabsViewModel(
         if (index < 0 || index >= currentTabs.size) return
 
         val tabToClose = currentTabs[index]
+        if (tabToClose.isPinned) return
         recordClosedTab(tabToClose)
 
         onTabClosedListener?.invoke(tabToClose)
@@ -157,6 +160,17 @@ class TabsViewModel(
             }
 
         _state.value = TabsState(tabs = newTabs, selectedTabIndex = newSelectedIndex)
+    }
+
+    private fun togglePin(index: Int) {
+        _state.update { current ->
+            if (index !in current.tabs.indices) return@update current
+            current.copy(
+                tabs = current.tabs.toMutableList().also { tabs ->
+                    tabs[index] = tabs[index].copy(isPinned = !tabs[index].isPinned)
+                },
+            )
+        }
     }
 
     private fun selectTab(index: Int) {
@@ -235,9 +249,16 @@ class TabsViewModel(
 
     private fun closeAllTabs() {
         val currentTabs = _state.value.tabs
-        currentTabs.forEach { tab ->
+        val pinnedTabs = currentTabs.filter { it.isPinned }
+        currentTabs.filterNot { it.isPinned }.forEach { tab ->
             recordClosedTab(tab)
             onTabClosedListener?.invoke(tab)
+        }
+        if (pinnedTabs.isNotEmpty()) {
+            val selectedTab = currentTabs.getOrNull(_state.value.selectedTabIndex)
+            val selectedIndex = pinnedTabs.indexOfFirst { it.id == selectedTab?.id }.takeIf { it >= 0 } ?: 0
+            _state.value = TabsState(tabs = pinnedTabs, selectedTabIndex = selectedIndex)
+            return
         }
         val destination = TabsDestination.BookContent(bookId = -1, tabId = UUID.randomUUID().toString())
         val newTab =
@@ -252,45 +273,46 @@ class TabsViewModel(
 
     private fun closeOthers(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.filterIndexed { idx, _ -> idx != index }.forEach { tab ->
+        if (index !in currentTabs.indices) return
+        currentTabs.filterIndexed { idx, tab -> idx != index && !tab.isPinned }.forEach { tab ->
             recordClosedTab(tab)
             onTabClosedListener?.invoke(tab)
         }
         _state.update { current ->
-            if (index !in 0..current.tabs.lastIndex) return@update current
-            TabsState(tabs = listOf(current.tabs[index]), selectedTabIndex = 0)
+            val target = current.tabs[index]
+            val newTabs = current.tabs.filterIndexed { idx, tab -> idx == index || tab.isPinned }
+            TabsState(tabs = newTabs, selectedTabIndex = newTabs.indexOfFirst { it.id == target.id })
         }
     }
 
     private fun closeLeft(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.take(index).forEach { tab ->
+        if (index !in currentTabs.indices) return
+        currentTabs.take(index).filterNot { it.isPinned }.forEach { tab ->
             recordClosedTab(tab)
             onTabClosedListener?.invoke(tab)
         }
         _state.update { current ->
-            if (index !in 0..current.tabs.lastIndex) return@update current
-            val newTabs = current.tabs.drop(index)
-            val newSelected =
-                if (current.selectedTabIndex >= index) {
-                    (current.selectedTabIndex - index).coerceIn(0, newTabs.lastIndex)
-                } else {
-                    0
-                }
+            val selectedTab = current.tabs.getOrNull(current.selectedTabIndex)
+            val newTabs = current.tabs.filterIndexed { idx, tab -> idx >= index || tab.isPinned }
+            val newSelected = newTabs.indexOfFirst { it.id == selectedTab?.id }.takeIf { it >= 0 } ?: 0
             TabsState(tabs = newTabs, selectedTabIndex = newSelected)
         }
     }
 
     private fun closeRight(index: Int) {
         val currentTabs = _state.value.tabs
-        currentTabs.drop(index + 1).forEach { tab ->
+        if (index !in currentTabs.indices) return
+        currentTabs.drop(index + 1).filterNot { it.isPinned }.forEach { tab ->
             recordClosedTab(tab)
             onTabClosedListener?.invoke(tab)
         }
         _state.update { current ->
-            if (index !in 0..current.tabs.lastIndex) return@update current
-            val newTabs = current.tabs.take(index + 1)
-            val newSelected = if (current.selectedTabIndex <= index) current.selectedTabIndex else newTabs.lastIndex
+            val selectedTab = current.tabs.getOrNull(current.selectedTabIndex)
+            val newTabs = current.tabs.filterIndexed { idx, tab -> idx <= index || tab.isPinned }
+            val newSelected =
+                newTabs.indexOfFirst { it.id == selectedTab?.id }.takeIf { it >= 0 }
+                    ?: newTabs.indexOfFirst { it.id == current.tabs[index].id }
             TabsState(tabs = newTabs, selectedTabIndex = newSelected)
         }
     }
@@ -499,6 +521,7 @@ class TabsViewModel(
         destinations: List<TabsDestination>,
         selectedIndex: Int,
         titles: Map<String, Pair<String, TabType>> = emptyMap(),
+        pinnedTabIds: Set<String> = emptySet(),
         skipAnimation: Boolean = false,
     ) {
         if (skipAnimation) _skipNextAnimation.value = true
@@ -514,6 +537,7 @@ class TabsViewModel(
                     title = title,
                     destination = destination,
                     tabType = tabType,
+                    isPinned = destination.tabId in pinnedTabIds,
                 )
             }
 

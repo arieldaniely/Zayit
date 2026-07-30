@@ -35,7 +35,7 @@ jobs:
           choco install zstd -y --no-progress
           python -m pip install --disable-pip-version-check Pillow
 
-      - name: Install and configure a signed 4K virtual display
+      - name: Install and configure a signed virtual display
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -84,7 +84,7 @@ jobs:
             throw "NefCon failed to install the virtual display driver (exit $LASTEXITCODE)."
           }
           Start-Sleep -Seconds 10
-          python scripts/configure-windows-virtual-display.py --width 3840 --height 2160
+          python scripts/configure-windows-virtual-display.py --width 1920 --height 1080
           python scripts/configure-windows-virtual-display.py --list
 
       - name: Download the current database bundle

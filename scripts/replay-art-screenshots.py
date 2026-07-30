@@ -18,9 +18,9 @@ from PIL import Image
 
 TARGET_WIDTH = 1463
 TARGET_HEIGHT = 811
-SOURCE_WIDTH = TARGET_WIDTH * 2
-SOURCE_HEIGHT = TARGET_HEIGHT * 2
-EXPECTED_DENSITY = 2.0
+SOURCE_WIDTH = TARGET_WIDTH
+SOURCE_HEIGHT = TARGET_HEIGHT
+EXPECTED_DENSITY = 1.0
 STEMS = (
     "HOME", "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED", "BOOK-SEARCH",
     "TOC-BOOK-SEARCH", "INBOOK-SEARCH", "PIRUSHIM", "PIRUSHIM-TARGUMIM",
@@ -152,14 +152,13 @@ def main() -> int:
                 if not fixture.is_file():
                     raise FileNotFoundError(f"missing fixture: {fixture}")
                 bridge_command(bridge, "restore", str(fixture))
+                bridge_command(bridge, "scenario", stem, timeout=120.0)
                 for theme in ("LIGHT", "DARK"):
                     bridge_command(bridge, "theme", theme.lower())
                     if stem == "CLIPBOARD-DEMO":
                         frame = capture_tools.get_frame_rect(hwnd)
-                        capture_tools.user32.SetCursorPos(frame.left + 1300, frame.top + 500)
-                        bridge_command(bridge, "clipboard-demo", "select")
-                        capture_tools.user32.mouse_event(0x0008, 0, 0, 0, 0)  # right button down
-                        capture_tools.user32.mouse_event(0x0010, 0, 0, 0, 0)  # right button up
+                        capture_tools.user32.SetCursorPos(frame.left + 1030, frame.top + 285)
+                        bridge_command(bridge, "clipboard-demo", "open")
                     time.sleep(args.settle)
                     name = f"{stem}-{theme}.png"
                     digest, _frame = capture_tools.capture(hwnd, output / name)
@@ -167,7 +166,7 @@ def main() -> int:
                     print(f"captured {name}", flush=True)
 
             manifest = {
-                "version": 3,
+                "version": 4,
                 "platform": "windows",
                 "logicalSize": [TARGET_WIDTH, TARGET_HEIGHT],
                 "displaySize": [display_width, display_height],

@@ -58,6 +58,8 @@ import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEve
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.features.search.SearchShellActions
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationBridge
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationState
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
@@ -207,10 +209,12 @@ fun TabsContent() {
 
     // ViewModel owners per tab - manages lifecycle and state. Owners survive while the
     // tab is open so re-selecting a tab needs no DB refetch (data is hot in the ViewModel).
-    val tabOwners = remember { mutableMapOf<String, SimpleTabViewModelOwner>() }
-    val knownTabIds = remember { mutableSetOf<String>() }
+    val replayGeneration by ScreenshotAutomationState.replayGeneration.collectAsState()
+    val effectiveReplayGeneration = if (ScreenshotAutomationBridge.isEnabled) replayGeneration else 0
+    val tabOwners = remember(effectiveReplayGeneration) { mutableMapOf<String, SimpleTabViewModelOwner>() }
+    val knownTabIds = remember(effectiveReplayGeneration) { mutableSetOf<String>() }
     // Holds per-tab saveable UI state across the teardown/rebuild that happens on switch.
-    val saveableStateHolder = rememberSaveableStateHolder()
+    val saveableStateHolder = key(effectiveReplayGeneration) { rememberSaveableStateHolder() }
 
     // Cleanup removed tabs. A tab that just moved to another window keeps its persisted state
     // (the store is app-wide, keyed by tabId); only truly closed tabs are purged.
@@ -228,7 +232,7 @@ fun TabsContent() {
         knownTabIds.addAll(activeTabIds)
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(tabOwners) {
         onDispose {
             tabOwners.values.forEach { it.clear() }
             tabOwners.clear()
@@ -268,7 +272,7 @@ fun TabsContent() {
         tabs.forEach { tabItem ->
             val tabId = tabItem.destination.tabId
             val isSelected = tabId == currentTabId
-            val saveableKey = saveableKeyFor(tabItem.destination)
+            val saveableKey = "$effectiveReplayGeneration:${saveableKeyFor(tabItem.destination)}"
             key(saveableKey) {
                 saveableStateHolder.SaveableStateProvider(saveableKey) {
                     val tabOwner = tabOwners.getOrPut(tabId) { SimpleTabViewModelOwner(tabId) }

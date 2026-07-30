@@ -20,31 +20,29 @@ reversed PIRUSHIM preview pair) does not affect automated output.
 
 ## Deterministic GitHub replay
 
-The manual Replay website screenshots workflow runs on a pinned Windows Server 2022 runner so the
-captured title bar and window controls are the real Windows variants. The hosted runner's basic
-1024x768 adapter cannot expose a 4K mode, so the workflow installs a version- and SHA-256-pinned,
-signed indirect display driver and makes its 3840x2160 monitor primary before Zayit starts. It then
-verifies that at least 2926x1622 physical pixels are available. Zayit creates its 2926x1622 native
-surface before the first frame and renders the complete window at Compose density 2.0, matching a
-logical 1463x811 viewport. The window is never enlarged after Skia creates its surface and is never
-resized between fixtures.
+The manual Replay website screenshots workflow runs on a pinned Windows Server 2022 runner. In
+screenshot mode the title bar always uses the Windows control vectors on the right, independent of
+the host platform's title-bar defaults. The hosted runner's basic 1024x768 adapter is too short, so
+the workflow installs a version- and SHA-256-pinned signed indirect display driver and makes a
+1920x1080 monitor primary before Zayit starts. Zayit creates its 1463x811 native surface before the
+first frame and renders at Compose density 1.0. The frame is captured directly at 1463x811: it is
+never enlarged, downsampled, or resized between fixtures.
 
 For each fixture the workflow:
 
-1. restores the internal application state without restoring window geometry;
-2. applies the recorded visual settings, including text size 32 (nine increments above the minimum)
-   and at most two commentators per page;
-3. selects the light theme and captures the real decorated Windows application window;
-4. selects the dark theme and captures the same state again;
-5. verifies Windows platform controls and Compose density 2.0, then rejects partial/black
-   PrintWindow surfaces and unexpected window dimensions;
-6. downsamples with Lanczos to 1463x811 and publishes both art directories.
+1. restores the internal application state and recreates the selected tab's ViewModels;
+2. enforces the scenario-specific transient state, sidebars, search mode, queries, and panes;
+3. reapplies and verifies text size 32 (nine increments) and two commentators per page;
+4. selects the light theme and captures the decorated application window;
+5. selects the dark theme and captures the same state again;
+6. verifies density 1.0 and the direct 1463x811 frame, rejects partial/black PrintWindow surfaces,
+   and publishes both art directories without resampling.
 
 The workflow uploads the generated images, manifest, and application log. When requested, it creates
 a result branch and opens a pull request against the branch from which the workflow was dispatched;
 it never commits generated images directly to that source branch.
 
-The clipboard scenario replays its text selection and native right-click after restoring the fixture.
+The clipboard scenario selects the exact recorded sentence and opens its context menu deterministically.
 
 ## Recording new fixtures on Windows
 

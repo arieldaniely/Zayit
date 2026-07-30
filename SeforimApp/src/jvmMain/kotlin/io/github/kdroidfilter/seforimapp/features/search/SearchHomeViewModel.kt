@@ -418,6 +418,18 @@ class SearchHomeViewModel(
         }
     }
 
+    fun resetForScreenshotReplay() {
+        referenceQuery.value = ""
+        tocQuery.value = ""
+        val current = _uiState.value
+        _uiState.value =
+            SearchHomeUiState(
+                userDisplayName = current.userDisplayName,
+                userCommunityCode = current.userCommunityCode,
+                pairedReferenceHints = current.pairedReferenceHints,
+            )
+    }
+
     fun onReferenceQueryChanged(query: String) {
         referenceQuery.value = query
         if (query.isBlank()) {

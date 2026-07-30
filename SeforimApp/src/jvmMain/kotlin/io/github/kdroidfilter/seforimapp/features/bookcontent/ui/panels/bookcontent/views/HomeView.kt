@@ -54,6 +54,8 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.components.CatalogRow
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationBridge
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationState
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.texteffects.TypewriterPlaceholder
@@ -294,6 +296,8 @@ private fun HomeBody(
             var skipNextReferenceQuery by remember { mutableStateOf(false) }
             var skipNextTocQuery by remember { mutableStateOf(false) }
             var tocEditedSinceBook by remember { mutableStateOf(false) }
+            val screenshotSearchReplay by ScreenshotAutomationState.homeSearchReplay.collectAsState()
+
             // Shared focus requester for the MAIN search bar so other UI (e.g., level changes)
             // can reliably return focus to it, allowing immediate Enter to submit.
             val mainSearchFocusRequester = remember { FocusRequester() }
@@ -301,6 +305,18 @@ private fun HomeBody(
             val referenceSectionFocusRequester = remember { FocusRequester() }
             var scopeExpanded by remember { mutableStateOf(false) }
             // Forward reference input changes to the ViewModel (VM handles debouncing and suggestions)
+            LaunchedEffect(screenshotSearchReplay.generation) {
+                if (ScreenshotAutomationBridge.isEnabled && screenshotSearchReplay.generation > 0) {
+                    referenceSearchState.edit {
+                        replace(0, length, screenshotSearchReplay.referenceQuery)
+                    }
+                    tocSearchState.edit {
+                        replace(0, length, screenshotSearchReplay.tocQuery)
+                    }
+                    mainSearchFocusRequester.requestFocus()
+                }
+            }
+
             LaunchedEffect(Unit) {
                 snapshotFlow { referenceSearchState.text.toString() }.collect { qRaw ->
                     if (skipNextReferenceQuery) {

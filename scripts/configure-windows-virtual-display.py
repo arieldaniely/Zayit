@@ -248,8 +248,8 @@ def configure(width: int, height: int) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--width", type=int, default=3840)
-    parser.add_argument("--height", type=int, default=2160)
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--list", action="store_true", help="List adapters without changing them")
     args = parser.parse_args()
     user32 = windows_api()

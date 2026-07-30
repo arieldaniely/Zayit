@@ -1,0 +1,112 @@
+name: Replay website screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      open_pull_request:
+        description: Open a pull request with the regenerated PNG files
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  screenshots:
+    env:
+      PYTHONUTF8: "1"
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Nucleus
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
+
+      - name: Install screenshot dependencies
+        shell: pwsh
+        run: |
+          choco install zstd -y --no-progress
+          python -m pip install --disable-pip-version-check Pillow
+
+      - name: Download the current database bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $download = Join-Path $env:RUNNER_TEMP 'zayit-db-download'
+          $database = Join-Path $env:RUNNER_TEMP 'zayit-db'
+          New-Item -ItemType Directory -Force -Path $download, $database | Out-Null
+          gh release download --repo kdroidFilter/SeforimLibrary --pattern '*.tar.zst*' --dir $download
+          $parts = @(Get-ChildItem -LiteralPath $download -File | Sort-Object Name)
+          if ($parts.Count -eq 0) { throw 'The latest release has no database archive.' }
+          $archive = Join-Path $env:RUNNER_TEMP 'seforim.tar.zst'
+          $output = [IO.File]::Create($archive)
+          try {
+            foreach ($part in $parts) {
+              $input = [IO.File]::OpenRead($part.FullName)
+              try { $input.CopyTo($output) } finally { $input.Dispose() }
+            }
+          } finally { $output.Dispose() }
+          zstd -d -f $archive -o "$archive.tar"
+          tar -xf "$archive.tar" -C $database
+          $db = Get-ChildItem -LiteralPath $database -Recurse -Filter seforim.db -File | Select-Object -First 1
+          if (-not $db) { throw 'seforim.db was not found in the release archive.' }
+          "SEFORIMAPP_DATABASE_PATH=$($db.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Replay recorded states in a native Windows window
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $screenshots = Join-Path $env:RUNNER_TEMP 'zayit-screenshots'
+          $profile = Join-Path $env:RUNNER_TEMP 'zayit-profile'
+          New-Item -ItemType Directory -Force -Path $screenshots, $profile | Out-Null
+          python scripts/replay-art-screenshots.py `
+            --fixtures SeforimApp/src/jvmTest/resources/website-screenshots `
+            --output $screenshots `
+            --profile $profile `
+            --publish
+
+      - name: Upload generated screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: website-screenshots
+          path: |
+            ${{ runner.temp }}/zayit-screenshots/*.png
+            ${{ runner.temp }}/zayit-screenshots/manifest.json
+            ${{ runner.temp }}/zayit-screenshots/zayit-run.log
+          if-no-files-found: warn
+
+      - name: Open a pull request against the dispatched branch
+        if: success() && inputs.open_pull_request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add art website/public/art
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'Screenshots are unchanged; no pull request is needed.'
+            exit 0
+          }
+          $branch = "automation/website-screenshots-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          git switch -c $branch
+          git commit -m 'Update application screenshots'
+          git push --set-upstream origin $branch
+          gh pr create `
+            --base $env:BASE_BRANCH `
+            --head $branch `
+            --title 'Update application screenshots' `
+            --body 'Regenerated from recorded Zayit application state on a native Windows runner at the recorded display scale.'

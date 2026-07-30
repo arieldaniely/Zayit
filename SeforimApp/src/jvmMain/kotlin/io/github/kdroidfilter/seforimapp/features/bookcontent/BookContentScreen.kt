@@ -64,6 +64,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.No
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationState
 import io.github.kdroidfilter.seforimapp.icons.Ink_pen
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -536,16 +537,24 @@ fun BookContentScreen(
                     state: ContextMenuState,
                     content: @Composable () -> Unit,
                 ) {
+                    val clipboardDemoGeneration by
+                        ScreenshotAutomationState.clipboardDemoGeneration.collectAsState()
+                    val selectedText =
+                        if (clipboardDemoGeneration > 0) {
+                            ScreenshotAutomationState.CLIPBOARD_DEMO_TEXT
+                        } else {
+                            textManager.selectedText.text
+                        }
+
                     // Mirror the current selection into the SelectionContext so the AWT
                     // keyboard dispatcher can read it without touching Compose state directly.
-                    LaunchedEffect(textManager.selectedText.text) {
-                        selectionContext.setSelectedText(textManager.selectedText.text)
+                    LaunchedEffect(selectedText) {
+                        selectionContext.setSelectedText(selectedText)
                     }
 
                     ContextMenuDataProvider(
                         items = {
-                            val query = normalizeSearchQuery(textManager.selectedText.text)
-                            val selectedText = textManager.selectedText.text
+                            val query = normalizeSearchQuery(selectedText)
                             buildList {
                                 // Copy without nikud option - first position, only show when book has diacritics and they are enabled
                                 if (bookHasDiacritics &&

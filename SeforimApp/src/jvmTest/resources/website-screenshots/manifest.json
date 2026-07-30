@@ -1,0 +1,59 @@
+{
+    "version":  1,
+    "recordedAt":  "2026-07-29T20:57:55.449613Z",
+    "sourceGitRevision":  "032e6605292addeccbfd9356d102a3dfd72b8f33",
+    "sourceRun":  "art/capture-preview/20260729-235207",
+    "themeStoredInFixture":  false,
+    "fixtures":  [
+                     {
+                         "file":  "BOOK-SEARCH.pb",
+                         "sha256":  "5dafeca58ee0f05d1163fad63708b41b13fab6af6cece1274fe9c5ba6ad3d7cf",
+                         "bytes":  1531
+                     },
+                     {
+                         "file":  "CLIPBOARD-DEMO.pb",
+                         "sha256":  "86c0b446d4c94a6ac9738d068f4fa1ab261729c40d26f9e22a7fd50f4e03a22d",
+                         "bytes":  1555
+                     },
+                     {
+                         "file":  "DB-SEARCH-ADVANCED.pb",
+                         "sha256":  "4661cd794db8a3c89c06428af87458bd2898b31f71f75f52429c7ec21209e9e5",
+                         "bytes":  2886960
+                     },
+                     {
+                         "file":  "DB-SEARCH-SIMPLE.pb",
+                         "sha256":  "379ae2ebd8ef8d8ea702cb801e843a58ce5fd8a3016850b37939d9b728c8d60d",
+                         "bytes":  7606
+                     },
+                     {
+                         "file":  "HOME.pb",
+                         "sha256":  "f9e1b2d9d5ccf1bb3ab542e115504e2e208d30fef2fc6073fceb743774dc093b",
+                         "bytes":  1531
+                     },
+                     {
+                         "file":  "INBOOK-SEARCH.pb",
+                         "sha256":  "95fc88093676d4fc37f3d39c2630d7e1c33d103c29a838a39bef779e6d94de4e",
+                         "bytes":  1531
+                     },
+                     {
+                         "file":  "MEKOR.pb",
+                         "sha256":  "fe95778d2859405ca5321ab3ed012e6cb9a2106b8813c274e1971d5525ca060f",
+                         "bytes":  1584
+                     },
+                     {
+                         "file":  "PIRUSHIM.pb",
+                         "sha256":  "95fc88093676d4fc37f3d39c2630d7e1c33d103c29a838a39bef779e6d94de4e",
+                         "bytes":  1531
+                     },
+                     {
+                         "file":  "PIRUSHIM-TARGUMIM.pb",
+                         "sha256":  "1cb991198e593f0007ac879e53889b0d3a2667923b5ed8489437d36788cbf330",
+                         "bytes":  1543
+                     },
+                     {
+                         "file":  "TOC-BOOK-SEARCH.pb",
+                         "sha256":  "5dafeca58ee0f05d1163fad63708b41b13fab6af6cece1274fe9c5ba6ad3d7cf",
+                         "bytes":  1531
+                     }
+                 ]
+}

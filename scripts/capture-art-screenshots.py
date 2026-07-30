@@ -42,7 +42,7 @@ configure_utf8_stdio()
 
 WIDTH = 1463
 HEIGHT = 811
-SOURCE_SCALE = 2
+SOURCE_SCALE = 1
 SOURCE_WIDTH = WIDTH * SOURCE_SCALE
 SOURCE_HEIGHT = HEIGHT * SOURCE_SCALE
 RESIZE_SETTLE_SECONDS = 1.0
@@ -347,41 +347,27 @@ def validate_rendered_surface(source: Image.Image) -> None:
 
 
 def crop_to_target_aspect(source: Image.Image) -> Image.Image:
-    """Remove small native-frame rounding before deterministic resizing.
-
-    Windows can report a couple of extra DWM pixels around a Compose window at
-    100% display scale (for example 1465x812 for a requested 1463x811 frame).
-    A native frame may be the exact 2926x1622 source or include a few DWM
-    boundary pixels. Cropping to the largest integral multiple of the target
-    preserves the exact aspect ratio without resizing the live window.
-    """
-    scale = min(source.width // WIDTH, source.height // HEIGHT)
-    if scale < 1:
+    """Remove only the few DWM boundary pixels around the direct-size frame."""
+    if source.width < WIDTH or source.height < HEIGHT:
         raise RuntimeError(
             f"Native frame {source.width}x{source.height} is smaller than {WIDTH}x{HEIGHT}",
         )
-
-    crop_width = WIDTH * scale
-    crop_height = HEIGHT * scale
-    excess_width = source.width - crop_width
-    excess_height = source.height - crop_height
-    tolerance = 4 * scale
-    if excess_width > tolerance or excess_height > tolerance:
+    excess_width = source.width - WIDTH
+    excess_height = source.height - HEIGHT
+    if excess_width > 4 or excess_height > 4:
         raise RuntimeError(
-            f"Native frame {source.width}x{source.height} does not match "
-            f"{WIDTH}x{HEIGHT} at an integral display scale",
+            f"Native frame {source.width}x{source.height} is not the direct {WIDTH}x{HEIGHT} frame",
         )
-
     left = excess_width // 2
     top = excess_height // 2
-    return source.crop((left, top, left + crop_width, top + crop_height))
+    return source.crop((left, top, left + WIDTH, top + HEIGHT))
 
 
 def capture(hwnd: int, output: Path) -> tuple[str, Rect]:
     source, frame = capture_native_window(hwnd)
     validate_rendered_surface(source)
     source = crop_to_target_aspect(source)
-    image = source.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+    image = source
     output.parent.mkdir(parents=True, exist_ok=True)
     image.save(output, "PNG", optimize=True)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()

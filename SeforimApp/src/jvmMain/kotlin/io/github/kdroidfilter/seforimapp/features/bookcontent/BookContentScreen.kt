@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.input.key.Key
@@ -551,11 +550,6 @@ fun BookContentScreen(
                     // keyboard dispatcher can read it without touching Compose state directly.
                     LaunchedEffect(selectedText) {
                         selectionContext.setSelectedText(selectedText)
-                    }
-                    LaunchedEffect(clipboardDemoGeneration) {
-                        if (clipboardDemoGeneration > 0) {
-                            state.status = ContextMenuState.Status.Open(Rect.Zero)
-                        }
                     }
 
                     ContextMenuDataProvider(

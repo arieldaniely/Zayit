@@ -133,7 +133,9 @@ def main() -> int:
                     if stem == "CLIPBOARD-DEMO":
                         frame = capture_tools.get_frame_rect(hwnd)
                         capture_tools.user32.SetCursorPos(frame.left + 1300, frame.top + 500)
-                        bridge_command(bridge, "clipboard-demo", "open")
+                        bridge_command(bridge, "clipboard-demo", "select")
+                        capture_tools.user32.mouse_event(0x0008, 0, 0, 0, 0)  # right button down
+                        capture_tools.user32.mouse_event(0x0010, 0, 0, 0, 0)  # right button up
                     time.sleep(args.settle)
                     name = f"{stem}-{theme}.png"
                     digest, _frame = capture_tools.capture(hwnd, output / name)

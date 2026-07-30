@@ -484,6 +484,9 @@ def launch_app(
     environment = os.environ.copy()
     configure_java_home(environment)
     environment["ZAYIT_SCREENSHOT_BRIDGE_DIR"] = str(bridge_directory)
+    environment["ZAYIT_SCREENSHOT_LOGICAL_WIDTH"] = str(WIDTH)
+    environment["ZAYIT_SCREENSHOT_LOGICAL_HEIGHT"] = str(HEIGHT)
+    environment["J2D_UISCALE"] = str(SOURCE_SCALE)
     output.mkdir(parents=True, exist_ok=True)
     stdout_path = output / "zayit-run.log"
     stderr_path = output / "zayit-run.err.log"
@@ -553,6 +556,12 @@ def main() -> int:
         "captures": [],
     }
 
+    visual_settings = output / "fixtures" / "visual-settings.properties"
+    send_bridge_command(bridge_directory, "record-settings", visual_settings)
+    manifest["visualSettings"] = {
+        "file": str(visual_settings.relative_to(output)),
+        "sha256": hashlib.sha256(visual_settings.read_bytes()).hexdigest(),
+    }
     print(f"\nהצילומים יישמרו זמנית ב: {output}")
     for index, scenario in enumerate(scenarios, start=1):
         print(f"\n[{index}/{len(scenarios)}] {scenario.title} ({scenario.stem})")
@@ -605,6 +614,7 @@ def main() -> int:
         fixture_target.mkdir(parents=True, exist_ok=True)
         for fixture in (output / "fixtures").glob("*.pb"):
             shutil.copy2(fixture, fixture_target / fixture.name)
+        shutil.copy2(visual_settings, fixture_target / visual_settings.name)
         shutil.copy2(manifest_path, fixture_target / "manifest.json")
         print("הצילומים הועתקו לשתי תיקיות art והמצבים הפנימיים פורסמו כ-test resources.")
     else:

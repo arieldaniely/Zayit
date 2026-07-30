@@ -60,6 +60,7 @@ object SessionManager {
      * [restoreIfEnabled].
      */
     fun peekInitialWindowGeometry(): SavedGeometry? {
+        automationGeometry()?.let { return it }
         if (!AppSettings.isPersistSessionEnabled()) return null
         val file = desktopsFile()
         if (!file.exists()) return null
@@ -120,8 +121,7 @@ object SessionManager {
         val bytes = withContext(Dispatchers.IO) { source.readBytes() }
         val state = proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
         val enrichedState = enrichMissingTabTitles(state, appGraph)
-        val targetWidth = System.getenv("ZAYIT_SCREENSHOT_WIDTH")?.toIntOrNull() ?: 2926
-        val targetHeight = System.getenv("ZAYIT_SCREENSHOT_HEIGHT")?.toIntOrNull() ?: 1622
+        val screenshotGeometry = automationGeometry() ?: SavedGeometry()
         val normalizedState =
             enrichedState.copy(
                 snapshots =
@@ -131,13 +131,8 @@ object SessionManager {
                                 snapshot.effectiveWindows().map { window ->
                                     window.copy(
                                         geometry =
-                                            SavedGeometry(
-                                                x = 0,
-                                                y = 0,
-                                                width = targetWidth,
-                                                height = targetHeight,
-                                                placement = "Maximized",
-                                            ),
+                                            screenshotGeometry,
+
                                     )
                                 },
                         )
@@ -153,6 +148,12 @@ object SessionManager {
         }
     }
 
+    private fun automationGeometry(): SavedGeometry? {
+        if (!ScreenshotAutomationBridge.isEnabled) return null
+        val width = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_WIDTH")?.toIntOrNull() ?: 1463
+        val height = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_HEIGHT")?.toIntOrNull() ?: 811
+        return SavedGeometry(x = 0, y = 0, width = width, height = height, placement = "Floating")
+    }
     /** Restores a saved session snapshot if the user enabled persistence in settings. */
     suspend fun restoreIfEnabled(appGraph: AppGraph) {
         if (!AppSettings.isPersistSessionEnabled()) return

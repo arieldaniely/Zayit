@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Replay recorded Zayit states on a fixed X11 display and publish normalized PNGs."""
+"""Replay recorded Zayit states in a native Windows window and publish normalized PNGs."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
-import signal
 import subprocess
 import time
 import uuid
@@ -20,64 +20,20 @@ SOURCE_HEIGHT = 1622
 TARGET_WIDTH = 1463
 TARGET_HEIGHT = 811
 STEMS = (
-    "HOME",
-    "DB-SEARCH-SIMPLE",
-    "DB-SEARCH-ADVANCED",
-    "BOOK-SEARCH",
-    "TOC-BOOK-SEARCH",
-    "INBOOK-SEARCH",
-    "PIRUSHIM",
-    "PIRUSHIM-TARGUMIM",
-    "MEKOR",
-    "CLIPBOARD-DEMO",
+    "HOME", "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED", "BOOK-SEARCH",
+    "TOC-BOOK-SEARCH", "INBOOK-SEARCH", "PIRUSHIM", "PIRUSHIM-TARGUMIM",
+    "MEKOR", "CLIPBOARD-DEMO",
 )
 
 
-def run_text(command: list[str]) -> str:
-    return subprocess.check_output(command, text=True, encoding="utf-8").strip()
-
-
-def display_dimensions() -> tuple[int, int]:
-    for line in run_text(["xdpyinfo"]).splitlines():
-        if "dimensions:" in line:
-            value = line.split("dimensions:", 1)[1].strip().split()[0]
-            width, height = value.split("x", 1)
-            return int(width), int(height)
-    raise RuntimeError("xdpyinfo did not report display dimensions")
-
-
-def window_geometry(window_id: str) -> dict[str, int]:
-    values: dict[str, int] = {}
-    for line in run_text(["xdotool", "getwindowgeometry", "--shell", window_id]).splitlines():
-        if "=" in line:
-            key, value = line.split("=", 1)
-            if value.lstrip("-").isdigit():
-                values[key] = int(value)
-    return values
-
-
-def find_window(title: str, timeout: float, app_process: subprocess.Popen[bytes]) -> str:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if app_process.poll() is not None:
-            raise RuntimeError(f"Zayit exited before opening a window (exit {app_process.returncode})")
-        result = subprocess.run(
-            ["xdotool", "search", "--onlyvisible", "--name", title],
-            text=True,
-            encoding="utf-8",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        candidates = [item for item in result.stdout.splitlines() if item]
-        if candidates:
-            return max(
-                candidates,
-                key=lambda item: window_geometry(item).get("WIDTH", 0)
-                * window_geometry(item).get("HEIGHT", 0),
-            )
-        time.sleep(0.5)
-    raise TimeoutError(f"Zayit window containing {title!r} did not appear")
+def load_windows_capture_module(repo: Path):
+    path = repo / "scripts" / "capture-art-screenshots.py"
+    spec = importlib.util.spec_from_file_location("zayit_windows_capture", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def bridge_command(bridge: Path, action: str, argument: str, timeout: float = 60.0) -> None:
@@ -86,9 +42,8 @@ def bridge_command(bridge: Path, action: str, argument: str, timeout: float = 60
     temporary = bridge / f"{request_id}.request.tmp"
     request = bridge / f"{request_id}.request"
     response = bridge / f"{request_id}.response"
-    temporary.write_text(f"{action}	{argument}", encoding="utf-8")
+    temporary.write_text(f"{action}\t{argument}", encoding="utf-8")
     os.replace(temporary, request)
-
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if response.is_file():
@@ -99,24 +54,6 @@ def bridge_command(bridge: Path, action: str, argument: str, timeout: float = 60
             return
         time.sleep(0.1)
     raise TimeoutError(f"Timed out waiting for Zayit bridge command {action}")
-
-
-def capture(window_id: str, destination: Path) -> str:
-    raw = destination.with_suffix(".source.png")
-    subprocess.run(["import", "-window", window_id, str(raw)], check=True)
-    with Image.open(raw) as image:
-        if image.size != (SOURCE_WIDTH, SOURCE_HEIGHT):
-            raise RuntimeError(
-                f"window is {image.width}x{image.height}; "
-                f"expected fixed {SOURCE_WIDTH}x{SOURCE_HEIGHT}",
-            )
-        normalized = image.convert("RGB").resize(
-            (TARGET_WIDTH, TARGET_HEIGHT),
-            Image.Resampling.LANCZOS,
-        )
-        normalized.save(destination, format="PNG", optimize=True)
-    raw.unlink()
-    return hashlib.sha256(destination.read_bytes()).hexdigest()
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,8 +68,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    if os.name == "nt" or not os.environ.get("DISPLAY"):
-        raise SystemExit("This replay tool requires a Linux X11 display (normally Xvfb).")
+    if os.name != "nt":
+        raise SystemExit("This replay tool requires Windows so screenshots contain real Windows controls.")
     args = parse_args()
     repo = Path(__file__).resolve().parents[1]
     fixtures = args.fixtures.resolve()
@@ -140,42 +77,51 @@ def main() -> int:
     profile = args.profile.resolve()
     output.mkdir(parents=True, exist_ok=True)
     profile.mkdir(parents=True, exist_ok=True)
-
-    actual_display = display_dimensions()
-    if actual_display != (SOURCE_WIDTH, SOURCE_HEIGHT):
-        raise RuntimeError(
-            f"X11 display is {actual_display[0]}x{actual_display[1]}; "
-            f"expected {SOURCE_WIDTH}x{SOURCE_HEIGHT}",
-        )
-
     bridge = output / "bridge"
+
+    capture_tools = load_windows_capture_module(repo)
+    capture_tools.enable_dpi_awareness()
+
     environment = os.environ.copy()
-    environment.update(
-        {
-            "ZAYIT_SCREENSHOT_BRIDGE_DIR": str(bridge),
-            "ZAYIT_SCREENSHOT_WIDTH": str(SOURCE_WIDTH),
-            "ZAYIT_SCREENSHOT_HEIGHT": str(SOURCE_HEIGHT),
-            "SEFORIMAPP_PORTABLE": "1",
-            "SEFORIMAPP_PORTABLE_DIR": str(profile),
-        },
-    )
+    environment.update({
+        "ZAYIT_SCREENSHOT_BRIDGE_DIR": str(bridge),
+        "ZAYIT_SCREENSHOT_LOGICAL_WIDTH": str(TARGET_WIDTH),
+        "ZAYIT_SCREENSHOT_LOGICAL_HEIGHT": str(TARGET_HEIGHT),
+        "J2D_UISCALE": "2",
+        "SEFORIMAPP_PORTABLE": "1",
+        "SEFORIMAPP_PORTABLE_DIR": str(profile),
+    })
     log_path = output / "zayit-run.log"
     with log_path.open("wb") as log:
         process = subprocess.Popen(
-            [
-                str(repo / "gradlew"),
-                ":SeforimApp:run",
-                "--no-daemon",
-                "--console=plain",
-            ],
+            [str(repo / "gradlew.bat"), ":SeforimApp:run", "--no-daemon", "--console=plain"],
             cwd=repo,
             env=environment,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         try:
-            window_id = find_window(args.window_title, 600.0, process)
+            hwnd = capture_tools.wait_for_window(args.window_title, 600.0, process, log_path)
+
+            # The app is born at this size. Captures only verify it and never resize it.
+            def verify_window(current_hwnd: int, width: int = SOURCE_WIDTH, height: int = SOURCE_HEIGHT):
+                frame = capture_tools.get_frame_rect(current_hwnd)
+                if (frame.width, frame.height) != (width, height):
+                    raise RuntimeError(
+                        f"Native frame is {frame.width}x{frame.height}; expected {width}x{height}. "
+                        "Refusing to resize because that would destabilize Compose layout."
+                    )
+                capture_tools.user32.SetForegroundWindow(current_hwnd)
+                return frame
+
+            capture_tools.normalize_window = verify_window
+            settings = fixtures / "visual-settings.properties"
+            if not settings.is_file():
+                raise FileNotFoundError(f"missing visual settings: {settings}")
+            bridge_command(bridge, "settings", str(settings))
+            time.sleep(args.settle)
+
             captures: list[dict[str, str]] = []
             for stem in STEMS:
                 fixture = fixtures / f"{stem}.pb"
@@ -184,22 +130,27 @@ def main() -> int:
                 bridge_command(bridge, "restore", str(fixture))
                 for theme in ("LIGHT", "DARK"):
                     bridge_command(bridge, "theme", theme.lower())
+                    if stem == "CLIPBOARD-DEMO":
+                        frame = capture_tools.get_frame_rect(hwnd)
+                        capture_tools.user32.SetCursorPos(frame.left + 1300, frame.top + 500)
+                        bridge_command(bridge, "clipboard-demo", "open")
                     time.sleep(args.settle)
-                    window_id = find_window(args.window_title, 30.0, process)
                     name = f"{stem}-{theme}.png"
-                    digest = capture(window_id, output / name)
+                    digest, _frame = capture_tools.capture(hwnd, output / name)
                     captures.append({"file": name, "sha256": digest})
                     print(f"captured {name}", flush=True)
 
             manifest = {
-                "version": 2,
+                "version": 3,
+                "platform": "windows",
+                "logicalSize": [TARGET_WIDTH, TARGET_HEIGHT],
                 "sourceSize": [SOURCE_WIDTH, SOURCE_HEIGHT],
                 "targetSize": [TARGET_WIDTH, TARGET_HEIGHT],
+                "uiScale": 2.0,
                 "captures": captures,
             }
             (output / "manifest.json").write_text(
-                json.dumps(manifest, ensure_ascii=False, indent=2) + chr(10),
-                encoding="utf-8",
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
             )
             if args.publish:
                 for target in (repo / "art", repo / "website" / "public" / "art"):
@@ -209,11 +160,11 @@ def main() -> int:
                         (target / source.name).write_bytes(source.read_bytes())
         finally:
             if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
+                process.terminate()
                 try:
                     process.wait(timeout=15)
                 except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
+                    process.kill()
     return 0
 
 

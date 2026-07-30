@@ -56,6 +56,12 @@ object ScreenshotAutomationBridge {
                 val snapshot = File(fields[1])
                 when (fields[0]) {
                     "record" -> SessionManager.exportSnapshot(appGraph, snapshot)
+                    "record-settings" -> ScreenshotVisualSettings.exportTo(snapshot)
+                    "settings" -> ScreenshotVisualSettings.importFrom(snapshot, appGraph)
+                    "clipboard-demo" -> {
+                        ScreenshotAutomationState.requestClipboardDemo()
+                        delay(500)
+                    }
                     "restore" -> SessionManager.importSnapshot(appGraph, snapshot)
                     "theme" -> {
                         val theme =

@@ -6,12 +6,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
@@ -49,6 +52,8 @@ import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationBridge
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationState
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -228,6 +233,19 @@ fun NucleusApplicationScope.MainAppWindow(
             }
         },
     ) {
+        val nativeDensity = LocalDensity.current
+        val renderedDensity =
+            if (ScreenshotAutomationBridge.isEnabled) {
+                Density(density = 2f, fontScale = nativeDensity.fontScale)
+            } else {
+                nativeDensity
+            }
+        SideEffect {
+            if (ScreenshotAutomationBridge.isEnabled) {
+                ScreenshotAutomationState.reportRenderedDensity(renderedDensity.density)
+            }
+        }
+
         // Hook up the native window: focus tracking feeds DesktopManager (dock menu, deep links
         // and desktop actions target the focused window), and toFront() needs the handle.
         val nucleusWin = nucleusWindow
@@ -255,6 +273,7 @@ fun NucleusApplicationScope.MainAppWindow(
         }
 
         CompositionLocalProvider(
+            LocalDensity provides renderedDensity,
             LocalOpenWindow provides openWindow,
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -73,6 +75,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnecti
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationState
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.AltTocEntry
@@ -1430,7 +1433,7 @@ private fun LineItem(
     val currentHl =
         JewelTheme.globalColors.outlines.focused
             .copy(alpha = 0.42f)
-    val displayText: AnnotatedString =
+    val baseDisplayText: AnnotatedString =
         remember(
             annotated,
             highlightQuery,
@@ -1473,6 +1476,27 @@ private fun LineItem(
             }
         }
 
+    val clipboardDemoGeneration by ScreenshotAutomationState.clipboardDemoGeneration.collectAsState()
+    val selectionBackground = LocalTextSelectionColors.current.backgroundColor
+    val displayText =
+        remember(baseDisplayText, clipboardDemoGeneration, selectionBackground) {
+            if (clipboardDemoGeneration <= 0) {
+                baseDisplayText
+            } else {
+                val start = baseDisplayText.text.indexOf(ScreenshotAutomationState.CLIPBOARD_DEMO_TEXT)
+                if (start < 0) {
+                    baseDisplayText
+                } else {
+                    AnnotatedString.Builder(baseDisplayText).apply {
+                        addStyle(
+                            SpanStyle(background = selectionBackground),
+                            start,
+                            start + ScreenshotAutomationState.CLIPBOARD_DEMO_TEXT.length,
+                        )
+                    }.toAnnotatedString()
+                }
+            }
+        }
     // Dotted grey underline marking the noted ranges (drawn from the text layout so it supports
     // wrapping and RTL). Offsets are remapped to the displayed text when diacritics are hidden.
     val noteRanges =

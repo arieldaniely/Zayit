@@ -1,0 +1,38 @@
+package io.github.kdroidfilter.seforimapp.framework.session
+
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.abs
+
+object ScreenshotAutomationState {
+    const val CLIPBOARD_DEMO_TEXT = "מֵאֵימָתַי קוֹרִין אֶת שְׁמַע בָּעֲרָבִין? מִשָּׁעָה שֶׁהַכֹּהֲנִים נִכְנָסִים לֶאֱכוֹל בִּתְרוּמָתָן. עַד סוֹף הָאַשְׁמוּרָה הָרִאשׁוֹנָה. דִּבְרֵי רַבִּי אֱלִיעֶזֶר."
+
+    private val _clipboardDemoGeneration = MutableStateFlow(0)
+    val clipboardDemoGeneration: StateFlow<Int> = _clipboardDemoGeneration
+
+    @Volatile
+    private var renderedDensity: Float? = null
+
+    fun requestClipboardDemo() {
+        _clipboardDemoGeneration.value += 1
+    }
+
+    fun reportRenderedDensity(density: Float) {
+        renderedDensity = density
+    }
+
+    suspend fun requireRenderedDensity(expected: Float) {
+        repeat(100) {
+            val actual = renderedDensity
+            if (actual != null) {
+                require(abs(actual - expected) < 0.01f) {
+                    "Compose density is $actual; expected $expected"
+                }
+                return
+            }
+            delay(100)
+        }
+        error("Compose did not report its rendered density")
+    }
+}

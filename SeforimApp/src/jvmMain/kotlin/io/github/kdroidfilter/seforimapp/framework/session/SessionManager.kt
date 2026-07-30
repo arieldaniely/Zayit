@@ -60,6 +60,7 @@ object SessionManager {
      * [restoreIfEnabled].
      */
     fun peekInitialWindowGeometry(): SavedGeometry? {
+        automationGeometry()?.let { return it }
         if (!AppSettings.isPersistSessionEnabled()) return null
         val file = desktopsFile()
         if (!file.exists()) return null
@@ -99,6 +100,121 @@ object SessionManager {
             val bytes = proto.encodeToByteArray(DesktopsState.serializer(), desktopsState)
             desktopsFile().writeBytes(bytes)
         }
+    }
+
+    /** Exports the current in-memory session regardless of the user's persistence setting. */
+    fun exportSnapshot(
+        appGraph: AppGraph,
+        destination: File,
+    ) {
+        val state = appGraph.desktopManager.buildDesktopsState()
+        val bytes = proto.encodeToByteArray(DesktopsState.serializer(), state)
+        destination.parentFile?.mkdirs()
+        destination.writeBytes(bytes)
+    }
+
+    /** Restores a snapshot exported by [exportSnapshot]. Intended for opt-in UI automation. */
+    suspend fun importSnapshot(
+        appGraph: AppGraph,
+        source: File,
+    ) {
+        val bytes = withContext(Dispatchers.IO) { source.readBytes() }
+        val state = proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
+        val enrichedState = enrichMissingTabTitles(state, appGraph)
+        val scenarioState = normalizeScreenshotSidebars(enrichedState, source.nameWithoutExtension)
+        val normalizedState =
+            scenarioState.copy(
+                snapshots =
+                    scenarioState.snapshots.mapValues { (_, snapshot) ->
+                        snapshot.copy(
+                            windows =
+                                snapshot.effectiveWindows().map { window ->
+                                    // The replay runner sizes the native window once before the
+                                    // first restore. A fixture restores content only; applying its
+                                    // recorded geometry here would shrink the oversized off-screen
+                                    // capture window back to the runner's logical display size.
+                                    window.copy(
+                                        geometry =
+                                            if (ScreenshotAutomationBridge.isEnabled) {
+                                                null
+                                            } else {
+                                                window.geometry
+                                            },
+                                    )
+                                },
+                        )
+                    },
+            )
+
+        _isRestoringSession.value = true
+        try {
+            appGraph.desktopManager.restoreFromDesktopsState(normalizedState)
+            withContext(NonCancellable) { delay(150) }
+        } finally {
+            _isRestoringSession.value = false
+        }
+    }
+
+    private fun normalizeScreenshotSidebars(
+        state: DesktopsState,
+        scenario: String,
+    ): DesktopsState {
+        val sidebarState =
+            when (scenario.uppercase()) {
+                "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED" ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = true,
+                        expandedCategoryIds = setOf(44L, 61L, 62L),
+                        isTocVisible = false,
+                        expandedTocEntryIds = emptySet(),
+                    )
+                "HOME", "BOOK-SEARCH" ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = true,
+                        expandedCategoryIds = emptySet(),
+                        isTocVisible = false,
+                        expandedTocEntryIds = emptySet(),
+                    )
+                else ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = false,
+                        expandedCategoryIds = emptySet(),
+                        isTocVisible = true,
+                        expandedTocEntryIds = emptySet(),
+                    )
+            }
+
+        return state.copy(
+            snapshots =
+                state.snapshots.mapValues { (_, snapshot) ->
+                    val selectedTabIds =
+                        snapshot.effectiveWindows()
+                            .mapNotNull { window -> window.destinations.getOrNull(window.selectedIndex)?.tabId }
+                            .toSet()
+                    val normalizedTabStates = snapshot.tabStates.toMutableMap()
+                    selectedTabIds.forEach { tabId ->
+                        val tabState = normalizedTabStates[tabId] ?: TabPersistedState()
+                        normalizedTabStates[tabId] =
+                            tabState.copy(
+                                bookContent =
+                                    tabState.bookContent.copy(
+                                        isBookTreeVisible = sidebarState.isBookTreeVisible,
+                                        expandedCategoryIds = sidebarState.expandedCategoryIds,
+                                        isTocVisible = sidebarState.isTocVisible,
+                                        expandedTocEntryIds = sidebarState.expandedTocEntryIds,
+                                    ),
+                            )
+                    }
+                    snapshot.copy(tabStates = normalizedTabStates)
+                },
+        )
+    }
+
+    private fun automationGeometry(): SavedGeometry? {
+        if (!ScreenshotAutomationBridge.isEnabled) return null
+        val width = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_WIDTH")?.toIntOrNull() ?: 1463
+        val height = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_HEIGHT")?.toIntOrNull() ?: 811
+        return SavedGeometry(x = 0, y = 0, width = width, height = height, placement = "Floating")
     }
 
     /** Restores a saved session snapshot if the user enabled persistence in settings. */

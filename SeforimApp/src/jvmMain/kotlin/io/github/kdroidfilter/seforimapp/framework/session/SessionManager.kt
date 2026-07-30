@@ -101,6 +101,58 @@ object SessionManager {
         }
     }
 
+    /** Exports the current in-memory session regardless of the user's persistence setting. */
+    fun exportSnapshot(
+        appGraph: AppGraph,
+        destination: File,
+    ) {
+        val state = appGraph.desktopManager.buildDesktopsState()
+        val bytes = proto.encodeToByteArray(DesktopsState.serializer(), state)
+        destination.parentFile?.mkdirs()
+        destination.writeBytes(bytes)
+    }
+
+    /** Restores a snapshot exported by [exportSnapshot]. Intended for opt-in UI automation. */
+    suspend fun importSnapshot(
+        appGraph: AppGraph,
+        source: File,
+    ) {
+        val bytes = withContext(Dispatchers.IO) { source.readBytes() }
+        val state = proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
+        val enrichedState = enrichMissingTabTitles(state, appGraph)
+        val targetWidth = System.getenv("ZAYIT_SCREENSHOT_WIDTH")?.toIntOrNull() ?: 2926
+        val targetHeight = System.getenv("ZAYIT_SCREENSHOT_HEIGHT")?.toIntOrNull() ?: 1622
+        val normalizedState =
+            enrichedState.copy(
+                snapshots =
+                    enrichedState.snapshots.mapValues { (_, snapshot) ->
+                        snapshot.copy(
+                            windows =
+                                snapshot.effectiveWindows().map { window ->
+                                    window.copy(
+                                        geometry =
+                                            SavedGeometry(
+                                                x = 0,
+                                                y = 0,
+                                                width = targetWidth,
+                                                height = targetHeight,
+                                                placement = "Maximized",
+                                            ),
+                                    )
+                                },
+                        )
+                    },
+            )
+
+        _isRestoringSession.value = true
+        try {
+            appGraph.desktopManager.restoreFromDesktopsState(normalizedState)
+            withContext(NonCancellable) { delay(150) }
+        } finally {
+            _isRestoringSession.value = false
+        }
+    }
+
     /** Restores a saved session snapshot if the user enabled persistence in settings. */
     suspend fun restoreIfEnabled(appGraph: AppGraph) {
         if (!AppSettings.isPersistSessionEnabled()) return

@@ -121,18 +121,17 @@ object SessionManager {
         val bytes = withContext(Dispatchers.IO) { source.readBytes() }
         val state = proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
         val enrichedState = enrichMissingTabTitles(state, appGraph)
+        val scenarioState = normalizeScreenshotSidebars(enrichedState, source.nameWithoutExtension)
         val screenshotGeometry = automationGeometry() ?: SavedGeometry()
         val normalizedState =
-            enrichedState.copy(
+            scenarioState.copy(
                 snapshots =
-                    enrichedState.snapshots.mapValues { (_, snapshot) ->
+                    scenarioState.snapshots.mapValues { (_, snapshot) ->
                         snapshot.copy(
                             windows =
                                 snapshot.effectiveWindows().map { window ->
                                     window.copy(
-                                        geometry =
-                                            screenshotGeometry,
-
+                                        geometry = screenshotGeometry,
                                     )
                                 },
                         )
@@ -148,12 +147,68 @@ object SessionManager {
         }
     }
 
+    private fun normalizeScreenshotSidebars(
+        state: DesktopsState,
+        scenario: String,
+    ): DesktopsState {
+        val sidebarState =
+            when (scenario.uppercase()) {
+                "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED" ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = true,
+                        expandedCategoryIds = setOf(44L, 61L, 62L),
+                        isTocVisible = false,
+                        expandedTocEntryIds = emptySet(),
+                    )
+                "HOME", "BOOK-SEARCH" ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = true,
+                        expandedCategoryIds = emptySet(),
+                        isTocVisible = false,
+                        expandedTocEntryIds = emptySet(),
+                    )
+                else ->
+                    BookContentPersistedState(
+                        isBookTreeVisible = false,
+                        expandedCategoryIds = emptySet(),
+                        isTocVisible = true,
+                        expandedTocEntryIds = emptySet(),
+                    )
+            }
+
+        return state.copy(
+            snapshots =
+                state.snapshots.mapValues { (_, snapshot) ->
+                    val selectedTabIds =
+                        snapshot.effectiveWindows()
+                            .mapNotNull { window -> window.destinations.getOrNull(window.selectedIndex)?.tabId }
+                            .toSet()
+                    val normalizedTabStates = snapshot.tabStates.toMutableMap()
+                    selectedTabIds.forEach { tabId ->
+                        val tabState = normalizedTabStates[tabId] ?: TabPersistedState()
+                        normalizedTabStates[tabId] =
+                            tabState.copy(
+                                bookContent =
+                                    tabState.bookContent.copy(
+                                        isBookTreeVisible = sidebarState.isBookTreeVisible,
+                                        expandedCategoryIds = sidebarState.expandedCategoryIds,
+                                        isTocVisible = sidebarState.isTocVisible,
+                                        expandedTocEntryIds = sidebarState.expandedTocEntryIds,
+                                    ),
+                            )
+                    }
+                    snapshot.copy(tabStates = normalizedTabStates)
+                },
+        )
+    }
+
     private fun automationGeometry(): SavedGeometry? {
         if (!ScreenshotAutomationBridge.isEnabled) return null
         val width = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_WIDTH")?.toIntOrNull() ?: 1463
         val height = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_HEIGHT")?.toIntOrNull() ?: 811
         return SavedGeometry(x = 0, y = 0, width = width, height = height, placement = "Floating")
     }
+
     /** Restores a saved session snapshot if the user enabled persistence in settings. */
     suspend fun restoreIfEnabled(appGraph: AppGraph) {
         if (!AppSettings.isPersistSessionEnabled()) return

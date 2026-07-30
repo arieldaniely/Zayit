@@ -1,11 +1,11 @@
 package io.github.kdroidfilter.seforimapp.framework.session
 
+import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import java.io.File
 
 /**
@@ -69,6 +69,7 @@ object ScreenshotAutomationBridge {
                             "Screenshot replay requires Windows controls; detected ${PlatformInfo.currentOS}"
                         }
                     "restore" -> SessionManager.importSnapshot(appGraph, snapshot)
+                    "scenario" -> ScreenshotScenarioReplay.prepare(appGraph, fields[1])
                     "theme" -> {
                         val theme =
                             when (fields[1].lowercase()) {

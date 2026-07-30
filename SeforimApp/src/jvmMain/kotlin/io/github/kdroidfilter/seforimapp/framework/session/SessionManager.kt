@@ -121,7 +121,7 @@ object SessionManager {
         val bytes = withContext(Dispatchers.IO) { source.readBytes() }
         val state = proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
         val enrichedState = enrichMissingTabTitles(state, appGraph)
-        val scenarioState = normalizeScreenshotSidebars(enrichedState, source.nameWithoutExtension)
+        val scenarioState = normalizeScreenshotState(enrichedState, source.nameWithoutExtension)
         val normalizedState =
             scenarioState.copy(
                 snapshots =
@@ -149,13 +149,14 @@ object SessionManager {
         _isRestoringSession.value = true
         try {
             appGraph.desktopManager.restoreFromDesktopsState(normalizedState)
+            if (ScreenshotAutomationBridge.isEnabled) ScreenshotAutomationState.beginReplay()
             withContext(NonCancellable) { delay(150) }
         } finally {
             _isRestoringSession.value = false
         }
     }
 
-    private fun normalizeScreenshotSidebars(
+    internal fun normalizeScreenshotState(
         state: DesktopsState,
         scenario: String,
     ): DesktopsState {
@@ -168,7 +169,7 @@ object SessionManager {
                         isTocVisible = false,
                         expandedTocEntryIds = emptySet(),
                     )
-                "HOME", "BOOK-SEARCH" ->
+                "HOME", "BOOK-SEARCH", "TOC-BOOK-SEARCH" ->
                     BookContentPersistedState(
                         isBookTreeVisible = true,
                         expandedCategoryIds = emptySet(),
@@ -202,7 +203,33 @@ object SessionManager {
                                         expandedCategoryIds = sidebarState.expandedCategoryIds,
                                         isTocVisible = sidebarState.isTocVisible,
                                         expandedTocEntryIds = sidebarState.expandedTocEntryIds,
+                                        showCommentaries =
+                                            scenario.uppercase() in setOf("PIRUSHIM", "PIRUSHIM-TARGUMIM"),
+                                        showTargum = scenario.equals("PIRUSHIM-TARGUMIM", ignoreCase = true),
+                                        showSources = scenario.equals("MEKOR", ignoreCase = true),
+                                        showMentions = false,
                                     ),
+                                search =
+                                    tabState.search?.let { search ->
+                                        if (scenario.uppercase() in setOf("DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED")) {
+                                            search.copy(
+                                                query = "\u05DC\u05D7\u05EA\u05D5\u05DA \u05E6\u05E0\u05D5\u05DF \u05D1\u05E1\u05DB\u05D9\u05DF \u05D1\u05E9\u05E8\u05D9",
+                                                globalExtended = scenario.equals("DB-SEARCH-ADVANCED", ignoreCase = true),
+                                                datasetScope = "global",
+                                                filterCategoryId = 0L,
+                                                filterBookId = 0L,
+                                                filterTocId = 0L,
+                                                fetchCategoryId = 0L,
+                                                fetchBookId = 0L,
+                                                fetchTocId = 0L,
+                                                selectedCategoryIds = emptySet(),
+                                                selectedBookIds = emptySet(),
+                                                selectedTocIds = emptySet(),
+                                            )
+                                        } else {
+                                            search
+                                        }
+                                    },
                             )
                     }
                     snapshot.copy(tabStates = normalizedTabStates)

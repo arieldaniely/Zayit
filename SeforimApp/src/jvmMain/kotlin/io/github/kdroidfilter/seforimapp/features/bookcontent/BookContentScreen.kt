@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
@@ -545,6 +546,11 @@ fun BookContentScreen(
                         } else {
                             textManager.selectedText.text
                         }
+                    LaunchedEffect(clipboardDemoGeneration) {
+                        if (clipboardDemoGeneration > 0) {
+                            state.status = ContextMenuState.Status.Open(Rect.Zero)
+                        }
+                    }
 
                     // Mirror the current selection into the SelectionContext so the AWT
                     // keyboard dispatcher can read it without touching Compose state directly.

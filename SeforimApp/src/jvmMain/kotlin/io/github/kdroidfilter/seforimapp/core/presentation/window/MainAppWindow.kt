@@ -236,7 +236,7 @@ fun NucleusApplicationScope.MainAppWindow(
         val nativeDensity = LocalDensity.current
         val renderedDensity =
             if (ScreenshotAutomationBridge.isEnabled) {
-                Density(density = 2f, fontScale = nativeDensity.fontScale)
+                Density(density = 1f, fontScale = nativeDensity.fontScale)
             } else {
                 nativeDensity
             }

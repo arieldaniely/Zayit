@@ -1,1 +1,87 @@
+name: Replay website screenshots
 
+on:
+  workflow_dispatch:
+    inputs:
+      commit_changes:
+        description: Commit the regenerated PNG files to this branch
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Nucleus
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
+
+      - name: Install virtual desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick jq openbox x11-utils xdotool xvfb zstd
+          python -m pip install --disable-pip-version-check Pillow
+
+      - name: Download the current database bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zayit-db"
+          mapfile -t parts < <(gh api repos/kdroidFilter/SeforimLibrary/releases/latest --jq '.assets[] | select(.name | contains(".tar.zst.part")) | [.name, .browser_download_url] | @tsv' | sort | cut -f2-)
+          if (( ${#parts[@]} > 0 )); then
+            for url in "${parts[@]}"; do curl --fail --location --retry 3 "$url"; done | tar --use-compress-program=unzstd -xf - -C "$RUNNER_TEMP/zayit-db"
+          else
+            url=$(gh api repos/kdroidFilter/SeforimLibrary/releases/latest --jq '.assets[] | select(.name | endswith(".tar.zst")) | .browser_download_url' | head -n1)
+            test -n "$url"
+            curl --fail --location --retry 3 "$url" | tar --use-compress-program=unzstd -xf - -C "$RUNNER_TEMP/zayit-db"
+          fi
+          db_path=$(find "$RUNNER_TEMP/zayit-db" -name seforim.db -type f -print -quit)
+          test -n "$db_path"
+          echo "SEFORIMAPP_DATABASE_PATH=$db_path" >> "$GITHUB_ENV"
+
+      - name: Replay recorded states on a fixed 2926x1622 desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zayit-screenshots" "$RUNNER_TEMP/zayit-profile"
+          xvfb-run -a -s "-screen 0 2926x1622x24 -dpi 96 -nolisten tcp" bash -c '
+            set -euo pipefail
+            openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+            python scripts/replay-art-screenshots.py --fixtures SeforimApp/src/jvmTest/resources/website-screenshots --output "$RUNNER_TEMP/zayit-screenshots" --profile "$RUNNER_TEMP/zayit-profile" --publish
+          '
+
+      - name: Upload generated screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: website-screenshots
+          path: |
+            ${{ runner.temp }}/zayit-screenshots/*.png
+            ${{ runner.temp }}/zayit-screenshots/manifest.json
+            ${{ runner.temp }}/zayit-screenshots/zayit-run.log
+            ${{ runner.temp }}/openbox.log
+          if-no-files-found: warn
+
+      - name: Commit regenerated screenshots
+        if: success() && inputs.commit_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add art website/public/art
+          git diff --cached --quiet && exit 0
+          git commit -m "Update application screenshots"
+          git push

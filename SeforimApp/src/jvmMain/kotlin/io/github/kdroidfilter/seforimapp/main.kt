@@ -38,6 +38,7 @@ import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
+import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationBridge
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.isDevEnv
 import io.github.kdroidfilter.seforimlibrary.cli.runCli
@@ -165,6 +166,9 @@ fun main(args: Array<String>) {
         val appGraph = remember { createGraph<AppGraph>() }
         // Ensure AppSettings uses the DI-provided Settings immediately
         AppSettings.initialize(appGraph.settings)
+        if (ScreenshotAutomationBridge.isEnabled) {
+            AppSettings.setOnboardingFinished(true)
+        }
 
         // Register the AWT-level keyboard shortcuts here (instead of in main()) so they can read
         // from the DI-provided SelectionContext. The DisposableEffect re-runs only if the graph
@@ -352,10 +356,16 @@ fun main(args: Array<String>) {
                         }
                     }
 
+                    LaunchedEffect(Unit) {
+                        ScreenshotAutomationBridge.run(appGraph)
+                    }
+
                     // Check for updates once at startup. PATCH updates are pre-downloaded
                     // here; MINOR/MAJOR surface the title-bar icon + UpdateDialog.
-                    LaunchedEffect(Unit) {
-                        appGraph.appUpdateService.checkOnStartup()
+                    if (!ScreenshotAutomationBridge.isEnabled) {
+                        LaunchedEffect(Unit) {
+                            appGraph.appUpdateService.checkOnStartup()
+                        }
                     }
 
                     // Debounced session autosave: any tab/window change persists ~2s later, so a

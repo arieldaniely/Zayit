@@ -107,7 +107,7 @@ fun DecoratedWindowScope.MainTitleBar() {
                 }
             }
             if (screenshotMode) {
-                ScreenshotWindowsControlButtons(baseTitleBarStyle, Modifier.align(Alignment.TopStart))
+                ScreenshotWindowsControlButtons(baseTitleBarStyle, Modifier.align(Alignment.TopEnd))
             }
         }
     }
@@ -120,16 +120,27 @@ private fun ScreenshotWindowsControlButtons(
 ) {
     val buttonWidth = 46.dp
     val iconColor = style.colors.controlButtonIconColor
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val buttons =
+        if (isRtl) {
+            listOf(
+                WindowsControlButtonIcons.Close,
+                WindowsControlButtonIcons.Maximize,
+                WindowsControlButtonIcons.Minimize,
+            )
+        } else {
+            listOf(
+                WindowsControlButtonIcons.Minimize,
+                WindowsControlButtonIcons.Maximize,
+                WindowsControlButtonIcons.Close,
+            )
+        }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = modifier.width(buttonWidth * 3).fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            listOf(
-                WindowsControlButtonIcons.Minimize,
-                WindowsControlButtonIcons.Maximize,
-                WindowsControlButtonIcons.Close,
-            ).forEach { imageVector ->
+            buttons.forEach { imageVector ->
                 Box(
                     modifier = Modifier.width(buttonWidth).fillMaxHeight(),
                     contentAlignment = Alignment.Center,

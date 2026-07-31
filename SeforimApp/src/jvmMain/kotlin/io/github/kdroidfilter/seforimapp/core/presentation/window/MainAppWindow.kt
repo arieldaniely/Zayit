@@ -150,6 +150,7 @@ fun NucleusApplicationScope.MainAppWindow(
                 SessionManager.saveIfEnabled(appGraph)
             }
         },
+        undecorated = ScreenshotAutomationBridge.isEnabled,
         title = windowTitle,
         icon = if (PlatformInfo.isMacOS) null else painterResource(Res.drawable.AppIcon),
         state = windowState,

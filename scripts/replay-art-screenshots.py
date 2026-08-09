@@ -31,7 +31,6 @@ WS_SYSMENU = 0x00080000
 LEGACY_NON_CLIENT_STYLES = (
     WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU
 )
-SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
 SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
@@ -57,8 +56,9 @@ def force_compose_window_frame(capture_tools, hwnd: int) -> None:
     borderless_style = style & ~LEGACY_NON_CLIENT_STYLES
     if borderless_style != style:
         # Nucleus' AWT adapter currently ignores its `undecorated` argument. Strip the
-        # non-client frame at the HWND as a backend-independent safety net. SWP_NOSIZE
-        # preserves the exact 1463x811 capture frame while Windows expands the client area.
+        # non-client frame at the HWND as a backend-independent safety net. Removing the
+        # resize border makes DWM's previously invisible 16x8 pixels visible, so apply the
+        # target frame size in the same operation instead of preserving the oversized outer HWND.
         if not set_window_long(hwnd, GWL_STYLE, borderless_style):
             raise ctypes.WinError()
         if not user32.SetWindowPos(
@@ -66,9 +66,9 @@ def force_compose_window_frame(capture_tools, hwnd: int) -> None:
             0,
             0,
             0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            SOURCE_WIDTH,
+            SOURCE_HEIGHT,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         ):
             raise ctypes.WinError()
         time.sleep(0.5)
@@ -77,6 +77,12 @@ def force_compose_window_frame(capture_tools, hwnd: int) -> None:
     if remaining:
         raise RuntimeError(
             f"Could not remove legacy Win32 non-client styles from screenshot window: 0x{remaining:X}",
+        )
+    frame = capture_tools.get_frame_rect(hwnd)
+    if (frame.width, frame.height) != (SOURCE_WIDTH, SOURCE_HEIGHT):
+        raise RuntimeError(
+            f"Borderless frame is {frame.width}x{frame.height}; expected "
+            f"{SOURCE_WIDTH}x{SOURCE_HEIGHT}",
         )
 
 

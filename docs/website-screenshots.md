@@ -21,12 +21,11 @@ reversed PIRUSHIM preview pair) does not affect automated output.
 ## Deterministic GitHub replay
 
 The manual Replay website screenshots workflow runs on a pinned Windows Server 2022 runner. In
-screenshot mode the title bar always uses the Windows control vectors on the right, independent of
-the host platform's title-bar defaults. The replay runner also removes any Win32 non-client styles
-that the Nucleus AWT backend may leave on the HWND and checks them again before every capture. This
-prevents the Windows Server fallback title bar from surrounding the Compose-rendered Windows 11
-controls. It normalizes the borderless HWND to 1463x811 once before replay begins, then publication
-fails instead of accepting a legacy or incorrectly sized frame if Windows changes it. The hosted
+screenshot mode the title bar uses one built-in Windows control pane on the left, independent of
+the host platform's title-bar defaults. The replay runner never mutates the HWND styles or resizes
+the window after Skia creates its surface; this prevents a stale, larger backing surface from
+remaining visible behind the live UI. It verifies the original 1463x811 frame before every capture,
+and publication fails instead of accepting a partial or incorrectly sized frame. The hosted
 runner's basic 1024x768 adapter is too short, so
 the workflow installs a version- and SHA-256-pinned signed indirect display driver and makes a
 1920x1080 monitor primary before Zayit starts. Zayit creates its 1463x811 native surface before the

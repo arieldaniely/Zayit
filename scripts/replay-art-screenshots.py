@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
 import importlib.util
 import json
@@ -22,81 +21,11 @@ TARGET_HEIGHT = 811
 SOURCE_WIDTH = TARGET_WIDTH
 SOURCE_HEIGHT = TARGET_HEIGHT
 EXPECTED_DENSITY = 1.0
-GWL_STYLE = -16
-WS_CAPTION = 0x00C00000
-WS_THICKFRAME = 0x00040000
-WS_MINIMIZEBOX = 0x00020000
-WS_MAXIMIZEBOX = 0x00010000
-WS_SYSMENU = 0x00080000
-LEGACY_NON_CLIENT_STYLES = (
-    WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU
-)
-SWP_NOMOVE = 0x0002
-SWP_NOZORDER = 0x0004
-SWP_NOACTIVATE = 0x0010
-SWP_FRAMECHANGED = 0x0020
 STEMS = (
     "HOME", "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED", "BOOK-SEARCH",
     "TOC-BOOK-SEARCH", "INBOOK-SEARCH", "PIRUSHIM", "PIRUSHIM-TARGUMIM",
     "MEKOR", "CLIPBOARD-DEMO",
 )
-
-
-def force_compose_window_frame(capture_tools, hwnd: int) -> None:
-    """Remove the hosted runner's Win32 chrome, leaving Compose's Windows controls visible."""
-    user32 = capture_tools.user32
-    get_window_long = user32.GetWindowLongPtrW
-    set_window_long = user32.SetWindowLongPtrW
-    get_window_long.argtypes = (ctypes.c_void_p, ctypes.c_int)
-    get_window_long.restype = ctypes.c_ssize_t
-    set_window_long.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t)
-    set_window_long.restype = ctypes.c_ssize_t
-
-    style = get_window_long(hwnd, GWL_STYLE)
-    borderless_style = style & ~LEGACY_NON_CLIENT_STYLES
-    if borderless_style != style:
-        # Nucleus' AWT adapter currently ignores its `undecorated` argument. Strip the
-        # non-client frame at the HWND as a backend-independent safety net. Removing the
-        # resize border makes DWM's previously invisible 16x8 pixels visible, so apply the
-        # target frame size in the same operation instead of preserving the oversized outer HWND.
-        if not set_window_long(hwnd, GWL_STYLE, borderless_style):
-            raise ctypes.WinError()
-        if not user32.SetWindowPos(
-            hwnd,
-            0,
-            0,
-            0,
-            SOURCE_WIDTH,
-            SOURCE_HEIGHT,
-            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
-        ):
-            raise ctypes.WinError()
-        time.sleep(0.5)
-
-    remaining = get_window_long(hwnd, GWL_STYLE) & LEGACY_NON_CLIENT_STYLES
-    if remaining:
-        raise RuntimeError(
-            f"Could not remove legacy Win32 non-client styles from screenshot window: 0x{remaining:X}",
-        )
-    frame = capture_tools.get_frame_rect(hwnd)
-    if (frame.width, frame.height) != (SOURCE_WIDTH, SOURCE_HEIGHT):
-        raise RuntimeError(
-            f"Borderless frame is {frame.width}x{frame.height}; expected "
-            f"{SOURCE_WIDTH}x{SOURCE_HEIGHT}",
-        )
-
-
-def require_compose_window_frame(capture_tools, hwnd: int) -> None:
-    """Refuse to publish screenshots if Windows has restored its external title bar."""
-    user32 = capture_tools.user32
-    get_window_long = user32.GetWindowLongPtrW
-    get_window_long.argtypes = (ctypes.c_void_p, ctypes.c_int)
-    get_window_long.restype = ctypes.c_ssize_t
-    remaining = get_window_long(hwnd, GWL_STYLE) & LEGACY_NON_CLIENT_STYLES
-    if remaining:
-        raise RuntimeError(
-            "Legacy Win32 title-bar styles returned before capture; refusing to publish screenshots",
-        )
 
 
 def load_windows_capture_module(repo: Path):
@@ -194,14 +123,12 @@ def main() -> int:
         )
         try:
             hwnd = capture_tools.wait_for_window(args.window_title, 600.0, process, log_path)
-            force_compose_window_frame(capture_tools, hwnd)
             bridge_command(bridge, "verify-platform", "windows")
             bridge_command(bridge, "verify-density", str(EXPECTED_DENSITY))
             native_frame = require_source_frame(capture_tools, hwnd)
 
             # The app is born at this size. Captures only verify it and never resize it.
             def verify_window(current_hwnd: int, width: int = TARGET_WIDTH, height: int = TARGET_HEIGHT):
-                require_compose_window_frame(capture_tools, current_hwnd)
                 frame = capture_tools.get_frame_rect(current_hwnd)
                 if (frame.width, frame.height) != (native_frame.width, native_frame.height):
                     raise RuntimeError(

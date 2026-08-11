@@ -1,29 +1,19 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.nucleusframework.core.runtime.Platform
 import dev.nucleusframework.window.ControlButtonsDirection
 import dev.nucleusframework.window.DecoratedWindowScope
-import dev.nucleusframework.window.icons.windows.Close
-import dev.nucleusframework.window.icons.windows.Maximize
-import dev.nucleusframework.window.icons.windows.Minimize
-import dev.nucleusframework.window.icons.windows.WindowsControlButtonIcons
 import dev.nucleusframework.window.jewel.JewelTitleBar
 import dev.nucleusframework.window.macOSLargeCornerRadius
 import dev.nucleusframework.window.newFullscreenControls
@@ -34,29 +24,23 @@ import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.session.ScreenshotAutomationBridge
 import io.github.kdroidfilter.seforimapp.framework.update.showTitleBarIcon
-import org.jetbrains.jewel.ui.component.Icon
 
 @Composable
 fun DecoratedWindowScope.MainTitleBar() {
     val screenshotMode = ScreenshotAutomationBridge.isEnabled
-    val baseTitleBarStyle = LocalTitleBarStyle.current
-    val titleBarStyle =
-        if (screenshotMode) {
-            baseTitleBarStyle.copy(metrics = baseTitleBarStyle.metrics.copy(titlePaneButtonSize = DpSize.Zero))
-        } else {
-            baseTitleBarStyle
-        }
     JewelTitleBar(
         modifier = Modifier.newFullscreenControls().macOSLargeCornerRadius(),
         gradientStartColor = if (ThemeUtils.isIslandsStyle()) ThemeUtils.titleBarGradientColor() else Color.Unspecified,
-        style = titleBarStyle,
-        controlButtonsDirection = if (screenshotMode) ControlButtonsDirection.Ltr else ControlButtonsDirection.SystemNative,
+        // The title-bar implementation uses this direction both to order and position the
+        // built-in controls. RTL therefore places the single Windows control pane on the left.
+        controlButtonsDirection =
+            if (screenshotMode) ControlButtonsDirection.Rtl else ControlButtonsDirection.SystemNative,
     ) {
         // Window control buttons (close/maximize/minimize) are Compose-based on Linux and
         // Windows-fallback. Their total width must be subtracted from the available width so
         // that the BoxWithConstraints content doesn't push them outside the window boundary.
         val effectivePlatform = if (screenshotMode) Platform.Windows else PlatformInfo.currentOS
-        val windowControlButtonWidth = baseTitleBarStyle.metrics.titlePaneButtonSize.width
+        val windowControlButtonWidth = LocalTitleBarStyle.current.metrics.titlePaneButtonSize.width
         val windowControlCount =
             when (effectivePlatform) {
                 Platform.MacOS -> 0 // native traffic lights, not in Compose layout
@@ -104,53 +88,6 @@ fun DecoratedWindowScope.MainTitleBar() {
                 ) {
                     DesktopSwitcher()
                     TitleBarActionsButtonsView()
-                }
-            }
-            if (screenshotMode) {
-                ScreenshotWindowsControlButtons(baseTitleBarStyle, Modifier.align(Alignment.TopEnd))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScreenshotWindowsControlButtons(
-    style: dev.nucleusframework.window.styling.TitleBarStyle,
-    modifier: Modifier = Modifier,
-) {
-    val buttonWidth = 46.dp
-    val iconColor = style.colors.controlButtonIconColor
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val buttons =
-        if (isRtl) {
-            listOf(
-                WindowsControlButtonIcons.Close,
-                WindowsControlButtonIcons.Maximize,
-                WindowsControlButtonIcons.Minimize,
-            )
-        } else {
-            listOf(
-                WindowsControlButtonIcons.Minimize,
-                WindowsControlButtonIcons.Maximize,
-                WindowsControlButtonIcons.Close,
-            )
-        }
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Row(
-            modifier = modifier.width(buttonWidth * 3).fillMaxHeight(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            buttons.forEach { imageVector ->
-                Box(
-                    modifier = Modifier.width(buttonWidth).fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = imageVector,
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(16.dp),
-                    )
                 }
             }
         }

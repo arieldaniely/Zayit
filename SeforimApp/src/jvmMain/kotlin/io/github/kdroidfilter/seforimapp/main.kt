@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.core.runtime.NucleusApp
@@ -140,6 +141,9 @@ fun main(args: Array<String>) {
 
     nucleusApplication(
         args,
+        // AWT ignores DecoratedWindow's undecorated flag. Pin screenshot replay to Tao so the
+        // window is born borderless instead of briefly creating a legacy Win32 caption frame.
+        backend = if (ScreenshotAutomationBridge.isEnabled) NucleusBackend.Tao else NucleusBackend.Auto,
         defaultLocale = Locale.Builder().setLanguage("he").build(),
     ) {
         aotTraining(duration = AOT_TRAINING_DURATION)

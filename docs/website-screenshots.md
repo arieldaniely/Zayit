@@ -21,8 +21,9 @@ reversed PIRUSHIM preview pair) does not affect automated output.
 ## Deterministic GitHub replay
 
 The manual Replay website screenshots workflow runs on a pinned Windows Server 2022 runner. In
-screenshot mode the title bar uses one built-in Windows control pane on the left, independent of
-the host platform's title-bar defaults. The replay runner never mutates the HWND styles or resizes
+screenshot mode the app pins Nucleus to the Tao backend so the window is created borderless, then
+uses its single Windows control pane in the reserved area on the left, independent of the host
+platform's title-bar defaults. The replay runner never mutates the HWND styles or resizes
 the window after Skia creates its surface; this prevents a stale, larger backing surface from
 remaining visible behind the live UI. It verifies the original 1463x811 frame before every capture,
 and publication fails instead of accepting a partial or incorrectly sized frame. The hosted

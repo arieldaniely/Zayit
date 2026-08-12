@@ -105,6 +105,7 @@ jobs:
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
         with:
           graalvm: ${{ matrix.graalvm }}
+          jbr-version: '25.0.3b496.62'
 
       # Linux builds
       - name: Build & stage Linux .deb
@@ -295,6 +296,16 @@ jobs:
           name: ${{ env.ASSET_NAME }}
           path: staging/*
           if-no-files-found: error
+
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: packaging-diagnostics-${{ matrix.os }}-${{ matrix.arch || matrix.jdk_arch }}-${{ matrix.pkg || 'app' }}
+          path: |
+            SeforimApp/build/compose/logs/**
+            SeforimApp/build/compose/tmp/*.args.txt
+          if-no-files-found: ignore
 
   release:
     needs: build

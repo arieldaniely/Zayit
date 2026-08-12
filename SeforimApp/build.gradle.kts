@@ -27,6 +27,19 @@ structuredCoroutines {
 
 val version = Versioning.resolveVersion(project)
 
+// jpackage requires the first macOS app-version component to be positive. Offset
+// the SemVer major so pre-1.0 releases remain valid and ordering stays monotonic
+// when the public version eventually moves from 0.x to 1.x.
+val macPackageVersion =
+    version.substringBefore('-').split('.').let { components ->
+        require(components.size in 1..3 && components.all { it.toIntOrNull() != null }) {
+            "macOS package version must contain one to three numeric components: $version"
+        }
+        components
+            .mapIndexed { index, component -> component.toInt() + if (index == 0) 1 else 0 }
+            .joinToString(".")
+    }
+
 sentry {
     includeSourceContext = true
     org = System.getenv("SENTRY_ORG") ?: "kdroidfilter"
@@ -343,7 +356,7 @@ nucleus.application {
         macOS {
             iconFile.set(project.file("desktopAppIcons/MacosIcon.icns"))
             bundleID = "io.github.kdroidfilter.seforimapp.desktopApp"
-            packageVersion = version
+            packageVersion = macPackageVersion
             packageName = "זית"
         }
         buildTypes.release.proguard {

@@ -13,40 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x64 (DEB) - GraalVM
+          # Linux x64 - one native image, then all package formats
           - os: ubuntu-latest
             arch: amd64
-            pkg: deb
             graalvm: true
 
-          # Linux ARM64 (DEB) - GraalVM
+          # Linux ARM64 - one native image, then all package formats
           - os: ubuntu-24.04-arm
             arch: arm64
-            pkg: deb
-            graalvm: true
-
-          # Linux x64 (RPM) - GraalVM
-          - os: ubuntu-latest
-            arch: amd64
-            pkg: rpm
-            graalvm: true
-
-          # Linux ARM64 (RPM) - GraalVM
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            pkg: rpm
-            graalvm: true
-
-          # Linux x64 (Pacman) - GraalVM
-          - os: ubuntu-latest
-            arch: amd64
-            pkg: pacman
-            graalvm: true
-
-          # Linux ARM64 (Pacman) - GraalVM
-          - os: ubuntu-24.04-arm
-            arch: arm64
-            pkg: pacman
             graalvm: true
 
           # Windows x64 - GraalVM
@@ -95,11 +69,17 @@ jobs:
             macos*)   plat=macos ;;
             *)        plat=unknown ;;
           esac
-          # deb and rpm share the same arch on the same runner — keep the pkg suffix so artifact names stay unique.
-          pkg_suffix=""
-          if [ -n "${{ matrix.pkg }}" ]; then pkg_suffix="-${{ matrix.pkg }}"; fi
           # generate-update-yml infers the platform from the artifact dir name (must contain linux/macos/windows).
-          echo "ASSET_NAME=release-assets-${plat}-${{ matrix.arch || matrix.jdk_arch }}${pkg_suffix}" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=release-assets-${plat}-${{ matrix.arch || matrix.jdk_arch }}" >> "$GITHUB_ENV"
+
+      # electron-builder downloads its FPM toolset for DEB/RPM/Pacman packaging.
+      # Preserve it across runs instead of making every matrix job fetch it again.
+      - name: Cache electron-builder toolsets
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-${{ runner.os }}-${{ runner.arch }}-26.15.3
 
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
@@ -108,51 +88,44 @@ jobs:
           jbr-version: '25.0.3b496.62'
 
       # Linux builds
-      - name: Build & stage Linux .deb
-        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'deb'
+      - name: Build & stage Linux packages
+        if: startsWith(matrix.os, 'ubuntu')
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew :SeforimApp:packageGraalvmDeb
+          # One Gradle invocation shares the expensive native-image task and the
+          # downloaded FPM toolset across all three package formats.
+          ./gradlew \
+            :SeforimApp:packageGraalvmDeb \
+            :SeforimApp:packageGraalvmRpm \
+            :SeforimApp:packageGraalvmPacman
           mkdir -p staging
-          src="$(find SeforimApp/build/compose/binaries/main/graalvm-deb -name '*.deb' | head -n1)"
-          [ -n "$src" ] || { echo "::error::No .deb produced"; exit 1; }
-          # Name kept in sync with website/public/download/launch.linux deb pattern.
-          cp "$src" "staging/zayit_${VERSION}_${{ matrix.arch }}.deb"
 
-      - name: Build & stage Linux .rpm
-        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'rpm'
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew :SeforimApp:packageGraalvmRpm
-          mkdir -p staging
-          src="$(find SeforimApp/build/compose/binaries/main/graalvm-rpm -name '*.rpm' | head -n1)"
-          [ -n "$src" ] || { echo "::error::No .rpm produced"; exit 1; }
+          deb_src="$(find SeforimApp/build/compose/binaries/main/graalvm-deb -name '*.deb' -print -quit)"
+          rpm_src="$(find SeforimApp/build/compose/binaries/main/graalvm-rpm -name '*.rpm' -print -quit)"
+          pacman_src="$(find SeforimApp/build/compose/binaries/main/graalvm-pacman -name '*.pacman' -print -quit)"
+          [ -n "$deb_src" ] || { echo "::error::No .deb produced"; exit 1; }
+          [ -n "$rpm_src" ] || { echo "::error::No .rpm produced"; exit 1; }
+          [ -n "$pacman_src" ] || { echo "::error::No pacman package produced"; exit 1; }
+
+          # Name kept in sync with website/public/download/launch.linux deb pattern.
+          cp "$deb_src" "staging/zayit_${VERSION}_${{ matrix.arch }}.deb"
+
           case "${{ matrix.arch }}" in
             amd64) rpm_arch=x86_64 ;;
             arm64) rpm_arch=aarch64 ;;
             *)     rpm_arch="${{ matrix.arch }}" ;;
           esac
           # Name kept in sync with website/public/download/launch.linux rpm pattern.
-          cp "$src" "staging/zayit-${VERSION}-1.${rpm_arch}.rpm"
+          cp "$rpm_src" "staging/zayit-${VERSION}-1.${rpm_arch}.rpm"
 
-      - name: Build & stage Linux .pacman
-        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'pacman'
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew :SeforimApp:packageGraalvmPacman
-          mkdir -p staging
-          # Nucleus emits the Arch package with a .pacman extension.
-          src="$(find SeforimApp/build/compose/binaries/main/graalvm-pacman -name '*.pacman' | head -n1)"
-          [ -n "$src" ] || { echo "::error::No pacman package produced"; exit 1; }
           case "${{ matrix.arch }}" in
             amd64) pac_arch=x86_64 ;;
             arm64) pac_arch=aarch64 ;;
             *)     pac_arch="${{ matrix.arch }}" ;;
           esac
-          cp "$src" "staging/zayit-${VERSION}-1-${pac_arch}.pacman"
+          # Nucleus emits the Arch package with a .pacman extension.
+          cp "$pacman_src" "staging/zayit-${VERSION}-1-${pac_arch}.pacman"
 
       # Windows GraalVM build (x64)
       - name: Build Windows NSIS installer (GraalVM)
@@ -301,7 +274,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: packaging-diagnostics-${{ matrix.os }}-${{ matrix.arch || matrix.jdk_arch }}-${{ matrix.pkg || 'app' }}
+          name: packaging-diagnostics-${{ matrix.os }}-${{ matrix.arch || matrix.jdk_arch }}
           path: |
             SeforimApp/build/compose/logs/**
             SeforimApp/build/compose/tmp/*.args.txt

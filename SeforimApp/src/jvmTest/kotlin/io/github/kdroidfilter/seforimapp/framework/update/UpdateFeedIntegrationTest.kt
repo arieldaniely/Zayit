@@ -34,11 +34,11 @@ class UpdateFeedIntegrationTest {
             ) {
                 "arm64"
             } else {
-                "amd64"
+                "x64"
             }
         return when (Platform.Current) {
             Platform.MacOS -> PlatformBits("latest-mac.yml", "zayit-1.0.1-mac-$arch.zip", "zip")
-            Platform.Windows -> PlatformBits("latest.yml", "zayit-1.0.1-windows-$arch.exe", "exe")
+            Platform.Windows -> PlatformBits("latest.yml", "zayit-1.0.1-windows-$arch-nsis.exe", "exe")
             else -> PlatformBits("latest-linux.yml", "zayit-1.0.1-linux-$arch.deb", "deb")
         }
     }

@@ -232,13 +232,22 @@ fun EnhancedHorizontalSplitPane(
                                 .fillMaxHeight()
                                 .onPointerEvent(PointerEventType.Enter) { event ->
                                     splitterHovered = true
-                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.y ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Move) { event ->
-                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.y ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
                                 .onPointerEvent(PointerEventType.Press) { event ->
                                     splitterDragging = true
-                                    pointerPosition = event.changes.firstOrNull()?.position?.y ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.y ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Release) { splitterDragging = false }
                                 .markAsHandle()
                                 .cursorForHorizontalResize(),
@@ -335,13 +344,22 @@ fun EnhancedVerticalSplitPane(
                                 .fillMaxWidth()
                                 .onPointerEvent(PointerEventType.Enter) { event ->
                                     splitterHovered = true
-                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.x ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Move) { event ->
-                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.x ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Exit) { splitterHovered = false }
                                 .onPointerEvent(PointerEventType.Press) { event ->
                                     splitterDragging = true
-                                    pointerPosition = event.changes.firstOrNull()?.position?.x ?: pointerPosition
+                                    pointerPosition = event.changes
+                                        .firstOrNull()
+                                        ?.position
+                                        ?.x ?: pointerPosition
                                 }.onPointerEvent(PointerEventType.Release) { splitterDragging = false }
                                 .markAsHandle()
                                 .cursorForVerticalResize(),

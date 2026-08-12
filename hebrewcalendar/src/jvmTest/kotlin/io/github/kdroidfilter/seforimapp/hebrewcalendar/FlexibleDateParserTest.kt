@@ -52,7 +52,12 @@ class FlexibleDateParserTest {
         assertNull(parseFlexibleDate("\u05D0 \u05D0\u05D3\u05E8 \u05D1 \u05EA\u05E9\u05E4\u05D4", CalendarMode.HEBREW, referenceDate))
     }
 
-    private fun assertHebrewDate(input: String, year: Int, month: Int, day: Int) {
+    private fun assertHebrewDate(
+        input: String,
+        year: Int,
+        month: Int,
+        day: Int,
+    ) {
         val parsed = parseFlexibleDate(input, CalendarMode.HEBREW, referenceDate)
         val jewishDate = JewishDate(parsed)
         assertEquals(year, jewishDate.jewishYear, input)

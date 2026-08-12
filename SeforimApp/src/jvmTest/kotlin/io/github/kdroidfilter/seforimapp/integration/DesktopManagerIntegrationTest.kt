@@ -136,15 +136,26 @@ class DesktopManagerIntegrationTest {
     fun `pinned tabs are restored only in their desktop`() {
         val originalWindow = desktopManager.windows.value.single()
         val originalDesktopId = originalWindow.desktopId.value
-        val pinnedTabId = originalWindow.tabsViewModel.state.value.tabs.single().destination.tabId
+        val pinnedTabId =
+            originalWindow.tabsViewModel.state.value.tabs
+                .single()
+                .destination.tabId
         originalWindow.tabsViewModel.onEvent(TabsEvents.OnTogglePin(0))
 
         desktopManager.createDesktop("Desktop 2")
-        assertTrue(desktopManager.focusedWindow()!!.tabsViewModel.state.value.tabs.none { it.isPinned })
+        assertTrue(
+            desktopManager
+                .focusedWindow()!!
+                .tabsViewModel.state.value.tabs
+                .none { it.isPinned },
+        )
 
         desktopManager.focusedWindow()!!.clearSwitching()
         desktopManager.switchTo(originalDesktopId)
-        val restoredTabs = desktopManager.focusedWindow()!!.tabsViewModel.state.value.tabs
+        val restoredTabs =
+            desktopManager
+                .focusedWindow()!!
+                .tabsViewModel.state.value.tabs
         assertEquals(
             setOf(pinnedTabId),
             restoredTabs.filter { it.isPinned }.map { it.destination.tabId }.toSet(),

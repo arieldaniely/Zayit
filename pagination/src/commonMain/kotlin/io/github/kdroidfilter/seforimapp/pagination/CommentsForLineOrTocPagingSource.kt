@@ -2,7 +2,6 @@ package io.github.kdroidfilter.seforimapp.pagination
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
 import io.github.kdroidfilter.seforimlibrary.core.models.LinkTypeClassification
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText

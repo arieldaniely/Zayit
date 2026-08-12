@@ -104,8 +104,8 @@ jobs:
           # macOS Apple Silicon (ARM64)
           - os: macos-26
             arch: arm64
-            build_task: ":SeforimApp:packageGraalvmDmg"
-            graalvm: true
+            build_task: ":SeforimApp:packageReleaseDmg"
+            graalvm: false
 
     steps:
       - name: Checkout source (with submodules)
@@ -116,13 +116,8 @@ jobs:
 
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
-
-      - name: Setup GraalVM (Liberica NIK)
-        if: matrix.graalvm
-        uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
-          distribution: 'liberica'
+          graalvm: ${{ matrix.graalvm }}
 
       # Build
       - name: Build
@@ -188,5 +183,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: macos-dmg-${{ matrix.arch }}
-          path: SeforimApp/build/compose/binaries/main/graalvm-dmg/*.dmg
+          path: |
+            SeforimApp/build/compose/binaries/main/graalvm-dmg/*.dmg
+            SeforimApp/build/compose/binaries/main-release/dmg/*.dmg
           if-no-files-found: error

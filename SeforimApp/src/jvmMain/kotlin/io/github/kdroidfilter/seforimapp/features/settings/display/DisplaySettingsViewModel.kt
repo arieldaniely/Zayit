@@ -26,7 +26,12 @@ class DisplaySettingsViewModel : ViewModel() {
 
     val state =
         combine(homeWidgetsVisibility, showHomeWallpaper, compactMode, maxCommentatorsPerPage, AppSettings.linkLoadLevelFlow) {
-                widgets, wallpaper, compact, maxCommentators, linkLoadLevel ->
+            widgets,
+            wallpaper,
+            compact,
+            maxCommentators,
+            linkLoadLevel,
+            ->
             DisplaySettingsState(
                 showZmanimWidgets = widgets[0],
                 showTempleCountdown = widgets[1],

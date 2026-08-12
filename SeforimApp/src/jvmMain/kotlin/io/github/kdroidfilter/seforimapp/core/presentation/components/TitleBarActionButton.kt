@@ -15,13 +15,13 @@ import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.IconActionButton
+import org.jetbrains.jewel.ui.component.TabState
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.styling.IconButtonColors
 import org.jetbrains.jewel.ui.component.styling.IconButtonMetrics
 import org.jetbrains.jewel.ui.component.styling.IconButtonStyle
 import org.jetbrains.jewel.ui.icon.IconKey
-import org.jetbrains.jewel.ui.component.TabState
 import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import org.jetbrains.jewel.ui.theme.iconButtonStyle
 
@@ -39,7 +39,10 @@ fun TitleBarActionButton(
     val accent = JewelTheme.globalColors.outlines.focused
     val baseStyle = JewelTheme.iconButtonStyle
     val isIslands = ThemeUtils.isIslandsStyle()
-    val activeTabBg = JewelTheme.defaultTabStyle.colors.backgroundFor(TabState.of(selected = true, active = true)).value
+    val activeTabBg =
+        JewelTheme.defaultTabStyle.colors
+            .backgroundFor(TabState.of(selected = true, active = true))
+            .value
 
     val style =
         remember(accent, baseStyle, isIslands, isActive, activeTabBg) {

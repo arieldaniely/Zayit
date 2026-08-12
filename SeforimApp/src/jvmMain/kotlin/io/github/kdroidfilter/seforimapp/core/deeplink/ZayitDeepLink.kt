@@ -82,37 +82,43 @@ fun parseContentDeepLink(uri: String): ParsedContentDeepLink? {
 
 private fun parseNativeLink(uri: URI): ParsedContentDeepLink? {
     val host = uri.host?.lowercase() ?: return null
-    val path = buildString {
-        append(host)
-        if (!uri.rawPath.isNullOrEmpty()) append(uri.rawPath)
-    }
+    val path =
+        buildString {
+            append(host)
+            if (!uri.rawPath.isNullOrEmpty()) append(uri.rawPath)
+        }
     val segments = path.split('/').filter { it.isNotEmpty() }
     if (segments.isEmpty()) return null
     val newTabId = UUID.randomUUID().toString()
-    val destination = when (segments[0].lowercase()) {
-        HOST_BOOK -> {
-            val bookId = segments.getOrNull(1)?.toLongOrNull() ?: return null
-            val lineId =
-                if (segments.getOrNull(2)?.equals(SEGMENT_LINE, ignoreCase = true) == true) {
-                    segments.getOrNull(3)?.toLongOrNull() ?: return null
-                } else {
-                    null
-                }
-            TabsDestination.BookContent(bookId = bookId, tabId = newTabId, lineId = lineId)
+    val destination =
+        when (segments[0].lowercase()) {
+            HOST_BOOK -> {
+                val bookId = segments.getOrNull(1)?.toLongOrNull() ?: return null
+                val lineId =
+                    if (segments.getOrNull(2)?.equals(SEGMENT_LINE, ignoreCase = true) == true) {
+                        segments.getOrNull(3)?.toLongOrNull() ?: return null
+                    } else {
+                        null
+                    }
+                TabsDestination.BookContent(bookId = bookId, tabId = newTabId, lineId = lineId)
+            }
+            HOST_SEARCH -> {
+                val encoded = segments.drop(1).joinToString("/")
+                if (encoded.isEmpty()) return null
+                TabsDestination.Search(searchQuery = URLDecoder.decode(encoded, StandardCharsets.UTF_8), tabId = newTabId)
+            }
+            else -> null
         }
-        HOST_SEARCH -> {
-            val encoded = segments.drop(1).joinToString("/")
-            if (encoded.isEmpty()) return null
-            TabsDestination.Search(searchQuery = URLDecoder.decode(encoded, StandardCharsets.UTF_8), tabId = newTabId)
-        }
-        else -> null
-    }
     return destination?.let(::ParsedContentDeepLink)
 }
 
 private fun parseOtzariaBookLink(uri: URI): ParsedContentDeepLink? {
     if (!uri.host.equals("open", ignoreCase = true)) return null
-    val segments = uri.path.orEmpty().split('/').filter { it.isNotEmpty() }
+    val segments =
+        uri.path
+            .orEmpty()
+            .split('/')
+            .filter { it.isNotEmpty() }
     if (!segments.getOrNull(0).equals("book", ignoreCase = true)) return null
     val bookId = segments.getOrNull(1)?.toLongOrNull()?.takeIf { it > 0 } ?: return null
     if (segments.size != 2) return null

@@ -15,7 +15,10 @@ fun parseFlexibleDate(
         CalendarMode.HEBREW -> parseHebrewDate(input, currentDate)
     }
 
-private fun parseGregorianDate(input: String, currentDate: LocalDate): LocalDate? {
+private fun parseGregorianDate(
+    input: String,
+    currentDate: LocalDate,
+): LocalDate? {
     val parts = input.trim().split(Regex("[\\s./_-]+"))
     if (parts.size !in 2..3 || parts.any { part -> part.isBlank() || part.any { !it.isDigit() } }) return null
 
@@ -33,7 +36,11 @@ private fun parseGregorianDate(input: String, currentDate: LocalDate): LocalDate
     }
 }
 
-private fun expandShortYear(value: Int, digits: Int, currentYear: Int): Int {
+private fun expandShortYear(
+    value: Int,
+    digits: Int,
+    currentYear: Int,
+): Int {
     if (digits > 2) return value
     val century = (currentYear / 100) * 100
     val candidate = century + value
@@ -51,7 +58,20 @@ private data class HebrewMonthMatch(
 )
 
 private enum class HebrewMonthKind {
-    NISSAN, IYAR, SIVAN, TAMMUZ, AV, ELUL, TISHREI, CHESHVAN, KISLEV, TEVET, SHEVAT, ADAR, ADAR_I, ADAR_II,
+    NISSAN,
+    IYAR,
+    SIVAN,
+    TAMMUZ,
+    AV,
+    ELUL,
+    TISHREI,
+    CHESHVAN,
+    KISLEV,
+    TEVET,
+    SHEVAT,
+    ADAR,
+    ADAR_I,
+    ADAR_II,
 }
 
 private val singleTokenHebrewMonths =
@@ -76,7 +96,10 @@ private val singleTokenHebrewMonths =
         "\u05D0\u05D3\u05E8" to HebrewMonthKind.ADAR,
     )
 
-private fun parseHebrewDate(input: String, currentDate: LocalDate): LocalDate? {
+private fun parseHebrewDate(
+    input: String,
+    currentDate: LocalDate,
+): LocalDate? {
     val tokens = input.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
     if (tokens.size < 2) return null
     val monthMatch = findHebrewMonth(tokens) ?: return null
@@ -112,7 +135,10 @@ private fun findHebrewMonth(tokens: List<String>): HebrewMonthMatch? {
     return null
 }
 
-private fun normalizeHebrewWord(value: String, allowPrefix: Boolean = false): String {
+private fun normalizeHebrewWord(
+    value: String,
+    allowPrefix: Boolean = false,
+): String {
     val normalized = value.filter { it.isLetterOrDigit() }
     if (allowPrefix && normalized.length > 2 && normalized.first() in setOf('\u05D1', '\u05DC')) {
         val withoutPrefix = normalized.drop(1)
@@ -121,7 +147,10 @@ private fun normalizeHebrewWord(value: String, allowPrefix: Boolean = false): St
     return normalized
 }
 
-private fun resolveJewishMonth(kind: HebrewMonthKind, year: Int): Int? {
+private fun resolveJewishMonth(
+    kind: HebrewMonthKind,
+    year: Int,
+): Int? {
     val isLeap = ((7 * year) + 1) % 19 < 7
     return when (kind) {
         HebrewMonthKind.NISSAN -> 1
@@ -142,13 +171,39 @@ private fun resolveJewishMonth(kind: HebrewMonthKind, year: Int): Int? {
 
 private val hebrewDigitValues =
     mapOf(
-        '\u05D0' to 1, '\u05D1' to 2, '\u05D2' to 3, '\u05D3' to 4, '\u05D4' to 5, '\u05D5' to 6, '\u05D6' to 7, '\u05D7' to 8, '\u05D8' to 9,
-        '\u05D9' to 10, '\u05DB' to 20, '\u05DA' to 20, '\u05DC' to 30, '\u05DE' to 40, '\u05DD' to 40, '\u05E0' to 50, '\u05DF' to 50,
-        '\u05E1' to 60, '\u05E2' to 70, '\u05E4' to 80, '\u05E3' to 80, '\u05E6' to 90, '\u05E5' to 90, '\u05E7' to 100, '\u05E8' to 200,
-        '\u05E9' to 300, '\u05EA' to 400,
+        '\u05D0' to 1,
+        '\u05D1' to 2,
+        '\u05D2' to 3,
+        '\u05D3' to 4,
+        '\u05D4' to 5,
+        '\u05D5' to 6,
+        '\u05D6' to 7,
+        '\u05D7' to 8,
+        '\u05D8' to 9,
+        '\u05D9' to 10,
+        '\u05DB' to 20,
+        '\u05DA' to 20,
+        '\u05DC' to 30,
+        '\u05DE' to 40,
+        '\u05DD' to 40,
+        '\u05E0' to 50,
+        '\u05DF' to 50,
+        '\u05E1' to 60,
+        '\u05E2' to 70,
+        '\u05E4' to 80,
+        '\u05E3' to 80,
+        '\u05E6' to 90,
+        '\u05E5' to 90,
+        '\u05E7' to 100,
+        '\u05E8' to 200,
+        '\u05E9' to 300,
+        '\u05EA' to 400,
     )
 
-private fun parseHebrewNumber(raw: String, isYear: Boolean): Int? {
+private fun parseHebrewNumber(
+    raw: String,
+    isYear: Boolean,
+): Int? {
     val trimmed = raw.trim()
     trimmed.toIntOrNull()?.let { return it }
     val thousandsSeparator = trimmed.indexOfFirst { it == '\'' || it == '\u05F3' }

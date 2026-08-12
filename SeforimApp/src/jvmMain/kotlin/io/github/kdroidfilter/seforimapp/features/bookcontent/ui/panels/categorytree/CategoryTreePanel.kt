@@ -25,8 +25,8 @@ import seforimapp.seforimapp.generated.resources.search_placeholder
 fun CategoryTreePanel(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    isPdfEdition: Boolean = false,
     modifier: Modifier = Modifier,
+    isPdfEdition: Boolean = false,
 ) {
     val paneHoverSource = remember { MutableInteractionSource() }
     Column(modifier = modifier.hoverable(paneHoverSource)) {

@@ -142,7 +142,7 @@ fun PdfContentView(
     requestedReferences: List<String>,
     zoom: Float,
     onZoomChange: (Float) -> Unit,
-    onLineSelected: (Long) -> Unit,
+    onLineSelect: (Long) -> Unit,
     isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -178,7 +178,7 @@ fun PdfContentView(
                 requestedReferences = requestedReferences,
                 zoom = zoom,
                 onZoomChange = onZoomChange,
-                onLineSelected = onLineSelected,
+                onLineSelect = onLineSelect,
                 isActive = isActive,
                 modifier = modifier,
             )
@@ -195,7 +195,7 @@ private fun PdfReader(
     requestedReferences: List<String>,
     zoom: Float,
     onZoomChange: (Float) -> Unit,
-    onLineSelected: (Long) -> Unit,
+    onLineSelect: (Long) -> Unit,
     isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -214,7 +214,7 @@ private fun PdfReader(
         }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage)
     val currentSelectedLineId by rememberUpdatedState(selectedLineId)
-    val currentOnLineSelected by rememberUpdatedState(onLineSelected)
+    val currentOnLineSelected by rememberUpdatedState(onLineSelect)
     var programmaticTarget by remember(session) { mutableStateOf<Int?>(null) }
     val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
     val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")

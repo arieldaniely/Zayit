@@ -607,7 +607,7 @@ private fun PdfContentTabContent(
                 requestedReferences = requestedReferences,
                 zoom = pdfZoom,
                 onZoomChange = { pdfZoom = it },
-                onLineSelected = { lineId -> viewModel.onEvent(BookContentEvent.LoadAndSelectLine(lineId)) },
+                onLineSelect = { lineId -> viewModel.onEvent(BookContentEvent.LoadAndSelectLine(lineId)) },
                 isActive = isSelected,
                 modifier = contentModifier,
             )

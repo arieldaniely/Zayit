@@ -1179,12 +1179,13 @@ class CommentariesUseCase(
         val currentState = stateManager.state.first()
         val selectedBook = currentState.navigation.selectedBook
 
-        val allConnections = repository.getCommentarySummariesForLines(
-            allBaseIds,
-            includeSources = true,
-            includeMentions = true,
-            linkLoadLevel = linkLoadLevel,
-        )
+        val allConnections =
+            repository.getCommentarySummariesForLines(
+                allBaseIds,
+                includeSources = true,
+                includeMentions = true,
+                linkLoadLevel = linkLoadLevel,
+            )
         if (allConnections.isEmpty()) return storeAndMerge(missing.associateWith { LineConnectionsSnapshot() })
 
         val connectionsBySource = allConnections.groupBy { it.link.sourceLineId }

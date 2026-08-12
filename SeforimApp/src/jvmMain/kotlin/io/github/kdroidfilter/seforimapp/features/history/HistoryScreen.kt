@@ -3,7 +3,6 @@ package io.github.kdroidfilter.seforimapp.features.history
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -163,6 +163,7 @@ private fun HistoryPageContent(
     val today = remember { LocalDate.now(zone) }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault()) }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
     val todayLabel = stringResource(Res.string.history_today)
     val yesterdayLabel = stringResource(Res.string.history_yesterday)
 
@@ -302,7 +303,7 @@ private fun HistoryPageContent(
                 if (hasMore) {
                     item(key = "load-more-${entries.size}") {
                         LaunchedEffect(entries.size, isLoadingMore) {
-                            if (!isLoadingMore) onLoadMore()
+                            if (!isLoadingMore) currentOnLoadMore()
                         }
                     }
                 }

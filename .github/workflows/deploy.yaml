@@ -61,10 +61,10 @@ jobs:
             rust_target: aarch64-pc-windows-msvc
             graalvm: false
 
-          # macOS Apple Silicon (ARM64) - GraalVM
+          # macOS Apple Silicon (ARM64) - JVM fallback (Liberica NIK deadlocks)
           - os: macos-26
             jdk_arch: aarch64
-            graalvm: true
+            graalvm: false
 
           # macOS Intel (x64) - GraalVM
           - os: macos-26-intel
@@ -78,20 +78,16 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Normalize version for manual runs
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag=$(git describe --tags --abbrev=0)
-          echo "Using latest tag for version: $tag"
-          echo "GITHUB_REF=refs/tags/$tag" >> "$GITHUB_ENV"
-
       - name: Compute version and asset name
         shell: bash
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            tag="$(git describe --tags --abbrev=0)"
+            echo "Using latest tag for version: $tag"
+          fi
           echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
           case "${{ matrix.os }}" in
             ubuntu*)  plat=linux ;;
@@ -107,13 +103,8 @@ jobs:
 
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
-
-      - name: Setup GraalVM (Liberica NIK)
-        if: matrix.graalvm
-        uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
-          distribution: 'liberica'
+          graalvm: ${{ matrix.graalvm }}
 
       # Linux builds
       - name: Build & stage Linux .deb
@@ -261,7 +252,7 @@ jobs:
 
       # macOS builds (GraalVM): .dmg (download) + .zip (auto-update)
       - name: Build & stage macOS .dmg + .zip
-        if: startsWith(matrix.os, 'macos')
+        if: startsWith(matrix.os, 'macos') && matrix.graalvm
         shell: bash
         run: |
           set -euo pipefail
@@ -276,6 +267,24 @@ jobs:
           SEARCH_ROOT="SeforimApp/build/compose/binaries/main"
           find "$SEARCH_ROOT/graalvm-dmg" -name '*.dmg' -exec cp {} staging/ \;
           find "$SEARCH_ROOT/graalvm-zip" \( -name '*.zip' -o -name '*.zip.blockmap' \) -exec cp {} staging/ \;
+
+          ls staging/*.dmg >/dev/null 2>&1 || { echo "::error::No .dmg produced"; exit 1; }
+          ls staging/*.zip >/dev/null 2>&1 || { echo "::error::No .zip produced"; exit 1; }
+
+      # Liberica NIK 25 repeatedly deadlocks during native-image generation on
+      # Apple Silicon. Keep the ARM64 release reliable with the regular JVM
+      # distribution while retaining GraalVM for Intel macOS.
+      - name: Build & stage macOS ARM64 JVM .dmg + .zip
+        if: startsWith(matrix.os, 'macos') && !matrix.graalvm
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :SeforimApp:packageReleaseDmg :SeforimApp:packageReleaseZip
+          mkdir -p staging
+
+          SEARCH_ROOT="SeforimApp/build/compose/binaries/main-release"
+          find "$SEARCH_ROOT/dmg" -name '*.dmg' -exec cp {} staging/ \;
+          find "$SEARCH_ROOT/zip" \( -name '*.zip' -o -name '*.zip.blockmap' \) -exec cp {} staging/ \;
 
           ls staging/*.dmg >/dev/null 2>&1 || { echo "::error::No .dmg produced"; exit 1; }
           ls staging/*.zip >/dev/null 2>&1 || { echo "::error::No .zip produced"; exit 1; }

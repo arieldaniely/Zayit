@@ -104,7 +104,8 @@ class PersonalLibraryImporterTest {
             JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
 
             val books = Files.createDirectory(temp.resolve("books"))
-            val content = """
+            val content =
+                """
                 <h1>כותרת א</h1>
                 טקסט פרק א
                 <h1>כותרת ב</h1>
@@ -113,7 +114,7 @@ class PersonalLibraryImporterTest {
                 טקסט סעיף
                 <h1>כותרת ג</h1>
                 טקסט פרק ג
-            """.trimIndent()
+                """.trimIndent()
             books.resolve("ספר מרובה כותרות.txt").writeText(content)
 
             val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
@@ -129,12 +130,13 @@ class PersonalLibraryImporterTest {
 
             DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
                 connection.createStatement().use { statement ->
-                    val query = """
+                    val query =
+                        """
                         SELECT tt.text, t.id
                         FROM tocEntry t
                         JOIN tocText tt ON t.textId = tt.id
                         ORDER BY t.id ASC
-                    """.trimIndent()
+                        """.trimIndent()
                     statement.executeQuery(query).use { rows ->
                         val titles = mutableListOf<String>()
                         while (rows.next()) {
@@ -142,7 +144,7 @@ class PersonalLibraryImporterTest {
                         }
                         assertEquals(
                             listOf("כותרת א", "כותרת ב", "תת כותרת ב1", "כותרת ג"),
-                            titles
+                            titles,
                         )
                     }
                 }

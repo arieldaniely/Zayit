@@ -496,7 +496,11 @@ private fun SingleLineTargumView(
                                                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                                             contentAlignment = Alignment.Center,
                                                         ) {
-                                                            Text(text = state.error.message ?: stringResource(Res.string.paging_error_loading_more))
+                                                            Text(
+                                                                text =
+                                                                    state.error.message
+                                                                        ?: stringResource(Res.string.paging_error_loading_more),
+                                                            )
                                                         }
                                                     }
 
@@ -1318,8 +1322,10 @@ private fun LinkFilterScaffold(
     onBookCheckedChange: (Long, Boolean) -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val movableContent = remember(content) { movableContentOf(content) }
+
     if (!isVisible) {
-        content()
+        movableContent()
         return
     }
 
@@ -1338,7 +1344,7 @@ private fun LinkFilterScaffold(
         }
         val mainContent: @Composable () -> Unit = {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Box(modifier = Modifier.fillMaxSize()) { content() }
+                Box(modifier = Modifier.fillMaxSize()) { movableContent() }
             }
         }
 

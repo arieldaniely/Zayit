@@ -57,12 +57,12 @@ private data class TreeItem(
 @Composable
 fun CategoryBookTreeView(
     navigationState: NavigationState,
-    isPdfEdition: Boolean = false,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
     onPdfBookClick: (Book) -> Unit,
     onScroll: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
+    isPdfEdition: Boolean = false,
     // Optional search integration: counts + selection override
     categoryCounts: Map<Long, Int> = emptyMap(),
     bookCounts: Map<Long, Int> = emptyMap(),

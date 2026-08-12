@@ -78,9 +78,10 @@ class PersonalLibraryImporter(
         Files.deleteIfExists(stagingDb)
         createSchema(stagingDb)
         progress.report(SCHEMA_END)
-        val summaries = importInto(stagingDb, folders.filter { it.enabled }) { fraction ->
-            progress.report(SCHEMA_END + fraction * (IMPORT_END - SCHEMA_END))
-        }
+        val summaries =
+            importInto(stagingDb, folders.filter { it.enabled }) { fraction ->
+                progress.report(SCHEMA_END + fraction * (IMPORT_END - SCHEMA_END))
+            }
         progress.report(IMPORT_END)
         PersonalLuceneIndexBuilder.build(stagingDb, index) { current, total ->
             progress.report(IMPORT_END + current.toFloat() / total * (INDEX_END - IMPORT_END))
@@ -106,6 +107,7 @@ class PersonalLibraryImporter(
     ): Map<String, PersonalImportSummary> {
         val totalBytes = folders.sumOf(::importableBytes).coerceAtLeast(1L)
         var completedBytes = 0L
+
         fun completed(bytes: Long) {
             completedBytes = (completedBytes + bytes).coerceAtMost(totalBytes)
             onProgress?.invoke(completedBytes.toFloat() / totalBytes)
@@ -236,13 +238,14 @@ class PersonalLibraryImporter(
                 meta?.extraTitles.orEmpty().filter { it.isNotBlank() }.forEach { term ->
                     execute("INSERT OR IGNORE INTO book_acronym(bookId,term) VALUES(?,?)", bookId, term)
                 }
-                val lineIds = insertLinesAndToc(bookId, title, lines) { completedLines ->
-                    val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
-                    if (expected > reportedBytes) {
-                        onBytesProcessed(expected - reportedBytes)
-                        reportedBytes = expected
+                val lineIds =
+                    insertLinesAndToc(bookId, title, lines) { completedLines ->
+                        val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
+                        if (expected > reportedBytes) {
+                            onBytesProcessed(expected - reportedBytes)
+                            reportedBytes = expected
+                        }
                     }
-                }
                 if (reportedBytes < fileBytes) onBytesProcessed(fileBytes - reportedBytes)
                 val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
                 booksByTitle[comparable(title)] = ref
@@ -380,7 +383,10 @@ class PersonalLibraryImporter(
             return result
         }
 
-        fun importLinks(folder: PersonalBookFolder, onBytesProcessed: (Long) -> Unit): Int {
+        fun importLinks(
+            folder: PersonalBookFolder,
+            onBytesProcessed: (Long) -> Unit,
+        ): Int {
             val linksDirectory = Path.of(folder.path).resolve("links")
             if (!linksDirectory.isDirectory()) return 0
             var count = 0
@@ -646,16 +652,20 @@ class PersonalLibraryImporter(
                 .filter { file ->
                     (file.extension.equals("txt", true) && !file.startsWith(root.resolve("links"))) ||
                         (file.extension.equals("json", true) && file.startsWith(root.resolve("links")))
-                }
-                .mapToLong { Files.size(it).coerceAtLeast(1L) }
+                }.mapToLong { Files.size(it).coerceAtLeast(1L) }
                 .sum()
         }
     }
 
-    private class ProgressReporter(private val callback: ((Float) -> Unit)?) {
+    private class ProgressReporter(
+        private val callback: ((Float) -> Unit)?,
+    ) {
         private var last = -1f
 
-        fun report(value: Float, force: Boolean = false) {
+        fun report(
+            value: Float,
+            force: Boolean = false,
+        ) {
             val next = value.coerceIn(0f, 1f).coerceAtLeast(last)
             if (force || last < 0f || next - last >= MIN_PROGRESS_STEP) {
                 last = next

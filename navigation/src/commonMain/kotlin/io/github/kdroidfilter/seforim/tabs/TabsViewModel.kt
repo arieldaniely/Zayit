@@ -42,18 +42,20 @@ class TabsViewModel(
 
     private fun recordClosedTab(tab: TabItem) {
         val dest = tab.destination
-        val shouldRecord = when (dest) {
-            is TabsDestination.Home -> false
-            is TabsDestination.History -> false
-            is TabsDestination.Favorites -> false
-            is TabsDestination.Search -> dest.searchQuery.isNotBlank()
-            is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
-            is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
-        }
+        val shouldRecord =
+            when (dest) {
+                is TabsDestination.Home -> false
+                is TabsDestination.History -> false
+                is TabsDestination.Favorites -> false
+                is TabsDestination.Search -> dest.searchQuery.isNotBlank()
+                is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
+                is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
+            }
         if (!shouldRecord) return
 
         _recentlyClosedTabs.update { closed -> listOf(tab) + closed.take(MAX_CLOSED_TABS - 1) }
     }
+
     /** When true, the next tab state change should not animate new tabs. Reset by the view after consuming. */
     private val _skipNextAnimation = MutableStateFlow(false)
     val skipNextAnimation: StateFlow<Boolean> = _skipNextAnimation.asStateFlow()
@@ -166,9 +168,10 @@ class TabsViewModel(
         _state.update { current ->
             if (index !in current.tabs.indices) return@update current
             current.copy(
-                tabs = current.tabs.toMutableList().also { tabs ->
-                    tabs[index] = tabs[index].copy(isPinned = !tabs[index].isPinned)
-                },
+                tabs =
+                    current.tabs.toMutableList().also { tabs ->
+                        tabs[index] = tabs[index].copy(isPinned = !tabs[index].isPinned)
+                    },
             )
         }
     }
@@ -320,12 +323,13 @@ class TabsViewModel(
     private fun reopenLastClosedTab() {
         val restoredTab = _recentlyClosedTabs.value.firstOrNull() ?: return
         _recentlyClosedTabs.update { it.drop(1) }
-        val newTab = TabItem(
-            id = _nextTabId++,
-            title = restoredTab.title,
-            destination = restoredTab.destination,
-            tabType = restoredTab.tabType,
-        )
+        val newTab =
+            TabItem(
+                id = _nextTabId++,
+                title = restoredTab.title,
+                destination = restoredTab.destination,
+                tabType = restoredTab.tabType,
+            )
         _state.update { current ->
             TabsState(tabs = listOf(newTab) + current.tabs, selectedTabIndex = 0)
         }

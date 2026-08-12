@@ -373,12 +373,22 @@ private fun SearchResultContentMvi(
     val bookToGroupIndex = remember(groups) { groups.mapIndexed { index, group -> group.bookId to index }.toMap() }
     // Keep expansion state while this result set is displayed, but never reuse hits from
     // a previous query or scope for a book with the same ID.
-    val expandedBooks = remember(
-        state.query, state.globalExtended, state.scopeCategoryPath.lastOrNull()?.id, state.scopeBook?.id, state.scopeTocId,
-    ) { mutableStateMapOf<Long, Boolean>() }
-    val expandedHits = remember(
-        state.query, state.globalExtended, state.scopeCategoryPath.lastOrNull()?.id, state.scopeBook?.id, state.scopeTocId,
-    ) { mutableStateMapOf<Long, List<SearchResult>>() }
+    val expandedBooks =
+        remember(
+            state.query,
+            state.globalExtended,
+            state.scopeCategoryPath.lastOrNull()?.id,
+            state.scopeBook?.id,
+            state.scopeTocId,
+        ) { mutableStateMapOf<Long, Boolean>() }
+    val expandedHits =
+        remember(
+            state.query,
+            state.globalExtended,
+            state.scopeCategoryPath.lastOrNull()?.id,
+            state.scopeBook?.id,
+            state.scopeTocId,
+        ) { mutableStateMapOf<Long, List<SearchResult>>() }
     val contentScope = rememberCoroutineScope()
     val currentLoadBookHits by rememberUpdatedState(loadBookHits)
     val onToggleExpand: (BookGroup) -> Unit = { group ->

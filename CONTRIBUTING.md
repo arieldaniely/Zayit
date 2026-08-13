@@ -1,11 +1,11 @@
-# Contributing to Zayit
+# Contributing to Zayita
 
 Thanks for your interest in contributing! A few simple rules keep the project
 clean and legally clear.
 
 ## License of your contributions (inbound = outbound)
 
-Zayit is licensed under the **GNU AGPL v3** together with the **additional
+Zayita is licensed under the **GNU AGPL v3** together with the **additional
 attribution term** under Section 7(b) of that license (the "Powered by the
 technologies that drive Zayit — https://zayitapp.com/" requirement). See
 [`LICENSE`](LICENSE) for the full text.

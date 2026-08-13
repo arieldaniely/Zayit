@@ -50,7 +50,7 @@ class DataSettingsViewModel : ViewModel() {
                 }
 
                 val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
-                val exportFile = File(exportDir, "zayit_backup_$timestamp.db")
+                val exportFile = File(exportDir, "zayita_backup_$timestamp.db")
 
                 Files.copy(
                     dbFile.toPath(),

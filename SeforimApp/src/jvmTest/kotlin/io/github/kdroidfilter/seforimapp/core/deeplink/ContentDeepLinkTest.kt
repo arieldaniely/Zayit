@@ -40,8 +40,16 @@ class ContentDeepLinkTest {
     }
 
     @Test
-    fun `keeps parsing native zayit links`() {
-        val destination = parseZayitDeepLink("zayit://book/2/line/1585")
-        assertEquals(1585L, assertIs<TabsDestination.BookContent>(destination).lineId)
+    fun `parses both native zayit and zayita links`() {
+        val legacy = parseContentDeepLink("zayit://book/2/line/1585")
+        val current = parseContentDeepLink("ZAYITA://BOOK/2/line/1585")
+
+        assertEquals(1585L, assertIs<TabsDestination.BookContent>(legacy?.destination).lineId)
+        assertEquals(1585L, assertIs<TabsDestination.BookContent>(current?.destination).lineId)
+    }
+
+    @Test
+    fun `share links use the zayita scheme`() {
+        assertEquals("zayita://book/2/line/1585", bookShareLink(2, 1585))
     }
 }

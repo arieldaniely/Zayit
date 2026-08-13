@@ -109,7 +109,7 @@ jobs:
           [ -n "$pacman_src" ] || { echo "::error::No pacman package produced"; exit 1; }
 
           # Name kept in sync with website/public/download/launch.linux deb pattern.
-          cp "$deb_src" "staging/zayit_${VERSION}_${{ matrix.arch }}.deb"
+          cp "$deb_src" "staging/zayita_${VERSION}_${{ matrix.arch }}.deb"
 
           case "${{ matrix.arch }}" in
             amd64) rpm_arch=x86_64 ;;
@@ -117,7 +117,7 @@ jobs:
             *)     rpm_arch="${{ matrix.arch }}" ;;
           esac
           # Name kept in sync with website/public/download/launch.linux rpm pattern.
-          cp "$rpm_src" "staging/zayit-${VERSION}-1.${rpm_arch}.rpm"
+          cp "$rpm_src" "staging/zayita-${VERSION}-1.${rpm_arch}.rpm"
 
           case "${{ matrix.arch }}" in
             amd64) pac_arch=x86_64 ;;
@@ -125,7 +125,7 @@ jobs:
             *)     pac_arch="${{ matrix.arch }}" ;;
           esac
           # Nucleus emits the Arch package with a .pacman extension.
-          cp "$pacman_src" "staging/zayit-${VERSION}-1-${pac_arch}.pacman"
+          cp "$pacman_src" "staging/zayita-${VERSION}-1-${pac_arch}.pacman"
 
       # Windows GraalVM build (x64)
       - name: Build Windows NSIS installer (GraalVM)
@@ -139,13 +139,7 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :SeforimApp:createReleaseDistributable :SeforimApp:packageReleaseNsis
 
-      - name: Install Rust toolchain
-        if: startsWith(matrix.os, 'windows')
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Build Rust wrapper and stage Windows assets
+      - name: Stage Windows installer
         if: startsWith(matrix.os, 'windows')
         shell: pwsh
         run: |
@@ -154,24 +148,15 @@ jobs:
           $ver = $env:VERSION
 
           $nsis = Get-ChildItem `
-            "SeforimApp\build\compose\binaries\main\graalvm-nsis\zayit-*-nsis.exe", `
-            "SeforimApp\build\compose\binaries\main-release\nsis\zayit-*-nsis.exe" `
+            "SeforimApp\build\compose\binaries\main\graalvm-nsis\zayita-*-nsis.exe", `
+            "SeforimApp\build\compose\binaries\main-release\nsis\zayita-*-nsis.exe" `
             -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $nsis) { Write-Error "NSIS installer not found"; exit 1 }
 
           New-Item -ItemType Directory -Force staging | Out-Null
 
-          # Raw NSIS (silent oneClick) — consumed by the auto-updater only.
-          Copy-Item $nsis.FullName "staging\Zayit-$ver-windows-$wtok-nsis.exe"
-
-          # Rust wrapper installer (splash UI) embeds and runs the NSIS silently — this is the user-facing download.
-          Push-Location installer
-          New-Item -ItemType Directory -Force resources | Out-Null
-          Copy-Item "..\SeforimApp\src\jvmMain\assets\common\splash.png" "resources\splash.png"
-          Copy-Item $nsis.FullName "resources\zayit-nsis.exe"
-          cargo build --release --target ${{ matrix.rust_target }}
-          Pop-Location
-          Copy-Item "installer\target\${{ matrix.rust_target }}\release\zayit-installer.exe" "staging\Zayit-$ver-windows-$wtok.exe"
+          # Publish the Zayita NSIS directly as the user-facing Windows installer.
+          Copy-Item $nsis.FullName "staging\Zayita-$ver-windows-$wtok-nsis.exe"
 
       # A self-contained ZIP that keeps user data beside the application. This is
       # intentionally built with the regular Compose runtime rather than NIK so the
@@ -196,24 +181,24 @@ jobs:
           }
 
           New-Item -ItemType Directory -Force portable-staging | Out-Null
-          $portableRoot = "zayit-$env:VERSION-windows-$wtok-portable"
+          $portableRoot = "zayita-$env:VERSION-windows-$wtok-portable"
           New-Item -ItemType Directory -Force $portableRoot | Out-Null
           Copy-Item (Join-Path $appDir '*') $portableRoot -Recurse -Force
 
-          $zayitRoot = Join-Path $portableRoot 'zayit'
-          New-Item -ItemType Directory -Force (Join-Path $zayitRoot 'data\databases') | Out-Null
-          New-Item -ItemType File -Force (Join-Path $zayitRoot 'zayit.portable') | Out-Null
+          $zayitaRoot = Join-Path $portableRoot 'zayita'
+          New-Item -ItemType Directory -Force (Join-Path $zayitaRoot 'data\databases') | Out-Null
+          New-Item -ItemType File -Force (Join-Path $zayitaRoot 'zayita.portable') | Out-Null
 
           @'
-          זית - מהדורה ניידת ל-Windows
+          זיתא - מהדורה ניידת ל-Windows
 
           כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
-          ניתן להפעיל מצב נייד גם באמצעות SEFORIMAPP_PORTABLE=1 או ‎-Dseforimapp.portable=true.
-          '@ | Set-Content (Join-Path $zayitRoot 'README-portable.txt') -Encoding utf8
+          ניתן להפעיל מצב נייד גם באמצעות ZAYITA_PORTABLE=1 או ‎-Dzayita.portable=true.
+          '@ | Set-Content (Join-Path $zayitaRoot 'README-portable.txt') -Encoding utf8
 
           Compress-Archive `
             -Path (Join-Path $portableRoot '*') `
-            -DestinationPath "portable-staging\Zayit-$env:VERSION-windows-$wtok-portable.zip" `
+            -DestinationPath "portable-staging\Zayita-$env:VERSION-windows-$wtok-portable.zip" `
             -Force
 
       - name: Upload portable Windows asset

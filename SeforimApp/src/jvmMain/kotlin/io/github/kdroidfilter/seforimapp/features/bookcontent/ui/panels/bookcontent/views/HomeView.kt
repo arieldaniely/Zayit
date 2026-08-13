@@ -22,10 +22,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -48,7 +46,6 @@ import androidx.compose.ui.window.PopupProperties
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CustomToggleableChip
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
-import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
@@ -636,41 +633,14 @@ private fun HomeBody(
     }
 }
 
-/**
- * App logo shown on the Home screen.
- * In light mode: always golden tint (text mask + subtle SoftLight on logo).
- * In dark mode: accent color tint from the current theme.
- */
 @Composable
 private fun LogoImage(modifier: Modifier = Modifier) {
-    val isDark = JewelTheme.isDark
-    val accent = JewelTheme.globalColors.outlines.focused
-    val logoTint = if (isDark) accent else AccentColor.Gold.forMode(isDark = false)
-    val tintAlpha = 0.25f
-
-    Box(modifier) {
-        // Base layer: full logo with original colors
-        Image(
-            painterResource(Res.drawable.zayit_new_logo),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-        // Subtle tint overlay: SoftLight preserves transparency, tints only colored areas
-        Image(
-            painterResource(Res.drawable.zayit_new_logo),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            alpha = tintAlpha,
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-        // Text overlay: tint color painted through the text alpha mask
-        Image(
-            painterResource(Res.drawable.zayit_new_logo_text),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-    }
+    Image(
+        painter = painterResource(Res.drawable.zayita_home_logo),
+        contentDescription = stringResource(Res.string.app_name),
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+    )
 }
 
 @Composable

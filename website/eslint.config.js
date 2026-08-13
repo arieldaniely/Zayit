@@ -19,5 +19,9 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // This small site intentionally co-locates its context hook and root component.
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

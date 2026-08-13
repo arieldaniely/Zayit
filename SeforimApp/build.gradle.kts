@@ -18,7 +18,6 @@ plugins {
     alias(libs.plugins.kover)
     alias(libs.plugins.nucleus)
     alias(libs.plugins.structured.coroutines)
-    alias(libs.plugins.sentryJvmGradle)
 }
 
 structuredCoroutines {
@@ -39,13 +38,6 @@ val macPackageVersion =
             .mapIndexed { index, component -> component.toInt() + if (index == 0) 1 else 0 }
             .joinToString(".")
     }
-
-sentry {
-    includeSourceContext = true
-    org = System.getenv("SENTRY_ORG") ?: "kdroidfilter"
-    projectName = System.getenv("SENTRY_PROJECT") ?: "zayit"
-    authToken = System.getenv("SENTRY_AUTH_TOKEN")
-}
 
 kotlin {
 //    androidTarget {
@@ -183,7 +175,7 @@ kotlin {
             implementation(libs.seforimlibrary.search)
 
             // SeforimLibrary CLI: lets the desktop binary run headless search commands
-            // (`zayit cli search ...`) by delegating to its runCli() entry point.
+            // (`zayita cli search ...`) by delegating to its runCli() entry point.
             implementation(libs.seforimlibrary.cli)
 
             // Delta-update client (download + apply patch.db onto local seforim.db)
@@ -237,7 +229,7 @@ nucleus.application {
         isEnabled = true
         javaLanguageVersion = 25
         jvmVendor = JvmVendorSpec.BELLSOFT
-        imageName = "zayit"
+        imageName = "zayita"
         buildArgs.addAll(
             // Enable native access for classpath (unnamed-module) code at IMAGE BUILD TIME so the
             // generated binary never emits the JDK "restricted method ... System::load" warnings
@@ -270,14 +262,14 @@ nucleus.application {
         nativeImageConfigBaseDir.set(layout.projectDirectory.dir("src/graalvm"))
     }
     nativeDistributions {
-        appName = "זית"
-        packageName = "zayit"
+        appName = "זיתא"
+        packageName = "zayita"
         description = "ספריית הלימוד שמובילה ישר לטקסט"
 
         publish {
             github {
                 enabled = true
-                owner = "kdroidFilter"
+                owner = "arieldaniely"
                 repo = "Zayit"
                 channel = ReleaseChannel.Latest
                 releaseType = ReleaseType.Release
@@ -287,7 +279,7 @@ nucleus.application {
         // Package-time resources root; include files under OS-specific subfolders (common, macos, windows, linux)
         appResourcesRootDir.set(layout.projectDirectory.dir("src/jvmMain/assets"))
         enableAotCache = true
-        homepage = "https://zayitapp.com"
+        homepage = "https://arieldaniely.github.io/Zayit/"
         licenseFile.set(File(project.rootDir, "LICENSE"))
         jvmArgs +=
             listOf(
@@ -318,17 +310,17 @@ nucleus.application {
             TargetFormat.Nsis,
             TargetFormat.Pacman,
         )
-        vendor = "KDroidFilter"
+        vendor = "Zayita Project"
         cleanupNativeLibs = true
 
-        // Register the custom URL scheme so shareable deep links (zayit://book/...,
-        // zayit://search/...) are routed to the app by the OS on macOS, Windows and Linux.
-        protocol("זית", "zayit")
+        // Register the custom URL scheme so shareable deep links (zayita://book/...,
+        // zayita://search/...) are routed to the app by the OS on macOS, Windows and Linux.
+        protocol("זיתא", "zayita")
 
         linux {
             iconFile.set(project.file("desktopAppIcons/LinuxIcon.png"))
             packageVersion = version
-            debMaintainer = "elyahou.hadass@gmail.com"
+            debMaintainer = "Zayita Project <arieldaniely@users.noreply.github.com>"
             menuGroup = "Education"
         }
         windows {
@@ -336,7 +328,7 @@ nucleus.application {
             packageVersion = version
             dirChooser = false
             shortcut = true
-            upgradeUuid = "d9f21975-4359-4818-a623-6e9a3f0a07ca"
+            upgradeUuid = "8e25f9ce-1d32-49d7-b867-c9b217135d71"
             perUserInstall = true
 
             nsis {
@@ -355,9 +347,9 @@ nucleus.application {
         }
         macOS {
             iconFile.set(project.file("desktopAppIcons/MacosIcon.icns"))
-            bundleID = "io.github.kdroidfilter.seforimapp.desktopApp"
+            bundleID = "io.github.arieldaniely.zayita.desktopApp"
             packageVersion = macPackageVersion
-            packageName = "זית"
+            packageName = "זיתא"
         }
         buildTypes.release.proguard {
             version.set("7.9.0")

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
 
 /**
- * Resolves incoming zayit:// content deep links and opens them in a new tab of the window that is
+ * Resolves incoming zayita:// content deep links and opens them in a new tab of the window that is
  * focused when the link arrives.
  *
  * Cross-platform (unlike [AppJumpList], which is Windows-only): the transport — cold-start CLI

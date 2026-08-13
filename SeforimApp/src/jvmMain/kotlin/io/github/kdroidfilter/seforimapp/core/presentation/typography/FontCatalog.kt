@@ -47,6 +47,7 @@ import seforimapp.seforimapp.generated.resources.LibertinusSerif_Italic
 import seforimapp.seforimapp.generated.resources.LibertinusSerif_Regular
 import seforimapp.seforimapp.generated.resources.LibertinusSerif_SemiBold
 import seforimapp.seforimapp.generated.resources.LibertinusSerif_SemiBoldItalic
+import seforimapp.seforimapp.generated.resources.Mekorot_Rashi
 import seforimapp.seforimapp.generated.resources.MiriamCLM_Bold
 import seforimapp.seforimapp.generated.resources.MiriamCLM_Book
 import seforimapp.seforimapp.generated.resources.MiriamLibre_VariableFont_wght
@@ -58,7 +59,6 @@ import seforimapp.seforimapp.generated.resources.NachlieliCLM_Bold
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_BoldOblique
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_Light
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_LightOblique
-import seforimapp.seforimapp.generated.resources.RashiAmiti
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.ShofarDemi_Bold
 import seforimapp.seforimapp.generated.resources.ShofarDemi_BoldOblique
@@ -100,13 +100,13 @@ import seforimapp.seforimapp.generated.resources.font_hadasim_clm
 import seforimapp.seforimapp.generated.resources.font_keter_aram_tsova
 import seforimapp.seforimapp.generated.resources.font_keter_yg
 import seforimapp.seforimapp.generated.resources.font_libertinus_serif
+import seforimapp.seforimapp.generated.resources.font_mekorot_rashi
 import seforimapp.seforimapp.generated.resources.font_miriam_clm
 import seforimapp.seforimapp.generated.resources.font_miriam_libre
 import seforimapp.seforimapp.generated.resources.font_miriam_mono_clm
 import seforimapp.seforimapp.generated.resources.font_nachlieli_clm
 import seforimapp.seforimapp.generated.resources.font_noto_rashi_hebrew
 import seforimapp.seforimapp.generated.resources.font_noto_serif_hebrew
-import seforimapp.seforimapp.generated.resources.font_rashi_amiti
 import seforimapp.seforimapp.generated.resources.font_shofar
 import seforimapp.seforimapp.generated.resources.font_simple_clm
 import seforimapp.seforimapp.generated.resources.font_stam_ashkenaz_clm
@@ -136,6 +136,7 @@ object FontCatalog {
         persistentListOf(
             FontOption(code = "notoserifhebrew", label = Res.string.font_noto_serif_hebrew),
             FontOption(code = "notorashihebrew", label = Res.string.font_noto_rashi_hebrew),
+            FontOption(code = "mekorotrashi", label = Res.string.font_mekorot_rashi),
             FontOption(code = "frankruhllibre", label = Res.string.font_frank_ruhl_libre),
             FontOption(code = "miriamlibre", label = Res.string.font_miriam_libre),
             FontOption(code = "cardo", label = Res.string.font_cardo),
@@ -144,7 +145,6 @@ object FontCatalog {
             FontOption(code = "bonanovasc", label = Res.string.font_bona_nova_sc),
             FontOption(code = "keteraramtsova", label = Res.string.font_keter_aram_tsova),
             FontOption(code = "keteryg", label = Res.string.font_keter_yg),
-            FontOption(code = "rashiamiti", label = Res.string.font_rashi_amiti),
             FontOption(code = "shofar", label = Res.string.font_shofar),
             FontOption(code = "taameyashkenaz", label = Res.string.font_taamey_ashkenaz),
             FontOption(code = "taameydavidclm", label = Res.string.font_taamey_david_clm),
@@ -170,6 +170,8 @@ object FontCatalog {
         when (code) {
             "notoserifhebrew" -> FontFamily(Font(resource = Res.font.notoserifhebrew, weight = FontWeight.Normal))
             "notorashihebrew" -> FontFamily(Font(resource = Res.font.notorashihebrew, weight = FontWeight.Normal))
+            "mekorotrashi", "rashiamiti" ->
+                FontFamily(Font(resource = Res.font.Mekorot_Rashi, weight = FontWeight.Normal))
             "frankruhllibre" -> FontFamily(Font(resource = Res.font.frankruhllibre, weight = FontWeight.Normal))
             "miriamlibre" ->
                 FontFamily(
@@ -216,10 +218,6 @@ object FontCatalog {
                     Font(resource = Res.font.KeterYG_MediumOblique, weight = FontWeight.Medium, style = FontStyle.Italic),
                     Font(resource = Res.font.KeterYG_Bold, weight = FontWeight.Bold),
                     Font(resource = Res.font.KeterYG_BoldOblique, weight = FontWeight.Bold, style = FontStyle.Italic),
-                )
-            "rashiamiti" ->
-                FontFamily(
-                    Font(resource = Res.font.RashiAmiti, weight = FontWeight.Normal),
                 )
             "shofar" ->
                 FontFamily(

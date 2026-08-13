@@ -114,7 +114,7 @@ class PortableSettings(
 
     private fun saveLocked() {
         file.parentFile?.mkdirs()
-        file.outputStream().use { properties.store(it, "Zayit portable settings") }
+        file.outputStream().use { properties.store(it, "Zayita portable settings") }
     }
 
     private companion object {

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">זית</string>
+    <string name="app_name">זיתא</string>
     <!-- Window title pattern: AppName - CurrentTab -->
     <string name="window_title_with_tab">%1$s - %2$s</string>
 
@@ -42,6 +42,7 @@
     <!-- Font names -->
     <string name="font_noto_serif_hebrew">נוטו סריף עברית</string>
     <string name="font_noto_rashi_hebrew">נוטו רש"י עברית</string>
+    <string name="font_mekorot_rashi">מקורות רש"י</string>
     <string name="font_frank_ruhl_libre">פרנק רוהל ליברה</string>
     <string name="font_miriam_libre">מרים ליברה</string>
     <string name="font_open_sans">אופן סנס</string>
@@ -52,7 +53,6 @@
     <string name="font_bona_nova_sc">בונה נובה</string>
     <string name="font_keter_aram_tsova">כתר ארם צובה</string>
     <string name="font_keter_yg">כתר יג</string>
-    <string name="font_rashi_amiti">רשי אמיתי</string>
     <string name="font_shofar">שופר</string>
     <string name="font_taamey_ashkenaz">טעמי אשכנז</string>
     <string name="font_taamey_david_clm">טעמי דוד</string>
@@ -411,11 +411,11 @@
     <string name="accent_color_gold">זהב</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_title_bar">מדריך ההגדרה של זית</string>
+    <string name="onboarding_title_bar">מדריך ההגדרה של זיתא</string>
     <string name="previous_button">קודם</string>
     <!-- Init-->
-    <string name="onboarding_init_welcome_title">ברוכים הבאים לזית!</string>
-    <string name="onboarding_init_welcome_subtitle">יישום חדש, מודרני ומהיר ללימוד התורה, שנבנה באהבה על ידי אברך ומפתח חרדי. זית שואפת לחולל מהפכה בלימוד טקסטים דיגיטליים באמצעות חוויה חלקה, אלגנטית וללא צורך בחיבור לאינטרנט.</string>
+    <string name="onboarding_init_welcome_title">ברוכים הבאים לזיתא!</string>
+    <string name="onboarding_init_welcome_subtitle">יישום מודרני ומהיר ללימוד התורה, המבוסס על פורק עצמאי של זית. זיתא אינה נוצרת, מופצת או נתמכת על ידי מפתחי זית.</string>
     <string name="onboarding_setup_guide">נלווה אתכם שלב אחר שלב כדי להגדיר את היישום כראוי.</string>
     <string name="onboarding_init_start">התחל</string>
 
@@ -451,11 +451,11 @@
     <string name="onboarding_version_error_message">מסד הנתונים שנבחר אינו תואם לגרסה זו של היישום. אנא הורידו את הגרסה העדכנית של מסד הנתונים.</string>
     <string name="onboarding_restart_installation">התחל התקנה מחדש</string>
 
-    <string name="onboarding_extracting_did_you_know">הידעת? זית משתמשת באלגוריתם הדחיסה המתקדם ביותר — לא ZIP ולא RAR, אלא ZST ברמת הדחיסה הגבוהה ביותר! דחיסה מרבית ומהירות חילוץ מרבית!</string>
+    <string name="onboarding_extracting_did_you_know">הידעת? זיתא משתמשת בפורמט הדחיסה Zstandard כדי להקטין את קובצי מסד הנתונים ולחלץ אותם במהירות.</string>
 
 
     <string name="onboarding_ready">הכול מוכן!</string>
-    <string name="onboarding_finish_ready_message">ברוכים הבאים לזית! אנו מאחלים לכם חוויית שימוש נעימה.</string>
+    <string name="onboarding_finish_ready_message">ברוכים הבאים לזיתא! אנו מאחלים לכם חוויית שימוש נעימה.</string>
     <string name="onboarding_open_app">פתח את היישום</string>
     <string name="onboarding_error_occurred">אירעה שגיאה</string>
     <string name="onboarding_error_with_detail">אירעה שגיאה: %1$s</string>
@@ -557,16 +557,16 @@
 
     <!-- Settings > App Info (General Settings Header) -->
     <string name="settings_info_app_version">גרסה: %1$s</string>
-    <string name="settings_info_created_by">נוצר על ידי אליהו גמבש</string>
+    <string name="settings_info_fork_notice">זיתא היא פורק עצמאי של זית ואינה מופצת או נתמכת על ידי מפתחי זית.</string>
     <string name="settings_info_license">יישום זה הוא קוד פתוח תחת רישיון AGPL-3.0</string>
-    <string name="settings_info_license_usage">ניתן להשתמש ולהפיץ בהתאם לתנאי הרישיון.</string>
+    <string name="settings_info_license_usage">קוד המקור המלא ושינויי הגרסה זמינים ב־GitHub בהתאם לתנאי הרישיון.</string>
 
     <!-- App Update -->
     <string name="update_available_banner">גרסה %1$s זמינה להורדה</string>
     <string name="update_download_action">הורד עכשיו</string>
     <string name="update_titlebar_tooltip">עדכון זמין</string>
     <string name="update_dialog_title">עדכון זמין</string>
-    <string name="update_dialog_message">גרסה %1$s של זית זמינה.</string>
+    <string name="update_dialog_message">גרסה %1$s של זיתא זמינה.</string>
     <string name="update_dialog_db_warning">ייתכן שלאחר עדכון זה יהיה צורך לעדכן את מסד הנתונים (כ‑3.5 ג״ב).</string>
     <string name="update_downloading">מוריד…</string>
     <string name="update_install_restart">התקן והפעל מחדש</string>

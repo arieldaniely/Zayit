@@ -3,7 +3,7 @@ package io.github.kdroidfilter.seforimapp.framework.portable
 import java.io.File
 
 object PortablePaths {
-    private const val PORTABLE_MARKER = "zayit.portable"
+    private const val PORTABLE_MARKER = "zayita.portable"
     private const val DATA_DIR_NAME = "data"
     private const val DATABASES_DIR_NAME = "databases"
     private const val PREFERENCES_DIR_NAME = "preferences"
@@ -11,19 +11,19 @@ object PortablePaths {
     val appDir: File by lazy { resolveAppDir() }
 
     val isPortable: Boolean by lazy {
-        val env = System.getenv("SEFORIMAPP_PORTABLE")?.isEnabledFlag()
-        val prop = System.getProperty("seforimapp.portable")?.isEnabledFlag()
+        val env = System.getenv("ZAYITA_PORTABLE")?.isEnabledFlag()
+        val prop = System.getProperty("zayita.portable")?.isEnabledFlag()
         env == true || prop == true || File(appDir, PORTABLE_MARKER).exists()
     }
 
     val dataDir: File by lazy {
         val explicit =
             System
-                .getenv("SEFORIMAPP_PORTABLE_DIR")
+                .getenv("ZAYITA_PORTABLE_DIR")
                 ?.takeIf { it.isNotBlank() }
                 ?.let(::File)
                 ?: System
-                    .getProperty("seforimapp.portable.dir")
+                    .getProperty("zayita.portable.dir")
                     ?.takeIf { it.isNotBlank() }
                     ?.let(::File)
 

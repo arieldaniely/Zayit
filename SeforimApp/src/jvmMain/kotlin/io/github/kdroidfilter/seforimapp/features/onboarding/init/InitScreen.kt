@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.init
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,7 +12,6 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardi
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.DefaultButton
@@ -47,10 +45,9 @@ fun InitView(onNext: () -> Unit) {
             fontSize = JewelTheme.typography.h4TextStyle.fontSize,
             textAlign = TextAlign.Center,
         )
-        Image(
-            painter = painterResource(Res.drawable.zayit_transparent),
-            contentDescription = null,
-            modifier = Modifier.size(176.dp),
+        Text(
+            text = stringResource(Res.string.app_name),
+            fontSize = JewelTheme.typography.h1TextStyle.fontSize,
         )
         Text(stringResource(Res.string.onboarding_setup_guide))
     }

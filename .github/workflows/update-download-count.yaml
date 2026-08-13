@@ -20,7 +20,7 @@ jobs:
       - name: Fetch download count and update file
         run: |
           # Fetch total download count from GitHub API
-          TOTAL=$(curl -s "https://api.github.com/repos/kdroidFilter/Zayit/releases?per_page=100" \
+          TOTAL=$(curl -s "https://api.github.com/repos/arieldaniely/Zayit/releases?per_page=100" \
             | jq '[.[].assets[].download_count] | add // 0')
 
           # Round down to nearest hundred

@@ -16,3 +16,9 @@ Pods/
 *.gpg
 *yarn.lock
 .claude/
+
+# Local migration/audit artifacts; never ship these with Zayita.
+legacy-brand-assets/
+.codex-brand-*.txt
+website-preview*.log
+DATABASE_LICENSING_REVIEW_HE.md

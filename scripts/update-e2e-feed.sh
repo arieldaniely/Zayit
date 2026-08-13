@@ -2,7 +2,7 @@
 # Local end-to-end harness for the app self-update flow (N4).
 #
 # Generates a fake update feed (latest-*.yml + a dummy installer), serves it over
-# HTTP, and prints the command to launch Zayit against it. Nothing is installed:
+# HTTP, and prints the command to launch Zayita against it. Nothing is installed:
 # pass DRY_RUN so installAndRestart/installAndQuit only log.
 #
 # Usage:
@@ -27,8 +27,8 @@ case "$(uname -m)" in
   *) ARCH="amd64" ;;
 esac
 
-FEED_DIR="$(mktemp -d -t zayit-feed-XXXX)"
-INSTALLER="zayit-${NEW_VERSION}-${OSPART}-${ARCH}.${EXT}"
+FEED_DIR="$(mktemp -d -t zayita-feed-XXXX)"
+INSTALLER="Zayita-${NEW_VERSION}-${OSPART}-${ARCH}.${EXT}"
 
 # Dummy installer payload (never executed thanks to DRY_RUN).
 head -c 1048576 /dev/urandom > "${FEED_DIR}/${INSTALLER}"
@@ -48,7 +48,7 @@ echo "Feed ready in ${FEED_DIR}"
 echo "  ${YML} (version ${NEW_VERSION})"
 echo "  ${INSTALLER} (${SIZE} bytes)"
 echo
-echo "In another terminal, launch Zayit against this feed:"
+echo "In another terminal, launch Zayita against this feed:"
 echo
 echo "  SEFORIMAPP_UPDATE_FEED_URL=http://127.0.0.1:${PORT} \\"
 echo "  SEFORIMAPP_UPDATE_FORCE_VERSION=${CURRENT_VERSION} \\"

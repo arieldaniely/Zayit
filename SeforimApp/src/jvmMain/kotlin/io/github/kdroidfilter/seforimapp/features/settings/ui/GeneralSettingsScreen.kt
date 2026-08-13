@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.settings.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -39,7 +38,6 @@ import io.github.kdroidfilter.seforimapp.framework.update.UpdateMode
 import io.github.kdroidfilter.seforimapp.framework.update.UpdateUiState
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
@@ -51,12 +49,12 @@ import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
-import seforimapp.seforimapp.generated.resources.AppIcon
 import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.app_name
 import seforimapp.seforimapp.generated.resources.close_book_tree_on_new_book
 import seforimapp.seforimapp.generated.resources.close_book_tree_on_new_book_description
 import seforimapp.seforimapp.generated.resources.settings_info_app_version
-import seforimapp.seforimapp.generated.resources.settings_info_created_by
+import seforimapp.seforimapp.generated.resources.settings_info_fork_notice
 import seforimapp.seforimapp.generated.resources.settings_info_license
 import seforimapp.seforimapp.generated.resources.settings_info_license_usage
 import seforimapp.seforimapp.generated.resources.settings_keep_screen_awake
@@ -173,22 +171,11 @@ private fun AppHeader(
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(
-                painter = painterResource(Res.drawable.AppIcon),
-                contentDescription = "App Icon",
-                modifier =
-                    Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = "זית",
+                    text = stringResource(Res.string.app_name),
                     fontSize = 22.sp,
                 )
                 Text(
@@ -196,9 +183,10 @@ private fun AppHeader(
                     fontSize = 13.sp,
                     color = JewelTheme.globalColors.text.info,
                 )
-                Link(
-                    text = stringResource(Res.string.settings_info_created_by),
-                    onClick = { UrlOpener.open("https://eliegambache.kdroidfilter.com/") },
+                Text(
+                    text = stringResource(Res.string.settings_info_fork_notice),
+                    fontSize = 12.sp,
+                    color = JewelTheme.globalColors.text.info,
                 )
             }
         }
@@ -225,7 +213,7 @@ private fun AppHeader(
             }
             IconButton(
                 onClick = {
-                    UrlOpener.open("https://github.com/kdroidFilter/Zayit")
+                    UrlOpener.open("https://github.com/arieldaniely/Zayit")
                 },
                 modifier = Modifier.size(32.dp),
             ) {

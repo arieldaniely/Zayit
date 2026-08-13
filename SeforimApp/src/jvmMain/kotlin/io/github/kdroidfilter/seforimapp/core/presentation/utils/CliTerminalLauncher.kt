@@ -9,8 +9,8 @@ import java.nio.file.Paths
 /**
  * Opens the SeforimLibrary search CLI in an external terminal window by re-launching the very same
  * application binary with a leading `cli` argument (see the `args.firstOrNull() == "cli"` branch in
- * `main()`). No separate `seforim-cli` executable is bundled — the normal `zayit` binary doubles as
- * the CLI when invoked as `zayit cli <command> ...`.
+ * `main()`). No separate `seforim-cli` executable is bundled — the normal `zayita` binary doubles as
+ * the CLI when invoked as `zayita cli <command> ...`.
  *
  * The launched process is fully isolated: it runs in its own JVM/terminal, so a CLI error or
  * `exitProcess` cannot disturb the running desktop app. The database/index/dictionary paths the app
@@ -60,7 +60,7 @@ object CliTerminalLauncher {
      * - `jpackage.app-path` is set by jpackage-style launchers and points at the user-facing
      *   executable.
      * - Otherwise [ProcessHandle.current] returns the launching command, which for the GraalVM
-     *   native image is the `zayit` binary itself.
+     *   native image is the `zayita` binary itself.
      *
      * Returns `null` (e.g. a plain `java -jar` dev run, where the command is the JDK launcher and
      * re-launching it would not enter our `main`).

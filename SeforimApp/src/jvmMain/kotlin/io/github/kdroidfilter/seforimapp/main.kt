@@ -98,6 +98,12 @@ private fun computeStartupState(): StartupState =
     }
 
 private fun initializeSentry() {
+    val sentryDsn =
+        System
+            .getenv("SENTRY_DSN")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return
     val sentryEnvironment =
         System
             .getenv("SENTRY_ENVIRONMENT")
@@ -106,7 +112,7 @@ private fun initializeSentry() {
             ?: "development"
 
     Sentry.init { options ->
-        options.dsn = "https://09cbadaf522c567b431dd4384c8f080b@o4510855773093888.ingest.de.sentry.io/4510857007726672"
+        options.dsn = sentryDsn
         options.environment = sentryEnvironment
         options.release = NucleusApp.version
         options.isDebug = isDevEnv
@@ -117,7 +123,7 @@ private fun initializeSentry() {
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 fun main(args: Array<String>) {
     PortablePaths.configureSystemProperties()
-    // Headless CLI mode: when the binary is launched as `zayit cli <args...>` (e.g. from the
+    // Headless CLI mode: when the binary is launched as `zayita cli <args...>` (e.g. from the
     // in-app "open CLI in terminal" action), delegate to the SeforimLibrary search CLI and exit
     // BEFORE any Sentry/Nucleus/GUI initialization. This keeps the normal GUI launch path
     // completely untouched — the branch is only taken when "cli" is the first argument.
@@ -125,7 +131,7 @@ fun main(args: Array<String>) {
         exitProcess(runCli(args.copyOfRange(1, args.size)))
     }
 
-    val loggingEnv = System.getenv("SEFORIMAPP_LOGGING")?.lowercase()
+    val loggingEnv = System.getenv("ZAYITA_LOGGING")?.lowercase()
     isDevEnv = loggingEnv == "true" || loggingEnv == "1" || loggingEnv == "yes"
 
     initializeSentry()
@@ -135,7 +141,7 @@ fun main(args: Array<String>) {
     // when nothing is in flight; never throws (failures are logged).
 //    DbDeltaRecoveryBootstrap.runOnce()
 
-    val appId = "io.github.kdroidfilter.seforimapp"
+    val appId = "io.github.arieldaniely.zayita"
 
     nucleusApplication(
         args,
@@ -334,7 +340,7 @@ fun main(args: Array<String>) {
                         }
                     }
 
-                    // Resolve shareable zayit:// content deep links (cross-platform); opens in
+                    // Resolve shareable zayita:// content deep links (cross-platform); opens in
                     // the window focused at the time the link arrives.
                     ContentDeepLinkHandler(
                         desktopManager = desktopManager,

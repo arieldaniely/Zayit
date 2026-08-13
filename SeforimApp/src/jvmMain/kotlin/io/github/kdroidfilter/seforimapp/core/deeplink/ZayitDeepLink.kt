@@ -8,19 +8,20 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 /**
- * Public, shareable deep link scheme for Zayit.
+ * Public, shareable deep link scheme for Zayita.
  *
  * Links reference the stable book / line database identifiers, so a link resolves to the
  * same content on any machine running the same database version:
  *
- *  - zayit://book/<bookId>                 -> open the book
- *  - zayit://book/<bookId>/line/<lineId>   -> open the book scrolled to a precise line
- *  - zayit://search/<url-encoded-query>    -> open a search
+ *  - zayita://book/<bookId>                 -> open the book
+ *  - zayita://book/<bookId>/line/<lineId>   -> open the book scrolled to a precise line
+ *  - zayita://search/<url-encoded-query>    -> open a search
  */
+const val ZAYITA_SCHEME = "zayita"
 const val ZAYIT_SCHEME = "zayit"
 const val OTZARIA_SCHEME = "otzaria"
 
-private const val PREFIX = "$ZAYIT_SCHEME://"
+private const val PREFIX = "$ZAYITA_SCHEME://"
 private const val HOST_BOOK = "book"
 private const val HOST_SEARCH = "search"
 private const val SEGMENT_LINE = "line"
@@ -60,21 +61,21 @@ fun TabsDestination.toShareLink(): String? =
     }
 
 /**
- * Parses a zayit:// deep link into a navigable destination carrying a fresh tabId, or null when
+ * Parses a zayita:// deep link into a navigable destination carrying a fresh tabId, or null when
  * the URI does not match a known content scheme. Resolution against the database (e.g. checking
  * the book exists) is the caller's responsibility.
  */
 fun parseZayitDeepLink(uri: String): TabsDestination? {
     val parsedUri = runCatching { URI(uri.trim()) }.getOrNull() ?: return null
-    if (!parsedUri.scheme.equals(ZAYIT_SCHEME, ignoreCase = true)) return null
+    if (parsedUri.scheme?.lowercase() !in setOf(ZAYITA_SCHEME, ZAYIT_SCHEME)) return null
     return parseNativeLink(parsedUri)?.destination
 }
 
-/** Parses Zayit links and the book-opening subset of the compatible `otzaria://` scheme. */
+/** Parses Zayita/Zayit links and the book-opening subset of the compatible `otzaria://` scheme. */
 fun parseContentDeepLink(uri: String): ParsedContentDeepLink? {
     val parsedUri = runCatching { URI(uri.trim()) }.getOrNull() ?: return null
     return when (parsedUri.scheme?.lowercase()) {
-        ZAYIT_SCHEME -> parseNativeLink(parsedUri)
+        ZAYITA_SCHEME, ZAYIT_SCHEME -> parseNativeLink(parsedUri)
         OTZARIA_SCHEME -> parseOtzariaBookLink(parsedUri)
         else -> null
     }

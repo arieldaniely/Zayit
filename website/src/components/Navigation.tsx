@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Globe, Menu, X, Download, Github, Coffee } from 'lucide-react';
+import { Globe, Menu, X, Download, Github, CircleHelp } from 'lucide-react';
 import { LANGUAGE_STORAGE_KEY } from '../i18n';
 
 export function Navigation() {
@@ -49,17 +49,19 @@ export function Navigation() {
             >
               <img
                 src={`${import.meta.env.BASE_URL}icon.png`}
-                alt="Zayit"
-                className="w-10 h-10 rounded-xl shadow-lg"
-                style={{ border: '1px solid rgba(230, 210, 140, 0.2)' }}
+                alt=""
+                aria-hidden="true"
+                width={34}
+                height={34}
+                style={{ borderRadius: '9px' }}
               />
-              <span>{isRTL ? 'זית' : 'Zayit'}</span>
+              <span>{isRTL ? 'זיתא' : 'Zayita'}</span>
             </motion.a>
 
             {/* Source Code & Support - Desktop only */}
             <div className="hidden md:flex items-center gap-2">
               <motion.a
-                href="https://github.com/kdroidFilter/SeforimApp"
+                href="https://github.com/arieldaniely/Zayit"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
@@ -76,7 +78,7 @@ export function Navigation() {
                 {t('footer.sourceCode')}
               </motion.a>
               <motion.a
-                href="https://ko-fi.com/lomityaesh"
+                href="https://github.com/arieldaniely/Zayit/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
@@ -90,7 +92,7 @@ export function Navigation() {
                   background: 'rgba(220, 38, 38, 0.1)',
                 }}
               >
-                <Coffee size={14} />
+                <CircleHelp size={14} />
                 {t('footer.support')}
               </motion.a>
             </div>
@@ -264,7 +266,7 @@ export function Navigation() {
                 {/* Source Code & Support - Mobile */}
                 <div className="flex gap-3 pt-2">
                   <a
-                    href="https://github.com/kdroidFilter/SeforimApp"
+                    href="https://github.com/arieldaniely/Zayit"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-4 py-2 rounded-full text-sm"
@@ -277,7 +279,7 @@ export function Navigation() {
                     {t('footer.sourceCode')}
                   </a>
                   <a
-                    href="https://ko-fi.com/lomityaesh"
+                    href="https://github.com/arieldaniely/Zayit/issues"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 px-4 py-2 rounded-full text-sm"
@@ -287,7 +289,7 @@ export function Navigation() {
                       background: 'rgba(220, 38, 38, 0.05)',
                     }}
                   >
-                    <Coffee size={16} />
+                    <CircleHelp size={16} />
                     {t('footer.support')}
                   </a>
                 </div>

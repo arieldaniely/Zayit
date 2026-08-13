@@ -73,7 +73,7 @@ sealed class SearchHomeNavigationEvent {
     ) : SearchHomeNavigationEvent()
 
     /**
-     * Navigate to a destination resolved from a zayit:// deep link pasted into the search bar.
+     * Navigate to a destination resolved from a zayita:// deep link pasted into the search bar.
      * @param destination The parsed destination (book/line or search)
      */
     data class NavigateToDeepLink(

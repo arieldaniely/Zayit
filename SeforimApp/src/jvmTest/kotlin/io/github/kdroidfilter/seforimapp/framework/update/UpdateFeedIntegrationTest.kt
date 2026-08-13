@@ -37,9 +37,9 @@ class UpdateFeedIntegrationTest {
                 "x64"
             }
         return when (Platform.Current) {
-            Platform.MacOS -> PlatformBits("latest-mac.yml", "zayit-1.0.1-mac-$arch.zip", "zip")
-            Platform.Windows -> PlatformBits("latest.yml", "zayit-1.0.1-windows-$arch-nsis.exe", "exe")
-            else -> PlatformBits("latest-linux.yml", "zayit-1.0.1-linux-$arch.deb", "deb")
+            Platform.MacOS -> PlatformBits("latest-mac.yml", "Zayita-1.0.1-mac-$arch.zip", "zip")
+            Platform.Windows -> PlatformBits("latest.yml", "Zayita-1.0.1-windows-$arch-nsis.exe", "exe")
+            else -> PlatformBits("latest-linux.yml", "Zayita-1.0.1-linux-$arch.deb", "deb")
         }
     }
 
@@ -83,7 +83,7 @@ class UpdateFeedIntegrationTest {
 
     @Test
     fun `real pipeline downloads and verifies a patch update`() {
-        val dir = Files.createTempDirectory("zayit-feed").toFile()
+        val dir = Files.createTempDirectory("zayita-feed").toFile()
         val bits = platformBits()
         val installer = File(dir, bits.installerName).apply { writeBytes(ByteArray(4096) { (it % 251).toByte() }) }
         writeFeed(dir, bits, sha512Base64(installer), installer.length())

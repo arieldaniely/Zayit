@@ -136,7 +136,7 @@ class DownloadUseCase(
             val connection =
                 HttpsConnectionFactory.openConnection(url) {
                     setRequestProperty("Accept", "application/octet-stream")
-                    setRequestProperty("User-Agent", "SeforimApp/1.0 (+https://github.com/kdroidFilter/SeforimApp)")
+                    setRequestProperty("User-Agent", "Zayita/1.0 (+https://github.com/arieldaniely/Zayit)")
                     connectTimeout = 30_000
                     readTimeout = 60_000
                     instanceFollowRedirects = true

@@ -23,7 +23,7 @@ import {
   Info,
 } from 'lucide-react';
 
-const GITHUB_OWNER = 'kdroidFilter';
+const GITHUB_OWNER = 'arieldaniely';
 const GITHUB_REPO = 'Zayit';
 const DB_OWNER = 'kdroidFilter';
 const DB_REPO = 'SeforimLibrary';
@@ -151,8 +151,8 @@ function filterAssetsByPlatform(assets: Asset[], platform: Platform): Asset[] {
 
   if (platform.os === 'windows') {
     return assets
-      // The -nsis.exe is the silent installer used by the auto-updater only; users get the Rust wrapper.
-      .filter((a) => /\.(msi|exe)$/i.test(a.name) && !/-nsis\.exe$/i.test(a.name))
+      // The release workflow publishes the NSIS installer as the user-facing Windows package.
+      .filter((a) => /\.(msi|exe)$/i.test(a.name))
       .sort((a, b) => {
         if (a.name.toLowerCase().endsWith('.exe') && !b.name.toLowerCase().endsWith('.exe')) return -1;
         if (!a.name.toLowerCase().endsWith('.exe') && b.name.toLowerCase().endsWith('.exe')) return 1;
@@ -204,7 +204,7 @@ function groupAssetsByArch(assets: Asset[]): ArchGroups {
 
 function getLaunchCommand(kind: 'mac' | 'linux'): string {
   const file = kind === 'mac' ? 'launch.mac' : 'launch.linux';
-  const base = window.location.origin + '/download/';
+  const base = new URL(`${import.meta.env.BASE_URL}download/`, window.location.origin).toString();
   return `curl -L ${base}${file} | bash`;
 }
 
@@ -371,7 +371,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')}</h1>
             <p className="download-subtitle flex items-center justify-center gap-2">
               {getOSIcon(platform.os)}
@@ -396,7 +396,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')} — {t('dl.common.download')}</h1>
           </div>
 
@@ -418,7 +418,7 @@ export function DownloadModal() {
       <>
         {/* Header */}
         <div className="text-center mb-7">
-          <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayit" className="download-logo mx-auto" />
+          <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
           <h1 className="download-title">{t('dl.header.downloadTitle')}</h1>
           <p className="download-subtitle flex items-center justify-center gap-2 flex-wrap">
             {getOSIcon(platform.os)}
@@ -741,7 +741,7 @@ function Footer() {
     <div className="download-footer">
       <div className="download-footer-links">
         <a
-          href="https://github.com/kdroidFilter/Zayit"
+          href="https://github.com/arieldaniely/Zayit"
           target="_blank"
           rel="noopener noreferrer"
           className="download-footer-link"
@@ -749,7 +749,7 @@ function Footer() {
           <Github size={20} />
         </a>
         <a
-          href="https://ko-fi.com/lomityaesh"
+          href="https://github.com/arieldaniely/Zayit/issues"
           target="_blank"
           rel="noopener noreferrer"
           className="download-footer-link download-footer-link-donate"

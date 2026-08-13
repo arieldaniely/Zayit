@@ -5,14 +5,14 @@
     "dir": "ltr"
   },
   "seo": {
-    "title": "Zayit - Jewish Study Library | Free Torah & Talmud Reader",
-    "description": "Zayit - The study library that goes straight to the text. A free desktop app to read, search, and explore Jewish study texts including Torah, Talmud, Midrash, and more.",
+    "title": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
+    "description": "Zayita - The study library that goes straight to the text. A free desktop app to read, search, and explore Jewish study texts including Torah, Talmud, Midrash, and more.",
     "keywords": "Jewish texts, Torah study, Talmud, Seforim, Hebrew books, religious texts, Jewish library, Torah reader, Tanakh, Midrash, Halacha, free Jewish app",
-    "ogTitle": "Zayit - Jewish Study Library | Free Torah & Talmud Reader",
+    "ogTitle": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
     "ogDescription": "A free desktop app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations. Download for Windows, macOS, or Linux.",
-    "twitterTitle": "Zayit - Jewish Study Library | Free Torah & Talmud Reader",
+    "twitterTitle": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
     "twitterDescription": "A free desktop app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations.",
-    "imageAlt": "Zayit - Jewish Study Library Application"
+    "imageAlt": "Zayita - Jewish Study Library Application"
   },
   "nav": {
     "features": "Features",
@@ -21,7 +21,7 @@
     "support": "Support"
   },
   "hero": {
-    "title": "Zayit",
+    "title": "Zayita",
     "subtitle": "The study library that goes straight to the text",
     "description": "A free app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations.",
     "cta": "Download Now",
@@ -30,11 +30,11 @@
   },
   "vision": {
     "title": "Vision",
-    "description": "Zayit is a dream turned useful: a natural, fluid, almost obvious study experience. The project will remain free by principle. Support is welcome and meaningful. It is designed to stay non-commercial. With God's help, Zayit will keep growing without losing its spirit."
+    "description": "Zayita is a dream turned useful: a natural, fluid, almost obvious study experience. The project will remain free by principle. Support is welcome and meaningful. It is designed to stay non-commercial. With God's help, Zayita will keep growing without losing its spirit."
   },
   "spirit": {
     "title": "In the spirit of a study hall",
-    "description": "Zayit is designed like a digital study hall: stable, fast, consistent. You feel the calm of study: everything works, everything is in its place. The text stays at the center, with respect and without distractions."
+    "description": "Zayita is designed like a digital study hall: stable, fast, consistent. You feel the calm of study: everything works, everything is in its place. The text stays at the center, with respect and without distractions."
   },
   "interface": {
     "title": "A pro and natural interface",
@@ -67,7 +67,7 @@
     "powered": "Powered by Lucene and enhanced by AI for precision"
   },
   "features": {
-    "title": "What Zayit lets you do",
+    "title": "What Zayita lets you do",
     "find": "Find a passage in seconds with simple or advanced search",
     "explore": "Explore a library by book and table of contents",
     "inbook": "Search inside a book to prepare a lesson or review",
@@ -79,28 +79,28 @@
   "promise": {
     "title": "Our Promise",
     "speed": "Lightning fast",
-    "speedDesc": "Exceptionally fast, even on old computers. Zayit is optimized to run smoothly on any machine, so you can focus on study, not on waiting.",
+    "speedDesc": "Exceptionally fast, even on old computers. Zayita is optimized to run smoothly on any machine, so you can focus on study, not on waiting.",
     "free": "Free forever",
-    "freeDesc": "Zayit is free and will remain free. Always. This is a commitment, not a marketing promise.",
+    "freeDesc": "Zayita is free and will remain free. Always. This is a commitment, not a marketing promise.",
     "library": "6,800+ books",
     "libraryDesc": "A vast library of Jewish texts at your fingertips. Torah, Talmud, Halacha, Midrash, commentaries, and much more.",
     "offline": "100% Offline",
-    "offlineDesc": "No internet required. Once installed, Zayit works completely offline. Your study is never interrupted."
+    "offlineDesc": "No internet required. Once installed, Zayita works completely offline. Your study is never interrupted."
   },
   "crafted": {
     "title": "Crafted with care",
-    "description": "Zayit aims for quality and consistency: no gimmicks, no noise. Like a digital study desk, everything is there to move forward. Every detail is designed for natural, respectful study. Built to be fast, light, almost magical, it runs even on low-powered machines."
+    "description": "Zayita aims for quality and consistency: no gimmicks, no noise. Like a digital study desk, everything is there to move forward. Every detail is designed for natural, respectful study. Built to be fast, light, almost magical, it runs even on low-powered machines."
   },
   "download": {
-    "title": "Download Zayit",
+    "title": "Download Zayita",
     "description": "Available for macOS, Windows, and Linux. Free and open source.",
     "downloads": "downloads",
     "cta": "Go to Downloads",
     "platforms": "Available on all major platforms"
   },
   "footer": {
-    "createdByPrefix": "Built with love by",
-    "createdByName": "Elie Gambache",
+    "createdByPrefix": "Independent fork based on Zayit by",
+    "createdByName": "Zayita Project",
     "sourceCode": "Source Code",
     "support": "Support the Project",
     "license": "Free and open source under AGPL v3"
@@ -109,6 +109,9 @@
     "light": "Light",
     "dark": "Dark",
     "drag": "Drag to compare"
+  },
+  "branding": {
+    "previewPending": "Updated Zayita screenshots will be added in the next website update"
   },
   "dl": {
     "common": {
@@ -122,11 +125,11 @@
       "error": "Error",
       "sourceCode": "Source Code",
       "support": "Support",
-      "createdBy": "Created by Elie Gambache"
+      "createdBy": "Zayita — an independent fork of Zayit"
     },
     "header": {
-      "title": "Zayit",
-      "downloadTitle": "Zayit — Quick Download",
+      "title": "Zayita",
+      "downloadTitle": "Zayita — Quick Download",
       "detected": "Detected"
     },
     "platform": {
@@ -149,7 +152,7 @@
     },
     "mobile": {
       "notSupported": "Not supported on mobile devices",
-      "desktopOnly": "Zayit is a desktop application only.",
+      "desktopOnly": "Zayita is a desktop application only.",
       "useDesktop": "Please access from your computer to download the software."
     },
     "unknownOS": {
@@ -195,7 +198,7 @@
       "loading": "Loading database files...",
       "showFiles": "Show database files",
       "hideFiles": "Hide database files",
-      "offlineInfo": "If you plan to install Zayit without an internet connection, also download the database files (separate download).",
+      "offlineInfo": "If you plan to install Zayita without an internet connection, also download the database from the original Zayit release (separate download). The database is not distributed by the Zayita project.",
       "totalSize": "Total database files size",
       "noFilesAvailable": "No database files available."
     },

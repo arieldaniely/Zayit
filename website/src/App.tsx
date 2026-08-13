@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
@@ -19,7 +19,6 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { Navigation } from './components/Navigation';
-import { ImageComparison } from './components/ImageComparison';
 import { CrystalParticlesGL } from './components/CrystalParticlesGL';
 import { useSEO } from './hooks/useSEO';
 import './i18n';
@@ -29,30 +28,34 @@ const panelsData = [
   {
     titleKey: 'panels.commentaries',
     descKey: 'panels.commentariesDesc',
-    lightImage: 'art/PIRUSHIM-LIGHT.png',
-    darkImage: 'art/PIRUSHIM-DARK.png',
-    altHe: 'פירושים',
-    altEn: 'Commentaries',
   },
   {
     titleKey: 'panels.translations',
     descKey: 'panels.translationsDesc',
-    lightImage: 'art/PIRUSHIM-TARGUMIM-LIGHT.png',
-    darkImage: 'art/PIRUSHIM-TARGUMIM-DARK.png',
-    altHe: 'פירושים ותרגומים',
-    altEn: 'Commentaries and Translations',
   },
   {
     titleKey: 'panels.sources',
     descKey: 'panels.sourcesDesc',
-    lightImage: 'art/MEKOR-LIGHT.png',
-    darkImage: 'art/MEKOR-DARK.png',
-    altHe: 'מקורות',
-    altEn: 'Sources',
   },
 ];
 
 const SLIDE_DURATION = 10000; // 10 seconds
+
+function BrandingPreviewPlaceholder({ label }: { label: string }) {
+  return (
+    <div
+      className="aspect-video rounded-2xl flex flex-col items-center justify-center gap-4 p-8 text-center"
+      style={{
+        background: 'var(--section-alt-bg)',
+        border: '1px solid var(--card-border)',
+        color: 'var(--text-muted)',
+      }}
+    >
+      <BookOpen size={48} style={{ color: 'var(--gold)' }} />
+      <p>{label}</p>
+    </div>
+  );
+}
 
 // Apple-style Panels Slider Component
 function PanelsSlider({
@@ -158,11 +161,7 @@ function PanelsSlider({
                     {t(panel.descKey)}
                   </p>
                 </div>
-                <ImageComparison
-                  lightImage={panel.lightImage}
-                  darkImage={panel.darkImage}
-                  alt={isRTL ? panel.altHe : panel.altEn}
-                />
+                <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
               </div>
             ))}
           </motion.div>
@@ -262,19 +261,18 @@ function App() {
   // Cinematic easing curve
   const cinematicEase = [0.16, 1, 0.3, 1] as const;
 
-  // Memoized particles for cinematic effect (reduced for performance)
-  const particles = useMemo(() =>
+  // Deterministic particles keep rendering pure and stable across React re-renders.
+  const particles =
     [...Array(20)].map((_, i) => ({
       id: i,
-      size: Math.random() * 4 + 2,
-      x: Math.random() * 100,
-      y: 60 + Math.random() * 40,
-      opacity: Math.random() * 0.4 + 0.2,
-      duration: Math.random() * 15 + 10,
-      delay: Math.random() * 8,
-      yMove: -150 - Math.random() * 200,
-    }))
-  , []);
+      size: 2 + ((i * 7) % 5),
+      x: (i * 37) % 100,
+      y: 60 + ((i * 13) % 40),
+      opacity: 0.2 + ((i * 11) % 5) / 10,
+      duration: 10 + ((i * 17) % 15),
+      delay: (i * 19) % 8,
+      yMove: -150 - ((i * 23) % 200),
+    }));
 
 
   return (
@@ -423,11 +421,7 @@ function App() {
             y: imageY,
           }}
         >
-          <ImageComparison
-            lightImage="art/HOME-LIGHT.png"
-            darkImage="art/HOME-DARK.png"
-            alt=""
-          />
+          <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
         </motion.div>
       </section>
 
@@ -557,11 +551,7 @@ function App() {
                 {t('interface.bookSearchDesc')}
               </p>
             </div>
-            <ImageComparison
-              lightImage="art/BOOK-SEARCH-LIGHT.png"
-              darkImage="art/BOOK-SEARCH-DARK.png"
-              alt={isRTL ? 'חיפוש ספרים' : 'Book Search'}
-            />
+            <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
           </motion.div>
         </div>
       </section>
@@ -671,11 +661,7 @@ function App() {
                 {t('search.simpleDesc')}
               </p>
             </div>
-            <ImageComparison
-              lightImage="art/DB-SEARCH-SIMPLE-LIGHT.png"
-              darkImage="art/DB-SEARCH-SIMPLE-DARK.png"
-              alt={isRTL ? 'חיפוש בבסיס הנתונים' : 'Database Search'}
-            />
+            <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
           </motion.div>
         </div>
       </section>
@@ -899,7 +885,7 @@ function App() {
             {t('download.description')}
           </motion.p>
 
-          {downloadCount !== null && (
+          {downloadCount !== null && downloadCount > 0 && (
             <motion.p
               className="text-2xl font-bold mb-8"
               style={{ color: 'var(--gold)' }}
@@ -959,7 +945,7 @@ function App() {
           <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
             {t('footer.createdByPrefix')}{' '}
             <a
-              href="https://eliegambache.kdroidfilter.com/"
+              href="https://github.com/arieldaniely/Zayit"
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: 'var(--gold)', textDecoration: 'none' }}

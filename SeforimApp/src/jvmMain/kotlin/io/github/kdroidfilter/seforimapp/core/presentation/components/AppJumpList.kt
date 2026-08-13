@@ -78,7 +78,7 @@ fun AppJumpList(
     LaunchedEffect(nextDesktopName) {
         pendingDeepLink.filterNotNull().collect { action ->
             // Only handle (and clear) seforim:// jump-list actions. Other schemes — notably
-            // shareable zayit:// content links — belong to ContentDeepLinkHandler; clearing them
+            // shareable zayita:// content links — belong to ContentDeepLinkHandler; clearing them
             // here would race that collector and swallow the link (StateFlow is conflated).
             val handled =
                 when {

@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $portableRoot = 'portable-zayit-windows'
+          $portableRoot = 'portable-zayita-windows'
           $appDir = 'SeforimApp/build/compose/binaries/main/app'
           if (-not (Test-Path $appDir -PathType Container)) {
             throw "Compose app directory was not found: $appDir"
@@ -47,21 +47,21 @@ jobs:
           New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
           Copy-Item -Path (Join-Path $appDir '*') -Destination $portableRoot -Recurse -Force
 
-          $zayitRoot = Join-Path $portableRoot 'zayit'
-          New-Item -ItemType Directory -Force -Path (Join-Path $zayitRoot 'data/databases') | Out-Null
-          New-Item -ItemType File -Force -Path (Join-Path $zayitRoot 'zayit.portable') | Out-Null
+          $zayitaRoot = Join-Path $portableRoot 'zayita'
+          New-Item -ItemType Directory -Force -Path (Join-Path $zayitaRoot 'data/databases') | Out-Null
+          New-Item -ItemType File -Force -Path (Join-Path $zayitaRoot 'zayita.portable') | Out-Null
 
           @'
-          זית - מהדורה ניידת ל-Windows
+          זיתא - מהדורה ניידת ל-Windows
 
           כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
-          ניתן להפעיל גם עם SEFORIMAPP_PORTABLE=1 או עם ‎-Dseforimapp.portable=true.
-          '@ | Set-Content -Path (Join-Path $zayitRoot 'README-portable.txt') -Encoding UTF8
+          ניתן להפעיל גם עם ZAYITA_PORTABLE=1 או עם ‎-Dzayita.portable=true.
+          '@ | Set-Content -Path (Join-Path $zayitaRoot 'README-portable.txt') -Encoding UTF8
 
-          Compress-Archive -Path (Join-Path $portableRoot '*') -DestinationPath 'zayit-portable-windows.zip' -Force
+          Compress-Archive -Path (Join-Path $portableRoot '*') -DestinationPath 'zayita-portable-windows.zip' -Force
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zayit-portable-windows
-          path: zayit-portable-windows.zip
+          name: zayita-portable-windows
+          path: zayita-portable-windows.zip

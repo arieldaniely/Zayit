@@ -97,6 +97,7 @@ object AppSettings {
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val KEY_LINK_LOAD_LEVEL = "link_load_level"
     private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
+    private const val KEY_ERROR_REPORT_EMAIL = "error_report_email"
 
     // Backing Settings storage (can be replaced at startup if needed)
     @Volatile
@@ -353,6 +354,13 @@ object AppSettings {
             settings[KEY_DATABASE_PATH] = path
             _databasePathFlow.value = path
         }
+    }
+
+    /** Email remembered locally for subsequent book-error reports. */
+    fun getErrorReportEmail(): String = settings[KEY_ERROR_REPORT_EMAIL, ""]
+
+    fun setErrorReportEmail(email: String) {
+        settings[KEY_ERROR_REPORT_EMAIL] = email.trim()
     }
 
     // Session persistence preference

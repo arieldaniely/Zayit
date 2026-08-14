@@ -61,6 +61,9 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
+import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
+import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
+import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -101,6 +104,7 @@ import seforimapp.seforimapp.generated.resources.context_menu_copy_with_source
 import seforimapp.seforimapp.generated.resources.context_menu_copy_without_nikud
 import seforimapp.seforimapp.generated.resources.context_menu_find_in_page
 import seforimapp.seforimapp.generated.resources.context_menu_highlight
+import seforimapp.seforimapp.generated.resources.context_menu_report_book_error
 import seforimapp.seforimapp.generated.resources.context_menu_search_selected_text
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -470,6 +474,7 @@ fun BookContentScreen(
     val copyWithSourceLabel = stringResource(Res.string.context_menu_copy_with_source)
     val copyLinkLabel = stringResource(Res.string.context_menu_copy_link)
     val addNoteLabel = stringResource(Res.string.context_menu_add_note)
+    val reportBookErrorLabel = stringResource(Res.string.context_menu_report_book_error)
     val baseTextContextMenu = LocalTextContextMenu.current
     val tabId = uiState.tabId
     val selectedBook = uiState.navigation.selectedBook
@@ -489,6 +494,7 @@ fun BookContentScreen(
     // edited inline in the notes pane (Google-Docs style).
     val noteStore = LocalAppGraph.current.noteStore
     var noteDraft by remember { mutableStateOf<NoteDraftAnchor?>(null) }
+    var errorReportDraft by remember { mutableStateOf<BookErrorReportDraft?>(null) }
     // Primary line captured when the draft was opened. Selecting a different line drops the unsaved
     // explicit draft so the editor reflects the newly selected line instead of the stale anchor.
     var noteDraftBaselineLine by remember { mutableStateOf<Long?>(null) }
@@ -524,6 +530,7 @@ fun BookContentScreen(
             copyWithoutNikudLabel,
             copyWithSourceLabel,
             copyLinkLabel,
+            reportBookErrorLabel,
             showDiacritics,
             bookHasDiacritics,
             bookId,
@@ -678,6 +685,28 @@ fun BookContentScreen(
                                         },
                                     )
                                 }
+                                // Report a textual error to Otzaria. A selection is preferred;
+                                // without one, use the complete right-clicked line as context.
+                                if (bookForCopy != null &&
+                                    selectionContext.activeCommentaryColumn.value.isEmpty() &&
+                                    (
+                                        selectedText.isNotBlank() ||
+                                            selectionContext.currentLineId.value.let { it != 0L && it != -1L }
+                                    )
+                                ) {
+                                    add(
+                                        ContextMenuItemOption(label = reportBookErrorLabel) {
+                                            errorReportDraft =
+                                                createBookErrorReportDraft(
+                                                    book = bookForCopy,
+                                                    selectedText = selectedText,
+                                                    visibleLines = selectionContext.visibleLines.value.lines,
+                                                    currentLineId = selectionContext.currentLineId.value,
+                                                    rootTitle = selectionContext.activeBook.value?.rootTitle,
+                                                )
+                                        },
+                                    )
+                                }
                                 // Highlight color picker (last item): persists a position-based
                                 // highlight for the selected text on its resolved line.
                                 if (selectedText.isNotBlank() && bookId != 0L && bookId != -1L) {
@@ -712,6 +741,14 @@ fun BookContentScreen(
                 }
             }
         }
+
+    errorReportDraft?.let { draft ->
+        BookErrorReportDialog(
+            draft = draft,
+            repository = LocalAppGraph.current.repository,
+            onDismiss = { errorReportDraft = null },
+        )
+    }
 
     // Configuration of split panes to monitor
     val splitPaneConfigs =

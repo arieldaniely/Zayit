@@ -178,6 +178,20 @@
     <string name="context_menu_copy_link">העתק קישור לקטע זה</string>
     <string name="context_menu_highlight">סמן</string>
     <string name="context_menu_add_note">הוסף הערה</string>
+    <string name="context_menu_report_book_error">דווח על שגיאה בספר</string>
+    <string name="error_report_title">דיווח על שגיאה בספר</string>
+    <string name="error_report_email">כתובת דוא״ל לחזרה</string>
+    <string name="error_report_details">תיאור השגיאה והתיקון המוצע</string>
+    <string name="error_report_details_hint">מה שגוי, ומה צריך להופיע במקום?</string>
+    <string name="error_report_excerpt">הקטע שיישלח</string>
+    <string name="error_report_privacy">הדיווח יישלח לשירות הדיווחים של אוצריא. יישלחו כתובת הדוא״ל, שם הספר, המקור, המיקום, הקטע המוצג ותיאור השגיאה. לא יישלח נתיב מקומי במחשב.</string>
+    <string name="error_report_send">שלח דיווח</string>
+    <string name="error_report_cancel">ביטול</string>
+    <string name="error_report_sending">שולח את הדיווח…</string>
+    <string name="error_report_success">הדיווח התקבל בהצלחה. תודה!</string>
+    <string name="error_report_failure">לא הצלחנו לשלוח את הדיווח. אפשר לנסות שוב מאוחר יותר.</string>
+    <string name="error_report_invalid_email">יש להזין כתובת דוא״ל תקינה.</string>
+    <string name="error_report_missing_details">יש לתאר את השגיאה או את התיקון הרצוי.</string>
 
     <!-- Notes pane -->
     <string name="notes_pane">הערות</string>

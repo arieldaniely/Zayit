@@ -48,6 +48,7 @@ import androidx.compose.ui.zIndex
 import io.github.kdroidfilter.seforim.htmlparser.buildAnnotatedFromHtml
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CustomToggleableChip
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
+import io.github.kdroidfilter.seforimapp.core.presentation.components.verticalEdgeFade
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.text.highlightAnnotatedWithCurrent
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
@@ -521,7 +522,7 @@ private fun SearchResultContentMvi(
     Box(modifier = modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 // Top persistent search toolbar
@@ -636,7 +637,14 @@ private fun SearchResultContentMvi(
                         Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(
                                 state = listState,
-                                modifier = Modifier.fillMaxSize().padding(start = 32.dp, end = 24.dp),
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                                        .padding(start = 18.dp, end = 14.dp)
+                                        .verticalEdgeFade(
+                                            showTop = listState.canScrollBackward,
+                                            showBottom = listState.canScrollForward,
+                                        ),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 // One card per book group; primary line's id is unique per group

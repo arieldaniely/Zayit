@@ -45,6 +45,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CustomToggleableChip
+import io.github.kdroidfilter.seforimapp.core.presentation.components.verticalEdgeFade
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -268,7 +269,7 @@ private fun HomeBody(
         scrollState = listState as ScrollableState,
     ) {
         Box(
-            modifier = Modifier.padding(top = 56.dp).fillMaxSize().padding(8.dp),
+            modifier = Modifier.padding(top = 48.dp).fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             // Keep state outside LazyColumn so it persists across item recompositions
@@ -348,7 +349,13 @@ private fun HomeBody(
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalEdgeFade(
+                            showTop = listState.canScrollBackward,
+                            showBottom = listState.canScrollForward,
+                        ),
             ) {
                 item {
                     BoxWithConstraints(

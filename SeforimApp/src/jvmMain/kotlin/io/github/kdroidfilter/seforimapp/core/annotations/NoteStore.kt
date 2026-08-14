@@ -34,6 +34,13 @@ data class UserNote(
     val updatedAt: Long = 0L,
 )
 
+/** A note together with the book it belongs to, for the library-wide notes browser. */
+@Stable
+data class BookUserNote(
+    val bookId: Long,
+    val note: UserNote,
+)
+
 /**
  * Persists position-based notes in the local user database and exposes them as a per-book
  * in-memory cache for the render hot path. Mirrors [HighlightStore]: reads hit SQLite once per
@@ -47,7 +54,11 @@ class NoteStore(
     private val _notesByBook = MutableStateFlow<Map<Long, List<UserNote>>>(emptyMap())
     val notesByBook: StateFlow<Map<Long, List<UserNote>>> = _notesByBook.asStateFlow()
 
+    private val _allNotes = MutableStateFlow<List<BookUserNote>>(emptyList())
+    val allNotes: StateFlow<List<BookUserNote>> = _allNotes.asStateFlow()
+
     private val loadedBooks = mutableSetOf<Long>()
+    private var allNotesLoaded = false
 
     /** Loads a book's notes into the cache once. Subsequent calls are no-ops. */
     suspend fun loadBook(bookId: Long): Unit =
@@ -55,6 +66,13 @@ class NoteStore(
             if (bookId in loadedBooks) return@withContext
             refreshBook(bookId)
             loadedBooks += bookId
+        }
+
+    /** Loads every saved note for the home-screen notes browser. */
+    suspend fun loadAll(): Unit =
+        withContext(Dispatchers.IO) {
+            refreshAll()
+            allNotesLoaded = true
         }
 
     /** Notes of a single line; safe to call from composition (cache lookup). */
@@ -93,6 +111,7 @@ class NoteStore(
                     queries.lastInsertRowId().executeAsOne()
                 }
             refreshBook(bookId)
+            refreshAllIfLoaded()
             id
         }
 
@@ -110,6 +129,7 @@ class NoteStore(
                 queries.updateNote(note = note, updatedAt = timestamp, id = noteId)
             }
             refreshBook(bookId)
+            refreshAllIfLoaded()
         }
 
     /** Removes a note. */
@@ -120,6 +140,7 @@ class NoteStore(
         withContext(Dispatchers.IO) {
             queries.deleteById(noteId)
             refreshBook(bookId)
+            refreshAllIfLoaded()
         }
 
     /** Re-reads the book's notes from SQLite and replaces the cache entry. */
@@ -138,5 +159,29 @@ class NoteStore(
                 )
             }
         _notesByBook.update { it + (bookId to list) }
+    }
+
+    private fun refreshAllIfLoaded() {
+        if (allNotesLoaded) refreshAll()
+    }
+
+    private fun refreshAll() {
+        _allNotes.value =
+            queries.selectAll().executeAsList().map { row ->
+                BookUserNote(
+                    bookId = row.bookId,
+                    note =
+                        UserNote(
+                            id = row.id,
+                            lineId = row.lineId,
+                            startOffset = row.startOffset.toInt(),
+                            endOffset = row.endOffset.toInt(),
+                            note = row.note,
+                            quote = row.quote,
+                            createdAt = row.createdAt,
+                            updatedAt = row.updatedAt,
+                        ),
+                )
+            }
     }
 }

@@ -182,6 +182,14 @@
     <!-- Notes pane -->
     <string name="notes_pane">הערות</string>
     <string name="notes_pane_tooltip">ההערות שלי על הספר</string>
+    <string name="all_notes_button">הערות</string>
+    <string name="all_notes_title">כל ההערות שלי</string>
+    <string name="all_notes_sort_book">לפי ספר</string>
+    <string name="all_notes_sort_time">לפי זמן שמירה</string>
+    <string name="all_notes_empty">עדיין לא שמרת הערות</string>
+    <string name="all_notes_open">פתח בספר</string>
+    <string name="all_notes_unknown_book">ספר לא זמין</string>
+    <string name="all_notes_close">סגור</string>
     <string name="note_body_placeholder">כתוב הערה...</string>
     <string name="no_notes_saved">אין הערות שמורות על קטע זה</string>
     <string name="no_notes_for_selection">אין הערות על השורות שנבחרו. בחר טקסט ולחץ "הוסף הערה".</string>

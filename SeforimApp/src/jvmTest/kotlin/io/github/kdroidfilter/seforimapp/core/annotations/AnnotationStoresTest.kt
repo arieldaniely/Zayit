@@ -124,6 +124,23 @@ class AnnotationStoresTest {
             assertTrue(reloaded.notesForLine(OTHER_BOOK, 42).isEmpty())
         }
 
+    @Test
+    fun all_notes_load_across_books_and_stay_current() =
+        runTest {
+            val store = NoteStore(db)
+            store.addNote(BOOK, 42, 0, 4, "older", timestamp = 1)
+            store.addNote(OTHER_BOOK, 84, 2, 7, "newer", timestamp = 2)
+
+            store.loadAll()
+            assertEquals(listOf(OTHER_BOOK, BOOK), store.allNotes.value.map { it.bookId })
+
+            val older = store.allNotes.value.single { it.bookId == BOOK }
+            store.updateNote(BOOK, older.note.id, "edited", timestamp = 3)
+            val updated = store.allNotes.value.first()
+            assertEquals("edited", updated.note.note)
+            assertEquals(BOOK, updated.bookId)
+        }
+
     private companion object {
         const val BOOK = 1L
         const val OTHER_BOOK = 2L

@@ -2,7 +2,6 @@ package io.github.kdroidfilter.seforimapp.framework.database
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryCatalogMerger
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.errorln
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
@@ -14,15 +13,10 @@ import io.github.kdroidfilter.seforimlibrary.core.models.extractCategoryChildren
 import io.github.kdroidfilter.seforimlibrary.core.models.extractRootCategories
 import io.github.kdroidfilter.seforimlibrary.dao.CatalogLoader
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
-
-private const val DEFAULT_DB_NAME = "seforim.db"
 
 /**
  * Cached database path. Resolved on first access and kept for the runtime, but can
@@ -57,26 +51,12 @@ fun resetDatabasePathCache() {
 }
 
 private fun resolveDatabasePath(): String {
-    // 1) Prefer an explicit environment variable override if provided
-    val envDbPath = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
-
-    // 2) Try AppSettings (but fix if it points to lexical.db which is wrong)
+    // Fix legacy settings that accidentally pointed at lexical.db.
     val rawSettingsPath = AppSettings.getDatabasePath()
-    val settingsPath =
-        if (rawSettingsPath?.endsWith("lexical.db", ignoreCase = true) == true) {
-            // Fix incorrect path by clearing it
-            AppSettings.setDatabasePath(null)
-            null
-        } else {
-            rawSettingsPath
-        }
-
-    // 3) Fallback to default location
-    val defaultDbPath = File(portableDatabasesDirPath(), DEFAULT_DB_NAME).absolutePath
-
-    val portableSettingsPath =
-        settingsPath?.takeIf { !PortablePaths.isPortable || File(it).absoluteFile.startsWith(PortablePaths.dataDir) }
-    val dbPath = envDbPath ?: portableSettingsPath ?: defaultDbPath
+    if (rawSettingsPath?.endsWith("lexical.db", ignoreCase = true) == true) {
+        AppSettings.setDatabasePath(null)
+    }
+    val dbPath = requestedDatabaseFile().absolutePath
 
     infoln { "[DatabaseUtils] Database path resolved: $dbPath (exists: ${File(dbPath).exists()})" }
 
@@ -247,6 +227,3 @@ object CatalogCache {
      */
     fun isCatalogAvailable(): Boolean = getCatalog() != null
 }
-
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

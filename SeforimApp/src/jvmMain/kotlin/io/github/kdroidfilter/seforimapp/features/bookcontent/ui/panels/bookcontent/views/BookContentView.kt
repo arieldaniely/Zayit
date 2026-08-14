@@ -290,7 +290,7 @@ fun BookContentView(
     // macOS fallback: some Hebrew fonts have no Bold face; slightly scale bold text for visibility
     val boldScaleForPlatform =
         remember(bookFontCode) {
-            val lacksBold = bookFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = bookFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 

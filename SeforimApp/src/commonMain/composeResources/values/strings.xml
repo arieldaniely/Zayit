@@ -26,7 +26,7 @@
     <string name="info_tooltip">הצג מידע</string>
     <string name="settings">הגדרות</string>
     <string name="settings_reset_app">איפוס האפליקציה</string>
-    <string name="settings_reset_warning">פעולה זו תמחק את כל הנתונים שלך: מסד הנתונים, אינדקס החיפוש, הסימניות וכל ההגדרות. האפליקציה תופעל מחדש כמו בהתקנה ראשונה.</string>
+    <string name="settings_reset_warning">פעולה זו תמחק את ההגדרות והנתונים האישיים של זיתא ותפעיל אותה מחדש כמו בהתקנה הראשונה. מסד שמנוהל בתיקייה של זיתא יימחק; מסד משותף שנבחר מתיקייה חיצונית יישאר במקומו.</string>
     <string name="settings_reset_confirm">האם אתה בטוח?</string>
     <string name="settings_reset_confirm_yes">כן, אפס</string>
     <string name="settings_reset_confirm_no">ביטול</string>
@@ -133,7 +133,20 @@
     <string name="data_import_success">הנתונים יובאו בהצלחה. האפליקציה מופעלת מחדש…</string>
     <string name="data_export_error">ייצוא הנתונים נכשל</string>
     <string name="data_import_error">ייבוא הנתונים נכשל</string>
-    <string name="data_reset_description">איפוס מלא של האפליקציה למצב ההתחלתי. פעולה זו תמחק את כל הנתונים שלך.</string>
+    <string name="data_reset_description">מחיקת ההגדרות והנתונים האישיים של זיתא. מסד שמנוהל בידי זיתא יימחק, אך מסד משותף בתיקייה חיצונית יישאר במקומו.</string>
+    <string name="database_location_title">תיקיית מסד הספרים</string>
+    <string name="database_location_description">אפשר להשתמש במסד שכבר הותקן בידי זית או זיתא, וכך לחסוך מקום ולהשתמש באותם ספרים בשתי התוכנות. לפני התקנה או עדכון של מסד משותף יש לסגור את התוכנה האחרת.</string>
+    <string name="database_location_current">התיקייה הנוכחית: %1$s</string>
+    <string name="database_location_selected">התיקייה שנבחרה: %1$s</string>
+    <string name="database_location_ready">נמצא מסד ספרים מתאים. זיתא תשתמש בו בלי להוריד עותק נוסף.</string>
+    <string name="database_location_update_required">נמצא מסד ספרים, אך הוא זקוק לעדכון כדי להתאים לגרסה זו. אפשר לעדכן אותו בתיקייה שנבחרה.</string>
+    <string name="database_location_missing">לא נמצא מסד ספרים בתיקייה. אפשר להתקין אותו כאן או לבחור תיקייה אחרת.</string>
+    <string name="database_location_invalid">לא ניתן להשתמש בתיקייה שנבחרה. יש לבחור תיקייה קיימת ונגישה.</string>
+    <string name="database_location_action_choose">בחירת תיקייה</string>
+    <string name="database_location_action_choose_again">בחירת תיקייה אחרת</string>
+    <string name="database_location_action_use">שימוש במסד הקיים</string>
+    <string name="database_location_action_install">התקנה בתיקייה זו</string>
+    <string name="database_location_action_update">עדכון בתיקייה זו</string>
     <string name="add_tab">הוסף לשונית</string>
     <string name="home">דף הבית</string>
     <string name="close_tab">סגור לשונית</string>
@@ -415,14 +428,14 @@
     <string name="previous_button">קודם</string>
     <!-- Init-->
     <string name="onboarding_init_welcome_title">ברוכים הבאים לזיתא!</string>
-    <string name="onboarding_init_welcome_subtitle">יישום מודרני ומהיר ללימוד התורה, המבוסס על פורק עצמאי של זית. זיתא אינה נוצרת, מופצת או נתמכת על ידי מפתחי זית.</string>
-    <string name="onboarding_setup_guide">נלווה אתכם שלב אחר שלב כדי להגדיר את היישום כראוי.</string>
+    <string name="onboarding_init_welcome_subtitle">ספרייה נוחה ומהירה לקריאה, ללימוד ולחיפוש בספרי הקודש.</string>
+    <string name="onboarding_setup_guide">בכמה צעדים קצרים נבחר את מקום הספרים ונתאים את זיתא עבורך.</string>
     <string name="onboarding_init_start">התחל</string>
 
     <!-- Licence -->
     <!-- Intro / provenance -->
     <string name="license_screen_title">רישיון ותנאי שימוש</string>
-    <string name="license_accept_checkbox">אני מאשר את תנאי הרישיון ושימוש</string>
+    <string name="license_accept_checkbox">קראתי ואני מסכים לתנאי הרישיון והשימוש</string>
     <string name="next_button">המשך</string>
 
     <!-- Installation chooser -->
@@ -557,9 +570,9 @@
 
     <!-- Settings > App Info (General Settings Header) -->
     <string name="settings_info_app_version">גרסה: %1$s</string>
-    <string name="settings_info_fork_notice">זיתא היא פורק עצמאי של זית ואינה מופצת או נתמכת על ידי מפתחי זית.</string>
-    <string name="settings_info_license">יישום זה הוא קוד פתוח תחת רישיון AGPL-3.0</string>
-    <string name="settings_info_license_usage">קוד המקור המלא ושינויי הגרסה זמינים ב־GitHub בהתאם לתנאי הרישיון.</string>
+    <string name="settings_info_fork_notice">זיתא היא מהדורה עצמאית המבוססת על זית. הפיתוח, ההפצה והתמיכה של זיתא נעשים בנפרד ממיזם זית.</string>
+    <string name="settings_info_license">זיתא היא תוכנה חופשית בקוד פתוח, ברישיון AGPL-3.0.</string>
+    <string name="settings_info_license_usage">אפשר לעיין בקוד המקור, לדווח על תקלות ולעקוב אחר השינויים במאגר GitHub של זיתא.</string>
 
     <!-- App Update -->
     <string name="update_available_banner">גרסה %1$s זמינה להורדה</string>

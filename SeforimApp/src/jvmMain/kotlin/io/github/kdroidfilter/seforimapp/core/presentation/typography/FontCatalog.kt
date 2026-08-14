@@ -169,7 +169,16 @@ object FontCatalog {
     fun familyFor(code: String): FontFamily =
         when (code) {
             "notoserifhebrew" -> FontFamily(Font(resource = Res.font.notoserifhebrew, weight = FontWeight.Normal))
-            "notorashihebrew" -> FontFamily(Font(resource = Res.font.notorashihebrew, weight = FontWeight.Normal))
+            "notorashihebrew" ->
+                FontFamily(
+                    // This is the variable-weight Noto Rashi file (100–900). Register the
+                    // weights used by the reader explicitly so Compose selects real outlines
+                    // instead of treating the whole family as Regular.
+                    Font(resource = Res.font.notorashihebrew, weight = FontWeight.Normal),
+                    Font(resource = Res.font.notorashihebrew, weight = FontWeight.Medium),
+                    Font(resource = Res.font.notorashihebrew, weight = FontWeight.SemiBold),
+                    Font(resource = Res.font.notorashihebrew, weight = FontWeight.Bold),
+                )
             "mekorotrashi", "rashiamiti" ->
                 FontFamily(Font(resource = Res.font.Mekorot_Rashi, weight = FontWeight.Normal))
             "frankruhllibre" -> FontFamily(Font(resource = Res.font.frankruhllibre, weight = FontWeight.Normal))

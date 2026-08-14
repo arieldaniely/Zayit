@@ -833,7 +833,7 @@ private fun rememberSnippetDisplay(
     // On macOS, some Hebrew fonts lack bold faces; scale slightly to keep emphasis visible.
     val boldScaleForPlatform =
         remember(bookFontCode) {
-            val lacksBold = bookFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = bookFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
     val boldColor = giltColor()

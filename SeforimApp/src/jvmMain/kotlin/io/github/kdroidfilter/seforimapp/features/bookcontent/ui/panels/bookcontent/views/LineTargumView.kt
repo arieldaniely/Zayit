@@ -146,7 +146,7 @@ private fun SingleLineTargumView(
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
     val boldScaleForPlatform =
         remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 
@@ -722,7 +722,7 @@ private fun MultiLineTargumView(
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
     val boldScaleForPlatform =
         remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 

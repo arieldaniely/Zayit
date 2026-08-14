@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.diskspace
 
 import dev.nucleusframework.systeminfo.SystemInfo
+import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -11,6 +12,18 @@ class AvailableDiskSpaceUseCase {
      */
     suspend fun getDiskSpaceInfo(): DiskSpaceInfo =
         withContext(Dispatchers.IO) {
+            val targetDisk =
+                generateSequence(databaseInstallDirectory().absoluteFile) { it.parentFile }
+                    .firstOrNull { it.exists() }
+            if (targetDisk != null && targetDisk.totalSpace > 0L) {
+                return@withContext DiskSpaceInfo(
+                    availableBytes = targetDisk.usableSpace,
+                    totalBytes = targetDisk.totalSpace,
+                )
+            }
+
+            // Defensive fallback for unusual virtual file systems where java.io.File cannot
+            // report capacity.
             val disks = SystemInfo.disks()
 
             val systemDir =

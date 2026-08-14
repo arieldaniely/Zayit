@@ -21,8 +21,6 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AccentMark
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
-import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.Checkbox
@@ -43,22 +41,7 @@ fun LicenceScreen(
     }
     LicenceView(
         onNext = {
-            // Check if DB exists and has compatible version
-            val dbExists = runCatching { getDatabasePath() }.isSuccess
-            val dbVersionCompatible =
-                if (dbExists) {
-                    DatabaseVersionManager.isDatabaseVersionCompatible()
-                } else {
-                    false
-                }
-
-            if (dbExists && dbVersionCompatible) {
-                // DB exists and version is compatible - skip install flow and go to user info
-                navController.navigate(OnBoardingDestination.PdfLibrarySetupScreen)
-            } else {
-                // DB doesn't exist or version is incompatible - continue with installation flow
-                navController.navigate(OnBoardingDestination.AvailableDiskSpaceScreen)
-            }
+            navController.navigate(OnBoardingDestination.DatabaseLocationScreen)
         },
         onPrevious = { navController.navigateUp() },
     )

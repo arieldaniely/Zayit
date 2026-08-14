@@ -47,9 +47,9 @@ class DatabaseCleanupUseCase {
         withContext(Dispatchers.IO) {
             val currentDbPath = AppSettings.getDatabasePath()
 
-            // The old database is going away: forget the recorded path and the cached
-            // resolution so the app re-resolves the freshly installed location later.
-            AppSettings.setDatabasePath(null)
+            // Keep the recorded location: the fresh database must be downloaded back into
+            // the folder the user selected. Only invalidate the runtime path cache while the
+            // old file is removed.
             resetDatabasePathCache()
 
             // Candidate directories: the real DB directory (may be non-default for
@@ -96,14 +96,17 @@ class DatabaseCleanupUseCase {
     /** True for files this app installs alongside the database and must remove on reinstall. */
     private fun isDatabaseArtifact(file: File): Boolean {
         val name = file.name.lowercase()
-        return name.endsWith(".db") ||
-            // seforim.db, lexical.db
-            name.endsWith(".db-wal") ||
-            name.endsWith(".db-shm") ||
-            // SQLite WAL/SHM sidecars
-            name.endsWith(".lucene") ||
-            name.contains(".lookup.lucene") ||
-            // Lucene index dirs
+        return name in
+            setOf(
+                "seforim.db",
+                "lexical.db",
+                "seforim.db-wal",
+                "seforim.db-shm",
+                "lexical.db-wal",
+                "lexical.db-shm",
+                "seforim.db.lucene",
+                "seforim.db.lookup.lucene",
+            ) ||
             name == "catalog.pb" ||
             // precomputed catalog (previously mis-targeted as ".proto")
             name == "release_info.txt" ||

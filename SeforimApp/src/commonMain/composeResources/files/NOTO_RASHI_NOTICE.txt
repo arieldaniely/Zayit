@@ -1,0 +1,9 @@
+Noto Rashi Hebrew
+=================
+
+Copyright 2020 The Noto Project Authors (https://github.com/notofonts/hebrew)
+Source mirror: https://github.com/aharonium/fonts/tree/master/Fonts/Hebrew%20Letters%20with%20Vowels%20and%20Cantillation/Google%20%28OFL%29/NotoRashiHebrew
+License: SIL Open Font License, Version 1.1
+License text: NOTO_RASHI_OFL.txt
+
+The bundled notorashihebrew.ttf file is the variable-weight font covering weights 100–900.

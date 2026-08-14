@@ -21,22 +21,21 @@ object DatabaseVersionManager {
      *
      * @return Database version string (yyyyMMddHHmmss) or null if not found
      */
-    fun getCurrentDatabaseVersion(): String? {
-        return try {
-            val dbPath = getDatabasePath()
-            val dbFile = File(dbPath)
-
-            // Look for release_info.txt in the same directory as the database
-            val versionFile = File(dbFile.parentFile, "release_info.txt")
-
-            if (!versionFile.exists()) {
-                return null
-            }
-
-            versionFile.readText().trim()
+    fun getCurrentDatabaseVersion(): String? =
+        try {
+            getDatabaseVersion(File(getDatabasePath()))
         } catch (e: Exception) {
             null
         }
+
+    /** Reads the version marker alongside a database without changing the configured location. */
+    fun getDatabaseVersion(databaseFile: File): String? {
+        val versionFile = File(databaseFile.absoluteFile.parentFile, "release_info.txt")
+        return versionFile
+            .takeIf { it.isFile }
+            ?.readText()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     /**
@@ -46,6 +45,11 @@ object DatabaseVersionManager {
      */
     fun isDatabaseVersionCompatible(): Boolean {
         val currentVersion = getCurrentDatabaseVersion() ?: return false
+        return isVersionCompatible(currentVersion, MINIMUM_REQUIRED_VERSION)
+    }
+
+    fun isDatabaseVersionCompatible(databaseFile: File): Boolean {
+        val currentVersion = runCatching { getDatabaseVersion(databaseFile) }.getOrNull() ?: return false
         return isVersionCompatible(currentVersion, MINIMUM_REQUIRED_VERSION)
     }
 

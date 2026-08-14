@@ -24,7 +24,9 @@ import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
+import io.github.kdroidfilter.seforimapp.features.settings.data.SelectedDatabaseStatus
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
@@ -56,6 +58,19 @@ import seforimapp.seforimapp.generated.resources.data_import_success
 import seforimapp.seforimapp.generated.resources.data_import_title
 import seforimapp.seforimapp.generated.resources.data_importing
 import seforimapp.seforimapp.generated.resources.data_reset_description
+import seforimapp.seforimapp.generated.resources.database_location_action_choose
+import seforimapp.seforimapp.generated.resources.database_location_action_choose_again
+import seforimapp.seforimapp.generated.resources.database_location_action_install
+import seforimapp.seforimapp.generated.resources.database_location_action_update
+import seforimapp.seforimapp.generated.resources.database_location_action_use
+import seforimapp.seforimapp.generated.resources.database_location_current
+import seforimapp.seforimapp.generated.resources.database_location_description
+import seforimapp.seforimapp.generated.resources.database_location_invalid
+import seforimapp.seforimapp.generated.resources.database_location_missing
+import seforimapp.seforimapp.generated.resources.database_location_ready
+import seforimapp.seforimapp.generated.resources.database_location_selected
+import seforimapp.seforimapp.generated.resources.database_location_title
+import seforimapp.seforimapp.generated.resources.database_location_update_required
 import seforimapp.seforimapp.generated.resources.pdf_download_library
 import seforimapp.seforimapp.generated.resources.pdf_import_archive
 import seforimapp.seforimapp.generated.resources.pdf_install_failed
@@ -65,6 +80,7 @@ import seforimapp.seforimapp.generated.resources.pdf_remove_failed
 import seforimapp.seforimapp.generated.resources.pdf_remove_library
 import seforimapp.seforimapp.generated.resources.pdf_remove_success
 import seforimapp.seforimapp.generated.resources.pdf_removing_library
+import seforimapp.seforimapp.generated.resources.settings_cancel
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
@@ -90,6 +106,18 @@ fun DataSettingsScreen() {
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            DatabaseLocationCard(
+                state = state,
+                onChoose = {
+                    scope.launch {
+                        val directory = withContext(Dispatchers.IO) { FileKit.openDirectoryPicker() }
+                        directory?.let { viewModel.inspectBooksDatabaseDirectory(File(it.path)) }
+                    }
+                },
+                onApply = viewModel::useSelectedBooksDatabaseDirectory,
+                onClearSelection = viewModel::clearSelectedBooksDatabaseDirectory,
+            )
+
             DataActionCard(
                 title = Res.string.data_export_title,
                 description = Res.string.data_export_description,
@@ -155,6 +183,94 @@ fun DataSettingsScreen() {
                 resetDone = state.resetDone,
                 onReset = { viewModel.resetApp() },
             )
+        }
+    }
+}
+
+@Composable
+private fun DatabaseLocationCard(
+    state: DataSettingsState,
+    onChoose: () -> Unit,
+    onApply: () -> Unit,
+    onClearSelection: () -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = stringResource(Res.string.database_location_title), fontSize = 15.sp)
+        Text(
+            text = stringResource(Res.string.database_location_description),
+            fontSize = 12.sp,
+            color = JewelTheme.globalColors.text.info,
+        )
+        Text(
+            text = stringResource(Res.string.database_location_current, state.databaseDirectory),
+            fontSize = 12.sp,
+        )
+        state.selectedDatabaseDirectory?.let { selectedDirectory ->
+            Text(
+                text = stringResource(Res.string.database_location_selected, selectedDirectory),
+                fontSize = 12.sp,
+            )
+        }
+
+        state.selectedDatabaseStatus?.let { status ->
+            val message =
+                when (status) {
+                    SelectedDatabaseStatus.READY -> Res.string.database_location_ready
+                    SelectedDatabaseStatus.UPDATE_REQUIRED -> Res.string.database_location_update_required
+                    SelectedDatabaseStatus.NOT_FOUND -> Res.string.database_location_missing
+                    SelectedDatabaseStatus.INVALID_DIRECTORY -> Res.string.database_location_invalid
+                }
+            if (status == SelectedDatabaseStatus.READY) {
+                InlineSuccessBanner(text = stringResource(message), modifier = Modifier.fillMaxWidth())
+            } else {
+                InlineErrorBanner(text = stringResource(message), modifier = Modifier.fillMaxWidth())
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onChoose) {
+                Text(
+                    text =
+                        stringResource(
+                            if (state.selectedDatabaseStatus == null) {
+                                Res.string.database_location_action_choose
+                            } else {
+                                Res.string.database_location_action_choose_again
+                            },
+                        ),
+                )
+            }
+            state.selectedDatabaseStatus?.let { status ->
+                if (status != SelectedDatabaseStatus.INVALID_DIRECTORY) {
+                    DefaultButton(onClick = onApply) {
+                        Text(
+                            text =
+                                stringResource(
+                                    when (status) {
+                                        SelectedDatabaseStatus.READY -> Res.string.database_location_action_use
+                                        SelectedDatabaseStatus.UPDATE_REQUIRED -> Res.string.database_location_action_update
+                                        SelectedDatabaseStatus.NOT_FOUND -> Res.string.database_location_action_install
+                                        SelectedDatabaseStatus.INVALID_DIRECTORY ->
+                                            Res.string.database_location_action_choose_again
+                                    },
+                                ),
+                        )
+                    }
+                    OutlinedButton(onClick = onClearSelection) {
+                        Text(text = stringResource(Res.string.settings_cancel))
+                    }
+                }
+            }
         }
     }
 }

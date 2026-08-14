@@ -1,11 +1,8 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.download
 
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
+import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import io.github.kdroidfilter.seforimapp.network.HttpsConnectionFactory
 import io.github.kdroidfilter.seforimapp.releasefetcher.github.GitHubReleaseFetcher
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -40,7 +37,7 @@ class DownloadUseCase(
                     .sortedBy { it.name }
             val singleAsset = allAssets.firstOrNull { it.name.endsWith(".tar.zst", true) && !it.name.contains(".part") }
 
-            val dbDir = File(portableDatabasesDirPath()).apply { mkdirs() }
+            val dbDir = databaseInstallDirectory().apply { mkdirs() }
 
             // Keep running stats for a smoother, more stable UX
             var lastBytes = 0L
@@ -170,6 +167,3 @@ class DownloadUseCase(
         onBytes(dest.length(), dest.length().takeIf { it > 0L })
     }
 }
-
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

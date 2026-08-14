@@ -2,10 +2,7 @@ package io.github.kdroidfilter.seforimapp.features.onboarding.extract
 
 import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
+import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -23,7 +20,7 @@ class ExtractUseCase {
         onProgress: (Float) -> Unit,
     ): String =
         withContext(Dispatchers.Default) {
-            val dbDir = File(portableDatabasesDirPath()).apply { mkdirs() }
+            val dbDir = databaseInstallDirectory().apply { mkdirs() }
             val source = File(sourcePath)
             require(source.exists()) { "Selected file not found" }
 
@@ -308,6 +305,3 @@ class ExtractUseCase {
         }
     }
 }
-
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

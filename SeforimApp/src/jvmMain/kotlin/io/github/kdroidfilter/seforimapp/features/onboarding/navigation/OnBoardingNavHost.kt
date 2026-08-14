@@ -13,6 +13,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AnimatedHorizontalProgressBar
 import io.github.kdroidfilter.seforimapp.core.presentation.navigation.noAnimatedComposable
+import io.github.kdroidfilter.seforimapp.features.onboarding.databaselocation.DatabaseLocationScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.diskspace.AvailableDiskSpaceScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.download.DownloadScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.extract.ExtractScreen
@@ -42,6 +43,9 @@ fun OnBoardingNavHost(navController: NavHostController) {
             }
             noAnimatedComposable<OnBoardingDestination.LicenceScreen> {
                 LicenceScreen(navController)
+            }
+            noAnimatedComposable<OnBoardingDestination.DatabaseLocationScreen> {
+                DatabaseLocationScreen(navController)
             }
             noAnimatedComposable<OnBoardingDestination.AvailableDiskSpaceScreen> {
                 AvailableDiskSpaceScreen(navController)

@@ -1196,7 +1196,7 @@ private fun rememberCommentariesLayoutConfig(
     val maxCommentatorsPerPage by AppSettings.maxCommentatorsPerPageFlow.collectAsState()
     val boldScaleForPlatform =
         remember(commentaryFontCode) {
-            val lacksBold = commentaryFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = commentaryFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 

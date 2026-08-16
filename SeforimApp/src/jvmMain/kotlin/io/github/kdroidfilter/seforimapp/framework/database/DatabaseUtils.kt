@@ -58,7 +58,9 @@ fun resetDatabasePathCache() {
 
 private fun resolveDatabasePath(): String {
     // 1) Prefer an explicit environment variable override if provided
-    val envDbPath = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
+    val envDbPath =
+        (System.getenv("SEFORIMAPP_DATABASE_PATH") ?: System.getProperty("SEFORIMAPP_DATABASE_PATH"))
+            ?.takeIf { it.isNotBlank() }
 
     // 2) Try AppSettings (but fix if it points to lexical.db which is wrong)
     val rawSettingsPath = AppSettings.getDatabasePath()

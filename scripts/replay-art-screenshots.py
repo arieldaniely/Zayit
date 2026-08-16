@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import subprocess
 import sys
@@ -21,6 +22,16 @@ TARGET_HEIGHT = 811
 SOURCE_WIDTH = TARGET_WIDTH
 SOURCE_HEIGHT = TARGET_HEIGHT
 EXPECTED_DENSITY = 1.0
+DEFAULT_WINDOWS_DPI = 96
+CONTROL_GLYPH_THRESHOLD = 25
+CONTROL_GLYPH_PATCH_TOP = 8
+CONTROL_GLYPH_PATCH_HEIGHT = 20
+CONTROL_GLYPH_PATCH_HALF_WIDTH = 8
+WINDOWS_11_CONTROL_GLYPHS = (
+    ("minimize", 115, (4, 10, 14, 11), 10, 10),
+    ("maximize", 69, (4, 5, 14, 15), 36, 36),
+    ("close", 23, (4, 5, 14, 15), 18, 60),
+)
 STEMS = (
     "HOME", "DB-SEARCH-SIMPLE", "DB-SEARCH-ADVANCED", "BOOK-SEARCH",
     "TOC-BOOK-SEARCH", "INBOOK-SEARCH", "PIRUSHIM", "PIRUSHIM-TARGUMIM",
@@ -82,6 +93,65 @@ def require_source_frame(capture_tools, hwnd: int):
     return frame
 
 
+def require_windows_11_control_pane(path: Path) -> None:
+    """Verify the captured pixels contain the deterministic Windows 11 glyphs."""
+    image = Image.open(path).convert("L")
+    for name, center_from_right, expected_bbox, minimum_pixels, maximum_pixels in WINDOWS_11_CONTROL_GLYPHS:
+        center_x = image.width - center_from_right
+        patch = image.crop(
+            (
+                center_x - CONTROL_GLYPH_PATCH_HALF_WIDTH,
+                CONTROL_GLYPH_PATCH_TOP,
+                center_x + CONTROL_GLYPH_PATCH_HALF_WIDTH,
+                CONTROL_GLYPH_PATCH_TOP + CONTROL_GLYPH_PATCH_HEIGHT,
+            ),
+        )
+        background = patch.getpixel((0, 0))
+        glyph_pixels = [
+            (x, y)
+            for y in range(patch.height)
+            for x in range(patch.width)
+            if abs(patch.getpixel((x, y)) - background) > CONTROL_GLYPH_THRESHOLD
+        ]
+        if not glyph_pixels:
+            raise RuntimeError(f"Missing Windows 11 {name} glyph in {path.name}")
+        actual_bbox = (
+            min(x for x, _y in glyph_pixels),
+            min(y for _x, y in glyph_pixels),
+            max(x for x, _y in glyph_pixels) + 1,
+            max(y for _x, y in glyph_pixels) + 1,
+        )
+        if actual_bbox != expected_bbox or not minimum_pixels <= len(glyph_pixels) <= maximum_pixels:
+            raise RuntimeError(
+                f"Unexpected Windows caption rendering in {path.name}: {name} glyph "
+                f"bounds={actual_bbox}, pixels={len(glyph_pixels)}",
+            )
+
+
+def primary_display_scale(capture_tools) -> float:
+    dpi = int(capture_tools.user32.GetDpiForSystem())
+    if dpi <= 0:
+        raise RuntimeError(f"Windows returned an invalid system DPI: {dpi}")
+    return dpi / DEFAULT_WINDOWS_DPI
+
+
+def terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
+    """Stop Gradle and the JavaExec app it owns, including on a failed replay."""
+    if process.poll() is not None:
+        return
+    subprocess.run(
+        ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    try:
+        process.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        process.kill()
+
+
 def main() -> int:
     if os.name != "nt":
         raise SystemExit("This replay tool requires Windows so screenshots contain real Windows controls.")
@@ -97,6 +167,9 @@ def main() -> int:
     capture_tools = load_windows_capture_module(repo)
     capture_tools.enable_dpi_awareness()
     display_width, display_height = capture_tools.primary_display_size()
+    display_scale = primary_display_scale(capture_tools)
+    window_width_dp = math.ceil(SOURCE_WIDTH / display_scale)
+    window_height_dp = math.ceil(SOURCE_HEIGHT / display_scale)
     if display_width < SOURCE_WIDTH or display_height < SOURCE_HEIGHT:
         raise RuntimeError(
             f"Windows display is {display_width}x{display_height}; "
@@ -106,15 +179,35 @@ def main() -> int:
     environment = os.environ.copy()
     environment.update({
         "ZAYIT_SCREENSHOT_BRIDGE_DIR": str(bridge),
-        "ZAYIT_SCREENSHOT_LOGICAL_WIDTH": str(SOURCE_WIDTH),
-        "ZAYIT_SCREENSHOT_LOGICAL_HEIGHT": str(SOURCE_HEIGHT),
+        "ZAYIT_SCREENSHOT_LOGICAL_WIDTH": str(window_width_dp),
+        "ZAYIT_SCREENSHOT_LOGICAL_HEIGHT": str(window_height_dp),
+        # Keep the native HWND size independent of the runner's display-scale setting.
+        # Compose content is also rendered at density 1 below, so both layers stay 1:1.
+        "J2D_UISCALE": str(EXPECTED_DENSITY),
         "SEFORIMAPP_PORTABLE": "1",
         "SEFORIMAPP_PORTABLE_DIR": str(profile),
     })
+    gradle_properties = [
+        f"-PzayitScreenshotBridgeDir={bridge}",
+        f"-PzayitScreenshotLogicalWidth={window_width_dp}",
+        f"-PzayitScreenshotLogicalHeight={window_height_dp}",
+        f"-PzayitScreenshotPortableDir={profile}",
+    ]
+    database_path = environment.get("SEFORIMAPP_DATABASE_PATH")
+    if database_path:
+        gradle_properties.append(f"-PzayitScreenshotDatabasePath={database_path}")
     log_path = output / "zayit-run.log"
+    existing_hwnds = {hwnd for hwnd, _title in capture_tools.matching_windows(args.window_title)}
     with log_path.open("wb") as log:
         process = subprocess.Popen(
-            [str(repo / "gradlew.bat"), ":SeforimApp:run", "--no-daemon", "--console=plain"],
+            [
+                str(repo / "gradlew.bat"),
+                ":SeforimApp:run",
+                "--no-daemon",
+                "--no-configuration-cache",
+                "--console=plain",
+                *gradle_properties,
+            ],
             cwd=repo,
             env=environment,
             stdout=log,
@@ -122,7 +215,13 @@ def main() -> int:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         try:
-            hwnd = capture_tools.wait_for_window(args.window_title, 600.0, process, log_path)
+            hwnd = capture_tools.wait_for_window(
+                args.window_title,
+                600.0,
+                process,
+                log_path,
+                exclude_hwnds=existing_hwnds,
+            )
             bridge_command(bridge, "verify-platform", "windows")
             bridge_command(bridge, "verify-density", str(EXPECTED_DENSITY))
             native_frame = require_source_frame(capture_tools, hwnd)
@@ -161,18 +260,23 @@ def main() -> int:
                         bridge_command(bridge, "clipboard-demo", "open")
                     time.sleep(args.settle)
                     name = f"{stem}-{theme}.png"
-                    digest, _frame = capture_tools.capture(hwnd, output / name)
+                    capture_path = output / name
+                    digest, _frame = capture_tools.capture(hwnd, capture_path)
+                    require_windows_11_control_pane(capture_path)
                     captures.append({"file": name, "sha256": digest})
                     print(f"captured {name}", flush=True)
 
             manifest = {
-                "version": 5,
+                "version": 6,
                 "platform": "windows",
                 "logicalSize": [TARGET_WIDTH, TARGET_HEIGHT],
                 "displaySize": [display_width, display_height],
+                "displayScale": display_scale,
+                "windowStateSizeDp": [window_width_dp, window_height_dp],
                 "sourceSize": [native_frame.width, native_frame.height],
                 "targetSize": [TARGET_WIDTH, TARGET_HEIGHT],
                 "uiScale": EXPECTED_DENSITY,
+                "windowControls": "windows-11-compose-validated",
                 "captures": captures,
             }
             (output / "manifest.json").write_text(
@@ -185,12 +289,7 @@ def main() -> int:
                         source = output / capture_info["file"]
                         (target / source.name).write_bytes(source.read_bytes())
         finally:
-            if process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    process.kill()
+            terminate_process_tree(process)
     return 0
 
 

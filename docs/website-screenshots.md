@@ -21,17 +21,20 @@ reversed PIRUSHIM preview pair) does not affect automated output.
 ## Deterministic GitHub replay
 
 The manual Replay website screenshots workflow runs on a pinned Windows Server 2022 runner. In
-screenshot mode the app pins Nucleus to the Tao backend so the window is created borderless, then
-uses its single Windows control pane in the reserved area on the left, independent of the host
-platform's title-bar defaults. The replay runner never mutates the HWND styles or resizes
+screenshot mode the app pins Nucleus to the Tao backend, disables Nucleus' backend-selected controls,
+and draws one fixed Windows 11 caption pane, independent of host-platform or desktop-environment
+detection. Replay validates the captured minimize, maximize and close glyph pixels before publishing,
+so a missing, legacy or overlaid control pane fails the workflow. The runner never mutates the HWND styles or resizes
 the window after Skia creates its surface; this prevents a stale, larger backing surface from
 remaining visible behind the live UI. It verifies the original 1463x811 frame before every capture,
 and publication fails instead of accepting a partial or incorrectly sized frame. The hosted
 runner's basic 1024x768 adapter is too short, so
 the workflow installs a version- and SHA-256-pinned signed indirect display driver and makes a
-1920x1080 monitor primary before Zayit starts. Zayit creates its 1463x811 native surface before the
-first frame and renders at Compose density 1.0. The frame is captured directly at 1463x811: it is
-never enlarged, downsampled, or resized between fixtures.
+1920x1080 monitor primary before Zayit starts. The replay converts the target pixel size to the
+primary monitor's DPI-scaled WindowState size before launch, so both 100% hosted runners and scaled
+local displays create the same 1463x811 native surface. Zayit renders at Compose density 1.0. The
+frame is captured directly at 1463x811: it is never enlarged, downsampled, or resized between
+fixtures.
 
 For each fixture the workflow:
 
@@ -40,8 +43,8 @@ For each fixture the workflow:
 3. reapplies and verifies text size 32 (nine increments) and two commentators per page;
 4. selects the light theme and captures the decorated application window;
 5. selects the dark theme and captures the same state again;
-6. verifies density 1.0 and the direct 1463x811 frame, rejects partial/black PrintWindow surfaces,
-   and publishes both art directories without resampling.
+6. verifies density 1.0, the direct 1463x811 frame and the Windows 11 caption-glyph signature,
+   rejects partial/black PrintWindow surfaces, and publishes both art directories without resampling.
 
 The workflow uploads the generated images, manifest, and application log. When requested, it creates
 a result branch and opens a pull request against the branch from which the workflow was dispatched;

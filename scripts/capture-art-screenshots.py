@@ -45,6 +45,7 @@ HEIGHT = 811
 SOURCE_SCALE = 1
 SOURCE_WIDTH = WIDTH * SOURCE_SCALE
 SOURCE_HEIGHT = HEIGHT * SOURCE_SCALE
+MAX_DWM_BOUNDARY_PIXELS = 8
 RESIZE_SETTLE_SECONDS = 1.0
 SW_RESTORE = 9
 SWP_NOACTIVATE = 0x0010
@@ -354,7 +355,7 @@ def crop_to_target_aspect(source: Image.Image) -> Image.Image:
         )
     excess_width = source.width - WIDTH
     excess_height = source.height - HEIGHT
-    if excess_width > 4 or excess_height > 4:
+    if excess_width > MAX_DWM_BOUNDARY_PIXELS or excess_height > MAX_DWM_BOUNDARY_PIXELS:
         raise RuntimeError(
             f"Native frame {source.width}x{source.height} is not the direct {WIDTH}x{HEIGHT} frame",
         )
@@ -441,7 +442,9 @@ def wait_for_window(
     timeout: float = 600.0,
     process: subprocess.Popen[bytes] | None = None,
     error_log: Path | None = None,
+    exclude_hwnds: set[int] | None = None,
 ) -> int:
+    excluded = exclude_hwnds or set()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process is not None and process.poll() is not None:
@@ -452,7 +455,7 @@ def wait_for_window(
             if details:
                 message += f"\n\n{details}"
             raise RuntimeError(message)
-        matches = matching_windows(title_hint)
+        matches = [(hwnd, title) for hwnd, title in matching_windows(title_hint) if hwnd not in excluded]
         if len(matches) == 1:
             print(f"נבחר חלון זית: {matches[0][1]}")
             return matches[0][0]

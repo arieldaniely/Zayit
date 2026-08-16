@@ -50,7 +50,9 @@ object DbDeltaRecoveryBootstrap {
      * in which case there's nothing to recover.
      */
     private fun resolveDbPathOrNull(): String? {
-        val env = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
+        val env =
+            (System.getenv("SEFORIMAPP_DATABASE_PATH") ?: System.getProperty("SEFORIMAPP_DATABASE_PATH"))
+                ?.takeIf { it.isNotBlank() }
         if (env != null) return env
         val settings =
             runCatching { AppSettings.getDatabasePath() }

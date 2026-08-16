@@ -140,16 +140,18 @@ fun NucleusApplicationScope.MainAppWindow(
             }
         }
 
+    val closeWindow: () -> Unit = {
+        if (desktopMgr.windows.value.size <= 1) {
+            // Last window: quit path (persist session, apply pending updates, exit).
+            onQuit()
+        } else {
+            desktopMgr.closeWindow(openWindow.id)
+            SessionManager.saveIfEnabled(appGraph)
+        }
+    }
+
     JewelDecoratedWindow(
-        onCloseRequest = {
-            if (desktopMgr.windows.value.size <= 1) {
-                // Last window: quit path (persist session, apply pending updates, exit).
-                onQuit()
-            } else {
-                desktopMgr.closeWindow(openWindow.id)
-                SessionManager.saveIfEnabled(appGraph)
-            }
-        },
+        onCloseRequest = closeWindow,
         undecorated = ScreenshotAutomationBridge.isEnabled,
         title = windowTitle,
         icon = if (PlatformInfo.isMacOS) null else painterResource(Res.drawable.AppIcon),
@@ -279,7 +281,7 @@ fun NucleusApplicationScope.MainAppWindow(
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,
         ) {
-            MainTitleBar()
+            MainTitleBar(windowState = windowState, onCloseRequest = closeWindow)
 
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).

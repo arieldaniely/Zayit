@@ -240,10 +240,12 @@ object SessionManager {
 
     private fun automationGeometry(): SavedGeometry? {
         if (!ScreenshotAutomationBridge.isEnabled) return null
-        val width = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_WIDTH")?.toIntOrNull() ?: 1463
-        val height = System.getenv("ZAYIT_SCREENSHOT_LOGICAL_HEIGHT")?.toIntOrNull() ?: 811
+        val width = screenshotSetting("ZAYIT_SCREENSHOT_LOGICAL_WIDTH")?.toIntOrNull() ?: 1463
+        val height = screenshotSetting("ZAYIT_SCREENSHOT_LOGICAL_HEIGHT")?.toIntOrNull() ?: 811
         return SavedGeometry(x = 0, y = 0, width = width, height = height, placement = "Floating")
     }
+
+    private fun screenshotSetting(name: String): String? = System.getenv(name) ?: System.getProperty(name)
 
     /** Restores a saved session snapshot if the user enabled persistence in settings. */
     suspend fun restoreIfEnabled(appGraph: AppGraph) {

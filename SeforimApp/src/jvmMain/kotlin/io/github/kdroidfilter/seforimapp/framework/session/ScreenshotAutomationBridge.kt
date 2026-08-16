@@ -20,11 +20,11 @@ object ScreenshotAutomationBridge {
     private const val BRIDGE_DIRECTORY_ENV = "ZAYIT_SCREENSHOT_BRIDGE_DIR"
 
     val isEnabled: Boolean
-        get() = !System.getenv(BRIDGE_DIRECTORY_ENV).isNullOrBlank()
+        get() = !bridgeDirectory().isNullOrBlank()
 
     suspend fun run(appGraph: AppGraph) {
         val directory =
-            System.getenv(BRIDGE_DIRECTORY_ENV)
+            bridgeDirectory()
                 ?.takeIf(String::isNotBlank)
                 ?.let(::File)
                 ?: return
@@ -39,6 +39,9 @@ object ScreenshotAutomationBridge {
             delay(100)
         }
     }
+
+    private fun bridgeDirectory(): String? =
+        System.getenv(BRIDGE_DIRECTORY_ENV) ?: System.getProperty(BRIDGE_DIRECTORY_ENV)
 
     private suspend fun processRequest(
         appGraph: AppGraph,

@@ -369,6 +369,41 @@ tasks.withType<ComposeHotRun>().configureEach {
     mainClass.set("io.github.kdroidfilter.seforimapp.MainKt")
 }
 
+// The Nucleus run task does not reliably retain a caller-modified environment on Windows.
+// Replay passes these values as Gradle properties, and the JavaExec boundary writes the exact
+// environment seen by the app. Normal developer runs remain unchanged when the properties are absent.
+val screenshotRunProperties =
+    mapOf(
+        "zayitScreenshotBridgeDir" to "ZAYIT_SCREENSHOT_BRIDGE_DIR",
+        "zayitScreenshotLogicalWidth" to "ZAYIT_SCREENSHOT_LOGICAL_WIDTH",
+        "zayitScreenshotLogicalHeight" to "ZAYIT_SCREENSHOT_LOGICAL_HEIGHT",
+        "zayitScreenshotPortableDir" to "SEFORIMAPP_PORTABLE_DIR",
+        "zayitScreenshotDatabasePath" to "SEFORIMAPP_DATABASE_PATH",
+    )
+
+tasks.withType<JavaExec>().configureEach {
+    if (name == "run") {
+        doFirst {
+            screenshotRunProperties.forEach { (propertyName, environmentName) ->
+                providers.gradleProperty(propertyName).orNull?.let { value ->
+                    environment(environmentName, value)
+                    systemProperty(environmentName, value)
+                }
+            }
+            val screenshotAutomation = providers.gradleProperty("zayitScreenshotBridgeDir").isPresent
+            logger.lifecycle("Screenshot automation requested: $screenshotAutomation")
+            if (screenshotAutomation) {
+                environment("SEFORIMAPP_PORTABLE", "1")
+                environment("J2D_UISCALE", "1.0")
+                systemProperty("seforimapp.portable", "true")
+                providers.gradleProperty("zayitScreenshotPortableDir").orNull?.let { value ->
+                    systemProperty("seforimapp.portable.dir", value)
+                }
+            }
+        }
+    }
+}
+
 buildConfig {
     // https://github.com/gmazzo/gradle-buildconfig-plugin#usage-in-kts
 }

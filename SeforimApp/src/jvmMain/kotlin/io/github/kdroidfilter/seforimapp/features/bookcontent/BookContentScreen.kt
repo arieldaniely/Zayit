@@ -60,7 +60,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.BookTocPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryDialog
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
@@ -669,6 +669,12 @@ fun BookContentScreen(
                                     add(
                                         ContextMenuItemOptionWithKeybinding(
                                             icon = AllIconsKeys.Actions.Annotate,
+                                            keybinding =
+                                                if (hostOs.isMacOS) {
+                                                    linkedSetOf("⌘", "E")
+                                                } else {
+                                                    linkedSetOf("Ctrl", "E")
+                                                },
                                             label = addNoteLabel,
                                         ) {
                                             val lines = selectionContext.visibleLines.value.lines
@@ -831,6 +837,29 @@ fun BookContentScreen(
                                     onEvent(BookContentEvent.ToggleDiacritics)
                                     true
                                 }
+                                isCtrlOrCmd && keyEvent.key == Key.E -> {
+                                    val isHome = uiState.navigation.selectedBook == null
+                                    if (isHome) {
+                                        onEvent(BookContentEvent.ToggleNotes)
+                                    } else {
+                                        val selectedText = selectionContext.selectedText.value
+                                        val lines = selectionContext.visibleLines.value.lines
+                                        val draft =
+                                            if (selectedText.isNotBlank() && lines.isNotEmpty()) {
+                                                resolveNoteDraft(selectedText, lines, showDiacritics)
+                                            } else {
+                                                null
+                                            }
+                                        if (draft != null) {
+                                            noteDraft = draft
+                                            noteDraftBaselineLine = currentPrimaryLineId
+                                            if (!currentNotesVisible) onEvent(BookContentEvent.ToggleNotes)
+                                        } else {
+                                            onEvent(BookContentEvent.ToggleNotes)
+                                        }
+                                    }
+                                    true
+                                }
                                 else -> false
                             }
                         } else {
@@ -838,29 +867,10 @@ fun BookContentScreen(
                         }
                     },
         ) {
-            var showHomeNotes by remember { mutableStateOf(false) }
-
             StartVerticalBar(
                 uiState = uiState,
-                onEvent = { event ->
-                    if (event is BookContentEvent.ToggleNotes && uiState.navigation.selectedBook == null) {
-                        showHomeNotes = !showHomeNotes
-                    } else {
-                        onEvent(event)
-                    }
-                },
+                onEvent = onEvent,
             )
-
-            if (showHomeNotes) {
-                NotesLibraryDialog(
-                    noteStore = noteStore,
-                    onOpenNote = { bookId, lineId ->
-                        showHomeNotes = false
-                        onEvent(BookContentEvent.OpenBookAtLine(bookId, lineId))
-                    },
-                    onDismiss = { showHomeNotes = false },
-                )
-            }
 
             val isHome = uiState.navigation.selectedBook == null
             val isIslands = ThemeUtils.isIslandsStyle()
@@ -899,17 +909,28 @@ fun BookContentScreen(
                                 firstMinSize = if (uiState.notes.isVisible) SplitDefaults.MIN_NOTES else 0f,
                                 firstContent = {
                                     if (uiState.notes.isVisible) {
-                                        NotesPanel(
-                                            uiState = uiState,
-                                            onEvent = onEvent,
-                                            bookId = bookId,
-                                            noteStore = noteStore,
-                                            selectedLineIds = uiState.content.selectedLineIds,
-                                            primarySelectedLine = uiState.content.primaryLine,
-                                            draft = noteDraft,
-                                            onConsumeDraft = { noteDraft = null },
-                                            modifier = panelCardModifier,
-                                        )
+                                        if (isHome) {
+                                            NotesLibraryPanel(
+                                                noteStore = noteStore,
+                                                onOpenNote = { bId, lId ->
+                                                    onEvent(BookContentEvent.OpenBookAtLine(bId, lId))
+                                                },
+                                                onHide = { onEvent(BookContentEvent.ToggleNotes) },
+                                                modifier = panelCardModifier,
+                                            )
+                                        } else {
+                                            NotesPanel(
+                                                uiState = uiState,
+                                                onEvent = onEvent,
+                                                bookId = bookId,
+                                                noteStore = noteStore,
+                                                selectedLineIds = uiState.content.selectedLineIds,
+                                                primarySelectedLine = uiState.content.primaryLine,
+                                                draft = noteDraft,
+                                                onConsumeDraft = { noteDraft = null },
+                                                modifier = panelCardModifier,
+                                            )
+                                        }
                                     }
                                 },
                                 secondContent = {

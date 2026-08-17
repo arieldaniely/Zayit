@@ -56,6 +56,7 @@ fun StartVerticalBar(
                 icon = NotebookPen,
                 iconDescription = stringResource(Res.string.notes_pane),
                 label = stringResource(Res.string.notes_pane),
+                shortcutHint = if (PlatformInfo.isMacOS) "E+⌘" else "E+Ctrl",
             )
         },
     )

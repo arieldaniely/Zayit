@@ -6,6 +6,7 @@ import dev.nucleusframework.updater.UpdateFile
 import dev.nucleusframework.updater.UpdateInfo
 import dev.nucleusframework.updater.UpdateLevel
 import dev.nucleusframework.updater.UpdateResult
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,6 +19,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** N2 — service orchestration with a fake updater (no network, no installer). */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppUpdateServiceTest {
     private val installerFile = File("/tmp/zayit-installer")
 

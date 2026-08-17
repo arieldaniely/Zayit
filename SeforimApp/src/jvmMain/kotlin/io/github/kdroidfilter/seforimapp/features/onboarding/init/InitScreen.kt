@@ -1,12 +1,9 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.init
 
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState

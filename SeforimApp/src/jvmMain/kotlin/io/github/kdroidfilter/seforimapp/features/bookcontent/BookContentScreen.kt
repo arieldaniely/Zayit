@@ -60,8 +60,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.BookTocPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryDialog
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
@@ -848,7 +848,7 @@ fun BookContentScreen(
                     } else {
                         onEvent(event)
                     }
-                }
+                },
             )
 
             if (showHomeNotes) {

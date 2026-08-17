@@ -61,6 +61,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
@@ -837,7 +838,29 @@ fun BookContentScreen(
                         }
                     },
         ) {
-            StartVerticalBar(uiState = uiState, onEvent = onEvent)
+            var showHomeNotes by remember { mutableStateOf(false) }
+
+            StartVerticalBar(
+                uiState = uiState,
+                onEvent = { event ->
+                    if (event is BookContentEvent.ToggleNotes && uiState.navigation.selectedBook == null) {
+                        showHomeNotes = !showHomeNotes
+                    } else {
+                        onEvent(event)
+                    }
+                }
+            )
+
+            if (showHomeNotes) {
+                NotesLibraryDialog(
+                    noteStore = noteStore,
+                    onOpenNote = { bookId, lineId ->
+                        showHomeNotes = false
+                        onEvent(BookContentEvent.OpenBookAtLine(bookId, lineId))
+                    },
+                    onDismiss = { showHomeNotes = false },
+                )
+            }
 
             val isHome = uiState.navigation.selectedBook == null
             val isIslands = ThemeUtils.isIslandsStyle()

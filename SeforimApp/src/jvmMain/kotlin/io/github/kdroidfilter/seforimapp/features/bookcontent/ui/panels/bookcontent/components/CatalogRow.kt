@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -22,13 +18,6 @@ import io.github.kdroidfilter.seforimapp.catalog.CatalogPresets
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CatalogDropdown
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryDialog
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
-import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.jewel.ui.component.OutlinedButton
-import org.jetbrains.jewel.ui.component.Text
-import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.all_notes_button
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -37,8 +26,6 @@ fun CatalogRow(
     modifier: Modifier = Modifier,
     spacing: Dp = 8.dp,
 ) {
-    var showNotes by remember { mutableStateOf(false) }
-    val noteStore = LocalAppGraph.current.noteStore
     val outerPadding = if (ThemeUtils.isIslandsStyle()) 12.dp else 6.dp
     Box(
         modifier =
@@ -96,20 +83,6 @@ fun CatalogRow(
                 modifier = buttonModifier,
                 maxPopupHeight = 130.dp,
             )
-            OutlinedButton(
-                onClick = { showNotes = true },
-                modifier = buttonModifier,
-            ) {
-                Text(stringResource(Res.string.all_notes_button))
-            }
         }
-    }
-
-    if (showNotes) {
-        NotesLibraryDialog(
-            noteStore = noteStore,
-            onOpenNote = { bookId, lineId -> onEvent(BookContentEvent.OpenBookAtLine(bookId, lineId)) },
-            onDismiss = { showNotes = false },
-        )
     }
 }

@@ -49,16 +49,14 @@ fun StartVerticalBar(
             }
         },
         bottomContent = {
-            if (uiState.navigation.selectedBook != null) {
-                SelectableIconButtonWithToolip(
-                    toolTipText = stringResource(Res.string.notes_pane_tooltip),
-                    onClick = { onEvent(BookContentEvent.ToggleNotes) },
-                    isSelected = uiState.notes.isVisible,
-                    icon = NotebookPen,
-                    iconDescription = stringResource(Res.string.notes_pane),
-                    label = stringResource(Res.string.notes_pane),
-                )
-            }
+            SelectableIconButtonWithToolip(
+                toolTipText = stringResource(Res.string.notes_pane_tooltip),
+                onClick = { onEvent(BookContentEvent.ToggleNotes) },
+                isSelected = uiState.notes.isVisible,
+                icon = NotebookPen,
+                iconDescription = stringResource(Res.string.notes_pane),
+                label = stringResource(Res.string.notes_pane),
+            )
         },
     )
 }

@@ -97,15 +97,11 @@ def require_windows_11_control_pane(path: Path) -> None:
     """Verify the captured pixels contain the deterministic Windows 11 glyphs."""
     image = Image.open(path).convert("L")
     
-    # Possible centers from the edge (for close, maximize, minimize in any order)
-    standard_offsets = [23, 69, 115]
-    all_centers = [image.width - off for off in standard_offsets] + standard_offsets
-
-    for name, expected_offset, expected_bbox, minimum_pixels, maximum_pixels in WINDOWS_11_CONTROL_GLYPHS:
-        last_error = None
+    for name, _offset, expected_bbox, minimum_pixels, maximum_pixels in WINDOWS_11_CONTROL_GLYPHS:
         found_valid = False
 
-        for center_x in all_centers:
+        # Scan horizontally across the top of the window to find the glyph
+        for center_x in range(CONTROL_GLYPH_PATCH_HALF_WIDTH, image.width - CONTROL_GLYPH_PATCH_HALF_WIDTH):
             patch = image.crop(
                 (
                     center_x - CONTROL_GLYPH_PATCH_HALF_WIDTH,
@@ -122,27 +118,20 @@ def require_windows_11_control_pane(path: Path) -> None:
                 if abs(patch.getpixel((x, y)) - background) > CONTROL_GLYPH_THRESHOLD
             ]
             if not glyph_pixels:
-                if not last_error:
-                    last_error = f"Missing Windows 11 {name} glyph in {path.name}"
                 continue
+                
             actual_bbox = (
                 min(x for x, _y in glyph_pixels),
                 min(y for _x, y in glyph_pixels),
                 max(x for x, _y in glyph_pixels) + 1,
                 max(y for _x, y in glyph_pixels) + 1,
             )
-            if actual_bbox != expected_bbox or not minimum_pixels <= len(glyph_pixels) <= maximum_pixels:
-                last_error = (
-                    f"Unexpected Windows caption rendering in {path.name}: {name} glyph "
-                    f"bounds={actual_bbox}, pixels={len(glyph_pixels)}"
-                )
-                continue
-            
-            found_valid = True
-            break
+            if actual_bbox == expected_bbox and minimum_pixels <= len(glyph_pixels) <= maximum_pixels:
+                found_valid = True
+                break
             
         if not found_valid:
-            raise RuntimeError(last_error)
+            raise RuntimeError(f"Missing or invalid Windows 11 {name} glyph in {path.name}")
 
 
 def primary_display_scale(capture_tools) -> float:

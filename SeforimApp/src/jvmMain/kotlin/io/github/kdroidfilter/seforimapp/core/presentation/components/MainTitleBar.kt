@@ -77,7 +77,7 @@ fun DecoratedWindowScope.MainTitleBar(
             LocalAppGraph.current.appUpdateService.state
                 .collectAsState()
                 .value.showTitleBarIcon
-        BoxWithConstraints(modifier = Modifier.align(Alignment.Start)) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val windowWidth = maxWidth
             // Non-macOS gets the extra Favorites button (macOS uses the native menus).
             // Tab Search lives at the leading edge of the tabs area and is accounted for there.

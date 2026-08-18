@@ -252,6 +252,7 @@ def main() -> int:
             time.sleep(args.settle)
 
             captures: list[dict[str, str]] = []
+            verification_errors = []
             for stem in STEMS:
                 fixture = fixtures / f"{stem}.pb"
                 if not fixture.is_file():
@@ -268,7 +269,12 @@ def main() -> int:
                     name = f"{stem}-{theme}.png"
                     capture_path = output / name
                     digest, _frame = capture_tools.capture(hwnd, capture_path)
-                    require_windows_11_control_pane(capture_path)
+                    
+                    try:
+                        require_windows_11_control_pane(capture_path)
+                    except RuntimeError as e:
+                        verification_errors.append(str(e))
+                        
                     captures.append({"file": name, "sha256": digest})
                     print(f"captured {name}", flush=True)
 
@@ -294,6 +300,9 @@ def main() -> int:
                     for capture_info in captures:
                         source = output / capture_info["file"]
                         (target / source.name).write_bytes(source.read_bytes())
+                        
+            if verification_errors:
+                raise RuntimeError("Screenshot verification failed:\n" + "\n".join(verification_errors))
         finally:
             terminate_process_tree(process)
     return 0

@@ -119,6 +119,7 @@ intellij-platform-icons = { module = "com.jetbrains.intellij.platform:icons", ve
 jbr-api = { module = "org.jetbrains.runtime:jbr-api", version.ref = "jbrApi" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 jbig2-imageio = { module = "org.apache.pdfbox:jbig2-imageio", version.ref = "jbig2Imageio" }
+jai-imageio-core = { module = "com.github.jai-imageio:jai-imageio-core", version.ref = "jaiImageioJpeg2000" }
 jai-imageio-jpeg2000 = { module = "com.github.jai-imageio:jai-imageio-jpeg2000", version.ref = "jaiImageioJpeg2000" }
 androidx-paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
 androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }

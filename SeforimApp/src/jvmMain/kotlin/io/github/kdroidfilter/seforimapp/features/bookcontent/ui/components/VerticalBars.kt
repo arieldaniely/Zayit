@@ -23,6 +23,7 @@ import io.github.kdroidfilter.seforimlibrary.core.models.Book as SeforimBook
 fun StartVerticalBar(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
+    showNotes: Boolean = true,
 ) {
     VerticalLateralBar(
         position = VerticalLateralBarPosition.Start,
@@ -49,15 +50,17 @@ fun StartVerticalBar(
             }
         },
         bottomContent = {
-            SelectableIconButtonWithToolip(
-                toolTipText = stringResource(Res.string.notes_pane_tooltip),
-                onClick = { onEvent(BookContentEvent.ToggleNotes) },
-                isSelected = uiState.notes.isVisible,
-                icon = NotebookPen,
-                iconDescription = stringResource(Res.string.notes_pane),
-                label = stringResource(Res.string.notes_pane),
-                shortcutHint = if (PlatformInfo.isMacOS) "E+⌘" else "E+Ctrl",
-            )
+            if (showNotes) {
+                SelectableIconButtonWithToolip(
+                    toolTipText = stringResource(Res.string.notes_pane_tooltip),
+                    onClick = { onEvent(BookContentEvent.ToggleNotes) },
+                    isSelected = uiState.notes.isVisible,
+                    icon = NotebookPen,
+                    iconDescription = stringResource(Res.string.notes_pane),
+                    label = stringResource(Res.string.notes_pane),
+                    shortcutHint = if (PlatformInfo.isMacOS) "E+⌘" else "E+Ctrl",
+                )
+            }
         },
     )
 }

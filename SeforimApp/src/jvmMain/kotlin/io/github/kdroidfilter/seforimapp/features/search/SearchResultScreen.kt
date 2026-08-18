@@ -251,7 +251,11 @@ fun SearchResultInBookShellMvi(
         }
 
     Row(modifier = Modifier.fillMaxSize()) {
-        StartVerticalBar(uiState = bookUiState, onEvent = onEvent)
+        StartVerticalBar(
+            uiState = bookUiState,
+            onEvent = onEvent,
+            showNotes = false,
+        )
 
         EnhancedHorizontalSplitPane(
             splitPaneState = bookUiState.layout.mainSplitState.asStable(),

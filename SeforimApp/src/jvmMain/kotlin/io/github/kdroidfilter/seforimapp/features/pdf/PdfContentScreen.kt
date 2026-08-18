@@ -347,9 +347,9 @@ private fun PdfPages(
             progressiveRenderPlan(currentPage, renderDpi, session.pageCount, isScrolling).forEach { request ->
                 currentCoroutineContext().ensureActive()
                 runCatching { session.render(request.pageIndex, request.dpi) }
-                    .onFailure { 
+                    .onFailure {
                         it.printStackTrace()
-                        session.recordRenderFailure(request.pageIndex) 
+                        session.recordRenderFailure(request.pageIndex)
                     }
             }
         }

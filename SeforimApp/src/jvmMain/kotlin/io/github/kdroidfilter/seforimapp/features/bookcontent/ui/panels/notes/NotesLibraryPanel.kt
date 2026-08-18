@@ -309,8 +309,7 @@ private fun NoteLibraryCard(
                         size = Size(stripeWidth, (size.height - 2 * verticalInset).coerceAtLeast(0f)),
                         cornerRadius = CornerRadius(stripeWidth / 2, stripeWidth / 2),
                     )
-                }
-                .padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                }.padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
     ) {
         Text(
             text = locationPath,
@@ -373,4 +372,3 @@ private fun NoteLibraryCard(
         }
     }
 }
-

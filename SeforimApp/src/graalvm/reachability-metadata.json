@@ -305,6 +305,8 @@
         ]
     },
     "resources": [
-        
+        {
+            "glob": "jumplist_icons/**"
+        }
     ]
 }

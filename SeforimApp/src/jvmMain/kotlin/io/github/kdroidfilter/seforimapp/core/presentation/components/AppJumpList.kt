@@ -24,6 +24,7 @@ import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.desktop_default_name
 import seforimapp.seforimapp.generated.resources.desktop_new
@@ -51,6 +52,7 @@ fun AppJumpList(
 ) {
     if (!PlatformInfo.isWindows || !WindowsJumpListManager.isAvailable) return
 
+    val isDark = JewelTheme.isDark
     val desktops by desktopManager.desktops.collectAsState()
     val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
     val tabsState by tabsViewModel.state.collectAsState()
@@ -113,7 +115,7 @@ fun AppJumpList(
     }
 
     // Rebuild the persisted Windows jump list whenever any displayed source changes.
-    LaunchedEffect(desktops, activeDesktopId, tabsState, favorites, recentlyClosedTabs) {
+    LaunchedEffect(desktops, activeDesktopId, tabsState, favorites, recentlyClosedTabs, isDark) {
         val tabs = tabsState.tabs
 
         val tabItems =
@@ -125,7 +127,12 @@ fun AppJumpList(
                         tab.tabType == TabType.SEARCH -> searchResultsFormat.replace("%1\$s", rawTitle)
                         else -> rawTitle
                     }
-                JumpListItem(title = title, arguments = "$SCHEME_TAB$index", description = title)
+                JumpListItem(
+                    title = title,
+                    arguments = "$SCHEME_TAB$index",
+                    description = title,
+                    icon = JumpListIcons.iconForTab(tab.tabType, rawTitle, isDark),
+                )
             }
 
         val desktopItems =
@@ -134,6 +141,7 @@ fun AppJumpList(
                     title = desktop.name,
                     arguments = "$SCHEME_DESKTOP$index",
                     description = desktop.name,
+                    icon = JumpListIcons.iconForDesktop(isDark),
                 )
             }
 
@@ -143,6 +151,7 @@ fun AppJumpList(
                     title = favorite.title,
                     arguments = bookShareLink(favorite.bookId, favorite.lineId),
                     description = favorite.title,
+                    icon = JumpListIcons.iconForFavorite(isDark),
                 )
             }
 
@@ -151,7 +160,12 @@ fun AppJumpList(
                 .mapNotNull { tab ->
                     tab.destination.toShareLink()?.let { link ->
                         val title = tab.title.ifBlank { homeLabel }
-                        JumpListItem(title = title, arguments = link, description = title)
+                        JumpListItem(
+                            title = title,
+                            arguments = link,
+                            description = title,
+                            icon = JumpListIcons.iconForRecentlyClosed(isDark),
+                        )
                     }
                 }.take(MAX_DYNAMIC_ITEMS)
 
@@ -167,8 +181,16 @@ fun AppJumpList(
 
         val tasks =
             listOf(
-                JumpListItem(title = newTabLabel, arguments = SCHEME_NEW_TAB),
-                JumpListItem(title = newDesktopLabel, arguments = SCHEME_NEW_DESKTOP),
+                JumpListItem(
+                    title = newTabLabel,
+                    arguments = SCHEME_NEW_TAB,
+                    icon = JumpListIcons.iconForNewTab(isDark),
+                ),
+                JumpListItem(
+                    title = newDesktopLabel,
+                    arguments = SCHEME_NEW_DESKTOP,
+                    icon = JumpListIcons.iconForNewDesktop(isDark),
+                ),
             )
 
         WindowsJumpListManager.setJumpList(categories = categories, tasks = tasks)

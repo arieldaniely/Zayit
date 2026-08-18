@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,21 +60,16 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconActionButton
-import org.jetbrains.jewel.ui.component.ListComboBox
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.all_notes_empty
-import seforimapp.seforimapp.generated.resources.all_notes_sort_book
-import seforimapp.seforimapp.generated.resources.all_notes_sort_time
 import seforimapp.seforimapp.generated.resources.all_notes_title
 import seforimapp.seforimapp.generated.resources.all_notes_unknown_book
 import seforimapp.seforimapp.generated.resources.delete_note
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-
-enum class NotesLibrarySort { BOOK, TIME }
 
 private val NOTES_LIBRARY_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yy · HH:mm")
 
@@ -110,7 +104,7 @@ suspend fun resolveNoteLocationPath(
     }
 
 /**
- * Side panel displaying all library notes across all books, with sorting and full section breadcrumbs.
+ * Side panel displaying all library notes across all books, with full section breadcrumbs.
  */
 @Composable
 fun NotesLibraryPanel(
@@ -123,7 +117,6 @@ fun NotesLibraryPanel(
     LaunchedEffect(noteStore) { noteStore.loadAll() }
     val allNotes by noteStore.allNotes.collectAsState()
     val booksById = remember { CatalogCache.getAllBooks().orEmpty().associateBy { it.id } }
-    var sort by remember { mutableStateOf(NotesLibrarySort.BOOK) }
     val unknownBook = stringResource(Res.string.all_notes_unknown_book)
     val scope = rememberCoroutineScope()
 
@@ -148,15 +141,11 @@ fun NotesLibraryPanel(
     }
 
     val sortedNotes =
-        remember(allNotes, booksById, sort, unknownBook) {
-            when (sort) {
-                NotesLibrarySort.BOOK ->
-                    allNotes.sortedWith(
-                        compareBy<BookUserNote> { booksById[it.bookId]?.title ?: unknownBook }
-                            .thenBy { it.note.lineId },
-                    )
-                NotesLibrarySort.TIME -> allNotes.sortedByDescending { it.note.updatedAt }
-            }
+        remember(allNotes, booksById, unknownBook) {
+            allNotes.sortedWith(
+                compareBy<BookUserNote> { booksById[it.bookId]?.title ?: unknownBook }
+                    .thenBy { it.note.lineId },
+            )
         }
 
     val paneHoverSource = remember { MutableInteractionSource() }
@@ -172,38 +161,6 @@ fun NotesLibraryPanel(
             interactionSource = paneHoverSource,
             onHide = onHide,
         )
-
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            val sortOptions =
-                listOf(
-                    stringResource(Res.string.all_notes_sort_book),
-                    stringResource(Res.string.all_notes_sort_time),
-                )
-            ListComboBox(
-                items = sortOptions,
-                selectedIndex = if (sort == NotesLibrarySort.BOOK) 0 else 1,
-                onSelectedItemChange = { index ->
-                    sort = if (index == 0) NotesLibrarySort.BOOK else NotesLibrarySort.TIME
-                },
-                modifier = Modifier.width(160.dp),
-            )
-
-            if (sortedNotes.isNotEmpty()) {
-                Text(
-                    text = "(${sortedNotes.size})",
-                    fontSize = 12.sp,
-                    color = JewelTheme.globalColors.text.info,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-        }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (sortedNotes.isEmpty()) {

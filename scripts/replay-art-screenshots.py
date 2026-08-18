@@ -96,12 +96,16 @@ def require_source_frame(capture_tools, hwnd: int):
 def require_windows_11_control_pane(path: Path) -> None:
     """Verify the captured pixels contain the deterministic Windows 11 glyphs."""
     image = Image.open(path).convert("L")
-    for name, offset, expected_bbox, minimum_pixels, maximum_pixels in WINDOWS_11_CONTROL_GLYPHS:
-        centers_to_try = [image.width - offset, offset]
+    
+    # Possible centers from the edge (for close, maximize, minimize in any order)
+    standard_offsets = [23, 69, 115]
+    all_centers = [image.width - off for off in standard_offsets] + standard_offsets
+
+    for name, expected_offset, expected_bbox, minimum_pixels, maximum_pixels in WINDOWS_11_CONTROL_GLYPHS:
         last_error = None
         found_valid = False
 
-        for center_x in centers_to_try:
+        for center_x in all_centers:
             patch = image.crop(
                 (
                     center_x - CONTROL_GLYPH_PATCH_HALF_WIDTH,
@@ -118,7 +122,8 @@ def require_windows_11_control_pane(path: Path) -> None:
                 if abs(patch.getpixel((x, y)) - background) > CONTROL_GLYPH_THRESHOLD
             ]
             if not glyph_pixels:
-                last_error = f"Missing Windows 11 {name} glyph in {path.name}"
+                if not last_error:
+                    last_error = f"Missing Windows 11 {name} glyph in {path.name}"
                 continue
             actual_bbox = (
                 min(x for x, _y in glyph_pixels),

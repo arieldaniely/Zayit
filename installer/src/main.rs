@@ -31,11 +31,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 // Embed splash image at compile time
 const SPLASH_PNG: &[u8] = include_bytes!("../resources/splash.png");
 // Embed NSIS installer at compile time
-const NSIS_DATA: &[u8] = include_bytes!("../resources/zayit-nsis.exe");
+const NSIS_DATA: &[u8] = include_bytes!("../resources/zayita-nsis.exe");
 
 // Progress bar configuration
-const PROGRESS_BAR_HEIGHT: i32 = 4;
-const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the logo
+const PROGRESS_BAR_HEIGHT: i32 = 5;
+const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the brand
 
 fn main() {
     // Set DPI awareness before any window creation (like JetBrains Runtime does)
@@ -262,27 +262,18 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
     let mut pixels = base_pixels.to_vec();
 
     // Calculate progress bar dimensions
-    // 30px from bottom, 75% width centered (12.5% margin each side)
-    let side_margin = width * 125 / 1000;  // 12.5%
-    let left_margin = side_margin;
-    let right_margin = side_margin;
-    let bottom_margin = 75;
+    // Positioned in the open space between subtitle text and bottom edge (~90.8% from top)
+    let bar_y_start = (height as f32 * 0.908).round() as i32;
+    let bar_y_end = (bar_y_start + PROGRESS_BAR_HEIGHT).min(height - 1);
 
-    let bar_y_start = (height - bottom_margin - PROGRESS_BAR_HEIGHT).max(0);
-    let bar_y_end = (height - bottom_margin).min(height - 1);
-    let bar_x_start = left_margin;
-    let bar_x_end = width - right_margin;
-
-    // Calculate bar width AFTER bounds checking
-    let bar_width = (bar_x_end - bar_x_start).max(1);
+    // 65% width centered
+    let bar_width = (width as f32 * 0.65).round() as i32;
+    let bar_x_start = (width - bar_width) / 2;
+    let bar_x_end = bar_x_start + bar_width;
 
     // Calculate filled portion (RIGHT TO LEFT - RTL style)
-    // Progress goes from right to left: at 0% nothing is filled, at 100% full bar from right
-    let filled_width = (bar_width as f32 * (progress as f32 / 100.0)) as i32;
+    let filled_width = (bar_width as f32 * (progress as f32 / 100.0)).round() as i32;
     let fill_start_x = bar_x_end - filled_width;
-
-    // Draw the progress bar
-    let (r, g, b) = PROGRESS_BAR_COLOR;
 
     for y in bar_y_start..bar_y_end {
         for x in bar_x_start..bar_x_end {
@@ -290,17 +281,27 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
             if pixel_idx + 3 < pixels.len() {
                 if x >= fill_start_x {
                     // Filled portion (gold color, fully opaque)
-                    pixels[pixel_idx] = b;     // B
-                    pixels[pixel_idx + 1] = g; // G
-                    pixels[pixel_idx + 2] = r; // R
-                    pixels[pixel_idx + 3] = 255; // A - fully opaque
+                    pixels[pixel_idx] = PROGRESS_BAR_COLOR.2;     // B
+                    pixels[pixel_idx + 1] = PROGRESS_BAR_COLOR.1; // G
+                    pixels[pixel_idx + 2] = PROGRESS_BAR_COLOR.0; // R
+                    pixels[pixel_idx + 3] = 255;                  // A
                 } else {
-                    // Background portion (dark, fully opaque to avoid transparency issues
-                    // when other windows overlap and are minimized)
-                    pixels[pixel_idx] = 30;     // B
-                    pixels[pixel_idx + 1] = 30; // G
-                    pixels[pixel_idx + 2] = 30; // R
-                    pixels[pixel_idx + 3] = 255; // A - fully opaque
+                    // Unfilled portion: frosted glass effect over the base image
+                    // Shows the underlying sky/clouds image with a subtle translucent white glass sheen (~28-45%)
+                    let is_edge = y == bar_y_start || y == bar_y_end - 1 || x == bar_x_start;
+                    let glass_alpha = if is_edge { 0.45f32 } else { 0.28f32 };
+                    let orig_b = base_pixels[pixel_idx] as f32;
+                    let orig_g = base_pixels[pixel_idx + 1] as f32;
+                    let orig_r = base_pixels[pixel_idx + 2] as f32;
+
+                    let b = (orig_b * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+                    let g = (orig_g * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+                    let r = (orig_r * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+
+                    pixels[pixel_idx] = b;
+                    pixels[pixel_idx + 1] = g;
+                    pixels[pixel_idx + 2] = r;
+                    pixels[pixel_idx + 3] = 255;
                 }
             }
         }

@@ -62,27 +62,5 @@ fun processKeyShortcuts(
         }
     }
 
-    // Process Alt key shortcuts for navigation
-    if (keyEvent.isAltPressed) {
-        return when (keyEvent.key) {
-            Key.W -> {
-                onNavigateTo("Welcome")
-                true
-            }
-
-            Key.M -> {
-                onNavigateTo("Markdown")
-                true
-            }
-
-            Key.C -> {
-                onNavigateTo("Components")
-                true
-            }
-
-            else -> false
-        }
-    }
-
     return false
 }

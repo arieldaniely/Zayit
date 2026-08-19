@@ -189,8 +189,8 @@ fun NucleusApplicationScope.MainAppWindow(
                         tabsVm.onEvent(TabsEvents.OnSelect(newIndex))
                     }
                     true
-                } else if ((keyEvent.isAltPressed && keyEvent.key == Key.Home) ||
-                    (keyEvent.isMetaPressed && keyEvent.isShiftPressed && keyEvent.key == Key.H)
+                } else if ((keyEvent.isAltPressed && !keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && !keyEvent.isMetaPressed && keyEvent.key == Key.Home) ||
+                    (keyEvent.isMetaPressed && keyEvent.isShiftPressed && !keyEvent.isCtrlPressed && !keyEvent.isAltPressed && keyEvent.key == Key.H)
                 ) {
                     val currentTabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId
                     if (currentTabId != null) {
@@ -378,10 +378,12 @@ fun NucleusApplicationScope.MainAppWindow(
                                         true
                                     }
                                     // Alt + Home (Windows) or Cmd + Shift + H (macOS) => go Home on current tab
-                                    (keyEvent.isAltPressed && keyEvent.key == Key.Home) ||
+                                    (keyEvent.isAltPressed && !keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && !keyEvent.isMetaPressed && keyEvent.key == Key.Home) ||
                                         (
                                             keyEvent.isMetaPressed &&
                                                 keyEvent.isShiftPressed &&
+                                                !keyEvent.isCtrlPressed &&
+                                                !keyEvent.isAltPressed &&
                                                 keyEvent.key == Key.H
                                         ) -> {
                                         val currentTabId = tabs.getOrNull(selectedIndex)?.destination?.tabId

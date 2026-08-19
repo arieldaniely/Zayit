@@ -1360,6 +1360,7 @@ private fun SearchBar(
 
     var anchor by remember { mutableStateOf<AnchorBounds?>(null) }
     var backspaceStartedEmpty by remember { mutableStateOf(false) }
+    var altAlone by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
         // Local helpers to ensure popup is dismissed when committing a choice
         fun dismissPopup() {
@@ -1415,9 +1416,20 @@ private fun SearchBar(
                         if (!focusState.isFocused) {
                             popupVisible = false
                             focusedIndex = -1
+                            altAlone = false
                         }
                     }.onPreviewKeyEvent { ev ->
                         val isRef = isReference
+                        if (ev.type == KeyEventType.KeyDown) {
+                            if (ev.key == Key.AltLeft || ev.key == Key.AltRight) {
+                                altAlone = !ev.isShiftPressed && !ev.isCtrlPressed && !ev.isMetaPressed
+                            } else {
+                                altAlone = false
+                            }
+                        } else if (ev.type == KeyEventType.KeyUp && ev.key != Key.AltLeft && ev.key != Key.AltRight) {
+                            altAlone = false
+                        }
+
                         when {
                             isRef && ev.key == Key.Backspace && isTocMode -> {
                                 when (ev.type) {
@@ -1444,12 +1456,18 @@ private fun SearchBar(
                                     else -> false
                                 }
                             }
-                            // Alt toggles between Reference and Text modes
+                            // Alt alone toggles between Reference and Text modes
                             (ev.key == Key.AltLeft || ev.key == Key.AltRight) && ev.type == KeyEventType.KeyUp -> {
-                                val next =
-                                    if (selectedFilter == SearchFilter.REFERENCE) SearchFilter.TEXT else SearchFilter.REFERENCE
-                                onFilterChange(next)
-                                true
+                                val shouldToggle = altAlone && !ev.isShiftPressed && !ev.isCtrlPressed && !ev.isMetaPressed
+                                altAlone = false
+                                if (shouldToggle) {
+                                    val next =
+                                        if (selectedFilter == SearchFilter.REFERENCE) SearchFilter.TEXT else SearchFilter.REFERENCE
+                                    onFilterChange(next)
+                                    true
+                                } else {
+                                    false
+                                }
                             }
 
                             (ev.key == Key.Enter || ev.key == Key.NumPadEnter) && ev.type == KeyEventType.KeyUp -> {

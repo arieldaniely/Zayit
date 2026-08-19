@@ -313,41 +313,47 @@ class SearchHomeViewModel(
                                                     for ((bookPart, locPart) in splits) {
                                                         if (bookPart.length < minBookPrefixLen || locPart.isBlank()) continue
                                                         val bookPartNorm = sanitizeHebrewForAcronym(bookPart)
-                                                        val candidateHits = runCatching {
-                                                            lookup.searchBooksWithScoring(bookPartNorm, limit = 5)
-                                                        }.getOrDefault(emptyList())
-                                                        val candidateBooks = candidateHits.map { hit ->
-                                                            Book(
-                                                                id = hit.id,
-                                                                categoryId = hit.categoryId,
-                                                                sourceId = 0,
-                                                                title = hit.title,
-                                                                order = hit.orderIndex.toFloat(),
-                                                                isBaseBook = hit.isBaseBook,
-                                                            )
-                                                        }.ifEmpty {
-                                                            runSuspendCatching {
-                                                                repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
+                                                        val candidateHits =
+                                                            runCatching {
+                                                                lookup.searchBooksWithScoring(bookPartNorm, limit = 5)
                                                             }.getOrDefault(emptyList())
-                                                        }
+                                                        val candidateBooks =
+                                                            candidateHits
+                                                                .map { hit ->
+                                                                    Book(
+                                                                        id = hit.id,
+                                                                        categoryId = hit.categoryId,
+                                                                        sourceId = 0,
+                                                                        title = hit.title,
+                                                                        order = hit.orderIndex.toFloat(),
+                                                                        isBaseBook = hit.isBaseBook,
+                                                                    )
+                                                                }
+                                                                .ifEmpty {
+                                                                    runSuspendCatching {
+                                                                        repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
+                                                                    }.getOrDefault(emptyList())
+                                                                }
 
                                                         for (candidateBook in candidateBooks.take(3)) {
                                                             val bookTocs = getOrLoadTocEntries(candidateBook)
-                                                            val matchingTocs = bookTocs.filter { tocDto ->
-                                                                TorahReferenceSearchHelper.matchesTocLocation(tocDto, locPart)
-                                                            }
+                                                            val matchingTocs =
+                                                                bookTocs.filter { tocDto ->
+                                                                    TorahReferenceSearchHelper.matchesTocLocation(tocDto, locPart)
+                                                                }
 
                                                             for (matchedToc in matchingTocs.take(6)) {
                                                                 val catPath = buildCategoryPathTitlesCached(candidateBook.categoryId)
                                                                 val hasPdfEdition =
                                                                     pdfTitles.contains(candidateBook.title.trim()) &&
                                                                         TalmudPdfService.isTalmudBavliCategoryPath(catPath)
-                                                                val combinedDto = BookSuggestionDto(
-                                                                    book = candidateBook,
-                                                                    path = matchedToc.path,
-                                                                    isPdf = false,
-                                                                    targetToc = matchedToc.toc,
-                                                                )
+                                                                val combinedDto =
+                                                                    BookSuggestionDto(
+                                                                        book = candidateBook,
+                                                                        path = matchedToc.path,
+                                                                        isPdf = false,
+                                                                        targetToc = matchedToc.toc,
+                                                                    )
                                                                 combinedSuggestions.add(combinedDto)
                                                                 if (hasPdfEdition) {
                                                                     combinedSuggestions.add(combinedDto.copy(isPdf = true))
@@ -386,20 +392,23 @@ class SearchHomeViewModel(
                                                             .distinctBy(Book::id)
                                                             .take(maxBookPredictive)
 
-                                                    val regularSuggestions = books.flatMap { book ->
-                                                        val catPath = buildCategoryPathTitlesCached(book.categoryId)
-                                                        val textSuggestion = BookSuggestionDto(book, catPath + book.title)
-                                                        val hasPdfEdition =
-                                                            pdfTitles.contains(book.title.trim()) &&
-                                                                TalmudPdfService.isTalmudBavliCategoryPath(catPath)
-                                                        if (hasPdfEdition) {
-                                                            listOf(textSuggestion, textSuggestion.copy(isPdf = true))
-                                                        } else {
-                                                            listOf(textSuggestion)
+                                                    val regularSuggestions =
+                                                        books.flatMap { book ->
+                                                            val catPath = buildCategoryPathTitlesCached(book.categoryId)
+                                                            val textSuggestion = BookSuggestionDto(book, catPath + book.title)
+                                                            val hasPdfEdition =
+                                                                pdfTitles.contains(book.title.trim()) &&
+                                                                    TalmudPdfService.isTalmudBavliCategoryPath(catPath)
+                                                            if (hasPdfEdition) {
+                                                                listOf(textSuggestion, textSuggestion.copy(isPdf = true))
+                                                            } else {
+                                                                listOf(textSuggestion)
+                                                            }
                                                         }
-                                                    }
 
-                                                    (combinedSuggestions + regularSuggestions).distinctBy { "${it.book.id}-${it.targetToc?.id}-${it.isPdf}" }
+                                                    (combinedSuggestions + regularSuggestions).distinctBy {
+                                                        "${it.book.id}-${it.targetToc?.id}-${it.isPdf}"
+                                                    }
                                                 }
                                             }
                                         }

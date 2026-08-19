@@ -34,9 +34,8 @@ const SPLASH_PNG: &[u8] = include_bytes!("../resources/splash.png");
 const NSIS_DATA: &[u8] = include_bytes!("../resources/zayita-nsis.exe");
 
 // Progress bar configuration
-const PROGRESS_BAR_HEIGHT: i32 = 4;
+const PROGRESS_BAR_HEIGHT: i32 = 5;
 const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the brand
-const PROGRESS_BAR_BG_COLOR: (u8, u8, u8) = (30, 45, 60); // Darker tone for unfilled progress track
 
 fn main() {
     // Set DPI awareness before any window creation (like JetBrains Runtime does)
@@ -274,12 +273,12 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
     let mut pixels = base_pixels.to_vec();
 
     // Calculate progress bar dimensions
-    // Positioned in the open space between subtitle text and bottom frame border (~86.6% from top)
-    let bar_y_start = (height as f32 * 0.866).round() as i32;
+    // Positioned in the open space between subtitle text and bottom edge (~90.8% from top)
+    let bar_y_start = (height as f32 * 0.908).round() as i32;
     let bar_y_end = (bar_y_start + PROGRESS_BAR_HEIGHT).min(height - 1);
 
-    // 70% width centered
-    let bar_width = (width as f32 * 0.70).round() as i32;
+    // 65% width centered
+    let bar_width = (width as f32 * 0.65).round() as i32;
     let bar_x_start = (width - bar_width) / 2;
     let bar_x_end = bar_x_start + bar_width;
 
@@ -298,11 +297,22 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
                     pixels[pixel_idx + 2] = PROGRESS_BAR_COLOR.0; // R
                     pixels[pixel_idx + 3] = 255;                  // A
                 } else {
-                    // Background portion (dark track, fully opaque)
-                    pixels[pixel_idx] = PROGRESS_BAR_BG_COLOR.2;     // B
-                    pixels[pixel_idx + 1] = PROGRESS_BAR_BG_COLOR.1; // G
-                    pixels[pixel_idx + 2] = PROGRESS_BAR_BG_COLOR.0; // R
-                    pixels[pixel_idx + 3] = 255;                     // A
+                    // Unfilled portion: frosted glass effect over the base image
+                    // Shows the underlying sky/clouds image with a subtle translucent white glass sheen (~28-45%)
+                    let is_edge = y == bar_y_start || y == bar_y_end - 1 || x == bar_x_start;
+                    let glass_alpha = if is_edge { 0.45f32 } else { 0.28f32 };
+                    let orig_b = base_pixels[pixel_idx] as f32;
+                    let orig_g = base_pixels[pixel_idx + 1] as f32;
+                    let orig_r = base_pixels[pixel_idx + 2] as f32;
+
+                    let b = (orig_b * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+                    let g = (orig_g * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+                    let r = (orig_r * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+
+                    pixels[pixel_idx] = b;
+                    pixels[pixel_idx + 1] = g;
+                    pixels[pixel_idx + 2] = r;
+                    pixels[pixel_idx + 3] = 255;
                 }
             }
         }

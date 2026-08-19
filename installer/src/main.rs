@@ -31,11 +31,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 // Embed splash image at compile time
 const SPLASH_PNG: &[u8] = include_bytes!("../resources/splash.png");
 // Embed NSIS installer at compile time
-const NSIS_DATA: &[u8] = include_bytes!("../resources/zayit-nsis.exe");
+const NSIS_DATA: &[u8] = include_bytes!("../resources/zayita-nsis.exe");
 
 // Progress bar configuration
 const PROGRESS_BAR_HEIGHT: i32 = 4;
-const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the logo
+const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the brand
+const PROGRESS_BAR_BG_COLOR: (u8, u8, u8) = (30, 45, 60); // Darker tone for unfilled progress track
 
 fn main() {
     // Set DPI awareness before any window creation (like JetBrains Runtime does)
@@ -45,22 +46,32 @@ fn main() {
 
     // Decode splash image
     let img = image::load_from_memory(SPLASH_PNG).expect("Failed to decode splash image");
-    let (width, height) = img.dimensions();
+    let (orig_width, orig_height) = img.dimensions();
+
+    // Scale to target width ~760px to maintain consistent, elegant proportions across all displays
+    let target_width = if orig_width > 800 { 760 } else { orig_width };
+    let target_height = ((target_width as f64) * (orig_height as f64 / orig_width as f64)).round() as u32;
+
+    let resized_img = if target_width != orig_width || target_height != orig_height {
+        image::imageops::resize(&img, target_width, target_height, image::imageops::FilterType::Lanczos3)
+    } else {
+        img.to_rgba8()
+    };
+
+    let width = target_width;
+    let height = target_height;
 
     // Convert to BGRA format (premultiplied alpha for layered window)
     // Using ARGB format: 0x00ff0000 (R), 0x0000ff00 (G), 0x000000ff (B), 0xff000000 (A)
     // with premultiplied alpha (like JBR splash screen)
-    let rgba = img.to_rgba8();
     let mut base_bgra_pixels = Vec::with_capacity((width * height * 4) as usize);
-    for pixel in rgba.pixels() {
+    for pixel in resized_img.pixels() {
         let a = pixel[3] as f32 / 255.0;
         base_bgra_pixels.push((pixel[2] as f32 * a) as u8); // B premultiplied
         base_bgra_pixels.push((pixel[1] as f32 * a) as u8); // G premultiplied
         base_bgra_pixels.push((pixel[0] as f32 * a) as u8); // R premultiplied
         base_bgra_pixels.push(pixel[3]); // A
     }
-
-    // No vertical flip needed - we use negative biHeight for top-down DIB (like JBR)
 
     // Progress tracking (0-100)
     let progress = Arc::new(AtomicU32::new(0));
@@ -180,7 +191,7 @@ fn install_with_progress(progress: Arc<AtomicU32>) {
 
     // Step 2: Extract NSIS installer to temp directory
     let temp_dir = std::env::temp_dir();
-    let nsis_path = temp_dir.join("Zayit-installer-temp.exe");
+    let nsis_path = temp_dir.join("zayita-installer-temp.exe");
 
     {
         let mut file = std::fs::File::create(&nsis_path).expect("Failed to create temp NSIS file");
@@ -204,7 +215,7 @@ fn install_with_progress(progress: Arc<AtomicU32>) {
     let _ = std::fs::remove_file(&nsis_path);
 }
 
-/// Detects and silently uninstalls any old MSI-based Zayit installation.
+/// Detects and silently uninstalls any old MSI-based Zayit/Zayita installation.
 fn uninstall_old_msi(progress: &Arc<AtomicU32>) {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -221,7 +232,8 @@ fn uninstall_old_msi(progress: &Arc<AtomicU32>) {
                 if let Ok(subkey) = uninstall_key.open_subkey(&key_name) {
                     let display_name: Result<String, _> = subkey.get_value("DisplayName");
                     if let Ok(name) = display_name {
-                        if name != "Zayit" {
+                        let is_target = name == "Zayit" || name == "Zayita" || name == "זית" || name == "זיתא";
+                        if !is_target {
                             continue;
                         }
                         // Verify this is an MSI installation (not NSIS) by checking UninstallString
@@ -262,27 +274,18 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
     let mut pixels = base_pixels.to_vec();
 
     // Calculate progress bar dimensions
-    // 30px from bottom, 75% width centered (12.5% margin each side)
-    let side_margin = width * 125 / 1000;  // 12.5%
-    let left_margin = side_margin;
-    let right_margin = side_margin;
-    let bottom_margin = 75;
+    // Positioned in the open space between subtitle text and bottom frame border (~86.6% from top)
+    let bar_y_start = (height as f32 * 0.866).round() as i32;
+    let bar_y_end = (bar_y_start + PROGRESS_BAR_HEIGHT).min(height - 1);
 
-    let bar_y_start = (height - bottom_margin - PROGRESS_BAR_HEIGHT).max(0);
-    let bar_y_end = (height - bottom_margin).min(height - 1);
-    let bar_x_start = left_margin;
-    let bar_x_end = width - right_margin;
-
-    // Calculate bar width AFTER bounds checking
-    let bar_width = (bar_x_end - bar_x_start).max(1);
+    // 70% width centered
+    let bar_width = (width as f32 * 0.70).round() as i32;
+    let bar_x_start = (width - bar_width) / 2;
+    let bar_x_end = bar_x_start + bar_width;
 
     // Calculate filled portion (RIGHT TO LEFT - RTL style)
-    // Progress goes from right to left: at 0% nothing is filled, at 100% full bar from right
-    let filled_width = (bar_width as f32 * (progress as f32 / 100.0)) as i32;
+    let filled_width = (bar_width as f32 * (progress as f32 / 100.0)).round() as i32;
     let fill_start_x = bar_x_end - filled_width;
-
-    // Draw the progress bar
-    let (r, g, b) = PROGRESS_BAR_COLOR;
 
     for y in bar_y_start..bar_y_end {
         for x in bar_x_start..bar_x_end {
@@ -290,17 +293,16 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
             if pixel_idx + 3 < pixels.len() {
                 if x >= fill_start_x {
                     // Filled portion (gold color, fully opaque)
-                    pixels[pixel_idx] = b;     // B
-                    pixels[pixel_idx + 1] = g; // G
-                    pixels[pixel_idx + 2] = r; // R
-                    pixels[pixel_idx + 3] = 255; // A - fully opaque
+                    pixels[pixel_idx] = PROGRESS_BAR_COLOR.2;     // B
+                    pixels[pixel_idx + 1] = PROGRESS_BAR_COLOR.1; // G
+                    pixels[pixel_idx + 2] = PROGRESS_BAR_COLOR.0; // R
+                    pixels[pixel_idx + 3] = 255;                  // A
                 } else {
-                    // Background portion (dark, fully opaque to avoid transparency issues
-                    // when other windows overlap and are minimized)
-                    pixels[pixel_idx] = 30;     // B
-                    pixels[pixel_idx + 1] = 30; // G
-                    pixels[pixel_idx + 2] = 30; // R
-                    pixels[pixel_idx + 3] = 255; // A - fully opaque
+                    // Background portion (dark track, fully opaque)
+                    pixels[pixel_idx] = PROGRESS_BAR_BG_COLOR.2;     // B
+                    pixels[pixel_idx + 1] = PROGRESS_BAR_BG_COLOR.1; // G
+                    pixels[pixel_idx + 2] = PROGRESS_BAR_BG_COLOR.0; // R
+                    pixels[pixel_idx + 3] = 255;                     // A
                 }
             }
         }
@@ -376,7 +378,15 @@ fn get_install_path() -> std::path::PathBuf {
             let user = std::env::var("USERNAME").unwrap_or_else(|_| "User".to_string());
             format!(r"C:\Users\{}\AppData\Local", user)
         });
-    std::path::PathBuf::from(local_app_data).join("Programs").join("zayit").join("zayit.exe")
+    let zayita_path = std::path::PathBuf::from(&local_app_data).join("Programs").join("zayita").join("zayita.exe");
+    if zayita_path.exists() {
+        return zayita_path;
+    }
+    let zayit_path = std::path::PathBuf::from(&local_app_data).join("Programs").join("zayit").join("zayit.exe");
+    if zayit_path.exists() {
+        return zayit_path;
+    }
+    zayita_path
 }
 
 fn launch_application() {
@@ -405,7 +415,7 @@ fn create_splash_window(img_width: i32, img_height: i32, pixels: &[u8]) -> HWND 
             style: CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(wnd_proc),
             hInstance: instance,
-            lpszClassName: w!("ZayitSplash"),
+            lpszClassName: w!("ZayitaSplash"),
             hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
             ..Default::default()
         };
@@ -421,8 +431,8 @@ fn create_splash_window(img_width: i32, img_height: i32, pixels: &[u8]) -> HWND 
         // Create layered window (no border, transparent background)
         let hwnd = CreateWindowExW(
             WS_EX_LAYERED | WS_EX_TOOLWINDOW,
-            w!("ZayitSplash"),
-            w!("Zayit Installer"),
+            w!("ZayitaSplash"),
+            w!("Zayita Installer"),
             WS_POPUP,
             x,
             y,
@@ -439,8 +449,6 @@ fn create_splash_window(img_width: i32, img_height: i32, pixels: &[u8]) -> HWND 
         let screen_dc = GetDC(None);
         let mem_dc = CreateCompatibleDC(screen_dc);
 
-        // Use negative height for top-down DIB format (like JetBrains Runtime)
-        // This avoids the need to manually flip the image vertically
         let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,

@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-echo === Zayit Installer Build Script ===
+echo === Zayita Installer Build Script ===
 echo.
 
 cd /d "%~dp0"
@@ -11,9 +11,13 @@ if not exist "resources" mkdir resources
 
 :: Copy splash image
 echo Copying splash.png...
-copy /Y "..\SeforimApp\src\jvmMain\assets\common\splash.png" "resources\splash.png" >nul
-if errorlevel 1 (
-    echo ERROR: Failed to copy splash.png
+if exist "..\art\splash.png" (
+    copy /Y "..\art\splash.png" "resources\splash.png" >nul
+) else if exist "..\SeforimApp\src\jvmMain\assets\common\splash.png" (
+    copy /Y "..\SeforimApp\src\jvmMain\assets\common\splash.png" "resources\splash.png" >nul
+)
+if not exist "resources\splash.png" (
+    echo ERROR: Failed to find splash.png
     exit /b 1
 )
 echo OK
@@ -27,9 +31,9 @@ for %%p in (
     "..\SeforimApp\build\compose\binaries\main\graalvm-nsis"
     "..\SeforimApp\build\compose\binaries\main-release\nsis"
 ) do (
-    for %%f in ("%%~p\zayit-*-nsis.exe") do (
+    for %%f in ("%%~p\zayita-*-nsis.exe" "%%~p\zayit-*-nsis.exe") do (
         set "NSIS_NAME=%%~nf"
-        copy /Y "%%f" "resources\zayit-nsis.exe" >nul
+        copy /Y "%%f" "resources\zayita-nsis.exe" >nul
         goto :nsis_copied
     )
 )
@@ -54,7 +58,7 @@ if errorlevel 1 (
 set "EXE_NAME=%NSIS_NAME%.exe"
 echo.
 echo Renaming to %EXE_NAME%...
-move /Y "target\release\zayit-installer.exe" "target\release\%EXE_NAME%" >nul
+move /Y "target\release\zayita-installer.exe" "target\release\%EXE_NAME%" >nul
 if errorlevel 1 (
     echo ERROR: Failed to rename exe
     exit /b 1

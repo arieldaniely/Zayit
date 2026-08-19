@@ -177,7 +177,11 @@
     },
     "windows": {
       "downloadSoftware": "הורדת התוכנה",
-      "recommendedFile": "קובץ מומלץ בשבילך",
+      "recommendedFile": "קובץ מומלץ בשבילך (כולל מסך פתיחה והתקנה מהירה)",
+      "installerOption": "מתקין רשמי (Installer)",
+      "portableTitle": "מהדורה ניידת (Portable)",
+      "portableDesc": "ארכיון ZIP שאינו דורש התקנה — כל הנתונים נשמרים בתיקיית התוכנה (אידיאלי ל-Disk-on-Key)",
+      "downloadPortable": "הורד מהדורה ניידת (ZIP)",
       "showMoreOptions": "אפשרויות נוספות",
       "hideMoreOptions": "אפשרויות נוספות",
       "alternativeFormat": "פורמט חלופי (MSI):",

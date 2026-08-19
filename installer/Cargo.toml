@@ -1,8 +1,8 @@
 [package]
-name = "zayit-installer"
+name = "zayita-installer"
 version = "1.0.0"
 edition = "2021"
-description = "Silent installer for Zayit application"
+description = "Silent installer for Zayita application"
 authors = ["KDroidFilter"]
 
 [dependencies]
@@ -17,7 +17,7 @@ windows = { version = "0.58", features = [
     "Win32_Security",
 ] }
 
-# Image decoding
+# Image decoding and resizing
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Windows registry access (for detecting old MSI installations)
@@ -33,5 +33,5 @@ codegen-units = 1
 strip = true
 
 [[bin]]
-name = "zayit-installer"
+name = "zayita-installer"
 path = "src/main.rs"

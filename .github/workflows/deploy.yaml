@@ -139,7 +139,13 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :SeforimApp:createReleaseDistributable :SeforimApp:packageReleaseNsis
 
-      - name: Stage Windows installer
+      - name: Install Rust toolchain
+        if: startsWith(matrix.os, 'windows')
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Build Rust wrapper and stage Windows assets
         if: startsWith(matrix.os, 'windows')
         shell: pwsh
         run: |
@@ -155,8 +161,17 @@ jobs:
 
           New-Item -ItemType Directory -Force staging | Out-Null
 
-          # Publish the Zayita NSIS directly as the user-facing Windows installer.
+          # Raw NSIS (silent oneClick) — consumed by the auto-updater only.
           Copy-Item $nsis.FullName "staging\Zayita-$ver-windows-$wtok-nsis.exe"
+
+          # Rust wrapper installer (splash UI) embeds and runs the NSIS silently — this is the user-facing download.
+          Push-Location installer
+          New-Item -ItemType Directory -Force resources | Out-Null
+          Copy-Item "..\art\splash.png" "resources\splash.png"
+          Copy-Item $nsis.FullName "resources\zayita-nsis.exe"
+          cargo build --release --target ${{ matrix.rust_target }}
+          Pop-Location
+          Copy-Item "installer\target\${{ matrix.rust_target }}\release\zayita-installer.exe" "staging\Zayita-$ver-windows-$wtok.exe"
 
       # A self-contained ZIP that keeps user data beside the application. This is
       # intentionally built with the regular Compose runtime rather than NIK so the

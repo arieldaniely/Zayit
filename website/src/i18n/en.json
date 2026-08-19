@@ -177,7 +177,11 @@
     },
     "windows": {
       "downloadSoftware": "Download Software",
-      "recommendedFile": "Recommended file for you",
+      "recommendedFile": "Recommended installer for you (includes splash screen & quick setup)",
+      "installerOption": "Official Installer",
+      "portableTitle": "Portable Edition",
+      "portableDesc": "ZIP archive that requires no installation — all data is stored locally with the app (ideal for USB drives)",
+      "downloadPortable": "Download Portable (ZIP)",
       "showMoreOptions": "more options",
       "hideMoreOptions": "more options",
       "alternativeFormat": "Alternative format (MSI):",

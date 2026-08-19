@@ -190,7 +190,8 @@ object TorahReferenceSearchHelper {
 
         // 2. Talmud Bavli Daf Matching
         val dafMatch = matchTalmudDaf(tocText, loc)
-        if (dafMatch) return true
+        if (dafMatch == true) return true
+        if (dafMatch == false) return false // Explicit rejection
 
         // 3. Siman / Perek / Seif / Pasuk multi-token or gematria matching
         if (matchTokensInPathOrText(dto, loc)) {
@@ -203,10 +204,10 @@ object TorahReferenceSearchHelper {
     private fun matchTalmudDaf(
         tocText: String,
         loc: String,
-    ): Boolean {
+    ): Boolean? {
         // Normalize loc: e.g. "ב:", "ב.", "ב ע\"ב", "דף ב עמוד א", "כז:", "27:"
         val cleanLoc = loc.replace("[\"\'״׳]".toRegex(), "").trim()
-        if (cleanLoc.isEmpty()) return false
+        if (cleanLoc.isEmpty()) return null
 
         val isAmudB =
             loc.endsWith(":") ||
@@ -245,7 +246,7 @@ object TorahReferenceSearchHelper {
         if (isAmudB && dafPart.endsWith(" ב")) dafPart = dafPart.dropLast(2).trim()
         if (isAmudA && dafPart.endsWith(" א")) dafPart = dafPart.dropLast(2).trim()
 
-        if (dafPart.isBlank()) return false
+        if (dafPart.isBlank()) return null
 
         // If dafPart is digits, convert to gematria
         val numericDaf = dafPart.toIntOrNull()
@@ -262,7 +263,7 @@ object TorahReferenceSearchHelper {
                 cleanToc == cleanGematriaDaf ||
                 cleanToc == "דף $cleanGematriaDaf"
 
-        if (!dafMatches) return false
+        if (!dafMatches) return null
 
         return when {
             isAmudB -> cleanToc.contains("עמוד ב") || cleanToc.contains("עב") || cleanToc.endsWith(":") || cleanToc.endsWith(" ב")

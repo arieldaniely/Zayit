@@ -82,10 +82,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def require_source_frame(capture_tools, hwnd: int):
+    client = capture_tools.get_client_rect(hwnd)
+    if client.width >= SOURCE_WIDTH and client.height >= SOURCE_HEIGHT:
+        return client
     frame = capture_tools.get_frame_rect(hwnd)
     if frame.width < SOURCE_WIDTH or frame.height < SOURCE_HEIGHT:
         raise RuntimeError(
-            f"Native frame is {frame.width}x{frame.height}; expected at least "
+            f"Native frame is {frame.width}x{frame.height} (client {client.width}x{client.height}); expected at least "
             f"{SOURCE_WIDTH}x{SOURCE_HEIGHT}. The window was not resized because "
             "resizing after Compose created its Skia surface produces black pixels."
         )
@@ -228,15 +231,17 @@ def main() -> int:
 
             # The app is born at this size. Captures only verify it and never resize it.
             def verify_window(current_hwnd: int, width: int = TARGET_WIDTH, height: int = TARGET_HEIGHT):
-                frame = capture_tools.get_frame_rect(current_hwnd)
-                if (frame.width, frame.height) != (native_frame.width, native_frame.height):
-                    raise RuntimeError(
-                        f"Native frame changed from {native_frame.width}x{native_frame.height} "
-                        f"to {frame.width}x{frame.height}. "
-                        "Refusing to resize because that would destabilize Compose layout."
-                    )
+                client = capture_tools.get_client_rect(current_hwnd)
+                if (client.width, client.height) != (native_frame.width, native_frame.height):
+                    frame = capture_tools.get_frame_rect(current_hwnd)
+                    if (frame.width, frame.height) != (native_frame.width, native_frame.height):
+                        raise RuntimeError(
+                            f"Native frame changed from {native_frame.width}x{native_frame.height} "
+                            f"to {frame.width}x{frame.height} (client {client.width}x{client.height}). "
+                            "Refusing to resize because that would destabilize Compose layout."
+                        )
                 capture_tools.user32.SetForegroundWindow(current_hwnd)
-                return frame
+                return client
 
             capture_tools.normalize_window = verify_window
             settings = fixtures / "visual-settings.properties"

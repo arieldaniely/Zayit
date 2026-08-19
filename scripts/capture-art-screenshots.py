@@ -51,6 +51,7 @@ SW_RESTORE = 9
 SWP_NOACTIVATE = 0x0010
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 HWND_TOP = 0
+PW_CLIENTONLY = 0x00000001
 PW_RENDERFULLCONTENT = 0x00000002
 BI_RGB = 0
 DIB_RGB_COLORS = 0
@@ -242,6 +243,13 @@ def choose_window(title_hint: str) -> int:
             return candidates[int(answer) - 1][0]
 
 
+def get_client_rect(hwnd: int) -> Rect:
+    rect = Rect()
+    if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
+        raise ctypes.WinError()
+    return rect
+
+
 def get_window_rect(hwnd: int) -> Rect:
     rect = Rect()
     if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
@@ -250,6 +258,9 @@ def get_window_rect(hwnd: int) -> Rect:
 
 
 def get_frame_rect(hwnd: int) -> Rect:
+    client = get_client_rect(hwnd)
+    if client.width >= WIDTH and client.height >= HEIGHT:
+        return client
     rect = Rect()
     result = dwmapi.DwmGetWindowAttribute(
         hwnd,
@@ -266,10 +277,14 @@ def normalize_window(
     height: int = SOURCE_HEIGHT,
 ) -> Rect:
     user32.ShowWindow(hwnd, SW_RESTORE)
+    client = get_client_rect(hwnd)
+    if client.width == width and client.height == height:
+        user32.SetForegroundWindow(hwnd)
+        return client
+
     outer = get_window_rect(hwnd)
-    frame = get_frame_rect(hwnd)
-    invisible_width = outer.width - frame.width
-    invisible_height = outer.height - frame.height
+    invisible_width = outer.width - client.width
+    invisible_height = outer.height - client.height
     if not user32.SetWindowPos(
         hwnd,
         HWND_TOP,
@@ -282,48 +297,47 @@ def normalize_window(
         raise ctypes.WinError()
     user32.SetForegroundWindow(hwnd)
     time.sleep(RESIZE_SETTLE_SECONDS)
-    frame = get_frame_rect(hwnd)
-    if (frame.width, frame.height) != (width, height):
-        raise RuntimeError(f"גודל החלון הוא {frame.width}x{frame.height}; נדרש {width}x{height}")
-    return frame
+    return get_client_rect(hwnd)
 
 
 def capture_native_window(hwnd: int) -> tuple[Image.Image, Rect]:
-    frame = normalize_window(hwnd)
-    outer = get_window_rect(hwnd)
-    window_dc = user32.GetWindowDC(hwnd)
+    client = normalize_window(hwnd)
+    capture_width = client.width if client.width >= WIDTH else WIDTH
+    capture_height = client.height if client.height >= HEIGHT else HEIGHT
+    window_dc = user32.GetDC(hwnd)
     memory_dc = gdi32.CreateCompatibleDC(window_dc)
-    bitmap = gdi32.CreateCompatibleBitmap(window_dc, outer.width, outer.height)
+    bitmap = gdi32.CreateCompatibleBitmap(window_dc, capture_width, capture_height)
     previous = gdi32.SelectObject(memory_dc, bitmap)
     try:
-        if not user32.PrintWindow(hwnd, memory_dc, PW_RENDERFULLCONTENT):
-            raise ctypes.WinError()
+        # PW_CLIENTONLY (0x1) copies ONLY the Compose client area, excluding Win32 non-client caption and borders
+        if not user32.PrintWindow(hwnd, memory_dc, PW_CLIENTONLY | PW_RENDERFULLCONTENT):
+            if not user32.PrintWindow(hwnd, memory_dc, PW_CLIENTONLY):
+                if not user32.PrintWindow(hwnd, memory_dc, PW_RENDERFULLCONTENT):
+                    raise ctypes.WinError()
 
         header = BitmapInfoHeader()
         header.biSize = ctypes.sizeof(BitmapInfoHeader)
-        header.biWidth = outer.width
-        header.biHeight = -outer.height
+        header.biWidth = capture_width
+        header.biHeight = -capture_height
         header.biPlanes = 1
         header.biBitCount = 32
         header.biCompression = BI_RGB
         info = BitmapInfo()
         info.bmiHeader = header
-        pixels = ctypes.create_string_buffer(outer.width * outer.height * 4)
+        pixels = ctypes.create_string_buffer(capture_width * capture_height * 4)
         copied = gdi32.GetDIBits(
             memory_dc,
             bitmap,
             0,
-            outer.height,
+            capture_height,
             pixels,
             ctypes.byref(info),
             DIB_RGB_COLORS,
         )
-        if copied != outer.height:
+        if copied != capture_height:
             raise ctypes.WinError()
-        image = Image.frombuffer("RGB", (outer.width, outer.height), pixels, "raw", "BGRX", 0, 1).copy()
-        crop_left = frame.left - outer.left
-        crop_top = frame.top - outer.top
-        image = image.crop((crop_left, crop_top, crop_left + frame.width, crop_top + frame.height))
+        image = Image.frombuffer("RGB", (capture_width, capture_height), pixels, "raw", "BGRX", 0, 1).copy()
+        frame = Rect(0, 0, capture_width, capture_height)
         return image, frame
     finally:
         gdi32.SelectObject(memory_dc, previous)

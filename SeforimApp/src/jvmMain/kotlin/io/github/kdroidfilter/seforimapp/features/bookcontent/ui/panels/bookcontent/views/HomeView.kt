@@ -93,6 +93,7 @@ private data class BookSuggestion(
     val book: BookModel,
     val path: List<String>,
     val isPdf: Boolean = false,
+    val targetToc: TocEntry? = null,
 )
 
 @Immutable
@@ -129,6 +130,7 @@ data class HomeSearchCallbacks(
     val onPickCategory: (Category) -> Unit,
     val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
+    val onPickCombinedReference: ((BookModel, Boolean, TocEntry) -> Unit)? = null,
 )
 
 /**
@@ -413,7 +415,7 @@ private fun HomeBody(
                             val mappedBookSuggestionsForBar =
                                 searchUi.bookSuggestions
                                     .map { bs ->
-                                        BookSuggestion(bs.book, bs.path, bs.isPdf)
+                                        BookSuggestion(bs.book, bs.path, bs.isPdf, bs.targetToc)
                                     }.toImmutableList()
                             val mappedTocSuggestionsForBar =
                                 searchUi.tocSuggestions.map { ts ->
@@ -483,14 +485,18 @@ private fun HomeBody(
                                 isBookLoading = searchUi.isReferenceLoading && !isTocInTopBar,
                                 isTocLoading = searchUi.isTocLoading && isTocInTopBar,
                                 onPickBook = { picked ->
-                                    searchCallbacks.onPickBook(picked.book, picked.isPdf)
-                                    skipNextReferenceQuery = true
-                                    referenceSearchState.edit { replace(0, length, "") }
-                                    skipNextTocQuery = true
-                                    tocSearchState.edit { replace(0, length, "") }
-                                    skipNextTocQuery = false
-                                    tocEditedSinceBook = false
-                                    focusAfterDelay(scope, 80, mainSearchFocusRequester)
+                                    if (picked.targetToc != null && searchCallbacks.onPickCombinedReference != null) {
+                                        searchCallbacks.onPickCombinedReference.invoke(picked.book, picked.isPdf, picked.targetToc)
+                                    } else {
+                                        searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                        skipNextReferenceQuery = true
+                                        referenceSearchState.edit { replace(0, length, "") }
+                                        skipNextTocQuery = true
+                                        tocSearchState.edit { replace(0, length, "") }
+                                        skipNextTocQuery = false
+                                        tocEditedSinceBook = false
+                                        focusAfterDelay(scope, 80, mainSearchFocusRequester)
+                                    }
                                 },
                                 onPickToc = { picked ->
                                     searchCallbacks.onPickToc(picked.toc)
@@ -536,7 +542,7 @@ private fun HomeBody(
                                     val mappedBookSuggestions =
                                         searchUi.bookSuggestions
                                             .map { bs ->
-                                                BookSuggestion(bs.book, bs.path, bs.isPdf)
+                                                BookSuggestion(bs.book, bs.path, bs.isPdf, bs.targetToc)
                                             }.toImmutableList()
                                     val mappedTocSuggestions =
                                         searchUi.tocSuggestions.map { ts ->
@@ -568,12 +574,16 @@ private fun HomeBody(
                                             referenceSearchState.edit { replace(0, length, full) }
                                         },
                                         onPickBook = { picked ->
-                                            searchCallbacks.onPickBook(picked.book, picked.isPdf)
-                                            skipNextReferenceQuery = true
-                                            referenceSearchState.edit { replace(0, length, "") }
-                                            skipNextTocQuery = true
-                                            tocSearchState.edit { replace(0, length, "") }
-                                            skipNextTocQuery = false
+                                            if (picked.targetToc != null && searchCallbacks.onPickCombinedReference != null) {
+                                                searchCallbacks.onPickCombinedReference.invoke(picked.book, picked.isPdf, picked.targetToc)
+                                            } else {
+                                                searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                                skipNextReferenceQuery = true
+                                                referenceSearchState.edit { replace(0, length, "") }
+                                                skipNextTocQuery = true
+                                                tocSearchState.edit { replace(0, length, "") }
+                                                skipNextTocQuery = false
+                                            }
                                         },
                                         onPickToc = { picked ->
                                             searchCallbacks.onPickToc(picked.toc)

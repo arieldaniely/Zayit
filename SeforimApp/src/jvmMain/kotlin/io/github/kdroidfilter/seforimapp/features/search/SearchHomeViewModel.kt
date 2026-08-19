@@ -12,6 +12,7 @@ import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.domain.TorahReferenceSearchHelper
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -92,6 +93,7 @@ data class BookSuggestionDto(
     val book: Book,
     val path: List<String>,
     val isPdf: Boolean = false,
+    val targetToc: TocEntry? = null,
 )
 
 @Immutable
@@ -301,9 +303,61 @@ class SearchHomeViewModel(
                                                 emptyList<BookSuggestionDto>()
                                             } else {
                                                 coroutineScope {
-                                                    // The lookup index contains the distributed library only. Query the
-                                                    // repository alongside it so personal books are discoverable too and
-                                                    // so reference lookup still works if the optional lookup index is absent.
+                                                    val pdfTitles =
+                                                        withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
+
+                                                    // 1. Check for continuous reference candidates (e.g. "ברכות ב:", "שו\"ע או\"ח רסג")
+                                                    val splits = TorahReferenceSearchHelper.splitReferenceQuery(q)
+                                                    val combinedSuggestions = mutableListOf<BookSuggestionDto>()
+
+                                                    for ((bookPart, locPart) in splits) {
+                                                        if (bookPart.length < minBookPrefixLen || locPart.isBlank()) continue
+                                                        val bookPartNorm = sanitizeHebrewForAcronym(bookPart)
+                                                        val candidateHits = runCatching {
+                                                            lookup.searchBooksWithScoring(bookPartNorm, limit = 5)
+                                                        }.getOrDefault(emptyList())
+                                                        val candidateBooks = candidateHits.map { hit ->
+                                                            Book(
+                                                                id = hit.id,
+                                                                categoryId = hit.categoryId,
+                                                                sourceId = 0,
+                                                                title = hit.title,
+                                                                order = hit.orderIndex.toFloat(),
+                                                                isBaseBook = hit.isBaseBook,
+                                                            )
+                                                        }.ifEmpty {
+                                                            runSuspendCatching {
+                                                                repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
+                                                            }.getOrDefault(emptyList())
+                                                        }
+
+                                                        for (candidateBook in candidateBooks.take(3)) {
+                                                            val bookTocs = getOrLoadTocEntries(candidateBook)
+                                                            val matchingTocs = bookTocs.filter { tocDto ->
+                                                                TorahReferenceSearchHelper.matchesTocLocation(tocDto, locPart)
+                                                            }
+
+                                                            for (matchedToc in matchingTocs.take(6)) {
+                                                                val catPath = buildCategoryPathTitlesCached(candidateBook.categoryId)
+                                                                val hasPdfEdition =
+                                                                    pdfTitles.contains(candidateBook.title.trim()) &&
+                                                                        TalmudPdfService.isTalmudBavliCategoryPath(catPath)
+                                                                val combinedDto = BookSuggestionDto(
+                                                                    book = candidateBook,
+                                                                    path = matchedToc.path,
+                                                                    isPdf = false,
+                                                                    targetToc = matchedToc.toc,
+                                                                )
+                                                                combinedSuggestions.add(combinedDto)
+                                                                if (hasPdfEdition) {
+                                                                    combinedSuggestions.add(combinedDto.copy(isPdf = true))
+                                                                }
+                                                            }
+                                                        }
+                                                        if (combinedSuggestions.isNotEmpty()) break
+                                                    }
+
+                                                    // 2. Standard book search
                                                     val indexedDeferred =
                                                         async(Dispatchers.Default) {
                                                             runCatching {
@@ -331,9 +385,8 @@ class SearchHomeViewModel(
                                                         (indexedBooks + repositoryDeferred.await())
                                                             .distinctBy(Book::id)
                                                             .take(maxBookPredictive)
-                                                    val pdfTitles =
-                                                        withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
-                                                    books.flatMap { book ->
+
+                                                    val regularSuggestions = books.flatMap { book ->
                                                         val catPath = buildCategoryPathTitlesCached(book.categoryId)
                                                         val textSuggestion = BookSuggestionDto(book, catPath + book.title)
                                                         val hasPdfEdition =
@@ -345,6 +398,8 @@ class SearchHomeViewModel(
                                                             listOf(textSuggestion)
                                                         }
                                                     }
+
+                                                    (combinedSuggestions + regularSuggestions).distinctBy { "${it.book.id}-${it.targetToc?.id}-${it.isPdf}" }
                                                 }
                                             }
                                         }
@@ -461,6 +516,28 @@ class SearchHomeViewModel(
             )
     }
 
+    private suspend fun getOrLoadTocEntries(book: Book): List<TocSuggestionDto> {
+        tocCache[book.id]?.let { return it }
+        return withContext(Dispatchers.Default) {
+            val entries = runSuspendCatching { repository.getBookToc(book.id) }.getOrElse { emptyList() }
+            val built = mutableListOf<TocSuggestionDto>()
+            val sorted =
+                entries
+                    .asSequence()
+                    .filter { it.text.isNotBlank() }
+                    .sortedWith(compareBy<TocEntry> { it.level }.thenBy { it.text })
+                    .toList()
+            for (toc in sorted) {
+                val path = buildTocPathTitlesCached(toc).filter { it.isNotBlank() }
+                if (path.isNotEmpty()) {
+                    built += TocSuggestionDto(toc, path)
+                }
+            }
+            tocCache[book.id] = built
+            built
+        }
+    }
+
     fun onPickBook(
         book: Book,
         isPdf: Boolean = false,
@@ -481,25 +558,7 @@ class SearchHomeViewModel(
             )
         // Load preview hints and initial TOC suggestions asynchronously
         viewModelScope.launch {
-            val tocEntries =
-                tocCache[book.id] ?: withContext(Dispatchers.Default) {
-                    val entries = runSuspendCatching { repository.getBookToc(book.id) }.getOrElse { emptyList() }
-                    val built = mutableListOf<TocSuggestionDto>()
-                    val sorted =
-                        entries
-                            .asSequence()
-                            .filter { it.text.isNotBlank() }
-                            .sortedWith(compareBy<TocEntry> { it.level }.thenBy { it.text })
-                            .toList()
-                    for (toc in sorted) {
-                        val path = buildTocPathTitlesCached(toc).filter { it.isNotBlank() }
-                        if (path.isNotEmpty()) {
-                            built += TocSuggestionDto(toc, path)
-                        }
-                    }
-                    tocCache[book.id] = built
-                    built
-                }
+            val tocEntries = getOrLoadTocEntries(book)
             val preview =
                 tocEntries
                     .mapNotNull { it.toc.text.takeIf { t -> t.isNotBlank() } }
@@ -677,6 +736,41 @@ class SearchHomeViewModel(
 
         // Emit navigation event - UI layer handles actual navigation
         if (selectedIsPdf) {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToPdfContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        } else {
+            _navigationEvents.send(
+                SearchHomeNavigationEvent.NavigateToBookContent(
+                    bookId = book.id,
+                    tabId = currentTabId,
+                    lineId = anchorLineId,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Opens a specific combined reference (book + TOC location) in the current tab.
+     */
+    suspend fun openCombinedReferenceInCurrentTab(
+        currentTabId: String,
+        book: Book,
+        isPdf: Boolean,
+        toc: TocEntry,
+    ) {
+        val anchorLineId: Long? =
+            toc.lineId ?: runSuspendCatching { repository.getLineIdsForTocEntry(toc.id).firstOrNull() }.getOrNull()
+
+        persistedStore.update(currentTabId) { current ->
+            current.copy(bookContent = current.bookContent.copy(selectedBookId = book.id))
+        }
+
+        if (isPdf) {
             _navigationEvents.send(
                 SearchHomeNavigationEvent.NavigateToPdfContent(
                     bookId = book.id,

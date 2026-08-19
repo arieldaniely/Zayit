@@ -190,16 +190,20 @@ fun NucleusApplicationScope.MainAppWindow(
                     }
                     true
                 } else if (
-                    (keyEvent.isAltPressed &&
-                        !keyEvent.isCtrlPressed &&
-                        !keyEvent.isShiftPressed &&
-                        !keyEvent.isMetaPressed &&
-                        keyEvent.key == Key.Home) ||
-                    (keyEvent.isMetaPressed &&
-                        keyEvent.isShiftPressed &&
-                        !keyEvent.isCtrlPressed &&
-                        !keyEvent.isAltPressed &&
-                        keyEvent.key == Key.H)
+                    (
+                        keyEvent.isAltPressed &&
+                            !keyEvent.isCtrlPressed &&
+                            !keyEvent.isShiftPressed &&
+                            !keyEvent.isMetaPressed &&
+                            keyEvent.key == Key.Home
+                    ) ||
+                    (
+                        keyEvent.isMetaPressed &&
+                            keyEvent.isShiftPressed &&
+                            !keyEvent.isCtrlPressed &&
+                            !keyEvent.isAltPressed &&
+                            keyEvent.key == Key.H
+                    )
                 ) {
                     val currentTabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId
                     if (currentTabId != null) {
@@ -393,13 +397,14 @@ fun NucleusApplicationScope.MainAppWindow(
                                             !keyEvent.isShiftPressed &&
                                             !keyEvent.isMetaPressed &&
                                             keyEvent.key == Key.Home
-                                    ) || (
-                                        keyEvent.isMetaPressed &&
-                                            keyEvent.isShiftPressed &&
-                                            !keyEvent.isCtrlPressed &&
-                                            !keyEvent.isAltPressed &&
-                                            keyEvent.key == Key.H
-                                    ) -> {
+                                    ) ||
+                                        (
+                                            keyEvent.isMetaPressed &&
+                                                keyEvent.isShiftPressed &&
+                                                !keyEvent.isCtrlPressed &&
+                                                !keyEvent.isAltPressed &&
+                                                keyEvent.key == Key.H
+                                        ) -> {
                                         val currentTabId = tabs.getOrNull(selectedIndex)?.destination?.tabId
                                         if (currentTabId != null) {
                                             tabsVm.replaceCurrentTabWithNewTabId(TabsDestination.Home(currentTabId))

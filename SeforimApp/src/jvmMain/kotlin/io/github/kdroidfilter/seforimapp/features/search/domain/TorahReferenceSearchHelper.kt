@@ -111,15 +111,25 @@ object TorahReferenceSearchHelper {
             sb.append('י')
             n -= 10
         }
-        if (n == 9) sb.append('ט')
-        else if (n == 8) sb.append('ח')
-        else if (n == 7) sb.append('ז')
-        else if (n == 6) sb.append('ו')
-        else if (n == 5) sb.append('ה')
-        else if (n == 4) sb.append('ד')
-        else if (n == 3) sb.append('ג')
-        else if (n == 2) sb.append('ב')
-        else if (n == 1) sb.append('א')
+        if (n == 9) {
+            sb.append('ט')
+        } else if (n == 8) {
+            sb.append('ח')
+        } else if (n == 7) {
+            sb.append('ז')
+        } else if (n == 6) {
+            sb.append('ו')
+        } else if (n == 5) {
+            sb.append('ה')
+        } else if (n == 4) {
+            sb.append('ד')
+        } else if (n == 3) {
+            sb.append('ג')
+        } else if (n == 2) {
+            sb.append('ב')
+        } else if (n == 1) {
+            sb.append('א')
+        }
         return sb.toString()
     }
 

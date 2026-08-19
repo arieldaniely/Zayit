@@ -318,22 +318,20 @@ class SearchHomeViewModel(
                                                                 lookup.searchBooksWithScoring(bookPartNorm, limit = 5)
                                                             }.getOrDefault(emptyList())
                                                         val candidateBooks =
-                                                            candidateHits
-                                                                .map { hit ->
-                                                                    Book(
-                                                                        id = hit.id,
-                                                                        categoryId = hit.categoryId,
-                                                                        sourceId = 0,
-                                                                        title = hit.title,
-                                                                        order = hit.orderIndex.toFloat(),
-                                                                        isBaseBook = hit.isBaseBook,
-                                                                    )
-                                                                }
-                                                                .ifEmpty {
-                                                                    runSuspendCatching {
-                                                                        repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
-                                                                    }.getOrDefault(emptyList())
-                                                                }
+                                                            candidateHits.map { hit ->
+                                                                Book(
+                                                                    id = hit.id,
+                                                                    categoryId = hit.categoryId,
+                                                                    sourceId = 0,
+                                                                    title = hit.title,
+                                                                    order = hit.orderIndex.toFloat(),
+                                                                    isBaseBook = hit.isBaseBook,
+                                                                )
+                                                            }.ifEmpty {
+                                                                runSuspendCatching {
+                                                                    repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
+                                                                }.getOrDefault(emptyList())
+                                                            }
 
                                                         for (candidateBook in candidateBooks.take(3)) {
                                                             val bookTocs = getOrLoadTocEntries(candidateBook)

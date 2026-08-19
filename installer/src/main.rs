@@ -34,7 +34,7 @@ const SPLASH_PNG: &[u8] = include_bytes!("../resources/splash.png");
 const NSIS_DATA: &[u8] = include_bytes!("../resources/zayita-nsis.exe");
 
 // Progress bar configuration
-const PROGRESS_BAR_HEIGHT: i32 = 5;
+const PROGRESS_BAR_HEIGHT: i32 = 10;
 const PROGRESS_BAR_COLOR: (u8, u8, u8) = (212, 175, 55); // Gold color matching the brand
 
 fn main() {
@@ -90,7 +90,6 @@ fn main() {
     let mut hwnd = create_splash_window(width as i32, height as i32, &base_bgra_pixels);
 
     // Non-blocking message loop with progress bar animation
-    let mut last_displayed_progress: u32 = 0;
     let mut smooth_progress: f32 = 0.0;
     let frame_duration = Duration::from_millis(33); // ~30 FPS
     let mut last_frame = Instant::now();
@@ -120,7 +119,14 @@ fn main() {
                     // Window was destroyed - recreate it
                     hwnd = create_splash_window(width as i32, height as i32, &base_bgra_pixels);
                     // Force redraw with current progress
-                    let _ = update_splash_with_progress(hwnd, width as i32, height as i32, &base_bgra_pixels, last_displayed_progress);
+                    let _ = update_splash_with_progress(
+                        hwnd,
+                        width as i32,
+                        height as i32,
+                        &base_bgra_pixels,
+                        smooth_progress,
+                        start_time.elapsed().as_secs_f32(),
+                    );
                 } else {
                     // Ensure window is visible
                     let _ = ShowWindow(hwnd, SW_SHOW);
@@ -136,7 +142,14 @@ fn main() {
                     if !IsWindow(hwnd).as_bool() {
                         hwnd = create_splash_window(width as i32, height as i32, &base_bgra_pixels);
                     }
-                    let _ = update_splash_with_progress(hwnd, width as i32, height as i32, &base_bgra_pixels, smooth_progress as u32);
+                    let _ = update_splash_with_progress(
+                        hwnd,
+                        width as i32,
+                        height as i32,
+                        &base_bgra_pixels,
+                        smooth_progress,
+                        start_time.elapsed().as_secs_f32(),
+                    );
                     thread::sleep(Duration::from_millis(20));
                 }
 
@@ -169,12 +182,14 @@ fn main() {
                     smooth_progress = smooth_progress.min(effective_target);
                 }
 
-                let display_progress = smooth_progress as u32;
-                if display_progress != last_displayed_progress {
-                    if update_splash_with_progress(hwnd, width as i32, height as i32, &base_bgra_pixels, display_progress) {
-                        last_displayed_progress = display_progress;
-                    }
-                }
+                let _ = update_splash_with_progress(
+                    hwnd,
+                    width as i32,
+                    height as i32,
+                    &base_bgra_pixels,
+                    smooth_progress,
+                    elapsed_secs,
+                );
                 last_frame = now;
             }
 
@@ -259,7 +274,14 @@ fn uninstall_old_msi(progress: &Arc<AtomicU32>) {
     }
 }
 
-fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels: &[u8], progress: u32) -> bool {
+fn update_splash_with_progress(
+    hwnd: HWND,
+    width: i32,
+    height: i32,
+    base_pixels: &[u8],
+    progress: f32,
+    anim_time: f32,
+) -> bool {
     use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
     // Check if window is still valid before attempting to update
@@ -272,48 +294,135 @@ fn update_splash_with_progress(hwnd: HWND, width: i32, height: i32, base_pixels:
     // Create a copy of the base pixels and overlay the progress bar
     let mut pixels = base_pixels.to_vec();
 
-    // Calculate progress bar dimensions
-    // Positioned in the open space between subtitle text and bottom edge (~90.8% from top)
-    let bar_y_start = (height as f32 * 0.908).round() as i32;
-    let bar_y_end = (bar_y_start + PROGRESS_BAR_HEIGHT).min(height - 1);
+    let bar_height_f = PROGRESS_BAR_HEIGHT as f32;
+    let radius = bar_height_f * 0.5;
+
+    // Positioned in the open space between subtitle text and bottom edge (~90% from top)
+    let bar_y_start = (height as f32 * 0.900).round() as i32;
+    let bar_y_end = bar_y_start + PROGRESS_BAR_HEIGHT;
 
     // 65% width centered
     let bar_width = (width as f32 * 0.65).round() as i32;
+    let bar_width_f = bar_width as f32;
     let bar_x_start = (width - bar_width) / 2;
     let bar_x_end = bar_x_start + bar_width;
 
-    // Calculate filled portion (RIGHT TO LEFT - RTL style)
-    let filled_width = (bar_width as f32 * (progress as f32 / 100.0)).round() as i32;
-    let fill_start_x = bar_x_end - filled_width;
+    let y_center = bar_y_start as f32 + radius;
 
-    for y in bar_y_start..bar_y_end {
-        for x in bar_x_start..bar_x_end {
+    // Medial axis segment for track capsule (rounded capsule bounds)
+    let track_x_left = bar_x_start as f32 + radius;
+    let track_x_right = bar_x_end as f32 - radius;
+
+    // Calculate filled portion (RIGHT TO LEFT - RTL style)
+    let filled_pct = (progress / 100.0).clamp(0.0, 1.0);
+    let filled_width_f = bar_width_f * filled_pct;
+
+    // Fill capsule bounds (RTL: right side is fixed at track_x_right, left side moves left)
+    let fill_x_right = track_x_right;
+    let fill_x_left = (bar_x_end as f32 - filled_width_f + radius).min(fill_x_right);
+
+    // Shimmer wave parameters (travels along active filled section from right to left)
+    let shimmer_speed = 1.3; // cycles per second
+    let shimmer_phase = (anim_time * shimmer_speed).fract();
+    let shimmer_center_rel = 1.0 - shimmer_phase; // RTL motion
+
+    let y_start_scan = (bar_y_start - 1).max(0);
+    let y_end_scan = (bar_y_end + 1).min(height - 1);
+    let x_start_scan = (bar_x_start - 1).max(0);
+    let x_end_scan = (bar_x_end + 1).min(width - 1);
+
+    for y in y_start_scan..=y_end_scan {
+        let py = y as f32 + 0.5;
+        for x in x_start_scan..=x_end_scan {
+            let px = x as f32 + 0.5;
+
+            // 1. Track capsule distance & coverage (Anti-aliased)
+            let clamped_track_x = px.clamp(track_x_left, track_x_right);
+            let dist_track = ((px - clamped_track_x).powi(2) + (py - y_center).powi(2)).sqrt();
+            if dist_track > radius + 0.5 {
+                continue;
+            }
+            let track_cov = (radius + 0.5 - dist_track).clamp(0.0, 1.0);
+
+            // 2. Fill capsule distance & coverage (Anti-aliased)
+            let fill_cov = if filled_width_f > 0.1 {
+                let clamped_fill_x = px.clamp(fill_x_left, fill_x_right);
+                let dist_fill = ((px - clamped_fill_x).powi(2) + (py - y_center).powi(2)).sqrt();
+                (radius + 0.5 - dist_fill).clamp(0.0, 1.0) * track_cov
+            } else {
+                0.0
+            };
+
             let pixel_idx = ((y * width + x) * 4) as usize;
             if pixel_idx + 3 < pixels.len() {
-                if x >= fill_start_x {
-                    // Filled portion (gold color, fully opaque)
-                    pixels[pixel_idx] = PROGRESS_BAR_COLOR.2;     // B
-                    pixels[pixel_idx + 1] = PROGRESS_BAR_COLOR.1; // G
-                    pixels[pixel_idx + 2] = PROGRESS_BAR_COLOR.0; // R
-                    pixels[pixel_idx + 3] = 255;                  // A
-                } else {
-                    // Unfilled portion: frosted glass effect over the base image
-                    // Shows the underlying sky/clouds image with a subtle translucent white glass sheen (~28-45%)
-                    let is_edge = y == bar_y_start || y == bar_y_end - 1 || x == bar_x_start;
-                    let glass_alpha = if is_edge { 0.45f32 } else { 0.28f32 };
-                    let orig_b = base_pixels[pixel_idx] as f32;
-                    let orig_g = base_pixels[pixel_idx + 1] as f32;
-                    let orig_r = base_pixels[pixel_idx + 2] as f32;
+                let orig_b = base_pixels[pixel_idx] as f32;
+                let orig_g = base_pixels[pixel_idx + 1] as f32;
+                let orig_r = base_pixels[pixel_idx + 2] as f32;
 
-                    let b = (orig_b * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
-                    let g = (orig_g * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
-                    let r = (orig_r * (1.0 - glass_alpha) + 255.0 * glass_alpha).min(255.0) as u8;
+                let mut cur_r = orig_r;
+                let mut cur_g = orig_g;
+                let mut cur_b = orig_b;
 
-                    pixels[pixel_idx] = b;
-                    pixels[pixel_idx + 1] = g;
-                    pixels[pixel_idx + 2] = r;
-                    pixels[pixel_idx + 3] = 255;
+                // Track layer: Frosted dark-blue/slate glass container background
+                let track_alpha = 0.55 * track_cov;
+                let track_r = 20.0;
+                let track_g = 26.0;
+                let track_b = 38.0;
+                cur_r = cur_r * (1.0 - track_alpha) + track_r * track_alpha;
+                cur_g = cur_g * (1.0 - track_alpha) + track_g * track_alpha;
+                cur_b = cur_b * (1.0 - track_alpha) + track_b * track_alpha;
+
+                // Subtle gold border ring highlight on track outline
+                if dist_track > radius - 1.2 && dist_track <= radius + 0.5 {
+                    let border_cov = (1.0 - (dist_track - (radius - 0.35)).abs()).clamp(0.0, 1.0) * track_cov;
+                    let border_alpha = 0.30 * border_cov * (1.0 - fill_cov * 0.8);
+                    cur_r = cur_r * (1.0 - border_alpha) + 212.0 * border_alpha;
+                    cur_g = cur_g * (1.0 - border_alpha) + 175.0 * border_alpha;
+                    cur_b = cur_b * (1.0 - border_alpha) + 60.0 * border_alpha;
                 }
+
+                // Filled gold progress bar with shimmer animation
+                if fill_cov > 0.0 {
+                    // Vertical 3D metallic gradient
+                    let rel_y = (py - bar_y_start as f32) / bar_height_f;
+                    let mut gold_r = 245.0 - rel_y * 35.0;
+                    let mut gold_g = 200.0 - rel_y * 45.0;
+                    let mut gold_b = 75.0 - rel_y * 35.0;
+
+                    // Moving shimmer light beam
+                    let fill_length = fill_x_right - fill_x_left;
+                    if fill_length > 1.0 {
+                        let rel_x = (px - fill_x_left) / fill_length;
+                        let dist_shimmer = (rel_x - shimmer_center_rel).abs();
+                        if dist_shimmer < 0.20 {
+                            let shimmer_glow = ((1.0 - dist_shimmer / 0.20).powi(2)) * 0.65;
+                            gold_r = (gold_r + 60.0 * shimmer_glow).min(255.0);
+                            gold_g = (gold_g + 55.0 * shimmer_glow).min(255.0);
+                            gold_b = (gold_b + 50.0 * shimmer_glow).min(255.0);
+                        }
+                    }
+
+                    // Pulse glow on leading edge tip
+                    let dist_tip = ((px - fill_x_left).powi(2) + (py - y_center).powi(2)).sqrt();
+                    if dist_tip <= radius {
+                        let pulse = (anim_time * 5.0).sin() * 0.5 + 0.5;
+                        let tip_boost = (1.0 - dist_tip / radius) * (0.2 + 0.3 * pulse);
+                        gold_r = (gold_r + 50.0 * tip_boost).min(255.0);
+                        gold_g = (gold_g + 45.0 * tip_boost).min(255.0);
+                        gold_b = (gold_b + 40.0 * tip_boost).min(255.0);
+                    }
+
+                    // Blend filled bar
+                    let fill_alpha = fill_cov;
+                    cur_r = cur_r * (1.0 - fill_alpha) + gold_r * fill_alpha;
+                    cur_g = cur_g * (1.0 - fill_alpha) + gold_g * fill_alpha;
+                    cur_b = cur_b * (1.0 - fill_alpha) + gold_b * fill_alpha;
+                }
+
+                pixels[pixel_idx] = cur_b.min(255.0) as u8;
+                pixels[pixel_idx + 1] = cur_g.min(255.0) as u8;
+                pixels[pixel_idx + 2] = cur_r.min(255.0) as u8;
+                pixels[pixel_idx + 3] = 255;
             }
         }
     }

@@ -146,16 +146,15 @@ private fun ScreenshotWindows11ControlButtons(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val buttons =
         listOf(
-            WindowsCaptionButton(WindowsCaptionGlyph.Close, onClose),
+            WindowsCaptionButton(WindowsCaptionGlyph.Minimize, onMinimize),
             WindowsCaptionButton(
                 if (isMaximized) WindowsCaptionGlyph.Restore else WindowsCaptionGlyph.Maximize,
                 onToggleMaximize,
             ),
-            WindowsCaptionButton(WindowsCaptionGlyph.Minimize, onMinimize),
-        ).let { if (isRtl) it else it.reversed() }
+            WindowsCaptionButton(WindowsCaptionGlyph.Close, onClose),
+        )
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(

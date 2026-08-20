@@ -37,7 +37,9 @@ internal fun applyPdfZoomCommand(
 internal fun pdfZoomFromScroll(
     zoom: Float,
     scrollDelta: Offset,
-): Float? {
+): Float? = pdfZoomFactorFromScroll(scrollDelta)?.let { factor -> pdfZoomFromGesture(zoom, factor) }
+
+internal fun pdfZoomFactorFromScroll(scrollDelta: Offset): Float? {
     val dominantDelta =
         if (abs(scrollDelta.y) >= abs(scrollDelta.x)) {
             scrollDelta.y
@@ -48,7 +50,7 @@ internal fun pdfZoomFromScroll(
     val exponent =
         (-dominantDelta * PDF_TRACKPAD_ZOOM_SENSITIVITY)
             .coerceIn(-PDF_TRACKPAD_MAX_EXPONENT, PDF_TRACKPAD_MAX_EXPONENT)
-    return (zoom * exp(exponent.toDouble()).toFloat()).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX)
+    return exp(exponent.toDouble()).toFloat()
 }
 
 internal fun pdfZoomFromGesture(
@@ -58,6 +60,23 @@ internal fun pdfZoomFromGesture(
     if (!gestureZoom.isFinite() || gestureZoom <= 0f || gestureZoom == 1f) return null
     return (zoom * gestureZoom).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX)
 }
+
+internal class PdfZoomAccumulator(
+    initialZoom: Float,
+) {
+    var targetZoom: Float = initialZoom
+
+    fun applyFactor(factor: Float): Boolean {
+        val newZoom = pdfZoomFromGesture(targetZoom, factor) ?: return false
+        if (abs(newZoom - targetZoom) < PDF_ZOOM_CHANGE_EPSILON) return false
+        targetZoom = newZoom
+        return true
+    }
+}
+
+internal fun pdfContentWidthScale(zoom: Float): Float = zoom.coerceAtLeast(1f)
+
+internal fun pdfPageWidthFraction(zoom: Float): Float = (zoom / pdfContentWidthScale(zoom)).coerceIn(0f, 1f)
 
 internal data class PdfZoomController(
     val zoomIn: () -> Unit,
@@ -97,3 +116,4 @@ internal object PdfZoomControllerRegistry {
 
 private const val PDF_TRACKPAD_ZOOM_SENSITIVITY = 0.08f
 private const val PDF_TRACKPAD_MAX_EXPONENT = 0.25f
+private const val PDF_ZOOM_CHANGE_EPSILON = 0.0001f

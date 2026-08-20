@@ -37,6 +37,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -45,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -87,6 +89,7 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Book
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -337,11 +340,64 @@ private fun PdfPages(
     val textPages by session.textPages.collectAsState()
     val currentPage by remember(listState) { derivedStateOf { listState.mostVisiblePage() } }
     val isScrolling by remember(listState) { derivedStateOf { listState.isScrollInProgress } }
-    val currentZoom by rememberUpdatedState(zoom)
     val currentOnZoomChange by rememberUpdatedState(onZoomChange)
+    val pointerZoomScope = rememberCoroutineScope()
+    val pointerZoomAccumulator = remember(session) { PdfZoomAccumulator(zoom) }
+    var displayedZoom by remember(session) { mutableFloatStateOf(zoom) }
+    var isPointerZooming by remember(session) { mutableStateOf(false) }
+    var pointerZoomRenderJob by remember(session) { mutableStateOf<Job?>(null) }
+    var pointerZoomCommitJob by remember(session) { mutableStateOf<Job?>(null) }
+
+    fun applyPointerZoomFactor(factor: Float) {
+        if (!isPointerZooming) {
+            pointerZoomAccumulator.targetZoom = displayedZoom
+            isPointerZooming = true
+        }
+        if (!pointerZoomAccumulator.applyFactor(factor)) return
+        if (pointerZoomRenderJob?.isActive == true) return
+        pointerZoomRenderJob =
+            pointerZoomScope.launch {
+                withFrameNanos { }
+                val target = pointerZoomAccumulator.targetZoom
+                displayedZoom = target
+                currentOnZoomChange(target)
+                pointerZoomRenderJob = null
+            }
+    }
+
+    fun commitPointerZoom() {
+        pointerZoomCommitJob?.cancel()
+        pointerZoomRenderJob?.cancel()
+        pointerZoomRenderJob = null
+        val target = pointerZoomAccumulator.targetZoom
+        displayedZoom = target
+        currentOnZoomChange(target)
+        pointerZoomCommitJob =
+            pointerZoomScope.launch {
+                delay(50)
+                isPointerZooming = false
+            }
+    }
+
+    fun schedulePointerZoomCommit() {
+        pointerZoomCommitJob?.cancel()
+        pointerZoomCommitJob =
+            pointerZoomScope.launch {
+                delay(120)
+                commitPointerZoom()
+            }
+    }
+
+    val applyPointerZoomFactorState = rememberUpdatedState<(Float) -> Unit> { applyPointerZoomFactor(it) }
+    LaunchedEffect(zoom, isPointerZooming) {
+        if (!isPointerZooming) {
+            pointerZoomAccumulator.targetZoom = zoom
+            displayedZoom = zoom
+        }
+    }
     val renderDpi =
-        remember(zoom) {
-            val rawDpi = (PDF_BASE_DPI * max(1f, zoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
+        remember(displayedZoom) {
+            val rawDpi = (PDF_BASE_DPI * max(1f, displayedZoom)).coerceAtMost(PDF_MAX_DPI.toFloat())
             (rawDpi / PDF_DPI_STEP).roundToInt() * PDF_DPI_STEP
         }
     LaunchedEffect(session, currentPage, renderDpi, isScrolling, isActive) {
@@ -366,13 +422,14 @@ private fun PdfPages(
                     val modifiers = event.keyboardModifiers
                     if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
                     val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
-                    val newZoom = pdfZoomFromScroll(currentZoom, delta) ?: return@onPointerEvent
-                    currentOnZoomChange(newZoom)
+                    val factor = pdfZoomFactorFromScroll(delta) ?: return@onPointerEvent
+                    applyPointerZoomFactor(factor)
+                    schedulePointerZoomCommit()
                     event.changes.forEach { it.consume() }
                 }.pointerInput(Unit) {
                     awaitEachGesture {
                         var previousDistance = 0f
-                        var accumulatedZoom = currentZoom
+                        var hasZoomed = false
 
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Main)
@@ -383,9 +440,8 @@ private fun PdfPages(
                                 if (previousDistance > 0f && distance > 0f) {
                                     val zoomFactor = (distance / previousDistance).coerceIn(0.85f, 1.18f)
                                     if (abs(zoomFactor - 1f) > 0.002f) {
-                                        accumulatedZoom =
-                                            pdfZoomFromGesture(accumulatedZoom, zoomFactor) ?: accumulatedZoom
-                                        currentOnZoomChange(accumulatedZoom)
+                                        applyPointerZoomFactorState.value(zoomFactor)
+                                        hasZoomed = true
                                         event.changes.forEach { it.consume() }
                                     }
                                 }
@@ -394,17 +450,28 @@ private fun PdfPages(
                                 previousDistance = 0f
                             }
                         } while (event.changes.any { it.pressed })
+
+                        if (hasZoomed) commitPointerZoom()
                     }
                 },
         ) {
-            val contentWidth = maxWidth * max(1f, zoom)
-            val pageWidthFraction = if (zoom < 1f) zoom else 0.96f
-            LaunchedEffect(zoom, horizontalScrollState.maxValue) {
-                if (horizontalScrollState.maxValue > 0) {
-                    horizontalScrollState.scrollTo(horizontalScrollState.maxValue / 2)
+            val contentWidth = maxWidth * pdfContentWidthScale(displayedZoom)
+            val pageWidthFraction = pdfPageWidthFraction(displayedZoom)
+            var previousHorizontalMax by remember { mutableIntStateOf(0) }
+            LaunchedEffect(horizontalScrollState.maxValue) {
+                val newMax = horizontalScrollState.maxValue
+                if (newMax != previousHorizontalMax) {
+                    val relativePosition =
+                        if (previousHorizontalMax > 0) {
+                            horizontalScrollState.value.toFloat() / previousHorizontalMax
+                        } else {
+                            0.5f
+                        }
+                    horizontalScrollState.scrollTo((newMax * relativePosition).roundToInt())
+                    previousHorizontalMax = newMax
                 }
             }
-            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState)) {
+            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState, reverseScrolling = true)) {
                 LazyColumn(
                     modifier = Modifier.width(contentWidth).fillMaxHeight(),
                     state = listState,

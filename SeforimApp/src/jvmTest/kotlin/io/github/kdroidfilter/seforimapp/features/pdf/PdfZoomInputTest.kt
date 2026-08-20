@@ -70,6 +70,26 @@ class PdfZoomInputTest {
     }
 
     @Test
+    fun `pointer zoom factors accumulate without using a stale external zoom`() {
+        val accumulator = PdfZoomAccumulator(PDF_DEFAULT_ZOOM)
+
+        assertTrue(accumulator.applyFactor(1.1f))
+        assertTrue(accumulator.applyFactor(1.1f))
+
+        assertEquals(PDF_DEFAULT_ZOOM * 1.21f, accumulator.targetZoom, absoluteTolerance = 0.0001f)
+    }
+
+    @Test
+    fun `page width changes continuously around one hundred percent`() {
+        val zoomLevels = listOf(0.99f, 1f, 1.01f)
+
+        zoomLevels.forEach { zoom ->
+            val effectivePageScale = pdfContentWidthScale(zoom) * pdfPageWidthFraction(zoom)
+            assertEquals(zoom, effectivePageScale, absoluteTolerance = 0.0001f)
+        }
+    }
+
+    @Test
     fun `registry dispatches only to the selected tab controller`() {
         var firstTabZooms = 0
         var secondTabZooms = 0

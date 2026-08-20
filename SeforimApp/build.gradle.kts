@@ -354,7 +354,10 @@ nucleus.application {
         }
         buildTypes.release.proguard {
             version.set("7.9.0")
-            isEnabled = true
+            // The installed Windows build must retain the same complete JVM classpath as the
+            // portable build. PDFBox rendering depends on AWT/ImageIO service providers that
+            // cannot be safely reduced by the desktop shrinker.
+            isEnabled = false
             obfuscate.set(false)
             optimize.set(true)
             configurationFiles.from(project.file("proguard-rules.pro"))

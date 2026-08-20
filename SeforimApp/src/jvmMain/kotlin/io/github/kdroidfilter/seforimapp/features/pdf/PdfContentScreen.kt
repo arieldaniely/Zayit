@@ -5,8 +5,8 @@ import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +66,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -361,7 +362,7 @@ private fun PdfPages(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(
             modifier
-                .onPointerEvent(PointerEventType.Scroll, pass = PointerEventPass.Initial) { event ->
+                .onPointerEvent(PointerEventType.Scroll) { event ->
                     val modifiers = event.keyboardModifiers
                     if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
                     val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
@@ -369,8 +370,30 @@ private fun PdfPages(
                     currentOnZoomChange(newZoom)
                     event.changes.forEach { it.consume() }
                 }.pointerInput(Unit) {
-                    detectTransformGestures { _, _, gestureZoom, _ ->
-                        pdfZoomFromGesture(currentZoom, gestureZoom)?.let(currentOnZoomChange)
+                    awaitEachGesture {
+                        var previousDistance = 0f
+                        var accumulatedZoom = currentZoom
+
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val pressedChanges = event.changes.filter { it.pressed }
+
+                            if (pressedChanges.size >= 2) {
+                                val distance = pdfAverageDistanceToCentroid(pressedChanges)
+                                if (previousDistance > 0f && distance > 0f) {
+                                    val zoomFactor = (distance / previousDistance).coerceIn(0.85f, 1.18f)
+                                    if (abs(zoomFactor - 1f) > 0.002f) {
+                                        accumulatedZoom =
+                                            pdfZoomFromGesture(accumulatedZoom, zoomFactor) ?: accumulatedZoom
+                                        currentOnZoomChange(accumulatedZoom)
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                                previousDistance = distance
+                            } else {
+                                previousDistance = 0f
+                            }
+                        } while (event.changes.any { it.pressed })
                     }
                 },
         ) {
@@ -424,6 +447,15 @@ private fun PdfPages(
             }
         }
     }
+}
+
+/** Mirrors the working two-pointer distance calculation used by the regular text reader. */
+private fun pdfAverageDistanceToCentroid(changes: List<PointerInputChange>): Float {
+    if (changes.isEmpty()) return 0f
+    var centroid = Offset.Zero
+    changes.forEach { change -> centroid += change.position }
+    centroid /= changes.size.toFloat()
+    return changes.sumOf { change -> (change.position - centroid).getDistance().toDouble() }.toFloat() / changes.size
 }
 
 @Composable

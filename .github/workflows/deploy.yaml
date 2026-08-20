@@ -23,11 +23,12 @@ jobs:
             arch: arm64
             graalvm: true
 
-          # Windows x64 - GraalVM
+          # Windows x64 - JBR. PDFBox's AWT renderer is not reliable in Native Image;
+          # use the same JVM runtime as the portable distribution.
           - os: windows-latest
             arch: amd64
             rust_target: x86_64-pc-windows-msvc
-            graalvm: true
+            graalvm: false
 
           # Windows ARM64 - JBR (no Liberica NIK available)
           - os: windows-11-arm
@@ -133,7 +134,7 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :SeforimApp:packageGraalvmNsis
 
-      # Windows JBR build (ARM64)
+      # Windows JBR build (x64 and ARM64)
       - name: Build Windows NSIS installer (JBR)
         if: startsWith(matrix.os, 'windows') && !matrix.graalvm
         shell: pwsh

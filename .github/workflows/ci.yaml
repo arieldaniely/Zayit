@@ -91,11 +91,11 @@ jobs:
             build_task: ":SeforimApp:packageGraalvmDeb"
             graalvm: true
 
-          # Windows x64 (GraalVM)
+          # Windows x64 (JBR, matching the portable runtime; PDFBox rendering uses AWT)
           - os: windows-latest
             arch: amd64
-            build_task: ":SeforimApp:packageGraalvmNsis"
-            graalvm: true
+            build_task: ":SeforimApp:createReleaseDistributable :SeforimApp:packageReleaseNsis"
+            graalvm: false
             rust_target: x86_64-pc-windows-msvc
 
           # Windows ARM64 (JBR - no Liberica NIK)

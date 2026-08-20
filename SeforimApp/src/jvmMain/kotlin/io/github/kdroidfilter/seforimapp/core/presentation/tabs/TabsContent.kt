@@ -51,9 +51,12 @@ import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_DEFAULT_ZOOM
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MAX
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
-import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_STEP
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomCommand
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomController
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.pdf.applyPdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
@@ -562,6 +565,15 @@ private fun PdfContentTabContent(
     val showDiacritics by viewModel.showDiacritics.collectAsState()
     val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
+    DisposableEffect(destination.tabId) {
+        val controller =
+            PdfZoomController(
+                zoomIn = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomIn) },
+                zoomOut = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomOut) },
+            )
+        PdfZoomControllerRegistry.register(destination.tabId, controller)
+        onDispose { PdfZoomControllerRegistry.unregister(destination.tabId, controller) }
+    }
 
     LaunchedEffect(destination.bookId, destination.lineId) {
         if (destination.bookId != 0L && destination.bookId != -1L) {
@@ -602,8 +614,8 @@ private fun PdfContentTabContent(
         isPdfEdition = true,
         pdfCanZoomIn = pdfZoom < PDF_ZOOM_MAX,
         pdfCanZoomOut = pdfZoom > PDF_ZOOM_MIN,
-        onPdfZoomIn = { pdfZoom = (pdfZoom + PDF_ZOOM_STEP).coerceAtMost(PDF_ZOOM_MAX) },
-        onPdfZoomOut = { pdfZoom = (pdfZoom - PDF_ZOOM_STEP).coerceAtLeast(PDF_ZOOM_MIN) },
+        onPdfZoomIn = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomIn) },
+        onPdfZoomOut = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomOut) },
         mainContentOverride = { contentModifier ->
             PdfContentView(
                 file = pdfFile,

@@ -306,6 +306,9 @@
     },
     "resources": [
         {
+            "glob": "META-INF/services/javax.imageio.spi.*"
+        },
+        {
             "glob": "jumplist_icons/**"
         }
     ]

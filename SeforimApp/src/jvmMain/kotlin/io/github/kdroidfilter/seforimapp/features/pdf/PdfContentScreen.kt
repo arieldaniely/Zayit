@@ -64,6 +64,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.github.jaiimageio.jpeg2000.impl.J2KImageReaderSpi
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -95,6 +97,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
+import org.apache.pdfbox.jbig2.JBIG2ImageReaderSpi
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination
@@ -115,8 +118,8 @@ import org.jetbrains.skia.ImageInfo
 import seforimapp.seforimapp.generated.resources.*
 import java.io.File
 import java.util.LinkedHashMap
+import javax.imageio.spi.IIORegistry
 import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -358,22 +361,16 @@ private fun PdfPages(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(
             modifier
-                .onPointerEvent(PointerEventType.Scroll) { event ->
+                .onPointerEvent(PointerEventType.Scroll, pass = PointerEventPass.Initial) { event ->
                     val modifiers = event.keyboardModifiers
                     if (!(modifiers.isCtrlPressed || modifiers.isMetaPressed)) return@onPointerEvent
                     val delta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
-                    val zoomDelta = if (abs(delta.y) >= abs(delta.x)) delta.y else delta.x
-                    if (zoomDelta == 0f) return@onPointerEvent
-                    val exponent = (-zoomDelta * 0.08f).coerceIn(-0.25f, 0.25f)
-                    currentOnZoomChange(
-                        (currentZoom * exp(exponent.toDouble()).toFloat()).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX),
-                    )
+                    val newZoom = pdfZoomFromScroll(currentZoom, delta) ?: return@onPointerEvent
+                    currentOnZoomChange(newZoom)
                     event.changes.forEach { it.consume() }
                 }.pointerInput(Unit) {
                     detectTransformGestures { _, _, gestureZoom, _ ->
-                        if (gestureZoom != 1f) {
-                            currentOnZoomChange((currentZoom * gestureZoom).coerceIn(PDF_ZOOM_MIN, PDF_ZOOM_MAX))
-                        }
+                        pdfZoomFromGesture(currentZoom, gestureZoom)?.let(currentOnZoomChange)
                     }
                 },
         ) {
@@ -384,7 +381,7 @@ private fun PdfPages(
                     horizontalScrollState.scrollTo(horizontalScrollState.maxValue / 2)
                 }
             }
-            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState, reverseScrolling = true)) {
+            Box(Modifier.fillMaxSize().horizontalScroll(horizontalScrollState)) {
                 LazyColumn(
                     modifier = Modifier.width(contentWidth).fillMaxHeight(),
                     state = listState,
@@ -732,6 +729,7 @@ private class PdfDocumentSession private constructor(
 
     companion object {
         fun open(file: File): PdfDocumentSession {
+            PdfImageIoPlugins.ensureRegistered()
             val document = Loader.loadPDF(file)
             return try {
                 val aspectRatios =
@@ -753,6 +751,28 @@ private class PdfDocumentSession private constructor(
                 document.close()
                 throw error
             }
+        }
+    }
+}
+
+/**
+ * Native Image cannot always infer ImageIO providers that are normally discovered through
+ * META-INF/services. Direct construction keeps the readers reachable after both ProGuard and
+ * GraalVM analysis and makes provider registration deterministic in installed builds.
+ */
+internal object PdfImageIoPlugins {
+    @Volatile
+    private var registered = false
+
+    fun ensureRegistered() {
+        if (registered) return
+        synchronized(this) {
+            if (registered) return
+            IIORegistry.getDefaultInstance().apply {
+                registerServiceProvider(JBIG2ImageReaderSpi())
+                registerServiceProvider(J2KImageReaderSpi())
+            }
+            registered = true
         }
     }
 }

@@ -42,6 +42,8 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
+import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
@@ -230,11 +232,27 @@ fun NucleusApplicationScope.MainAppWindow(
                         }
                     true
                 } else {
-                    processKeyShortcuts(
-                        keyEvent = keyEvent,
-                        onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
-                        tabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId ?: "",
-                    )
+                    val currentDest = currentTabs.getOrNull(currentIndex)?.destination
+                    val zoomCommand =
+                        if (currentDest is TabsDestination.PdfContent) {
+                            pdfZoomCommand(
+                                key = keyEvent.key,
+                                type = keyEvent.type,
+                                isCtrlPressed = keyEvent.isCtrlPressed,
+                                isMetaPressed = keyEvent.isMetaPressed,
+                            )
+                        } else {
+                            null
+                        }
+                    if (zoomCommand != null && currentDest is TabsDestination.PdfContent) {
+                        PdfZoomControllerRegistry.dispatch(currentDest.tabId, zoomCommand)
+                    } else {
+                        processKeyShortcuts(
+                            keyEvent = keyEvent,
+                            onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
+                            tabId = currentDest?.tabId ?: "",
+                        )
+                    }
                 }
             } else {
                 false

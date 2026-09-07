@@ -52,6 +52,7 @@ fun AppJumpList(
 ) {
     if (!PlatformInfo.isWindows || !WindowsJumpListManager.isAvailable) return
 
+    val jumpListUpdater = remember { JumpListUpdater() }
     val isDark = JewelTheme.isDark
     val desktops by desktopManager.desktops.collectAsState()
     val activeDesktopId by desktopManager.activeDesktopId.collectAsState()
@@ -193,6 +194,6 @@ fun AppJumpList(
                 ),
             )
 
-        WindowsJumpListManager.setJumpList(categories = categories, tasks = tasks)
+        jumpListUpdater.update(categories = categories, tasks = tasks)
     }
 }

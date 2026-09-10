@@ -68,6 +68,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.text.findAllMatchesOr
 import io.github.kdroidfilter.seforimapp.core.presentation.text.noteDisplayRanges
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.bookcontent.extractLookupToken
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
@@ -1048,8 +1049,9 @@ fun BookContentView(
                                                 textLayoutWidthPx = width
                                             }
                                         },
-                                        onContextClick = {
+                                        onContextClick = { word ->
                                             selectionContext.setCurrentLineId(line.id)
+                                            selectionContext.setContextWord(word)
                                             // Drop any stale comments-pane anchor so a main-pane
                                             // highlight never lands on a commentary line.
                                             selectionContext.setActiveCommentaryColumn(emptyList())
@@ -1325,7 +1327,7 @@ private fun LineItem(
     userHighlights: List<UserHighlight> = emptyList(),
     userNotes: List<UserNote> = emptyList(),
     onLayoutWidthMeasure: (Int) -> Unit = {},
-    onContextClick: () -> Unit = {},
+    onContextClick: (String) -> Unit = {},
 ) {
     // Process content: remove diacritics if setting is disabled
     val processedContent =
@@ -1365,10 +1367,6 @@ private fun LineItem(
                     onClick(isModifier)
                 }
             }
-        }.onPointerEvent(PointerEventType.Press) { event ->
-            // Record this line as the right-click target so the context menu can offer a
-            // "copy link to this line" action even when no text is selected.
-            if (event.buttons.isSecondaryPressed) onContextClick()
         }
 
     val localAnnotatedCache = remember { StableAnnotatedCache(mutableStateMapOf()) }
@@ -1403,7 +1401,10 @@ private fun LineItem(
             fontFamily = fontFamily,
             fontSize = baseTextSize.sp,
             lineHeight = (baseTextSize * lineHeight).sp,
-            modifier = textModifier,
+            modifier =
+                textModifier.onPointerEvent(PointerEventType.Press) { event ->
+                    if (event.buttons.isSecondaryPressed) onContextClick("")
+                },
             onTextLayout = { result ->
                 val cw = result.layoutInput.constraints.maxWidth
                 if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
@@ -1488,9 +1489,24 @@ private fun LineItem(
         fontFamily = fontFamily,
         lineHeight = (baseTextSize * lineHeight).sp,
         modifier =
-            textModifier.drawBehind {
-                noteLayout?.let { drawNoteUnderlines(it, noteRanges, noteUnderlineColor) }
-            },
+            textModifier
+                .onPointerEvent(PointerEventType.Press) { event ->
+                    if (event.buttons.isSecondaryPressed) {
+                        val position = event.changes.firstOrNull()?.position
+                        val word =
+                            if (position == null) {
+                                ""
+                            } else {
+                                noteLayout
+                                    ?.getOffsetForPosition(position)
+                                    ?.let { offset -> extractLookupToken(displayText.text, offset) }
+                                    .orEmpty()
+                            }
+                        onContextClick(word)
+                    }
+                }.drawBehind {
+                    noteLayout?.let { drawNoteUnderlines(it, noteRanges, noteUnderlineColor) }
+                },
         inlineContent = inlineImageContent,
         onTextLayout = { result ->
             noteLayout = result

@@ -179,6 +179,13 @@
     <string name="context_menu_highlight">סמן</string>
     <string name="context_menu_add_note">הוסף הערה</string>
     <string name="context_menu_report_book_error">דווח על שגיאה בספר</string>
+    <string name="context_menu_show_word_definition">הצג פירוש</string>
+    <string name="context_menu_expand_acronym">פענח ראשי תיבות</string>
+    <string name="context_menu_show_word_lookup">הצג פירוש ופענוח</string>
+    <string name="word_lookup_title">מילון</string>
+    <string name="word_lookup_dictionary_section">מילון ארמי–עברי</string>
+    <string name="word_lookup_acronym_section">פענוח ראשי תיבות</string>
+    <string name="word_lookup_close">סגור</string>
     <string name="error_report_title">דיווח על שגיאה בספר</string>
     <string name="error_report_email">כתובת דוא״ל לחזרה</string>
     <string name="error_report_details">תיאור השגיאה והתיקון המוצע</string>

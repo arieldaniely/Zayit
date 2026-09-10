@@ -103,10 +103,13 @@ import seforimapp.seforimapp.generated.resources.context_menu_add_note
 import seforimapp.seforimapp.generated.resources.context_menu_copy_link
 import seforimapp.seforimapp.generated.resources.context_menu_copy_with_source
 import seforimapp.seforimapp.generated.resources.context_menu_copy_without_nikud
+import seforimapp.seforimapp.generated.resources.context_menu_expand_acronym
 import seforimapp.seforimapp.generated.resources.context_menu_find_in_page
 import seforimapp.seforimapp.generated.resources.context_menu_highlight
 import seforimapp.seforimapp.generated.resources.context_menu_report_book_error
 import seforimapp.seforimapp.generated.resources.context_menu_search_selected_text
+import seforimapp.seforimapp.generated.resources.context_menu_show_word_definition
+import seforimapp.seforimapp.generated.resources.context_menu_show_word_lookup
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.InputEvent
@@ -476,6 +479,9 @@ fun BookContentScreen(
     val copyLinkLabel = stringResource(Res.string.context_menu_copy_link)
     val addNoteLabel = stringResource(Res.string.context_menu_add_note)
     val reportBookErrorLabel = stringResource(Res.string.context_menu_report_book_error)
+    val showWordDefinitionLabel = stringResource(Res.string.context_menu_show_word_definition)
+    val expandAcronymLabel = stringResource(Res.string.context_menu_expand_acronym)
+    val showWordLookupLabel = stringResource(Res.string.context_menu_show_word_lookup)
     val baseTextContextMenu = LocalTextContextMenu.current
     val tabId = uiState.tabId
     val selectedBook = uiState.navigation.selectedBook
@@ -496,6 +502,11 @@ fun BookContentScreen(
     val noteStore = LocalAppGraph.current.noteStore
     var noteDraft by remember { mutableStateOf<NoteDraftAnchor?>(null) }
     var errorReportDraft by remember { mutableStateOf<BookErrorReportDraft?>(null) }
+    var wordLookupResult by remember { mutableStateOf<WordLookupResult?>(null) }
+    LaunchedEffect(Unit) {
+        // Parsing happens once on a background dispatcher; context-menu queries remain O(1).
+        runCatching { WordLookupIndex.preload() }
+    }
     // Primary line captured when the draft was opened. Selecting a different line drops the unsaved
     // explicit draft so the editor reflects the newly selected line instead of the stale anchor.
     var noteDraftBaselineLine by remember { mutableStateOf<Long?>(null) }
@@ -532,6 +543,9 @@ fun BookContentScreen(
             copyWithSourceLabel,
             copyLinkLabel,
             reportBookErrorLabel,
+            showWordDefinitionLabel,
+            expandAcronymLabel,
+            showWordLookupLabel,
             showDiacritics,
             bookHasDiacritics,
             bookId,
@@ -625,6 +639,25 @@ fun BookContentScreen(
                                             val link = bookShareLink(bookForCopy.id, lineId)
                                             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
                                             clipboard.setContents(StringSelection(link), null)
+                                        },
+                                    )
+                                }
+                                val lookupText = selectedText.ifBlank { selectionContext.contextWord.value }
+                                val lookup = WordLookupIndex.lookup(lookupText)
+                                if (lookup != null) {
+                                    val lookupLabel =
+                                        when {
+                                            lookup.dictionarySenses.isNotEmpty() && lookup.acronymExpansions.isNotEmpty() ->
+                                                showWordLookupLabel
+                                            lookup.acronymExpansions.isNotEmpty() -> expandAcronymLabel
+                                            else -> showWordDefinitionLabel
+                                        }
+                                    add(
+                                        ContextMenuItemOption(
+                                            icon = TextSearchContextMenuIconKey,
+                                            label = lookupLabel,
+                                        ) {
+                                            wordLookupResult = lookup
                                         },
                                     )
                                 }
@@ -758,6 +791,10 @@ fun BookContentScreen(
             repository = LocalAppGraph.current.repository,
             onDismiss = { errorReportDraft = null },
         )
+    }
+
+    wordLookupResult?.let { result ->
+        WordLookupDialog(result = result, onDismiss = { wordLookupResult = null })
     }
 
     // Configuration of split panes to monitor

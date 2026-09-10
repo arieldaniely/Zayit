@@ -60,6 +60,13 @@ class SelectionContextTest {
         assertEquals("", context.selectedText.value)
     }
 
+    @Test
+    fun `context word starts empty and follows the latest secondary click`() {
+        assertEquals("", context.contextWord.value)
+        context.setContextWord("איכא")
+        assertEquals("איכא", context.contextWord.value)
+    }
+
     // -------------------------------------------------------------------------------------------
     // activeBook
     // -------------------------------------------------------------------------------------------

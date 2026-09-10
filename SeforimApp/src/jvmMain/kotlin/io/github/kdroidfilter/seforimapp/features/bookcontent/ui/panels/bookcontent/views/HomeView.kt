@@ -83,13 +83,13 @@ import io.github.kdroidfilter.seforimlibrary.core.models.Book as BookModel
 
 // Suggestion models for the scope picker
 @Immutable
-private data class CategorySuggestion(
+internal data class CategorySuggestion(
     val category: Category,
     val path: List<String>,
 )
 
 @Immutable
-private data class BookSuggestion(
+internal data class BookSuggestion(
     val book: BookModel,
     val path: List<String>,
     val isPdf: Boolean = false,
@@ -97,7 +97,7 @@ private data class BookSuggestion(
 )
 
 @Immutable
-private data class TocSuggestion(
+internal data class TocSuggestion(
     val toc: TocEntry,
     val path: List<String>,
 )
@@ -130,7 +130,6 @@ data class HomeSearchCallbacks(
     val onPickCategory: (Category) -> Unit,
     val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
-    val onPickCombinedReference: ((BookModel, Boolean, TocEntry) -> Unit)? = null,
 )
 
 /**
@@ -291,8 +290,8 @@ private fun HomeBody(
             val searchState = remember { TextFieldState() }
             val referenceSearchState = remember { TextFieldState() }
             val tocSearchState = remember { TextFieldState() }
-            var skipNextReferenceQuery by remember { mutableStateOf(false) }
-            var skipNextTocQuery by remember { mutableStateOf(false) }
+            var ignoredReferenceQuery by remember { mutableStateOf<String?>(null) }
+            var ignoredTocQuery by remember { mutableStateOf<String?>(null) }
             var tocEditedSinceBook by remember { mutableStateOf(false) }
             // Shared focus requester for the MAIN search bar so other UI (e.g., level changes)
             // can reliably return focus to it, allowing immediate Enter to submit.
@@ -303,23 +302,18 @@ private fun HomeBody(
             // Forward reference input changes to the ViewModel (VM handles debouncing and suggestions)
             LaunchedEffect(Unit) {
                 snapshotFlow { referenceSearchState.text.toString() }.collect { qRaw ->
-                    if (skipNextReferenceQuery) {
-                        skipNextReferenceQuery = false
-                    } else {
-                        searchCallbacks.onReferenceQueryChanged(qRaw)
-                    }
+                    val ignore = ignoredReferenceQuery == qRaw
+                    ignoredReferenceQuery = null
+                    if (!ignore) searchCallbacks.onReferenceQueryChanged(qRaw)
                 }
             }
             // Forward toc input changes to the ViewModel (ignored until a book is selected)
             LaunchedEffect(Unit) {
                 snapshotFlow { tocSearchState.text.toString() }.collect { qRaw ->
-                    if (skipNextTocQuery) {
-                        skipNextTocQuery = false
-                        tocEditedSinceBook = qRaw.isNotBlank()
-                    } else {
-                        tocEditedSinceBook = qRaw.isNotBlank()
-                        searchCallbacks.onTocQueryChanged(qRaw)
-                    }
+                    val ignore = ignoredTocQuery == qRaw
+                    ignoredTocQuery = null
+                    tocEditedSinceBook = qRaw.isNotBlank()
+                    if (!ignore) searchCallbacks.onTocQueryChanged(qRaw)
                 }
             }
 
@@ -400,6 +394,7 @@ private fun HomeBody(
                                         SearchFilter.REFERENCE -> {
                                             val from = searchState.text.toString()
                                             if (from.isNotBlank() && referenceSearchState.text.isEmpty()) {
+                                                ignoredReferenceQuery = from
                                                 referenceSearchState.edit { replace(0, length, from) }
                                             }
                                         }
@@ -480,41 +475,44 @@ private fun HomeBody(
                                     },
                                 placeholderText = null,
                                 submitOnEnterInReference = isReferenceMode && isTocInTopBar,
+                                submitCombinedReference = isReferenceMode,
                                 globalExtended = searchUi.globalExtended,
                                 onGlobalExtendedChange = { searchCallbacks.onGlobalExtendedChange(it) },
                                 isBookLoading = searchUi.isReferenceLoading && !isTocInTopBar,
                                 isTocLoading = searchUi.isTocLoading && isTocInTopBar,
                                 onPickBook = { picked ->
-                                    if (picked.targetToc != null && searchCallbacks.onPickCombinedReference != null) {
-                                        searchCallbacks.onPickCombinedReference.invoke(picked.book, picked.isPdf, picked.targetToc)
-                                    } else {
-                                        searchCallbacks.onPickBook(picked.book, picked.isPdf)
-                                        skipNextReferenceQuery = true
-                                        referenceSearchState.edit { replace(0, length, "") }
-                                        skipNextTocQuery = true
-                                        tocSearchState.edit { replace(0, length, "") }
-                                        skipNextTocQuery = false
-                                        tocEditedSinceBook = false
-                                        focusAfterDelay(scope, 80, mainSearchFocusRequester)
-                                    }
+                                    searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                    picked.targetToc?.let(searchCallbacks.onPickToc)
+                                    ignoredReferenceQuery = ""
+                                    referenceSearchState.edit { replace(0, length, "") }
+                                    val display =
+                                        if (picked.targetToc != null) {
+                                            stripBookPrefixFromTocPath(picked.book, dedupAdjacent(picked.path))
+                                                .joinToString(breadcrumbSeparatorTop)
+                                        } else {
+                                            ""
+                                        }
+                                    ignoredTocQuery = display
+                                    tocSearchState.edit { replace(0, length, display) }
+                                    tocEditedSinceBook = picked.targetToc != null
+                                    focusAfterDelay(scope, 80, mainSearchFocusRequester)
                                 },
                                 onPickToc = { picked ->
                                     searchCallbacks.onPickToc(picked.toc)
                                     val dedup = dedupAdjacent(picked.path)
                                     val stripped = stripBookPrefixFromTocPath(searchUi.selectedScopeBook, dedup)
                                     val display = stripped.joinToString(breadcrumbSeparatorTop)
-                                    skipNextTocQuery = true
+                                    ignoredTocQuery = display
                                     tocSearchState.edit { replace(0, length, display) }
                                     tocEditedSinceBook = true
                                 },
                                 onClearBook = {
                                     searchCallbacks.onReferenceQueryChanged("")
                                     searchCallbacks.onTocQueryChanged("")
-                                    skipNextReferenceQuery = true
-                                    skipNextTocQuery = true
+                                    ignoredReferenceQuery = ""
                                     referenceSearchState.edit { replace(0, length, "") }
+                                    ignoredTocQuery = ""
                                     tocSearchState.edit { replace(0, length, "") }
-                                    skipNextTocQuery = false
                                     tocEditedSinceBook = false
                                 },
                                 canClearBookOnBackspace = { !tocEditedSinceBook },
@@ -570,35 +568,38 @@ private fun HomeBody(
                                         onPickCategory = { picked ->
                                             searchCallbacks.onPickCategory(picked.category)
                                             val full = dedupAdjacent(picked.path).joinToString(breadcrumbSeparator)
-                                            skipNextReferenceQuery = true
+                                            ignoredReferenceQuery = full
                                             referenceSearchState.edit { replace(0, length, full) }
                                         },
                                         onPickBook = { picked ->
-                                            if (picked.targetToc != null && searchCallbacks.onPickCombinedReference != null) {
-                                                searchCallbacks.onPickCombinedReference.invoke(picked.book, picked.isPdf, picked.targetToc)
-                                            } else {
-                                                searchCallbacks.onPickBook(picked.book, picked.isPdf)
-                                                skipNextReferenceQuery = true
-                                                referenceSearchState.edit { replace(0, length, "") }
-                                                skipNextTocQuery = true
-                                                tocSearchState.edit { replace(0, length, "") }
-                                                skipNextTocQuery = false
-                                            }
+                                            searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                            picked.targetToc?.let(searchCallbacks.onPickToc)
+                                            ignoredReferenceQuery = ""
+                                            referenceSearchState.edit { replace(0, length, "") }
+                                            val display =
+                                                if (picked.targetToc != null) {
+                                                    stripBookPrefixFromTocPath(picked.book, dedupAdjacent(picked.path))
+                                                        .joinToString(breadcrumbSeparator)
+                                                } else {
+                                                    ""
+                                                }
+                                            ignoredTocQuery = display
+                                            tocSearchState.edit { replace(0, length, display) }
                                         },
                                         onPickToc = { picked ->
                                             searchCallbacks.onPickToc(picked.toc)
                                             val dedup = dedupAdjacent(picked.path)
                                             val stripped = stripBookPrefixFromTocPath(searchUi.selectedScopeBook, dedup)
                                             val display = stripped.joinToString(breadcrumbSeparator)
-                                            skipNextTocQuery = true
+                                            ignoredTocQuery = display
                                             tocSearchState.edit { replace(0, length, display) }
                                         },
                                         onClearBook = {
                                             searchCallbacks.onReferenceQueryChanged("")
                                             searchCallbacks.onTocQueryChanged("")
-                                            skipNextReferenceQuery = true
-                                            skipNextTocQuery = true
+                                            ignoredReferenceQuery = ""
                                             referenceSearchState.edit { replace(0, length, "") }
+                                            ignoredTocQuery = ""
                                             tocSearchState.edit { replace(0, length, "") }
                                         },
                                         isBookLoading = searchUi.isReferenceLoading,
@@ -763,15 +764,12 @@ private fun ReferenceByCategorySection(
                 },
                 onPickBook = { picked ->
                     onPickBook(picked)
-                    refState.edit { replace(0, length, "") }
-                    tocTfState.edit { replace(0, length, "") }
                 },
                 onPickToc = { picked ->
                     onPickToc(picked)
                     val dedup = dedupAdjacent(picked.path)
                     val display = stripBookPrefixFromTocPath(selectedBook, dedup).joinToString(breadcrumbSeparator)
                     tocTfState.edit { replace(0, length, display) }
-                    if (submitAfterPick) onSubmit()
                 },
                 onSubmit = onSubmit,
                 submitOnEnterIfSelection = submitOnEnterIfSelection,
@@ -779,8 +777,6 @@ private fun ReferenceByCategorySection(
                 autoFocus = false,
                 onClearBook = {
                     onClearBook()
-                    refState.edit { replace(0, length, "") }
-                    tocTfState.edit { replace(0, length, "") }
                 },
                 isBookLoading = isBookLoading,
                 isTocLoading = isTocLoading,
@@ -1200,7 +1196,7 @@ private fun SuggestionRow(
 }
 
 @Composable
-private fun SearchBar(
+internal fun SearchBar(
     state: TextFieldState,
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
@@ -1236,6 +1232,7 @@ private fun SearchBar(
     submitOnEnterIfSelection: Boolean = false,
     // In reference-mode first field, pressing Enter should also submit when a book is picked
     submitOnEnterInReference: Boolean = false,
+    submitCombinedReference: Boolean = false,
     // Advanced search toggle
     globalExtended: Boolean = false,
     onGlobalExtendedChange: (Boolean) -> Unit = {},
@@ -1484,7 +1481,7 @@ private fun SearchBar(
                                 if (isRef) {
                                     // Commit current suggestion, don't open
                                     when {
-                                        isTocMode && focusedIndex in 0 until totalToc -> {
+                                        popupVisible && isTocMode && focusedIndex in 0 until totalToc -> {
                                             handlePickToc(visibleTocSuggestions[focusedIndex].first)
                                             if (submitOnEnterInReference) {
                                                 submitAfterFrame(scope)
@@ -1492,7 +1489,7 @@ private fun SearchBar(
                                             true
                                         }
 
-                                        !isTocMode && focusedIndex in 0 until totalCatBook -> {
+                                        popupVisible && !isTocMode && focusedIndex in 0 until totalCatBook -> {
                                             if (focusedIndex < categoriesCount) {
                                                 val picked = categorySuggestions[focusedIndex]
                                                 handlePickCategory(picked)
@@ -1501,7 +1498,9 @@ private fun SearchBar(
                                                 val picked = bookSuggestions.getOrNull(idx)
                                                 if (picked != null) {
                                                     handlePickBook(picked)
-                                                    if (submitOnEnterInReference) handleSubmit()
+                                                    if (submitOnEnterInReference || (submitCombinedReference && picked.targetToc != null)) {
+                                                        submitAfterFrame(scope)
+                                                    }
                                                 }
                                             }
                                             true
@@ -1543,6 +1542,8 @@ private fun SearchBar(
                                 true
                             }
 
+                            ev.key == Key.Tab && (ev.isAltPressed || ev.isCtrlPressed || ev.isMetaPressed || ev.isShiftPressed) -> false
+
                             // Consume Tab KeyDown in REFERENCE mode when suggestions are visible
                             // to prevent default focus movement before our KeyUp handler runs
                             isRef && ev.key == Key.Tab && ev.type == KeyEventType.KeyDown && popupVisible -> {
@@ -1553,12 +1554,12 @@ private fun SearchBar(
                                 if (isRef) {
                                     val handled =
                                         when {
-                                            isTocMode && focusedIndex in 0 until totalToc -> {
+                                            popupVisible && isTocMode && focusedIndex in 0 until totalToc -> {
                                                 handlePickToc(visibleTocSuggestions[focusedIndex].first)
                                                 true
                                             }
 
-                                            !isTocMode && focusedIndex in 0 until totalCatBook -> {
+                                            popupVisible && !isTocMode && focusedIndex in 0 until totalCatBook -> {
                                                 if (focusedIndex < categoriesCount) {
                                                     handlePickCategory(categorySuggestions[focusedIndex])
                                                 } else {
@@ -1571,9 +1572,6 @@ private fun SearchBar(
                                             else -> false
                                         }
                                     if (handled) {
-                                        if (submitOnEnterInReference && isTocMode) {
-                                            submitAfterFrame(scope)
-                                        }
                                         true
                                     } else {
                                         onTab?.invoke()
@@ -1740,7 +1738,10 @@ private fun SearchBar(
                             categorySuggestions = categorySuggestions,
                             bookSuggestions = bookSuggestions,
                             onPickCategory = ::handlePickCategory,
-                            onPickBook = ::handlePickBook,
+                            onPickBook = { picked ->
+                                handlePickBook(picked)
+                                if (submitCombinedReference && picked.targetToc != null) submitAfterFrame(scope)
+                            },
                             focusedIndex = focusedIndex,
                             emptyMessage = if (showBookEmptyState) stringResource(Res.string.autocomplete_no_results) else null,
                             isLoading = showBookLoading,

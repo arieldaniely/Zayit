@@ -106,4 +106,56 @@ class TorahReferenceSearchHelperTest {
         assertTrue(TorahReferenceSearchHelper.matchesTocLocation(tocDtoRambam, "שבת א ב"))
         assertTrue(TorahReferenceSearchHelper.matchesTocLocation(tocDtoRambam, "הל' שבת א ב"))
     }
+
+    @Test
+    fun `book prefix cannot swallow chapter as a partial title word`() {
+        assertTrue(TorahReferenceSearchHelper.hasUnmatchedLocationSuffix("ברכות בבלי", "ברכות ב"))
+        assertFalse(TorahReferenceSearchHelper.hasUnmatchedLocationSuffix("שמואל ב", "שמואל ב"))
+        assertFalse(TorahReferenceSearchHelper.hasUnmatchedLocationSuffix("שולחן ערוך אורח חיים", "שולחן ערוך אורח חיים"))
+    }
+
+    private fun location(
+        text: String,
+        vararg parents: String,
+    ) = TocSuggestionDto(TocEntry(id = 1L, bookId = 1L, text = text, level = parents.size), parents.toList() + text)
+
+    @Test
+    fun `location numbers use whole tokens rather than substrings`() {
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("סימן יב"), "ב"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("סימן 12"), "2"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("דיני שבת"), "ב"))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("דיני הדלקת נרות"), "הדל", allowTextPrefix = true))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("סימן יב"), "ב", allowTextPrefix = true))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("סימן רס״ג"), "263"))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("סימן 263"), "רס״ג"))
+    }
+
+    @Test
+    fun `chapter and verse must match in order and without reusing a token`() {
+        val entry = location("פסוק ב", "בראשית", "פרק יח")
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(entry, "18 2"))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("ב", "בראשית", "א"), "א ב"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "ב יח"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "ב ב"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "יח"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "בראשית"))
+    }
+
+    @Test
+    fun `daf side and number must both match including Hebrew punctuation`() {
+        val entry = location("דף יב עמוד ב")
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "ב:"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(entry, "12."))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(entry, "יב ע״ב"))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("יב:"), "12/ב"))
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("דף עב עמוד א"), "עב"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("הלכה ב", "פרק א"), "ב:"))
+    }
+
+    @Test
+    fun `abbreviations are expanded as tokens and ordinary words are not numbers`() {
+        assertTrue(TorahReferenceSearchHelper.matchesTocLocation(location("סימן רסג", "אורח חיים"), "או״ח רסג"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("סימן 702"), "שבת"))
+        assertFalse(TorahReferenceSearchHelper.matchesTocLocation(location("אורח חייםדים"), "אוחדים"))
+    }
 }

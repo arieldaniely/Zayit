@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Navigation events emitted by SearchHomeViewModel.
@@ -158,7 +159,9 @@ class SearchHomeViewModel(
     private val categoryPathMutex = Mutex()
     private val tocPathCache = LruCache<Long, List<String>>(2048)
     private val tocPathMutex = Mutex()
-    private val tocCache = mutableMapOf<Long, List<TocSuggestionDto>>()
+    private val tocCache = ConcurrentHashMap<Long, List<TocSuggestionDto>>()
+    private var referenceRevision = 0L
+    private var tocRevision = 0L
 
     private fun matchRank(
         text: String,
@@ -226,6 +229,8 @@ class SearchHomeViewModel(
                 .distinctUntilChanged()
                 .collectLatest { qRaw ->
                     val q = qRaw.trim()
+                    val revision = referenceRevision
+                    if (referenceQuery.value != qRaw || _uiState.value.selectedScopeBook != null) return@collectLatest
                     val qNorm = sanitizeHebrewForAcronym(q)
                     if (q.isBlank()) {
                         _uiState.value =
@@ -335,6 +340,13 @@ class SearchHomeViewModel(
                                                                 }
 
                                                         for (candidateBook in candidateBooks.take(3)) {
+                                                            if (TorahReferenceSearchHelper.hasUnmatchedLocationSuffix(
+                                                                    candidateBook.title,
+                                                                    bookPart,
+                                                                )
+                                                            ) {
+                                                                continue
+                                                            }
                                                             val bookTocs = getOrLoadTocEntries(candidateBook)
                                                             val matchingTocs =
                                                                 bookTocs.filter { tocDto ->
@@ -405,7 +417,12 @@ class SearchHomeViewModel(
                                                             }
                                                         }
 
-                                                    (combinedSuggestions + regularSuggestions).distinctBy {
+                                                    val exactBooks =
+                                                        regularSuggestions.filter {
+                                                            sanitizeHebrewForAcronym(it.book.title) ==
+                                                                qNorm
+                                                        }
+                                                    (exactBooks + combinedSuggestions + regularSuggestions).distinctBy {
                                                         "${it.book.id}-${it.targetToc?.id}-${it.isPdf}"
                                                     }
                                                 }
@@ -418,6 +435,7 @@ class SearchHomeViewModel(
                                 }
                             }
 
+                        if (referenceRevision != revision || referenceQuery.value != qRaw) return@collectLatest
                         val (catSuggestions, bookSuggestions) = result
                         _uiState.value =
                             _uiState.value.copy(
@@ -437,8 +455,11 @@ class SearchHomeViewModel(
                 .distinctUntilChanged()
                 .collectLatest { qRaw ->
                     val q = qRaw.trim()
+                    if (tocQuery.value != qRaw || _uiState.value.selectedScopeToc != null) return@collectLatest
                     val book = _uiState.value.selectedScopeBook
-                    val cached = book?.let { tocCache[it.id] }.orEmpty()
+                    val revision = tocRevision
+                    val cached = book?.let { getOrLoadTocEntries(it) }.orEmpty()
+                    if (tocRevision != revision || tocQuery.value != qRaw) return@collectLatest
                     when {
                         book == null ->
                             _uiState.value =
@@ -463,7 +484,7 @@ class SearchHomeViewModel(
                             val suggestions =
                                 cached
                                     .asSequence()
-                                    .filter { it.toc.text.contains(q, ignoreCase = true) }
+                                    .filter { TorahReferenceSearchHelper.matchesTocLocation(it, q, allowTextPrefix = true) }
                                     .sortedWith(
                                         compareBy<TocSuggestionDto> { matchRank(it.toc.text, q) }
                                             .thenBy { it.toc.level }
@@ -482,7 +503,14 @@ class SearchHomeViewModel(
     }
 
     fun onReferenceQueryChanged(query: String) {
+        referenceRevision++
         referenceQuery.value = query
+        _uiState.value =
+            _uiState.value.copy(
+                suggestionsVisible = false,
+                categorySuggestions = emptyList(),
+                bookSuggestions = emptyList(),
+            )
         if (query.isBlank()) {
             _uiState.value =
                 _uiState.value.copy(
@@ -497,7 +525,14 @@ class SearchHomeViewModel(
     }
 
     fun onTocQueryChanged(query: String) {
+        tocRevision++
         tocQuery.value = query
+        _uiState.value =
+            _uiState.value.copy(
+                selectedScopeToc = null,
+                tocSuggestionsVisible = false,
+                tocSuggestions = emptyList(),
+            )
         if (query.isBlank()) {
             _uiState.value =
                 _uiState.value.copy(
@@ -509,6 +544,9 @@ class SearchHomeViewModel(
     }
 
     fun onPickCategory(category: Category) {
+        referenceRevision++
+        referenceQuery.value = ""
+        tocRevision++
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = category,
@@ -550,6 +588,10 @@ class SearchHomeViewModel(
         book: Book,
         isPdf: Boolean = false,
     ) {
+        referenceRevision++
+        referenceQuery.value = ""
+        val revision = ++tocRevision
+        tocQuery.value = ""
         // Update synchronously first
         _uiState.value =
             _uiState.value.copy(
@@ -573,18 +615,21 @@ class SearchHomeViewModel(
                     .distinct()
                     .take(5)
                     .toList()
+            if (_uiState.value.selectedScopeBook?.id != book.id || tocRevision != revision) return@launch
             val initialSuggestions = tocEntries.take(maxTocPredictive)
             _uiState.value =
                 _uiState.value.copy(
                     tocPreviewHints = preview,
                     tocSuggestions = initialSuggestions,
-                    tocSuggestionsVisible = initialSuggestions.isNotEmpty(),
+                    tocSuggestionsVisible = _uiState.value.selectedScopeToc == null && initialSuggestions.isNotEmpty(),
                     isTocLoading = false,
                 )
         }
     }
 
     fun onPickToc(toc: TocEntry) {
+        if (toc.bookId != _uiState.value.selectedScopeBook?.id) return
+        tocRevision++
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeToc = toc,
@@ -734,7 +779,9 @@ class SearchHomeViewModel(
         val anchorLineId: Long? =
             when (selectedToc) {
                 null -> null
-                else -> runSuspendCatching { repository.getLineIdsForTocEntry(selectedToc.id).firstOrNull() }.getOrNull()
+                else ->
+                    selectedToc.lineId
+                        ?: runSuspendCatching { repository.getLineIdsForTocEntry(selectedToc.id).firstOrNull() }.getOrNull()
             }
 
         // Pre-seed minimal state so the BookContent shell can show a loader instead of flashing Home.
@@ -744,41 +791,6 @@ class SearchHomeViewModel(
 
         // Emit navigation event - UI layer handles actual navigation
         if (selectedIsPdf) {
-            _navigationEvents.send(
-                SearchHomeNavigationEvent.NavigateToPdfContent(
-                    bookId = book.id,
-                    tabId = currentTabId,
-                    lineId = anchorLineId,
-                ),
-            )
-        } else {
-            _navigationEvents.send(
-                SearchHomeNavigationEvent.NavigateToBookContent(
-                    bookId = book.id,
-                    tabId = currentTabId,
-                    lineId = anchorLineId,
-                ),
-            )
-        }
-    }
-
-    /**
-     * Opens a specific combined reference (book + TOC location) in the current tab.
-     */
-    suspend fun openCombinedReferenceInCurrentTab(
-        currentTabId: String,
-        book: Book,
-        isPdf: Boolean,
-        toc: TocEntry,
-    ) {
-        val anchorLineId: Long? =
-            toc.lineId ?: runSuspendCatching { repository.getLineIdsForTocEntry(toc.id).firstOrNull() }.getOrNull()
-
-        persistedStore.update(currentTabId) { current ->
-            current.copy(bookContent = current.bookContent.copy(selectedBookId = book.id))
-        }
-
-        if (isPdf) {
             _navigationEvents.send(
                 SearchHomeNavigationEvent.NavigateToPdfContent(
                     bookId = book.id,

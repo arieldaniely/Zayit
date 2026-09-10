@@ -159,12 +159,6 @@ fun TabsContent() {
                     searchHomeViewModel.onPickBook(book, isPdf)
                 },
                 onPickToc = searchHomeViewModel::onPickToc,
-                onPickCombinedReference = { book, isPdf, toc ->
-                    val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
-                    scope.launch {
-                        searchHomeViewModel.openCombinedReferenceInCurrentTab(tabId, book, isPdf, toc)
-                    }
-                },
             )
         }
 

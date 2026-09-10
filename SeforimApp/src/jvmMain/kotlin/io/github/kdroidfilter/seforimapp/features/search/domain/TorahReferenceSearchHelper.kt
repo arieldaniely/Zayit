@@ -3,7 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.search.domain
 import io.github.kdroidfilter.seforimapp.features.search.TocSuggestionDto
 
 /**
- * Fast, zero-allocation helper for parsing and matching continuous Torah book+location reference queries.
+ * Helper for parsing and matching continuous Torah book+location reference queries.
  * Examples: "ברכות ב:", "שו\"ע או\"ח רסג", "משנ\"ב רסג", "רמב\"ם שבת א ב", "בראשית יח א".
  */
 object TorahReferenceSearchHelper {
@@ -170,150 +170,110 @@ object TorahReferenceSearchHelper {
         return results
     }
 
-    /**
-     * Checks if a TOC entry matches the location part of a query.
-     */
+    private val quotes = Regex("[\"'״׳]")
+    private val separators = Regex("[\\s,:./\\-–—]+")
+    private val aliases =
+        mapOf(
+            "אוח" to "אורח חיים",
+            "יוד" to "יורה דעה",
+            "חומ" to "חושן משפט",
+            "אהעז" to "אבן העזר",
+            "אהע" to "אבן העזר",
+            "סי" to "סימן",
+            "סע" to "סעיף",
+            "פ" to "פרק",
+            "הל" to "הלכות",
+        )
+
+    private fun tokens(text: String): List<String> = text.replace(quotes, "").split(separators).filter(String::isNotBlank)
+
+    private fun number(token: String): Int? {
+        token.toIntOrNull()?.let { return it.takeIf { value -> value > 0 } }
+        val value = gematriaToNumber(token) ?: return null
+        // Ordinary Hebrew words must not become numbers just because their letters have values.
+        return value.takeIf { numberToGematria(it) == token }
+    }
+
+    /** Do not let prefix book search consume the chapter number as part of a title word. */
+    fun hasUnmatchedLocationSuffix(
+        bookTitle: String,
+        bookQuery: String,
+    ): Boolean {
+        val queryTokens = tokens(bookQuery)
+        if (queryTokens.size < 2) return false
+        val suffixNumber = number(queryTokens.last()) ?: return false
+        return tokens(bookTitle).none { number(it) == suffixNumber }
+    }
+
+    private data class Daf(
+        val number: Int,
+        val amud: String?,
+    )
+
+    private val dafPattern =
+        Regex("^(?:דף\\s+)?([א-ת]+|[0-9]+)(?:\\s*([:.])|\\s*/\\s*([אב])|\\s+(?:עמוד\\s+|עמ\\s+|ע)?([אב]))?$")
+
+    private fun parseDaf(text: String): Daf? {
+        val clean = text.replace(quotes, "").trim()
+        val match = dafPattern.matchEntire(clean) ?: return null
+        val dafNumber = number(match.groupValues[1]) ?: return null
+        val amud =
+            when (match.groupValues[2]) {
+                ":" -> "ב"
+                "." -> "א"
+                else -> match.groupValues[3].ifEmpty { match.groupValues[4] }.ifEmpty { null }
+            }
+        return Daf(dafNumber, amud)
+    }
+
+    /** Matches whole tokens in path order, with the final token belonging to this entry. */
     fun matchesTocLocation(
         dto: TocSuggestionDto,
         locQuery: String,
+        allowTextPrefix: Boolean = false,
     ): Boolean {
         val loc = locQuery.trim()
         if (loc.isEmpty()) return false
-
-        val tocText = dto.toc.text.trim()
-        val fullPathText = dto.path.joinToString(" ")
-
-        // 1. Exact or direct substring match in text or path
-        if (tocText.contains(loc, ignoreCase = true) || fullPathText.contains(loc, ignoreCase = true)) {
-            return true
+        val tocDaf = parseDaf(dto.toc.text)
+        val queryDaf = parseDaf(loc)
+        val isDafEntry = tocDaf?.amud != null || tokens(dto.toc.text).firstOrNull() == "דף"
+        if (tocDaf != null && queryDaf != null && (isDafEntry || queryDaf.amud == null)) {
+            return tocDaf.number == queryDaf.number && (queryDaf.amud == null || tocDaf.amud == queryDaf.amud)
+        }
+        // An explicit daf side must never fall through to a chapter/verse token match.
+        if (queryDaf?.amud != null && (loc.any { it in ":./" } || tokens(loc).any { it in setOf("עא", "עב", "עמוד", "עמ", "דף") })) {
+            return false
         }
 
-        // 2. Talmud Bavli Daf Matching
-        val dafMatch = matchTalmudDaf(tocText, loc)
-        if (dafMatch == true) return true
-        if (dafMatch == false) return false // Explicit rejection
-
-        // 3. Siman / Perek / Seif / Pasuk multi-token or gematria matching
-        if (matchTokensInPathOrText(dto, loc)) {
-            return true
+        val queryTokens =
+            loc.split(separators).filter(String::isNotBlank).flatMap { rawToken ->
+                val token = rawToken.replace(quotes, "")
+                val expand = token !in setOf("סי", "סע", "פ", "הל") || quotes.containsMatchIn(rawToken)
+                if (expand) aliases[token]?.let(::tokens) ?: listOf(token) else listOf(token)
+            }
+        if (queryTokens.isEmpty()) return false
+        val path = dto.path.toMutableList()
+        if (path.lastOrNull() == dto.toc.text) path.removeAt(path.lastIndex)
+        val parentTokens = path.flatMap(::tokens)
+        val allTokens = parentTokens + tokens(dto.toc.text)
+        var nextIndex = 0
+        for ((index, token) in queryTokens.withIndex()) {
+            val tokenNumber = number(token)
+            val start = if (index == queryTokens.lastIndex) maxOf(nextIndex, parentTokens.size) else nextIndex
+            val found =
+                (start until allTokens.size).firstOrNull { position ->
+                    val candidate = allTokens[position]
+                    candidate.equals(token, ignoreCase = true) ||
+                        (tokenNumber != null && tokenNumber == number(candidate)) ||
+                        (
+                            allowTextPrefix &&
+                                index == queryTokens.lastIndex &&
+                                tokenNumber == null &&
+                                candidate.startsWith(token, ignoreCase = true)
+                        )
+                } ?: return false
+            nextIndex = found + 1
         }
-
-        return false
-    }
-
-    private fun matchTalmudDaf(
-        tocText: String,
-        loc: String,
-    ): Boolean? {
-        // Normalize loc: e.g. "ב:", "ב.", "ב ע\"ב", "דף ב עמוד א", "כז:", "27:"
-        val cleanLoc = loc.replace("[\"\'״׳]".toRegex(), "").trim()
-        if (cleanLoc.isEmpty()) return null
-
-        val isAmudB =
-            loc.endsWith(":") ||
-                loc.endsWith("/ב") ||
-                loc.contains("ע\"ב") ||
-                loc.contains("עב") ||
-                loc.contains("עמוד ב") ||
-                loc.contains("עמ' ב") ||
-                loc.endsWith(" ב")
-        val isAmudA =
-            loc.endsWith(".") ||
-                loc.endsWith("/א") ||
-                loc.contains("ע\"א") ||
-                loc.contains("עא") ||
-                loc.contains("עמוד א") ||
-                loc.contains("עמ' א") ||
-                loc.endsWith(" א")
-
-        // Extract daf component
-        var dafPart =
-            loc
-                .replace("דף", "")
-                .replace("ד'", "")
-                .replace("עמוד ב", "")
-                .replace("עמוד א", "")
-                .replace("ע\"ב", "")
-                .replace("ע\"א", "")
-                .replace("עמ' ב", "")
-                .replace("עמ' א", "")
-                .replace("/ב", "")
-                .replace("/א", "")
-                .replace("[:.]".toRegex(), "")
-                .trim()
-
-        // If ends with " א" or " ב" which indicated amud, strip it from dafPart
-        if (isAmudB && dafPart.endsWith(" ב")) dafPart = dafPart.dropLast(2).trim()
-        if (isAmudA && dafPart.endsWith(" א")) dafPart = dafPart.dropLast(2).trim()
-
-        if (dafPart.isBlank()) return null
-
-        // If dafPart is digits, convert to gematria
-        val numericDaf = dafPart.toIntOrNull()
-        val gematriaDaf = if (numericDaf != null) numberToGematria(numericDaf) else dafPart
-
-        val cleanToc = tocText.replace("[\"\'״׳]".toRegex(), "").trim()
-        val cleanGematriaDaf = gematriaDaf.replace("[\"\'״׳]".toRegex(), "").trim()
-
-        // Check if tocText refers to this daf
-        val dafMatches =
-            cleanToc.contains("דף $cleanGematriaDaf") ||
-                cleanToc.startsWith("$cleanGematriaDaf ") ||
-                cleanToc.startsWith("דף $cleanGematriaDaf ") ||
-                cleanToc == cleanGematriaDaf ||
-                cleanToc == "דף $cleanGematriaDaf"
-
-        if (!dafMatches) return null
-
-        return when {
-            isAmudB -> cleanToc.contains("עמוד ב") || cleanToc.contains("עב") || cleanToc.endsWith(":") || cleanToc.endsWith(" ב")
-            isAmudA -> cleanToc.contains("עמוד א") || cleanToc.contains("עא") || cleanToc.endsWith(".") || cleanToc.endsWith(" א")
-            else -> true // Neither amud specified, match any amud of that daf
-        }
-    }
-
-    private fun matchTokensInPathOrText(
-        dto: TocSuggestionDto,
-        locQuery: String,
-    ): Boolean {
-        // Expand common acronyms in query: או"ח -> אורח חיים, יו"ד -> יורה דעה, חו"מ -> חושן משפט, אהע"ז -> אבן העזר
-        val expandedQuery =
-            locQuery
-                .replace("או\"ח", "אורח חיים")
-                .replace("אוח", "אורח חיים")
-                .replace("יו\"ד", "יורה דעה")
-                .replace("יוד", "יורה דעה")
-                .replace("חו\"מ", "חושן משפט")
-                .replace("חומ", "חושן משפט")
-                .replace("אהע\"ז", "אבן העזר")
-                .replace("אה\"ע", "אבן העזר")
-                .replace("סי'", "סימן")
-                .replace("סע'", "סעיף")
-                .replace("פ'", "פרק")
-                .replace("הל'", "הלכות")
-
-        val tokens =
-            expandedQuery
-                .replace("[\"\'״׳:,\\-–—]".toRegex(), " ")
-                .split("\\s+".toRegex())
-                .filter { it.isNotEmpty() }
-
-        if (tokens.isEmpty()) return false
-
-        val fullText =
-            (dto.path + dto.toc.text)
-                .joinToString(" ")
-                .replace("[\"\'״׳:,\\-–—]".toRegex(), " ")
-
-        // All tokens must match in fullText (either directly or via number <-> gematria)
-        return tokens.all { token ->
-            val num = token.toIntOrNull()
-            val gem = if (num != null) numberToGematria(num) else null
-            val asNum = if (num == null) gematriaToNumber(token) else null
-
-            fullText.contains(token, ignoreCase = true) ||
-                (gem != null && fullText.contains(gem, ignoreCase = true)) ||
-                (asNum != null && fullText.contains(asNum.toString(), ignoreCase = true))
-        }
+        return true
     }
 }

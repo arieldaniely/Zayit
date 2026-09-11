@@ -68,6 +68,7 @@ import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteFolder
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Link
+import io.github.kdroidfilter.seforimapp.icons.TablerInfoSquare
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -79,6 +80,7 @@ import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.breadcrumb_copy_link
+import seforimapp.seforimapp.generated.resources.book_info_tooltip
 import seforimapp.seforimapp.generated.resources.favorites_add
 import seforimapp.seforimapp.generated.resources.favorites_edit
 import seforimapp.seforimapp.generated.resources.favorites_folder_name_placeholder
@@ -96,6 +98,7 @@ fun BreadcrumbActionsView(uiState: BookContentState) {
     val book = uiState.navigation.selectedBook ?: return
     val toc = uiState.toc.breadcrumbPath.lastOrNull()
     val lineId = uiState.content.primaryLine?.id ?: toc?.lineId
+    var showBookInfo by remember(book.id) { mutableStateOf(false) }
 
     val aboveAnchorPlacement =
         remember {
@@ -123,6 +126,19 @@ fun BreadcrumbActionsView(uiState: BookContentState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        Tooltip(
+            tooltip = { Text(stringResource(Res.string.book_info_tooltip), fontSize = 13.sp) },
+            tooltipPlacement = aboveAnchorPlacement,
+        ) {
+            IconButton(onClick = { showBookInfo = true }, modifier = Modifier.size(24.dp)) {
+                Image(
+                    painter = rememberVectorPainter(TablerInfoSquare),
+                    contentDescription = stringResource(Res.string.book_info_tooltip),
+                    modifier = Modifier.size(16.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
+            }
+        }
         CopyLinkButton(
             bookId = book.id,
             lineId = lineId,
@@ -139,6 +155,9 @@ fun BreadcrumbActionsView(uiState: BookContentState) {
                     ?.let { "${book.title} - $it" } ?: book.title,
             tooltipPlacement = aboveAnchorPlacement,
         )
+    }
+    if (showBookInfo) {
+        BookInfoDialog(bookId = book.id, onDismiss = { showBookInfo = false })
     }
 }
 

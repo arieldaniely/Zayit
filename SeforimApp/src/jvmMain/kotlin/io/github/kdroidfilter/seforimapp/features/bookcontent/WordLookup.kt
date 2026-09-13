@@ -93,7 +93,8 @@ internal fun buildWordLookupSnapshot(
 ): WordLookupSnapshot {
     val dictionary = LinkedHashMap<String, MutableList<String>>()
     val dictionaryEntries =
-        Json.parseToJsonElement(dictionaryJson)
+        Json
+            .parseToJsonElement(dictionaryJson)
             .jsonObject["מילון פשיטא"]
             ?.jsonArray
             .orEmpty()
@@ -126,7 +127,10 @@ internal fun buildWordLookupSnapshot(
     )
 }
 
-internal fun lookupWord(snapshot: WordLookupSnapshot, selection: String): WordLookupResult? {
+internal fun lookupWord(
+    snapshot: WordLookupSnapshot,
+    selection: String,
+): WordLookupResult? {
     // A lookup is meaningful only for a short word/phrase; this also prevents large selections
     // from creating normalization work while the menu is being assembled.
     if (
@@ -177,7 +181,10 @@ private fun lookupCandidates(key: String): Sequence<String> =
     }
 
 /** Extracts the Hebrew token around a text-layout offset for a direct secondary click. */
-internal fun extractLookupToken(text: String, rawOffset: Int): String {
+internal fun extractLookupToken(
+    text: String,
+    rawOffset: Int,
+): String {
     if (text.isEmpty()) return ""
     var offset = rawOffset.coerceIn(0, text.lastIndex)
     if (!isLookupTokenChar(text[offset]) && offset > 0 && isLookupTokenChar(text[offset - 1])) {
@@ -257,8 +264,29 @@ private val VOCALIZED_FORM = Regex("^\\{([^}]*)}(?:\\s*)(.*)$")
 private val TYPOGRAPHIC_DOUBLE_QUOTES = charArrayOf('״', '“', '”', '„', '‟')
 private val LOOKUP_EDGE_CHARS =
     charArrayOf(
-        ' ', '\t', '\n', '\r', '.', ',', ';', ':', '!', '?', '…',
-        '(', ')', '[', ']', '{', '}', '<', '>', '"', '״', '“', '”',
+        ' ',
+        '\t',
+        '\n',
+        '\r',
+        '.',
+        ',',
+        ';',
+        ':',
+        '!',
+        '?',
+        '…',
+        '(',
+        ')',
+        '[',
+        ']',
+        '{',
+        '}',
+        '<',
+        '>',
+        '"',
+        '״',
+        '“',
+        '”',
     )
 private const val MAX_LOOKUP_LENGTH = 80
 private const val MAX_PREFIXES_TO_STRIP = 2

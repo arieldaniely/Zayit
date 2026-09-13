@@ -736,7 +736,7 @@ fun BookContentScreen(
                                 ) {
                                     add(
                                         ContextMenuItemOption(
-                                            icon = AllIconsKeys.General.Error,
+                                            icon = AllIconsKeys.Actions.Report,
                                             label = reportBookErrorLabel,
                                         ) {
                                             errorReportDraft =

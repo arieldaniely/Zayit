@@ -424,8 +424,8 @@ private fun RtlAwareTabStripContent(
         val maxWidthDp = this.maxWidth
         // Reserve a non-interactive draggable area at the trailing edge to allow window move
         val reservedDragArea = 40.dp
-        // + button (40.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
-        val extrasWidth = 40.dp + 1.dp + 8.dp + reservedDragArea
+        // + button (36.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
+        val extrasWidth = 36.dp + 1.dp + 8.dp + reservedDragArea
         val availableForTabs = (maxWidthDp - extrasWidth).coerceAtLeast(0.dp)
         val tabsCount = tabs.size.coerceAtLeast(1)
         // Chrome-like: tabs shrink to fill available width, capped by a max width

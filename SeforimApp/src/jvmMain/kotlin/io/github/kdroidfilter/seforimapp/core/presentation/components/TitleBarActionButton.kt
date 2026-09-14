@@ -94,12 +94,7 @@ fun TitleBarActionButton(
             )
         }
 
-    val buttonModifier =
-        if (isIslands) {
-            Modifier.width(40.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
-        } else {
-            Modifier.width(40.dp).fillMaxHeight()
-        }
+    val buttonModifier = Modifier.width(36.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
 
     Tooltip(
         tooltip = {

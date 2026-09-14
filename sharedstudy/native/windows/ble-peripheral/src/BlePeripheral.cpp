@@ -1,5 +1,8 @@
 #include <jni.h>
 
+#include <windows.h>
+#include <winerror.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <mutex>
@@ -7,11 +10,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include <winrt/base.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Devices.Bluetooth.h>
 #include <winrt/Windows.Devices.Bluetooth.Advertisement.h>
 #include <winrt/Windows.Devices.Bluetooth.GenericAttributeProfile.h>
 #include <winrt/Windows.Storage.Streams.h>
-#include <winrt/base.h>
 
 using namespace winrt;
 using namespace Windows::Devices::Bluetooth;
@@ -89,8 +94,11 @@ void rebuild_subscribed_clients() {
     std::scoped_lock lock(g_mutex);
     g_clients.clear();
     if (g_notify_characteristic == nullptr) return;
-    for (auto const& client : g_notify_characteristic.SubscribedClients()) {
-        g_clients.insert_or_assign(to_string(client.Session().DeviceId().Id()), client);
+    auto clients = g_notify_characteristic.SubscribedClients();
+    uint32_t const count = clients.Size();
+    for (uint32_t i = 0; i < count; ++i) {
+        auto client = clients.GetAt(i);
+        g_clients.insert_or_assign(winrt::to_string(client.Session().DeviceId().Id()), client);
     }
 }
 
@@ -125,8 +133,8 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     try {
         init_apartment(apartment_type::multi_threaded);
     } catch (hresult_error const& error) {
-        if (error.code() != RPC_E_CHANGED_MODE) {
-            throw_java(env, to_string(error.message()));
+        if (error.code() != winrt::hresult(RPC_E_CHANGED_MODE)) {
+            throw_java(env, winrt::to_string(error.message()));
             return;
         }
     }
@@ -146,7 +154,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     try {
         return peripheral_supported() ? JNI_TRUE : JNI_FALSE;
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
         return JNI_FALSE;
     }
 }
@@ -163,15 +171,15 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         auto service_id = guid(to_utf8(service_uuid, env));
         auto write_id = guid(to_utf8(write_uuid, env));
         auto notify_id = guid(to_utf8(notify_uuid, env));
-        auto name = to_hstring(to_utf8(local_name, env));
+        auto name = winrt::to_hstring(to_utf8(local_name, env));
 
         std::scoped_lock lock(g_mutex);
         stop_locked();
-        if (!peripheral_supported()) throw hresult_error(E_NOTIMPL, L"BLE peripheral role is unsupported");
+        if (!peripheral_supported()) throw hresult_error(winrt::hresult(E_NOTIMPL), L"BLE peripheral role is unsupported");
 
         auto provider_result = GattServiceProvider::CreateAsync(service_id).get();
         if (provider_result.Error() != BluetoothError::Success) {
-            throw hresult_error(E_FAIL, L"Unable to create the shared-study GATT service");
+            throw hresult_error(winrt::hresult(E_FAIL), L"Unable to create the shared-study GATT service");
         }
         g_provider = provider_result.ServiceProvider();
 
@@ -182,7 +190,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         write_parameters.UserDescription(L"Zayit shared-study write");
         auto write_result = g_provider.Service().CreateCharacteristicAsync(write_id, write_parameters).get();
         if (write_result.Error() != BluetoothError::Success) {
-            throw hresult_error(E_FAIL, L"Unable to create the shared-study write characteristic");
+            throw hresult_error(winrt::hresult(E_FAIL), L"Unable to create the shared-study write characteristic");
         }
         g_write_characteristic = write_result.Characteristic();
 
@@ -192,7 +200,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         notify_parameters.UserDescription(L"Zayit shared-study notify");
         auto notify_result = g_provider.Service().CreateCharacteristicAsync(notify_id, notify_parameters).get();
         if (notify_result.Error() != BluetoothError::Success) {
-            throw hresult_error(E_FAIL, L"Unable to create the shared-study notify characteristic");
+            throw hresult_error(winrt::hresult(E_FAIL), L"Unable to create the shared-study notify characteristic");
         }
         g_notify_characteristic = notify_result.Characteristic();
 
@@ -204,7 +212,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
                     auto reader = DataReader::FromBuffer(request.Value());
                     std::vector<std::uint8_t> bytes(reader.UnconsumedBufferLength());
                     if (!bytes.empty()) reader.ReadBytes(bytes);
-                    notify_packet(to_string(args.Session().DeviceId().Id()), bytes);
+                    notify_packet(winrt::to_string(args.Session().DeviceId().Id()), bytes);
                     if (request.Option() == GattWriteOption::WriteWithResponse) request.Respond();
                 }
             } catch (...) {
@@ -229,7 +237,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     } catch (hresult_error const& error) {
         std::scoped_lock lock(g_mutex);
         stop_locked();
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     } catch (std::exception const& error) {
         std::scoped_lock lock(g_mutex);
         stop_locked();
@@ -265,7 +273,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         {
             std::scoped_lock lock(g_mutex);
             auto found = g_clients.find(id);
-            if (found == g_clients.end()) throw hresult_error(E_BOUNDS, L"BLE client is not subscribed");
+            if (found == g_clients.end()) throw hresult_error(winrt::hresult(E_BOUNDS), L"BLE client is not subscribed");
             client = found->second;
             characteristic = g_notify_characteristic;
         }
@@ -273,7 +281,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         writer.WriteBytes(bytes);
         characteristic.NotifyValueAsync(writer.DetachBuffer(), client).get();
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     }
 }
 

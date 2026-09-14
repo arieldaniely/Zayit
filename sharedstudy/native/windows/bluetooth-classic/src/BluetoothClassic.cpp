@@ -1,5 +1,8 @@
 #include <jni.h>
 
+#include <windows.h>
+#include <winerror.h>
+
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -8,17 +11,21 @@
 #include <unordered_map>
 #include <vector>
 
+#include <winrt/base.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Devices.Bluetooth.h>
 #include <winrt/Windows.Devices.Bluetooth.Rfcomm.h>
 #include <winrt/Windows.Devices.Enumeration.h>
+#include <winrt/Windows.Networking.h>
 #include <winrt/Windows.Networking.Sockets.h>
 #include <winrt/Windows.Storage.Streams.h>
-#include <winrt/base.h>
 
 using namespace winrt;
 using namespace Windows::Devices::Bluetooth;
 using namespace Windows::Devices::Bluetooth::Rfcomm;
 using namespace Windows::Devices::Enumeration;
+using namespace Windows::Networking;
 using namespace Windows::Networking::Sockets;
 using namespace Windows::Storage::Streams;
 
@@ -179,13 +186,13 @@ void start_server_locked(guid const& service_uuid, std::string const& local_name
     sdp_writer.UnicodeEncoding(UnicodeEncoding::Utf8);
     sdp_writer.WriteByte(0x25);
     sdp_writer.WriteByte(static_cast<std::uint8_t>(name.size()));
-    sdp_writer.WriteString(to_hstring(name));
+    sdp_writer.WriteString(winrt::to_hstring(name));
     g_provider.SdpRawAttributes().Insert(kServiceNameAttribute, sdp_writer.DetachBuffer());
 
     g_listener = StreamSocketListener();
     g_connection_token = g_listener.ConnectionReceived([](auto const&, StreamSocketListenerConnectionReceivedEventArgs const& args) {
         auto socket = args.Socket();
-        auto remote = to_string(socket.Information().RemoteAddress().CanonicalName());
+        auto remote = winrt::to_string(socket.Information().RemoteAddress().CanonicalName());
         install_connection("incoming:" + remote, socket);
     });
     g_listener
@@ -204,8 +211,8 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     try {
         init_apartment(apartment_type::multi_threaded);
     } catch (hresult_error const& error) {
-        if (error.code() != RPC_E_CHANGED_MODE) {
-            throw_java(env, to_string(error.message()));
+        if (error.code() != winrt::hresult(RPC_E_CHANGED_MODE)) {
+            throw_java(env, winrt::to_string(error.message()));
             return;
         }
     }
@@ -226,7 +233,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     try {
         return classic_supported() ? JNI_TRUE : JNI_FALSE;
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
         return JNI_FALSE;
     }
 }
@@ -246,14 +253,16 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         auto selector = RfcommDeviceService::GetDeviceSelector(RfcommServiceId::FromUuid(service_id));
         auto found = DeviceInformation::FindAllAsync(selector).get();
         std::vector<std::pair<std::string, std::string>> devices;
-        devices.reserve(found.Size());
-        for (auto const& device : found) {
-            devices.emplace_back(to_string(device.Id()), to_string(device.Name()));
+        uint32_t const count = found.Size();
+        devices.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            auto device = found.GetAt(i);
+            devices.emplace_back(winrt::to_string(device.Id()), winrt::to_string(device.Name()));
         }
         notify_devices(devices);
         notify_state(true);
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     }
 }
 
@@ -272,7 +281,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         std::scoped_lock lock(g_mutex);
         start_server_locked(guid(to_utf8(service_uuid, env)), to_utf8(local_name, env));
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     }
 }
 
@@ -292,9 +301,10 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     jstring service_uuid) {
     try {
         auto id = to_utf8(device_id, env);
-        auto service = RfcommDeviceService::FromIdAsync(to_hstring(id)).get();
-        if (service == nullptr || service.ServiceId() != RfcommServiceId::FromUuid(guid(to_utf8(service_uuid, env)))) {
-            throw hresult_error(E_FAIL, L"RFCOMM shared-study service is unavailable");
+        auto target_guid = guid(to_utf8(service_uuid, env));
+        auto service = RfcommDeviceService::FromIdAsync(winrt::to_hstring(id)).get();
+        if (service == nullptr || service.ServiceId().Uuid() != target_guid) {
+            throw hresult_error(winrt::hresult(E_FAIL), L"RFCOMM shared-study service is unavailable");
         }
         StreamSocket socket;
         socket
@@ -306,7 +316,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         install_connection(id, socket);
         service.Close();
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     }
 }
 
@@ -336,11 +346,11 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         {
             std::scoped_lock lock(g_mutex);
             auto found = g_connections.find(id);
-            if (found == g_connections.end()) throw hresult_error(E_BOUNDS, L"RFCOMM connection is unavailable");
+            if (found == g_connections.end()) throw hresult_error(winrt::hresult(E_BOUNDS), L"RFCOMM connection is unavailable");
             connection = found->second;
         }
         auto size = static_cast<std::uint32_t>(env->GetArrayLength(payload));
-        if (size == 0 || size > kMaximumFrameSize) throw hresult_error(E_INVALIDARG, L"Invalid RFCOMM frame size");
+        if (size == 0 || size > kMaximumFrameSize) throw hresult_error(winrt::hresult(E_INVALIDARG), L"Invalid RFCOMM frame size");
         std::vector<std::uint8_t> bytes(size);
         env->GetByteArrayRegion(payload, 0, size, reinterpret_cast<jbyte*>(bytes.data()));
         std::scoped_lock write_lock(connection->write_mutex);
@@ -349,6 +359,6 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         connection->writer.StoreAsync().get();
         connection->writer.FlushAsync().get();
     } catch (hresult_error const& error) {
-        throw_java(env, to_string(error.message()));
+        throw_java(env, winrt::to_string(error.message()));
     }
 }

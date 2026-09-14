@@ -219,14 +219,73 @@ fn install_with_progress(progress: Arc<AtomicU32>) {
         .arg("/S")
         .status();
 
-    progress.store(100, Ordering::SeqCst);
-
     if let Err(e) = status {
         eprintln!("Failed to run NSIS installer: {}", e);
     }
 
+    // Step 4: Register custom URL protocols as trusted for Office applications (no admin privileges needed)
+    register_office_trusted_protocols();
+
+    progress.store(100, Ordering::SeqCst);
+
     // Clean up temp file
     let _ = std::fs::remove_file(&nsis_path);
+}
+
+/// Registers Zayita's custom URL schemes (`zayita:` and `zayit:`) as trusted protocols
+/// in Microsoft Office (Word, Excel, PowerPoint, Outlook, etc.) under `HKEY_CURRENT_USER`.
+/// This suppresses the "potential security concern" hyperlink warning without requiring
+/// administrator privileges.
+fn register_office_trusted_protocols() {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    // Common Office version keys:
+    // 16.0 = Office 2016, 2019, 2021, 2024, Microsoft 365
+    // 15.0 = Office 2013
+    // 14.0 = Office 2010
+    // 12.0 = Office 2007
+    let mut versions = vec![
+        "16.0".to_string(),
+        "15.0".to_string(),
+        "14.0".to_string(),
+        "12.0".to_string(),
+    ];
+
+    // Also dynamically discover any additional version numbers under HKCU\SOFTWARE\Microsoft\Office
+    for search_root in &[r"SOFTWARE\Microsoft\Office", r"SOFTWARE\Policies\Microsoft\Office"] {
+        if let Ok(office_key) = hkcu.open_subkey(search_root) {
+            for subkey_name in office_key.enum_keys().filter_map(|k| k.ok()) {
+                if subkey_name.chars().next().map_or(false, |c| c.is_ascii_digit())
+                    && subkey_name.contains('.')
+                    && !versions.contains(&subkey_name)
+                {
+                    versions.push(subkey_name);
+                }
+            }
+        }
+    }
+
+    // Register both canonical 'zayita' and legacy 'zayit', with colon (standard Office requirement)
+    // and without colon as a fallback.
+    let protocols = ["zayita:", "zayita", "zayit:", "zayit"];
+
+    let base_paths = [
+        r"SOFTWARE\Policies\Microsoft\Office",
+        r"SOFTWARE\Microsoft\Office",
+    ];
+
+    for base in &base_paths {
+        for ver in &versions {
+            let trusted_path = format!(
+                r"{}\{}\Common\Security\Trusted Protocols\All Applications",
+                base, ver
+            );
+            for proto in &protocols {
+                let full_path = format!(r"{}\{}", trusted_path, proto);
+                let _ = hkcu.create_subkey(&full_path);
+            }
+        }
+    }
 }
 
 /// Detects and silently uninstalls any old MSI-based Zayit/Zayita installation.

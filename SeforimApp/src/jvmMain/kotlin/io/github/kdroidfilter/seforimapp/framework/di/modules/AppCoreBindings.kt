@@ -26,6 +26,7 @@ import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordin
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.PacketizedBleTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.createDesktopBlePlatformBridge
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
@@ -64,11 +65,13 @@ object AppCoreBindings {
         val displayName = AppSettings.getSharedStudyDisplayName() ?: profileName.ifBlank { fallback }
         return SharedStudyCoordinator(
             transport =
-                CompositeSharedStudyTransport(
-                    ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
-                    localNetwork = LocalNetworkTransport(instanceId = AppSettings.getOrCreateSharedStudyDeviceId()),
-                    bluetoothClassic = BluetoothClassicTransport(),
-                ),
+                LazySharedStudyTransport {
+                    CompositeSharedStudyTransport(
+                        ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
+                        localNetwork = LocalNetworkTransport(instanceId = AppSettings.getOrCreateSharedStudyDeviceId()),
+                        bluetoothClassic = BluetoothClassicTransport(),
+                    )
+                },
             initialDisplayName = displayName,
             localId = AppSettings.getOrCreateSharedStudyDeviceId(),
             onDisplayNameChanged = AppSettings::setSharedStudyDisplayName,

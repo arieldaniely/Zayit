@@ -57,10 +57,6 @@ class SharedStudyCoordinator(
                 .collect(::receive)
         }
         launchInScope {
-            transport.refreshBluetoothState()
-            runCatching { transport.startDiscovery(_state.value.displayName.trim()) }
-        }
-        launchInScope {
             for (location in locationUpdates) {
                 _state.value.sessionId?.let { sessionId ->
                     route(StudyMessage.LocationChanged(localId, nextSequence(), sessionId, location))
@@ -94,10 +90,21 @@ class SharedStudyCoordinator(
 
     fun startDiscovery() {
         launchInScope {
-            _state.update { it.copy(isScanning = true, error = null) }
-            runCatching { transport.startDiscovery(_state.value.displayName.trim()) }
+            _state.update { it.copy(isScanning = true, hasStartedDiscovery = true, error = null) }
+            runCatching {
+                transport.refreshBluetoothState()
+                transport.startDiscovery(_state.value.displayName.trim())
+            }
                 .onFailure { failure -> _state.update { it.copy(error = failure.message) } }
             _state.update { it.copy(isScanning = false) }
+        }
+    }
+
+    fun stopDiscovery() {
+        launchInScope {
+            runCatching { transport.stopDiscovery() }
+            if (_state.value.sessionId == null) runCatching { transport.stopAdvertising() }
+            _state.update { it.copy(isScanning = false, hasStartedDiscovery = false) }
         }
     }
 

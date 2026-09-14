@@ -16,12 +16,14 @@
 #include <winrt/Windows.Devices.Bluetooth.h>
 #include <winrt/Windows.Devices.Bluetooth.Advertisement.h>
 #include <winrt/Windows.Devices.Bluetooth.GenericAttributeProfile.h>
+#include <winrt/Windows.Devices.Radios.h>
 #include <winrt/Windows.Storage.Streams.h>
 
 using namespace winrt;
 using namespace Windows::Devices::Bluetooth;
 using namespace Windows::Devices::Bluetooth::Advertisement;
 using namespace Windows::Devices::Bluetooth::GenericAttributeProfile;
+using namespace Windows::Devices::Radios;
 using namespace Windows::Storage::Streams;
 
 namespace {
@@ -123,9 +125,18 @@ void stop_locked() {
 bool peripheral_supported() {
     try {
         init_apartment(apartment_type::multi_threaded);
-    } catch (...) {}
-    auto adapter = BluetoothAdapter::GetDefaultAsync().get();
-    return adapter != nullptr && adapter.IsPeripheralRoleSupported();
+    } catch (...) {
+        // The calling JVM thread may already be initialized in a different apartment.
+    }
+    try {
+        auto adapter = BluetoothAdapter::GetDefaultAsync().get();
+        if (adapter == nullptr || !adapter.IsPeripheralRoleSupported()) return false;
+        auto radio = adapter.GetRadioAsync().get();
+        return radio != nullptr && radio.State() == RadioState::On;
+    } catch (...) {
+        // BluetoothAdapter reports ERROR_DEVICE_NOT_AVAILABLE while the radio is off.
+        return false;
+    }
 }
 }  // namespace
 
@@ -144,12 +155,11 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndpoint_nativeIsBluetoothEnabled(
-    JNIEnv* env,
+    JNIEnv*,
     jobject) {
     try {
         return peripheral_supported() ? JNI_TRUE : JNI_FALSE;
-    } catch (hresult_error const& error) {
-        throw_java(env, winrt::to_string(error.message()));
+    } catch (...) {
         return JNI_FALSE;
     }
 }

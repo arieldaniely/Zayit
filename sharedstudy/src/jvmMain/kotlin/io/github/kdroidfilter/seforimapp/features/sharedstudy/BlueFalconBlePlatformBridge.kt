@@ -9,11 +9,13 @@ import dev.bluefalcon.core.ServiceDiscoveryPhase
 import dev.bluefalcon.core.ServiceFilter
 import dev.bluefalcon.core.toUuid
 import dev.bluefalcon.engine.macos.jvm.MacosJvmEngine
+import dev.bluefalcon.engine.windows.WindowsEngine
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +28,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.uuid.ExperimentalUuidApi
 
 /**
@@ -38,6 +43,7 @@ internal class BlueFalconBlePlatformBridge(
     private val blueFalcon: BlueFalcon,
     private val peripheralEndpoint: BlePeripheralEndpoint,
     private val engineDispatcher: CoroutineDispatcher? = null,
+    private val usePeripheralAdapterState: Boolean = false,
     @param:StructuredScope private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : BlePlatformBridge {
     private data class CentralConnection(
@@ -47,10 +53,10 @@ internal class BlueFalconBlePlatformBridge(
 
     private val centralConnections = ConcurrentHashMap<String, CentralConnection>()
     private val _centralPackets = MutableSharedFlow<BleIncomingPacket>(extraBufferCapacity = 128)
-
     override val bluetoothState: Flow<BluetoothState> =
         combine(blueFalcon.managerState, peripheralEndpoint.isAvailable) { managerState, peripheralAvailable ->
             when {
+                usePeripheralAdapterState -> if (peripheralAvailable) BluetoothState.ON else BluetoothState.OFF
                 managerState == BluetoothManagerState.Ready -> BluetoothState.ON
                 peripheralAvailable -> BluetoothState.OFF
                 else -> BluetoothState.UNSUPPORTED
@@ -91,6 +97,12 @@ internal class BlueFalconBlePlatformBridge(
     }
 
     override suspend fun startScanning(serviceUuid: String) {
+        if (usePeripheralAdapterState) {
+            peripheralEndpoint.refreshState()
+            // BlueFalcon 3.7.7 terminates the JVM instead of reporting HRESULT 0x800710DF
+            // when nativeScan is invoked while the Windows Bluetooth radio is off.
+            if (!peripheralEndpoint.isAvailable.first()) return
+        }
         onEngineThread {
             blueFalcon.clearPeripherals()
             blueFalcon.scan(listOf(ServiceFilter(serviceUuid.toUuid())))
@@ -219,11 +231,28 @@ internal fun createDesktopBlePlatformBridge(
 ): BlePlatformBridge {
     val osName = System.getProperty("os.name").lowercase()
     if (osName.contains("win")) {
-        // BlueFalcon 3.7.7 lets WinRT exceptions escape its nativeScan JNI boundary. In
-        // particular, HRESULT 0x800710DF (device not ready) terminates the entire JVM and cannot
-        // be caught from Kotlin. Keep the safe local GATT server while discovery falls back to
-        // LAN and Bluetooth Classic until the Windows central scanner is fixed upstream.
-        return PeripheralOnlyBlePlatformBridge(peripheralEndpoint)
+        val executor =
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "Zayit-BlueFalcon-Windows").apply { isDaemon = true }
+            }
+        val dispatcher = executor.asCoroutineDispatcher()
+        return runCatching {
+            executor.submit(
+                Callable<BlePlatformBridge> {
+                    BlueFalconBlePlatformBridge(
+                        blueFalcon = BlueFalcon(WindowsEngine()),
+                        peripheralEndpoint = peripheralEndpoint,
+                        engineDispatcher = dispatcher,
+                        // BlueFalcon 3.7.7 lets HRESULT 0x800710DF escape nativeScan when the
+                        // adapter is off. Our peripheral adapter reports that state safely.
+                        usePeripheralAdapterState = true,
+                    )
+                },
+            ).get(ENGINE_INITIALIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }.getOrElse {
+            dispatcher.close()
+            PeripheralOnlyBlePlatformBridge(peripheralEndpoint)
+        }
     }
     if (osName.contains("mac")) {
         return runCatching {
@@ -232,6 +261,8 @@ internal fun createDesktopBlePlatformBridge(
     }
     return UnsupportedBlePlatformBridge()
 }
+
+private const val ENGINE_INITIALIZATION_TIMEOUT_SECONDS = 5L
 
 internal class PeripheralOnlyBlePlatformBridge(
     private val peripheralEndpoint: BlePeripheralEndpoint,

@@ -202,6 +202,7 @@ data class SharedStudyState(
     val bluetoothState: BluetoothState = BluetoothState.UNKNOWN,
     val discoveryStage: DiscoveryStage = DiscoveryStage.AUTOMATIC,
     val isScanning: Boolean = false,
+    val hasStartedDiscovery: Boolean = false,
     val displayName: String = "",
     val nearbyDevices: List<NearbyStudyDevice> = emptyList(),
     val sessionId: String? = null,

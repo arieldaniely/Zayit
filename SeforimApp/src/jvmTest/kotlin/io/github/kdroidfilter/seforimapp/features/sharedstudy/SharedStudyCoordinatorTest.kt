@@ -15,6 +15,23 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SharedStudyCoordinatorTest {
     @Test
+    fun `construction does not activate discovery until the user requests it`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            runCurrent()
+
+            assertEquals(0, transport.refreshCount)
+            assertEquals(0, transport.discoveryCount)
+
+            coordinator.startDiscovery()
+            runCurrent()
+
+            assertEquals(1, transport.refreshCount)
+            assertEquals(1, transport.discoveryCount)
+        }
+
+    @Test
     fun `host assigns distinct colors and broadcasts roster after approval`() =
         runTest {
             val transport = FakeTransport()
@@ -212,6 +229,8 @@ class SharedStudyCoordinatorTest {
         val devices = MutableStateFlow<List<NearbyStudyDevice>>(emptyList())
         val incoming = MutableSharedFlow<IncomingStudyMessage>(extraBufferCapacity = 8)
         val sent = mutableListOf<Pair<String, StudyMessage>>()
+        var refreshCount = 0
+        var discoveryCount = 0
 
         override val bluetoothState = state
         override val nearbyDevices = devices
@@ -224,9 +243,13 @@ class SharedStudyCoordinatorTest {
             incoming.emit(IncomingStudyMessage(deviceId, message))
         }
 
-        override suspend fun refreshBluetoothState() = Unit
+        override suspend fun refreshBluetoothState() {
+            refreshCount += 1
+        }
 
-        override suspend fun startDiscovery(localName: String) = Unit
+        override suspend fun startDiscovery(localName: String) {
+            discoveryCount += 1
+        }
 
         override suspend fun stopDiscovery() = Unit
 

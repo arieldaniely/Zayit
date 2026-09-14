@@ -28,9 +28,8 @@ fun SharedStudyDialog(
 ) {
     val state by coordinator.state.collectAsState()
     val nameState = rememberTextFieldState(state.displayName)
-    LaunchedEffect(Unit) {
-        coordinator.refreshBluetoothState()
-        coordinator.startDiscovery()
+    DisposableEffect(coordinator) {
+        onDispose(coordinator::stopDiscovery)
     }
     LaunchedEffect(nameState.text) { coordinator.setDisplayName(nameState.text.toString()) }
 
@@ -72,22 +71,28 @@ fun SharedStudyDialog(
                 }
             }
 
-            when (state.bluetoothState) {
-                BluetoothState.OFF -> BluetoothHelp(stringResource(Res.string.shared_study_bluetooth_off), coordinator)
-                BluetoothState.UNSUPPORTED -> Text(
-                    stringResource(Res.string.shared_study_bluetooth_unsupported),
-                    color = JewelTheme.globalColors.text.info,
-                )
-                BluetoothState.UNKNOWN -> if (state.nearbyDevices.isEmpty()) CircularProgressIndicator(Modifier.size(20.dp))
-                BluetoothState.ON -> Unit
-            }
+            if (state.hasStartedDiscovery) {
+                when (state.bluetoothState) {
+                    BluetoothState.OFF -> BluetoothHelp(stringResource(Res.string.shared_study_bluetooth_off), coordinator)
+                    BluetoothState.UNSUPPORTED -> Text(
+                        stringResource(Res.string.shared_study_bluetooth_unsupported),
+                        color = JewelTheme.globalColors.text.info,
+                    )
+                    BluetoothState.UNKNOWN ->
+                        if (state.nearbyDevices.isEmpty()) CircularProgressIndicator(Modifier.size(20.dp))
+                    BluetoothState.ON -> Unit
+                }
 
-            when (state.discoveryStage) {
-                DiscoveryStage.AUTOMATIC ->
-                    Text(stringResource(Res.string.shared_study_automatic_search), color = JewelTheme.globalColors.text.info)
-                DiscoveryStage.BLUETOOTH_PAIRING ->
-                    BluetoothHelp(stringResource(Res.string.shared_study_pairing_help), coordinator)
-                DiscoveryStage.HOTSPOT_GUIDANCE -> HotspotHelp(coordinator)
+                when (state.discoveryStage) {
+                    DiscoveryStage.AUTOMATIC ->
+                        Text(
+                            stringResource(Res.string.shared_study_automatic_search),
+                            color = JewelTheme.globalColors.text.info,
+                        )
+                    DiscoveryStage.BLUETOOTH_PAIRING ->
+                        BluetoothHelp(stringResource(Res.string.shared_study_pairing_help), coordinator)
+                    DiscoveryStage.HOTSPOT_GUIDANCE -> HotspotHelp(coordinator)
+                }
             }
 
             DeviceList(state, coordinator)
@@ -148,7 +153,15 @@ private fun DeviceList(
             Text(stringResource(Res.string.shared_study_available_people), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = coordinator::startDiscovery, enabled = !state.isScanning) {
-                Text(stringResource(Res.string.shared_study_refresh))
+                Text(
+                    stringResource(
+                        if (state.hasStartedDiscovery) {
+                            Res.string.shared_study_refresh
+                        } else {
+                            Res.string.shared_study_start_search
+                        },
+                    ),
+                )
             }
         }
         if (state.isScanning) CircularProgressIndicator(modifier = Modifier.size(20.dp))

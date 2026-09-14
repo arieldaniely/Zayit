@@ -20,11 +20,13 @@
 #include <winrt/Windows.Networking.h>
 #include <winrt/Windows.Networking.Sockets.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Devices.Radios.h>
 
 using namespace winrt;
 using namespace Windows::Devices::Bluetooth;
 using namespace Windows::Devices::Bluetooth::Rfcomm;
 using namespace Windows::Devices::Enumeration;
+using namespace Windows::Devices::Radios;
 using namespace Windows::Networking;
 using namespace Windows::Networking::Sockets;
 using namespace Windows::Storage::Streams;
@@ -161,9 +163,18 @@ void install_connection(std::string const& device_id, StreamSocket const& socket
 bool classic_supported() {
     try {
         init_apartment(apartment_type::multi_threaded);
-    } catch (...) {}
-    auto adapter = BluetoothAdapter::GetDefaultAsync().get();
-    return adapter != nullptr && adapter.IsClassicSupported();
+    } catch (...) {
+        // The calling JVM thread may already be initialized in a different apartment.
+    }
+    try {
+        auto adapter = BluetoothAdapter::GetDefaultAsync().get();
+        if (adapter == nullptr || !adapter.IsClassicSupported()) return false;
+        auto radio = adapter.GetRadioAsync().get();
+        return radio != nullptr && radio.State() == RadioState::On;
+    } catch (...) {
+        // BluetoothAdapter reports ERROR_DEVICE_NOT_AVAILABLE while the radio is off.
+        return false;
+    }
 }
 
 void stop_server_locked() {
@@ -226,12 +237,11 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTransport_nativeIsBluetoothEnabled(
-    JNIEnv* env,
+    JNIEnv*,
     jobject) {
     try {
         return classic_supported() ? JNI_TRUE : JNI_FALSE;
-    } catch (hresult_error const& error) {
-        throw_java(env, winrt::to_string(error.message()));
+    } catch (...) {
         return JNI_FALSE;
     }
 }

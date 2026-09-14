@@ -785,6 +785,7 @@
     <string name="shared_study_bluetooth_unsupported">BLE אינו זמין במחשב זה; החיפוש ברשת המקומית ממשיך כרגיל.</string>
     <string name="shared_study_open_settings">פתח הגדרות Bluetooth</string>
     <string name="shared_study_refresh">רענן</string>
+    <string name="shared_study_start_search">התחל חיפוש</string>
     <string name="shared_study_no_devices">לא נמצאו כרגע לומדים זמינים.</string>
     <string name="shared_study_connect">התחבר</string>
     <string name="shared_study_connected_people">משתתפים מחוברים</string>

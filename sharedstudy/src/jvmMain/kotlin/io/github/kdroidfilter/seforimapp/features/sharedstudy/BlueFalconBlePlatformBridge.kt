@@ -207,11 +207,34 @@ internal fun createDesktopBlePlatformBridge(
     val osName = System.getProperty("os.name").lowercase()
     val engine =
         when {
-            osName.contains("win") -> WindowsEngine()
-            osName.contains("mac") -> MacosJvmEngine()
+            osName.contains("win") -> {
+                runCatching {
+                    // WindowsEngine.nativeInitialize() calls CoInitializeEx(nullptr, COINIT_MULTITHREADED).
+                    // If called on the UI/main thread (which Tao/AWT initialized as STA),
+                    // CoInitializeEx fails with RPC_E_CHANGED_MODE (0x80010106) and throws an
+                    // unhandled C++ exception, crashing the JVM.
+                    // Initializing WindowsEngine on a dedicated background thread ensures CoInitializeEx
+                    // succeeds on a clean, uninitialized thread.
+                    val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+                        Thread(r, "Zayit-BlueFalcon-Init").apply { isDaemon = true }
+                    }
+                    try {
+                        executor.submit(java.util.concurrent.Callable { WindowsEngine() }).get(5, java.util.concurrent.TimeUnit.SECONDS)
+                    } finally {
+                        executor.shutdown()
+                    }
+                }.getOrElse { return UnsupportedBlePlatformBridge() }
+            }
+            osName.contains("mac") -> {
+                runCatching { MacosJvmEngine() }.getOrElse { return UnsupportedBlePlatformBridge() }
+            }
             else -> return UnsupportedBlePlatformBridge()
         }
-    return BlueFalconBlePlatformBridge(BlueFalcon(engine), peripheralEndpoint)
+    return runCatching {
+        BlueFalconBlePlatformBridge(BlueFalcon(engine), peripheralEndpoint)
+    }.getOrElse {
+        UnsupportedBlePlatformBridge()
+    }
 }
 
 internal class UnsupportedBlePlatformBridge : BlePlatformBridge {

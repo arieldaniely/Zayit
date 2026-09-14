@@ -159,6 +159,9 @@ void install_connection(std::string const& device_id, StreamSocket const& socket
 }
 
 bool classic_supported() {
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto adapter = BluetoothAdapter::GetDefaultAsync().get();
     return adapter != nullptr && adapter.IsClassicSupported();
 }
@@ -178,6 +181,9 @@ void stop_server_locked() {
 
 void start_server_locked(guid const& service_uuid, std::string const& local_name) {
     if (g_provider != nullptr) return;
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto result = RfcommServiceProvider::CreateAsync(RfcommServiceId::FromUuid(service_uuid)).get();
     g_provider = result;
 
@@ -208,14 +214,6 @@ extern "C" JNIEXPORT void JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTransport_nativeInitialize(
     JNIEnv* env,
     jobject owner) {
-    try {
-        init_apartment(apartment_type::multi_threaded);
-    } catch (hresult_error const& error) {
-        if (error.code() != winrt::hresult(RPC_E_CHANGED_MODE)) {
-            throw_java(env, winrt::to_string(error.message()));
-            return;
-        }
-    }
     env->GetJavaVM(&g_vm);
     std::scoped_lock lock(g_mutex);
     if (g_owner != nullptr) env->DeleteGlobalRef(g_owner);
@@ -300,6 +298,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     jstring device_id,
     jstring service_uuid) {
     try {
+        try {
+            init_apartment(apartment_type::multi_threaded);
+        } catch (...) {}
         auto id = to_utf8(device_id, env);
         auto target_guid = guid(to_utf8(service_uuid, env));
         auto service = RfcommDeviceService::FromIdAsync(winrt::to_hstring(id)).get();
@@ -325,6 +326,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     JNIEnv* env,
     jobject,
     jstring device_id) {
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto id = to_utf8(device_id, env);
     std::scoped_lock lock(g_mutex);
     auto found = g_connections.find(id);
@@ -341,6 +345,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
     jstring device_id,
     jbyteArray payload) {
     try {
+        try {
+            init_apartment(apartment_type::multi_threaded);
+        } catch (...) {}
         auto id = to_utf8(device_id, env);
         std::shared_ptr<Connection> connection;
         {

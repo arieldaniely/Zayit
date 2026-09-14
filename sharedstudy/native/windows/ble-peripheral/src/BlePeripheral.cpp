@@ -121,6 +121,9 @@ void stop_locked() {
 }
 
 bool peripheral_supported() {
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto adapter = BluetoothAdapter::GetDefaultAsync().get();
     return adapter != nullptr && adapter.IsPeripheralRoleSupported();
 }
@@ -130,14 +133,6 @@ extern "C" JNIEXPORT void JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndpoint_nativeInitialize(
     JNIEnv* env,
     jobject owner) {
-    try {
-        init_apartment(apartment_type::multi_threaded);
-    } catch (hresult_error const& error) {
-        if (error.code() != winrt::hresult(RPC_E_CHANGED_MODE)) {
-            throw_java(env, winrt::to_string(error.message()));
-            return;
-        }
-    }
     env->GetJavaVM(&g_vm);
     std::scoped_lock lock(g_mutex);
     if (g_owner != nullptr) env->DeleteGlobalRef(g_owner);
@@ -260,6 +255,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     jstring device_id,
     jbyteArray payload) {
     try {
+        try {
+            init_apartment(apartment_type::multi_threaded);
+        } catch (...) {}
         auto id = to_utf8(device_id, env);
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(env->GetArrayLength(payload)));
         env->GetByteArrayRegion(
@@ -290,6 +288,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     JNIEnv* env,
     jobject,
     jstring device_id) {
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto id = to_utf8(device_id, env);
     std::scoped_lock lock(g_mutex);
     auto found = g_clients.find(id);
@@ -304,6 +305,9 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     JNIEnv* env,
     jobject,
     jstring device_id) {
+    try {
+        init_apartment(apartment_type::multi_threaded);
+    } catch (...) {}
     auto id = to_utf8(device_id, env);
     std::scoped_lock lock(g_mutex);
     auto found = g_clients.find(id);

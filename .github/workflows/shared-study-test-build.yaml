@@ -8,6 +8,7 @@ on:
     paths:
       - 'SeforimApp/**'
       - 'sharedstudy/**'
+      - 'SeforimLibrary'
       - 'navigation/**'
       - 'gradle/**'
       - '*.gradle.kts'

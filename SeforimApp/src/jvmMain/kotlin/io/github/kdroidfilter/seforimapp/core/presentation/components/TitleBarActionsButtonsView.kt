@@ -28,8 +28,10 @@ import seforimapp.seforimapp.generated.resources.*
 // dropped from IntelliJ Platform icons 262, so the asset is shipped locally.
 private object SystemThemeIconAnchor
 
+private object SharedStudyIconAnchor
+
 private val SystemTheme = PathIconKey("icons/system_theme.svg", SystemThemeIconAnchor::class.java)
-private val SharedStudy = AllIconsKeys.CodeWithMe.Users
+private val SharedStudy = PathIconKey("icons/shared_study.svg", SharedStudyIconAnchor::class.java)
 
 @Composable
 fun TitleBarActionsButtonsView() {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,6 +49,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontStyle
@@ -60,6 +62,8 @@ import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyNote
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.catch
@@ -82,6 +86,7 @@ import seforimapp.seforimapp.generated.resources.no_notes_saved
 import seforimapp.seforimapp.generated.resources.note_body_placeholder
 import seforimapp.seforimapp.generated.resources.notes_info_word_level
 import seforimapp.seforimapp.generated.resources.notes_pane
+import seforimapp.seforimapp.generated.resources.shared_study_note_by
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -133,6 +138,8 @@ fun NotesPanel(
     val scope = rememberCoroutineScope()
     val currentOnEvent by rememberUpdatedState(onEvent)
     val focusManager = LocalFocusManager.current
+    val sharedStudyCoordinator = LocalAppGraph.current.sharedStudyCoordinator
+    val sharedStudyState by sharedStudyCoordinator.state.collectAsState()
 
     // Idempotent: keeps the pane self-contained instead of relying on BookContentView's load.
     LaunchedEffect(bookId, noteStore) { noteStore.loadBook(bookId) }
@@ -148,6 +155,14 @@ fun NotesPanel(
         }
 
     val primaryLineId = primarySelectedLine?.id
+    val remoteNotes =
+        remember(sharedStudyState.notes, sharedStudyState.participants, bookId) {
+            val participants = sharedStudyState.participants.associateBy { it.id }
+            sharedStudyState.notes.values
+                .filter { it.bookId == bookId }
+                .sortedBy { it.updatedAt }
+                .map { note -> note to participants[note.authorId] }
+        }
 
     // The note the draft editor has created. It is excluded from the list and kept inside the draft
     // editor so editing it does not tear down/recreate the field (which would drop focus). Reset
@@ -186,7 +201,7 @@ fun NotesPanel(
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (notes.isEmpty() && effectiveDraft == null) {
+            if (notes.isEmpty() && remoteNotes.isEmpty() && effectiveDraft == null) {
                 NotesEmptyState()
             } else {
                 val listState =
@@ -220,9 +235,49 @@ fun NotesPanel(
                                     scope.launch {
                                         // A blank body deletes the note (NoteStore.updateNote contract).
                                         noteStore.updateNote(bookId, note.id, text, System.currentTimeMillis())
+                                        val sharedId = sharedStudyCoordinator.sharedNoteId(bookId, note.id)
+                                        if (text.isBlank()) {
+                                            sharedStudyCoordinator.removeNote(sharedId)
+                                        } else {
+                                            sharedStudyCoordinator.publishNote(
+                                                SharedStudyNote(
+                                                    sharedId,
+                                                    "",
+                                                    bookId,
+                                                    note.lineId,
+                                                    note.startOffset,
+                                                    note.endOffset,
+                                                    text,
+                                                    note.quote,
+                                                    System.currentTimeMillis(),
+                                                ),
+                                            )
+                                        }
                                     }
                                 },
-                                onDelete = { scope.launch { noteStore.removeNote(bookId, note.id) } },
+                                onDelete = {
+                                    scope.launch {
+                                        noteStore.removeNote(bookId, note.id)
+                                        sharedStudyCoordinator.removeNote(sharedStudyCoordinator.sharedNoteId(bookId, note.id))
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    items(remoteNotes, key = { "shared-${it.first.id}" }) { (note, participant) ->
+                        NoteCard(
+                            quote = note.quote.takeIf { it.isNotBlank() },
+                            accentStrong = true,
+                            accentColor = participant?.let { Color(it.colorArgb.toULong()) },
+                            modifier = Modifier.clickable {
+                                currentOnEvent(BookContentEvent.LoadAndSelectLine(note.lineId))
+                            },
+                        ) {
+                            Text(note.body, modifier = Modifier.fillMaxWidth())
+                            Text(
+                                stringResource(Res.string.shared_study_note_by, participant?.displayName ?: note.authorId),
+                                fontSize = 11.sp,
+                                color = JewelTheme.globalColors.text.info,
                             )
                         }
                     }
@@ -250,10 +305,13 @@ fun NotesPanel(
                                             when {
                                                 text.isBlank() && id != null -> {
                                                     noteStore.removeNote(bookId, id)
+                                                    sharedStudyCoordinator.removeNote(
+                                                        sharedStudyCoordinator.sharedNoteId(bookId, id),
+                                                    )
                                                     draftCreatedId = null
                                                 }
                                                 text.isNotBlank() && id == null -> {
-                                                    draftCreatedId =
+                                                    val createdId =
                                                         noteStore.addNote(
                                                             bookId = bookId,
                                                             lineId = effectiveDraft.lineId,
@@ -263,9 +321,38 @@ fun NotesPanel(
                                                             timestamp = now,
                                                             quote = effectiveDraft.quote,
                                                         )
+                                                    draftCreatedId = createdId
+                                                    createdId?.let {
+                                                        sharedStudyCoordinator.publishNote(
+                                                            SharedStudyNote(
+                                                                sharedStudyCoordinator.sharedNoteId(bookId, it),
+                                                                "",
+                                                                bookId,
+                                                                effectiveDraft.lineId,
+                                                                effectiveDraft.startOffset,
+                                                                effectiveDraft.endOffset,
+                                                                text,
+                                                                effectiveDraft.quote,
+                                                                now,
+                                                            ),
+                                                        )
+                                                    }
                                                 }
                                                 text.isNotBlank() && id != null -> {
                                                     noteStore.updateNote(bookId, id, text, now)
+                                                    sharedStudyCoordinator.publishNote(
+                                                        SharedStudyNote(
+                                                            sharedStudyCoordinator.sharedNoteId(bookId, id),
+                                                            "",
+                                                            bookId,
+                                                            effectiveDraft.lineId,
+                                                            effectiveDraft.startOffset,
+                                                            effectiveDraft.endOffset,
+                                                            text,
+                                                            effectiveDraft.quote,
+                                                            now,
+                                                        ),
+                                                    )
                                                 }
                                             }
                                         }
@@ -273,6 +360,9 @@ fun NotesPanel(
                                     onDelete = {
                                         scope.launch {
                                             draftCreatedId?.let { noteStore.removeNote(bookId, it) }
+                                            draftCreatedId?.let {
+                                                sharedStudyCoordinator.removeNote(sharedStudyCoordinator.sharedNoteId(bookId, it))
+                                            }
                                             draftCreatedId = null
                                         }
                                         if (isExplicitDraft) onConsumeDraft()
@@ -341,11 +431,12 @@ private fun NoteCard(
     quote: String?,
     accentStrong: Boolean,
     modifier: Modifier = Modifier,
+    accentColor: Color? = null,
     content: @Composable (hovered: Boolean) -> Unit,
 ) {
     val hoverSource = remember { MutableInteractionSource() }
     val hovered by hoverSource.collectIsHoveredAsState()
-    val accent = JewelTheme.globalColors.outlines.focused
+    val accent = accentColor ?: JewelTheme.globalColors.outlines.focused
 
     val stripeColor =
         when {

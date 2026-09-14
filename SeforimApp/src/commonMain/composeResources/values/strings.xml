@@ -775,4 +775,31 @@
     <string name="history_other_workspaces">&#x05DE;&#x05D5;&#x05E6;&#x05D2;&#x05D9;&#x05DD; &#x05E4;&#x05E8;&#x05D9;&#x05D8;&#x05D9;&#x05DD; &#x05D0;&#x05D7;&#x05E8;&#x05D5;&#x05E0;&#x05D9;&#x05DD; &#x05DE;&#x05DE;&#x05E8;&#x05D7;&#x05D1;&#x05D9;&#x05DD; &#x05D0;&#x05D7;&#x05E8;&#x05D9;&#x05DD;</string>
     <string name="history_no_filtered_items">&#x05DC;&#x05D0; &#x05E0;&#x05DE;&#x05E6;&#x05D0;&#x05D5; &#x05E4;&#x05E8;&#x05D9;&#x05D8;&#x05D9;&#x05DD; &#x05D4;&#x05EA;&#x05D5;&#x05D0;&#x05DE;&#x05D9;&#x05DD; &#x05DC;&#x05E1;&#x05D9;&#x05E0;&#x05D5;&#x05DF;</string>
     <string name="cancel">&#x05D1;&#x05D9;&#x05D8;&#x05D5;&#x05DC;</string>
+
+    <!-- Shared study -->
+    <string name="shared_study">לימוד משותף</string>
+    <string name="shared_study_tooltip">התחל או הצטרף ללימוד משותף</string>
+    <string name="shared_study_name">השם שיוצג לאחרים</string>
+    <string name="shared_study_available_people">לומדים זמינים בסביבה</string>
+    <string name="shared_study_bluetooth_off">ה-Bluetooth כבוי. יש להפעיל אותו כדי למצוא לומדים בסביבה.</string>
+    <string name="shared_study_bluetooth_unsupported">BLE אינו זמין במחשב זה; החיפוש ברשת המקומית ממשיך כרגיל.</string>
+    <string name="shared_study_open_settings">פתח הגדרות Bluetooth</string>
+    <string name="shared_study_refresh">רענן</string>
+    <string name="shared_study_no_devices">לא נמצאו כרגע לומדים זמינים.</string>
+    <string name="shared_study_connect">התחבר</string>
+    <string name="shared_study_connected_people">משתתפים מחוברים</string>
+    <string name="shared_study_invitation">%s רוצה ללמוד איתך</string>
+    <string name="shared_study_accept">אישור</string>
+    <string name="shared_study_decline">דחייה</string>
+    <string name="shared_study_close">סגירה</string>
+    <string name="shared_study_note_by">הערה מאת %s</string>
+    <string name="shared_study_automatic_search">מחפש אוטומטית באמצעות BLE וברשת המקומית…</string>
+    <string name="shared_study_pairing_help">לא נמצא חיבור אוטומטי. אם המחשבים טרם צומדו, פתחו את הגדרות Bluetooth ובצעו צימוד קצר.</string>
+    <string name="shared_study_hotspot_help">עדיין לא נמצא חיבור. אפשר להפעיל נקודת גישה במחשב אחד, לחבר אליה את המחשב השני, והזיהוי יתבצע אוטומטית — ללא צורך באינטרנט.</string>
+    <string name="shared_study_open_hotspot">פתח הגדרות נקודת גישה</string>
+    <string name="shared_study_via_ble">BLE</string>
+    <string name="shared_study_via_lan">רשת מקומית</string>
+    <string name="shared_study_via_classic">Bluetooth</string>
+    <string name="shared_study_connection_lost">החיבור אל %s נותק.</string>
+    <string name="shared_study_leave">סיים לימוד משותף</string>
 </resources>

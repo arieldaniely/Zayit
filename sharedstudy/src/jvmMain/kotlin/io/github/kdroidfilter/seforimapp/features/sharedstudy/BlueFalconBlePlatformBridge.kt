@@ -12,8 +12,10 @@ import dev.bluefalcon.engine.macos.jvm.MacosJvmEngine
 import dev.bluefalcon.engine.windows.WindowsEngine
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +26,12 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.uuid.ExperimentalUuidApi
 
 /**
@@ -35,6 +42,7 @@ import kotlin.uuid.ExperimentalUuidApi
 internal class BlueFalconBlePlatformBridge(
     private val blueFalcon: BlueFalcon,
     private val peripheralEndpoint: BlePeripheralEndpoint,
+    private val engineDispatcher: CoroutineDispatcher? = null,
     @param:StructuredScope private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : BlePlatformBridge {
     private data class CentralConnection(
@@ -42,7 +50,7 @@ internal class BlueFalconBlePlatformBridge(
         val writeCharacteristic: BluetoothCharacteristic,
     )
 
-    private val centralConnections = mutableMapOf<String, CentralConnection>()
+    private val centralConnections = ConcurrentHashMap<String, CentralConnection>()
     private val _centralPackets = MutableSharedFlow<BleIncomingPacket>(extraBufferCapacity = 128)
 
     override val bluetoothState: Flow<BluetoothState> =
@@ -88,11 +96,13 @@ internal class BlueFalconBlePlatformBridge(
     }
 
     override suspend fun startScanning(serviceUuid: String) {
-        blueFalcon.clearPeripherals()
-        blueFalcon.scan(listOf(ServiceFilter(serviceUuid.toUuid())))
+        onEngineThread {
+            blueFalcon.clearPeripherals()
+            blueFalcon.scan(listOf(ServiceFilter(serviceUuid.toUuid())))
+        }
     }
 
-    override suspend fun stopScanning() = blueFalcon.stopScanning()
+    override suspend fun stopScanning() = onEngineThread { blueFalcon.stopScanning() }
 
     override suspend fun startAdvertising(
         serviceUuid: String,
@@ -113,54 +123,57 @@ internal class BlueFalconBlePlatformBridge(
         serviceUuid: String,
         writeCharacteristicUuid: String,
         notifyCharacteristicUuid: String,
-    ) {
-        val peripheral =
-            blueFalcon.peripherals.value.firstOrNull { it.uuid == deviceId }
-                ?: blueFalcon.retrievePeripheral(deviceId)
-                ?: error("BLE device is no longer available")
+    ) =
+        onEngineThread {
+            val peripheral =
+                blueFalcon.peripherals.value.firstOrNull { it.uuid == deviceId }
+                    ?: blueFalcon.retrievePeripheral(deviceId)
+                    ?: error("BLE device is no longer available")
 
-        blueFalcon.connect(peripheral)
-        if (blueFalcon.connectionState(peripheral) != BluetoothPeripheralState.Connected) {
-            withTimeout(CONNECTION_TIMEOUT_MS) {
-                blueFalcon.connectionStateUpdates
-                    .filter { it.peripheral.uuid == deviceId && it.state == BluetoothPeripheralState.Connected }
-                    .first()
+            blueFalcon.connect(peripheral)
+            if (blueFalcon.connectionState(peripheral) != BluetoothPeripheralState.Connected) {
+                withTimeout(CONNECTION_TIMEOUT_MS) {
+                    blueFalcon.connectionStateUpdates
+                        .filter { it.peripheral.uuid == deviceId && it.state == BluetoothPeripheralState.Connected }
+                        .first()
+                }
             }
-        }
 
-        blueFalcon.discoverServices(peripheral, listOf(serviceUuid.toUuid()))
-        if (peripheral.services.none { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }) {
-            withTimeout(DISCOVERY_TIMEOUT_MS) {
-                blueFalcon.serviceDiscoveryUpdates
-                    .filter {
-                        it.peripheral.uuid == deviceId && it.phase == ServiceDiscoveryPhase.ServicesDiscovered
-                    }.first()
+            blueFalcon.discoverServices(peripheral, listOf(serviceUuid.toUuid()))
+            if (peripheral.services.none { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }) {
+                withTimeout(DISCOVERY_TIMEOUT_MS) {
+                    blueFalcon.serviceDiscoveryUpdates
+                        .filter {
+                            it.peripheral.uuid == deviceId && it.phase == ServiceDiscoveryPhase.ServicesDiscovered
+                        }.first()
+                }
             }
-        }
-        val service =
-            peripheral.services.firstOrNull { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }
-                ?: error("Shared-study BLE service was not found")
+            val service =
+                peripheral.services.firstOrNull { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }
+                    ?: error("Shared-study BLE service was not found")
 
-        blueFalcon.discoverCharacteristics(peripheral, service)
-        if (service.characteristics.none { it.uuid.toString().equals(writeCharacteristicUuid, ignoreCase = true) }) {
-            withTimeout(DISCOVERY_TIMEOUT_MS) {
-                blueFalcon.serviceDiscoveryUpdates
-                    .filter {
-                        it.peripheral.uuid == deviceId &&
-                            it.phase == ServiceDiscoveryPhase.CharacteristicsDiscovered &&
-                            it.service?.uuid == service.uuid
-                    }.first()
+            blueFalcon.discoverCharacteristics(peripheral, service)
+            if (service.characteristics.none { it.uuid.toString().equals(writeCharacteristicUuid, ignoreCase = true) }) {
+                withTimeout(DISCOVERY_TIMEOUT_MS) {
+                    blueFalcon.serviceDiscoveryUpdates
+                        .filter {
+                            it.peripheral.uuid == deviceId &&
+                                it.phase == ServiceDiscoveryPhase.CharacteristicsDiscovered &&
+                                it.service?.uuid == service.uuid
+                        }.first()
+                }
             }
-        }
 
-        val writeCharacteristic = service.requiredCharacteristic(writeCharacteristicUuid)
-        val notifyCharacteristic = service.requiredCharacteristic(notifyCharacteristicUuid)
-        blueFalcon.notifyCharacteristic(peripheral, notifyCharacteristic, true)
-        centralConnections[deviceId] = CentralConnection(peripheral, writeCharacteristic)
-    }
+            val writeCharacteristic = service.requiredCharacteristic(writeCharacteristicUuid)
+            val notifyCharacteristic = service.requiredCharacteristic(notifyCharacteristicUuid)
+            blueFalcon.notifyCharacteristic(peripheral, notifyCharacteristic, true)
+            centralConnections[deviceId] = CentralConnection(peripheral, writeCharacteristic)
+        }
 
     override suspend fun disconnect(deviceId: String) {
-        centralConnections.remove(deviceId)?.let { blueFalcon.disconnect(it.peripheral) }
+        onEngineThread {
+            centralConnections.remove(deviceId)?.let { blueFalcon.disconnect(it.peripheral) }
+        }
         peripheralEndpoint.disconnect(deviceId)
     }
 
@@ -170,11 +183,13 @@ internal class BlueFalconBlePlatformBridge(
     ) {
         val central = centralConnections[deviceId]
         if (central != null) {
-            blueFalcon.writeCharacteristic(
-                peripheral = central.peripheral,
-                characteristic = central.writeCharacteristic,
-                value = packet,
-            )
+            onEngineThread {
+                blueFalcon.writeCharacteristic(
+                    peripheral = central.peripheral,
+                    characteristic = central.writeCharacteristic,
+                    value = packet,
+                )
+            }
         } else {
             peripheralEndpoint.send(deviceId, packet)
         }
@@ -185,6 +200,9 @@ internal class BlueFalconBlePlatformBridge(
             ?: peripheralEndpoint.maximumPacketSize(deviceId)
 
     override fun openSettings(): Boolean = PlatformConnectionSettings.openBluetooth()
+
+    private suspend fun <T> onEngineThread(block: suspend () -> T): T =
+        engineDispatcher?.let { withContext(it) { block() } } ?: block()
 
     private fun dev.bluefalcon.core.BluetoothService.requiredCharacteristic(uuid: String): BluetoothCharacteristic =
         characteristics.firstOrNull { it.uuid.toString().equals(uuid, ignoreCase = true) }
@@ -205,37 +223,39 @@ internal fun createDesktopBlePlatformBridge(
     peripheralEndpoint: BlePeripheralEndpoint = JniBlePeripheralEndpoint(),
 ): BlePlatformBridge {
     val osName = System.getProperty("os.name").lowercase()
-    val engine =
-        when {
-            osName.contains("win") -> {
-                runCatching {
-                    // WindowsEngine.nativeInitialize() calls CoInitializeEx(nullptr, COINIT_MULTITHREADED).
-                    // If called on the UI/main thread (which Tao/AWT initialized as STA),
-                    // CoInitializeEx fails with RPC_E_CHANGED_MODE (0x80010106) and throws an
-                    // unhandled C++ exception, crashing the JVM.
-                    // Initializing WindowsEngine on a dedicated background thread ensures CoInitializeEx
-                    // succeeds on a clean, uninitialized thread.
-                    val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-                        Thread(r, "Zayit-BlueFalcon-Init").apply { isDaemon = true }
-                    }
-                    try {
-                        executor.submit(java.util.concurrent.Callable { WindowsEngine() }).get(5, java.util.concurrent.TimeUnit.SECONDS)
-                    } finally {
-                        executor.shutdown()
-                    }
-                }.getOrElse { return UnsupportedBlePlatformBridge() }
+    if (osName.contains("win")) {
+        val executor =
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "Zayit-BlueFalcon-Windows").apply { isDaemon = true }
             }
-            osName.contains("mac") -> {
-                runCatching { MacosJvmEngine() }.getOrElse { return UnsupportedBlePlatformBridge() }
-            }
-            else -> return UnsupportedBlePlatformBridge()
+        val dispatcher = executor.asCoroutineDispatcher()
+        return runCatching {
+            // C++/WinRT apartment initialization is thread-local. Construct the engine and retain
+            // this same thread for every native BlueFalcon call; moving scan/connect to another
+            // coroutine worker lets an uncaught C++ exception cross JNI and terminate the JVM.
+            executor.submit(
+                Callable<BlePlatformBridge> {
+                    BlueFalconBlePlatformBridge(
+                        blueFalcon = BlueFalcon(WindowsEngine()),
+                        peripheralEndpoint = peripheralEndpoint,
+                        engineDispatcher = dispatcher,
+                    )
+                },
+            ).get(ENGINE_INITIALIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }.getOrElse {
+            dispatcher.close()
+            UnsupportedBlePlatformBridge()
         }
-    return runCatching {
-        BlueFalconBlePlatformBridge(BlueFalcon(engine), peripheralEndpoint)
-    }.getOrElse {
-        UnsupportedBlePlatformBridge()
     }
+    if (osName.contains("mac")) {
+        return runCatching {
+            BlueFalconBlePlatformBridge(BlueFalcon(MacosJvmEngine()), peripheralEndpoint)
+        }.getOrElse { UnsupportedBlePlatformBridge() }
+    }
+    return UnsupportedBlePlatformBridge()
 }
+
+private const val ENGINE_INITIALIZATION_TIMEOUT_SECONDS = 5L
 
 internal class UnsupportedBlePlatformBridge : BlePlatformBridge {
     override val bluetoothState = MutableStateFlow(BluetoothState.UNSUPPORTED).asStateFlow()

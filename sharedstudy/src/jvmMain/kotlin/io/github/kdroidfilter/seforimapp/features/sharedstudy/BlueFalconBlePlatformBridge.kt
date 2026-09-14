@@ -9,13 +9,11 @@ import dev.bluefalcon.core.ServiceDiscoveryPhase
 import dev.bluefalcon.core.ServiceFilter
 import dev.bluefalcon.core.toUuid
 import dev.bluefalcon.engine.macos.jvm.MacosJvmEngine
-import dev.bluefalcon.engine.windows.WindowsEngine
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.uuid.ExperimentalUuidApi
 
 /**
@@ -224,28 +219,11 @@ internal fun createDesktopBlePlatformBridge(
 ): BlePlatformBridge {
     val osName = System.getProperty("os.name").lowercase()
     if (osName.contains("win")) {
-        val executor =
-            Executors.newSingleThreadExecutor { runnable ->
-                Thread(runnable, "Zayit-BlueFalcon-Windows").apply { isDaemon = true }
-            }
-        val dispatcher = executor.asCoroutineDispatcher()
-        return runCatching {
-            // C++/WinRT apartment initialization is thread-local. Construct the engine and retain
-            // this same thread for every native BlueFalcon call; moving scan/connect to another
-            // coroutine worker lets an uncaught C++ exception cross JNI and terminate the JVM.
-            executor.submit(
-                Callable<BlePlatformBridge> {
-                    BlueFalconBlePlatformBridge(
-                        blueFalcon = BlueFalcon(WindowsEngine()),
-                        peripheralEndpoint = peripheralEndpoint,
-                        engineDispatcher = dispatcher,
-                    )
-                },
-            ).get(ENGINE_INITIALIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        }.getOrElse {
-            dispatcher.close()
-            UnsupportedBlePlatformBridge()
-        }
+        // BlueFalcon 3.7.7 lets WinRT exceptions escape its nativeScan JNI boundary. In
+        // particular, HRESULT 0x800710DF (device not ready) terminates the entire JVM and cannot
+        // be caught from Kotlin. Keep the safe local GATT server while discovery falls back to
+        // LAN and Bluetooth Classic until the Windows central scanner is fixed upstream.
+        return PeripheralOnlyBlePlatformBridge(peripheralEndpoint)
     }
     if (osName.contains("mac")) {
         return runCatching {
@@ -255,7 +233,51 @@ internal fun createDesktopBlePlatformBridge(
     return UnsupportedBlePlatformBridge()
 }
 
-private const val ENGINE_INITIALIZATION_TIMEOUT_SECONDS = 5L
+internal class PeripheralOnlyBlePlatformBridge(
+    private val peripheralEndpoint: BlePeripheralEndpoint,
+) : BlePlatformBridge {
+    override val bluetoothState: Flow<BluetoothState> =
+        peripheralEndpoint.isAvailable.map { available ->
+            if (available) BluetoothState.ON else BluetoothState.OFF
+        }
+    override val advertisements = MutableStateFlow(emptyList<BleAdvertisement>()).asStateFlow()
+    override val incomingPackets: Flow<BleIncomingPacket> = peripheralEndpoint.incomingPackets
+
+    override suspend fun refreshState() = peripheralEndpoint.refreshState()
+    override suspend fun startScanning(serviceUuid: String) = Unit
+    override suspend fun stopScanning() = Unit
+
+    override suspend fun startAdvertising(
+        serviceUuid: String,
+        localName: String,
+    ) {
+        peripheralEndpoint.start(
+            serviceUuid = serviceUuid,
+            localName = localName,
+            writeCharacteristicUuid = PacketizedBleTransport.WRITE_CHARACTERISTIC_UUID,
+            notifyCharacteristicUuid = PacketizedBleTransport.NOTIFY_CHARACTERISTIC_UUID,
+        )
+    }
+
+    override suspend fun stopAdvertising() = peripheralEndpoint.stop()
+
+    override suspend fun connect(
+        deviceId: String,
+        serviceUuid: String,
+        writeCharacteristicUuid: String,
+        notifyCharacteristicUuid: String,
+    ) = Unit
+
+    override suspend fun disconnect(deviceId: String) = peripheralEndpoint.disconnect(deviceId)
+
+    override suspend fun write(
+        deviceId: String,
+        packet: ByteArray,
+    ) = peripheralEndpoint.send(deviceId, packet)
+
+    override fun maximumPacketSize(deviceId: String): Int = peripheralEndpoint.maximumPacketSize(deviceId)
+    override fun openSettings(): Boolean = PlatformConnectionSettings.openBluetooth()
+}
 
 internal class UnsupportedBlePlatformBridge : BlePlatformBridge {
     override val bluetoothState = MutableStateFlow(BluetoothState.UNSUPPORTED).asStateFlow()

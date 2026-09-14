@@ -65,13 +65,15 @@ object AppCoreBindings {
         val displayName = AppSettings.getSharedStudyDisplayName() ?: profileName.ifBlank { fallback }
         return SharedStudyCoordinator(
             transport =
-                LazySharedStudyTransport {
-                    CompositeSharedStudyTransport(
-                        ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
-                        localNetwork = LocalNetworkTransport(instanceId = AppSettings.getOrCreateSharedStudyDeviceId()),
-                        bluetoothClassic = BluetoothClassicTransport(),
-                    )
-                },
+                LazySharedStudyTransport(
+                    factory = {
+                        CompositeSharedStudyTransport(
+                            ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
+                            localNetwork = LocalNetworkTransport(instanceId = AppSettings.getOrCreateSharedStudyDeviceId()),
+                            bluetoothClassic = BluetoothClassicTransport(),
+                        )
+                    },
+                ),
             initialDisplayName = displayName,
             localId = AppSettings.getOrCreateSharedStudyDeviceId(),
             onDisplayNameChanged = AppSettings::setSharedStudyDisplayName,

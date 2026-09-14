@@ -17,8 +17,8 @@ import kotlinx.coroutines.launch
  * effects and cannot trigger permission prompts.
  */
 class LazySharedStudyTransport(
-    private val factory: () -> SharedStudyTransport,
     @param:StructuredScope private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val factory: () -> SharedStudyTransport,
 ) : SharedStudyTransport {
     private val lock = Any()
 

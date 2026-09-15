@@ -820,5 +820,20 @@
     <string name="shared_study_error_device_unavailable">הלומד כבר אינו זמין ברשת המקומית. נסו לרענן את החיפוש.</string>
     <string name="shared_study_error_connection_failed">לא הצלחנו להתחבר ללומד.</string>
     <string name="shared_study_error_connection_lost">החיבור ללימוד המשותף נותק.</string>
+    <string name="shared_study_troubleshooting_title">מתקשים להתחבר? הצעות לחיבור</string>
+    <string name="shared_study_troubleshooting_subtitle">אם אינכם מוצאים זה את זה, נסו את אחת מהאפשרויות הבאות:</string>
+    <string name="shared_study_bluetooth_suggestion_title">חיבור באמצעות Bluetooth</string>
+    <string name="shared_study_bluetooth_suggestion_desc">ודאו ששני המחשבים מותאמים זה לזה (Paired) בהגדרות ה-Bluetooth.</string>
+    <string name="shared_study_wifi_suggestion_title">חיבור באמצעות Wi-Fi / נקודת גישה</string>
+    <string name="shared_study_wifi_suggestion_desc">אפשר להפעיל נקודת גישה (Hotspot) במחשב אחד ולחבר אליה את המחשב השני — אין צורך בחיבור לאינטרנט.</string>
+    <string name="shared_study_status_active">זמין לגילוי</string>
+    <string name="shared_study_status_connected">מחובר ללימוד</string>
+    <string name="shared_study_status_off">זמינות כבויה</string>
+    <string name="shared_study_status_searching">מחפש בסביבה…</string>
+    <string name="shared_study_turn_on_action">הפעל זמינות</string>
+    <string name="shared_study_connected_with">לימוד משותף פעיל</string>
+    <string name="shared_study_connected_badge">מחוברים כעת</string>
+    <string name="shared_study_name_hint">השם שיוצג ללומדים אחרים</string>
+    <string name="shared_study_invitation_incoming">הזמנה ללימוד משותף</string>
     <string name="shared_study_error_message_send_failed">לא הצלחנו לשלוח את העדכון למשתתפים.</string>
 </resources>

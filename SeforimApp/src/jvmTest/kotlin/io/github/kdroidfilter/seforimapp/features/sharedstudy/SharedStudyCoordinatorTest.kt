@@ -151,7 +151,10 @@ class SharedStudyCoordinatorTest {
             clock = 16_000L
             advanceTimeBy(5_000L)
             runCurrent()
-            assertTrue(coordinator.state.value.participants.none { it.id == "peer" })
+            assertTrue(
+                coordinator.state.value.participants
+                    .none { it.id == "peer" },
+            )
         }
 
     @Test
@@ -172,7 +175,11 @@ class SharedStudyCoordinatorTest {
             transport.receive("peer-device", StudyMessage.NoteChanged("peer", 2, sessionId, forged))
             runCurrent()
 
-            assertEquals("local", coordinator.state.value.notes["note"]?.body)
+            assertEquals(
+                "local",
+                coordinator.state.value.notes["note"]
+                    ?.body,
+            )
         }
 
     @Test

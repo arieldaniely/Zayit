@@ -53,7 +53,7 @@ class SharedStudyCoordinator(
         launchInScope { transport.nearbyDevices.collect { value -> _state.update { it.copy(nearbyDevices = value) } } }
         launchInScope {
             transport.incomingMessages
-                .catch { failure -> _state.update { it.copy(error = failure.message) } }
+                .catch { failure -> reportError(failure, SharedStudyError.CONNECTION_LOST) }
                 .collect(::receive)
         }
         launchInScope {
@@ -94,7 +94,7 @@ class SharedStudyCoordinator(
             runCatching {
                 transport.refreshBluetoothState()
                 transport.startDiscovery(_state.value.displayName.trim())
-            }.onFailure { failure -> _state.update { it.copy(error = failure.message) } }
+            }.onFailure { failure -> reportError(failure, SharedStudyError.DISCOVERY_UNAVAILABLE) }
             _state.update { it.copy(isScanning = false) }
         }
     }
@@ -125,7 +125,7 @@ class SharedStudyCoordinator(
                     device.id,
                     StudyMessage.Invitation(localId, nextSequence(), _state.value.displayName, sessionId, mode),
                 )
-            }.onFailure { failure -> _state.update { it.copy(error = failure.message) } }
+            }.onFailure { failure -> reportError(failure, SharedStudyError.CONNECTION_FAILED) }
         }
     }
 
@@ -148,6 +148,7 @@ class SharedStudyCoordinator(
                     )
                 }
             } else {
+                forgetDevice(invitation.deviceId)
                 transport.disconnect(invitation.deviceId)
                 _state.update { it.copy(pendingInvitation = null) }
             }
@@ -191,9 +192,6 @@ class SharedStudyCoordinator(
 
     private suspend fun receive(incoming: IncomingStudyMessage) {
         val message = incoming.message
-        deviceIdByParticipantId[message.senderId] = incoming.deviceId
-        participantIdByDeviceId[incoming.deviceId] = message.senderId
-        lastSeenByParticipantId[message.senderId] = now()
 
         if (message is StudyMessage.Acknowledgement) {
             pendingDeliveries.remove(incoming.deviceId to message.messageId)
@@ -203,16 +201,19 @@ class SharedStudyCoordinator(
             acknowledge(incoming.deviceId, message.messageId)
             if (!rememberReliableMessage(message.messageId)) return
         }
+        if (message is StudyMessage.Invitation) {
+            handleInvitation(incoming.deviceId, message)
+            return
+        }
+        if (!belongsToCurrentSession(message)) return
+
+        deviceIdByParticipantId[message.senderId] = incoming.deviceId
+        participantIdByDeviceId[incoming.deviceId] = message.senderId
+        lastSeenByParticipantId[message.senderId] = now()
         if (message is StudyMessage.LocationChanged && !acceptLocationSequence(message)) return
 
         when (message) {
-            is StudyMessage.Invitation ->
-                _state.update {
-                    it.copy(
-                        pendingInvitation =
-                            PendingInvitation(incoming.deviceId, message.displayName, message.sessionId, message.mode),
-                    )
-                }
+            is StudyMessage.Invitation -> Unit
             is StudyMessage.InvitationResponse -> handleInvitationResponse(incoming.deviceId, message)
             is StudyMessage.Roster ->
                 if (message.sessionId == _state.value.sessionId) {
@@ -235,11 +236,16 @@ class SharedStudyCoordinator(
                 }
             is StudyMessage.NoteChanged ->
                 if (message.sessionId == _state.value.sessionId) {
+                    if (message.note.authorId != message.senderId) return
+                    val existing = _state.value.notes[message.note.id]
+                    if (existing != null && existing.authorId != message.senderId) return
                     _state.update { it.copy(notes = it.notes + (message.note.id to message.note)) }
                     forwardFromHost(message, incoming.deviceId)
                 }
             is StudyMessage.NoteRemoved ->
                 if (message.sessionId == _state.value.sessionId) {
+                    val existing = _state.value.notes[message.noteId] ?: return
+                    if (existing.authorId != message.senderId) return
                     _state.update { it.copy(notes = it.notes - message.noteId) }
                     forwardFromHost(message, incoming.deviceId)
                 }
@@ -255,6 +261,57 @@ class SharedStudyCoordinator(
             is StudyMessage.Hello -> Unit
             is StudyMessage.Acknowledgement -> Unit
         }
+    }
+
+    private suspend fun handleInvitation(
+        deviceId: String,
+        message: StudyMessage.Invitation,
+    ) {
+        val current = _state.value
+        val pending = current.pendingInvitation
+        if (
+            current.sessionId != null ||
+            (pending != null && (pending.deviceId != deviceId || pending.sessionId != message.sessionId))
+        ) {
+            runCatching {
+                transport.send(
+                    deviceId,
+                    StudyMessage.InvitationResponse(localId, nextSequence(), message.sessionId, accepted = false),
+                )
+            }
+            if (deviceId !in connectedDeviceIds) runCatching { transport.disconnect(deviceId) }
+            return
+        }
+
+        deviceIdByParticipantId[message.senderId] = deviceId
+        participantIdByDeviceId[deviceId] = message.senderId
+        lastSeenByParticipantId[message.senderId] = now()
+        _state.update {
+            it.copy(
+                pendingInvitation = PendingInvitation(deviceId, message.displayName, message.sessionId, message.mode),
+            )
+        }
+    }
+
+    private fun belongsToCurrentSession(message: StudyMessage): Boolean {
+        val currentSessionId = _state.value.sessionId ?: return message is StudyMessage.Hello
+        val messageSessionId =
+            when (message) {
+                is StudyMessage.InvitationResponse -> message.sessionId
+                is StudyMessage.Roster -> message.sessionId
+                is StudyMessage.LocationChanged -> message.sessionId
+                is StudyMessage.NoteChanged -> message.sessionId
+                is StudyMessage.NoteRemoved -> message.sessionId
+                is StudyMessage.SyncSnapshot -> message.sessionId
+                is StudyMessage.Ping -> message.sessionId
+                is StudyMessage.Pong -> message.sessionId
+                is StudyMessage.Leave -> message.sessionId
+                is StudyMessage.Hello,
+                is StudyMessage.Invitation,
+                is StudyMessage.Acknowledgement,
+                -> return message is StudyMessage.Hello
+            }
+        return messageSessionId == currentSessionId
     }
 
     private suspend fun handleInvitationResponse(
@@ -362,7 +419,7 @@ class SharedStudyCoordinator(
         val delivery = PendingDelivery(deviceId, message, attempts = 1, lastAttemptAt = now())
         pendingDeliveries[deviceId to message.messageId] = delivery
         runCatching { transport.send(deviceId, message) }
-            .onFailure { failure -> _state.update { it.copy(error = failure.message) } }
+            .onFailure { failure -> reportError(failure, SharedStudyError.MESSAGE_SEND_FAILED) }
     }
 
     private suspend fun acknowledge(
@@ -454,6 +511,23 @@ class SharedStudyCoordinator(
         participantIdByDeviceId.clear()
         lastSeenByParticipantId.clear()
         pendingDeliveries.clear()
+    }
+
+    private fun forgetDevice(deviceId: String) {
+        connectedDeviceIds -= deviceId
+        participantIdByDeviceId.remove(deviceId)?.let { participantId ->
+            deviceIdByParticipantId -= participantId
+            lastSeenByParticipantId -= participantId
+        }
+        pendingDeliveries.keys.removeAll { it.first == deviceId }
+    }
+
+    private fun reportError(
+        failure: Throwable,
+        fallback: SharedStudyError,
+    ) {
+        val error = (failure as? SharedStudyTransportException)?.error ?: fallback
+        _state.update { it.copy(error = error) }
     }
 
     private fun clearSessionState(timedOutParticipantName: String? = null) {

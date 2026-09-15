@@ -397,9 +397,11 @@ fun BookContentView(
                 }.groupBy({ it.first }, { it.second })
         }
     val remoteNotesByLine =
-        remember(sharedStudyState.notes, sharedParticipantColors, bookId) {
+        remember(sharedStudyState.notes, sharedParticipantColors, bookId, sharedStudyCoordinator) {
             sharedStudyState.notes.values
-                .filter { it.bookId == bookId }
+                .filter {
+                    it.bookId == bookId && it.authorId != sharedStudyCoordinator.localParticipantId
+                }
                 .mapNotNull { note -> sharedParticipantColors[note.authorId]?.let { note.lineId to (note to it) } }
                 .groupBy({ it.first }, { it.second })
         }

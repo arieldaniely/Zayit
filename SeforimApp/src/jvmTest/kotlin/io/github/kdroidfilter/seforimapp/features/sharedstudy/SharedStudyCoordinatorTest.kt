@@ -99,6 +99,83 @@ class SharedStudyCoordinatorTest {
         }
 
     @Test
+    fun `invitation is rejected while another session is active`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            transport.devices.value = listOf(NearbyStudyDevice("peer-device", "ראובן"))
+            coordinator.invite(transport.devices.value.single())
+            runCurrent()
+            val activeSessionId = coordinator.state.value.sessionId!!
+
+            transport.receive(
+                "other-device",
+                StudyMessage.Invitation("other", 1, "שמעון", "other-session", StudyMode.CHAVRUTA),
+            )
+            runCurrent()
+
+            assertEquals(activeSessionId, coordinator.state.value.sessionId)
+            assertEquals(null, coordinator.state.value.pendingInvitation)
+            assertTrue(
+                transport.sent.any { (deviceId, message) ->
+                    deviceId == "other-device" &&
+                        message is StudyMessage.InvitationResponse &&
+                        !message.accepted &&
+                        message.sessionId == "other-session"
+                },
+            )
+            assertTrue("other-device" in transport.disconnected)
+        }
+
+    @Test
+    fun `messages from another session cannot mutate or keep participants alive`() =
+        runTest {
+            var clock = 0L
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport, now = { clock })
+            transport.devices.value = listOf(NearbyStudyDevice("peer-device", "ראובן"))
+            coordinator.invite(transport.devices.value.single())
+            runCurrent()
+            val sessionId = coordinator.state.value.sessionId!!
+            transport.receive("peer-device", StudyMessage.InvitationResponse("peer", 1, sessionId, true))
+            runCurrent()
+
+            clock = 14_000L
+            transport.receive(
+                "peer-device",
+                StudyMessage.LocationChanged("peer", 999, "stale-session", StudyLocation(9, 99)),
+            )
+            runCurrent()
+            assertEquals(null, coordinator.state.value.locations["peer"])
+
+            clock = 16_000L
+            advanceTimeBy(5_000L)
+            runCurrent()
+            assertTrue(coordinator.state.value.participants.none { it.id == "peer" })
+        }
+
+    @Test
+    fun `participant cannot overwrite a note owned by someone else`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            transport.devices.value = listOf(NearbyStudyDevice("peer-device", "ראובן"))
+            coordinator.invite(transport.devices.value.single())
+            runCurrent()
+            val sessionId = coordinator.state.value.sessionId!!
+            transport.receive("peer-device", StudyMessage.InvitationResponse("peer", 1, sessionId, true))
+            runCurrent()
+            coordinator.publishNote(SharedStudyNote("note", "local", 1, 1, 0, 1, "local", updatedAt = 1))
+            runCurrent()
+
+            val forged = SharedStudyNote("note", "peer", 1, 1, 0, 1, "forged", updatedAt = 2)
+            transport.receive("peer-device", StudyMessage.NoteChanged("peer", 2, sessionId, forged))
+            runCurrent()
+
+            assertEquals("local", coordinator.state.value.notes["note"]?.body)
+        }
+
+    @Test
     fun `critical note arriving after a newer location is retained`() =
         runTest {
             val transport = FakeTransport()
@@ -237,6 +314,7 @@ class SharedStudyCoordinatorTest {
         val sent = mutableListOf<Pair<String, StudyMessage>>()
         var refreshCount = 0
         var discoveryCount = 0
+        val disconnected = mutableListOf<String>()
 
         override val bluetoothState = state
         override val nearbyDevices = devices
@@ -265,7 +343,9 @@ class SharedStudyCoordinatorTest {
 
         override suspend fun connect(deviceId: String) = Unit
 
-        override suspend fun disconnect(deviceId: String) = Unit
+        override suspend fun disconnect(deviceId: String) {
+            disconnected += deviceId
+        }
 
         override suspend fun send(
             deviceId: String,

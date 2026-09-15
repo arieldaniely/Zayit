@@ -109,7 +109,9 @@ class LocalNetworkTransport(
 
     override suspend fun connect(deviceId: String) {
         if (connections[deviceId]?.socket?.isConnected == true) return
-        val peer = peers[deviceId] ?: error("המחשב כבר אינו זמין ברשת המקומית")
+        val peer =
+            peers[deviceId]
+                ?: throw SharedStudyTransportException(SharedStudyError.DEVICE_UNAVAILABLE)
         val socket = Socket()
         socket.connect(peer.endpoint, CONNECT_TIMEOUT_MS)
         installConnection(socket, expectedDeviceId = deviceId)
@@ -123,7 +125,9 @@ class LocalNetworkTransport(
         deviceId: String,
         message: StudyMessage,
     ) {
-        val connection = connections[deviceId] ?: error("החיבור לרשת המקומית נותק")
+        val connection =
+            connections[deviceId]
+                ?: throw SharedStudyTransportException(SharedStudyError.CONNECTION_LOST)
         val payload = SharedStudyWireCodec.encode(message)
         require(payload.size <= MAX_FRAME_SIZE) { "Shared-study message is too large" }
         connection.sendMutex.withLock {

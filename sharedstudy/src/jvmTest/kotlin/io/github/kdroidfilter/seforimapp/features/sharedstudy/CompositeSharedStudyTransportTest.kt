@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,7 +58,36 @@ class CompositeSharedStudyTransportTest {
             assertEquals(DiscoveryStage.HOTSPOT_GUIDANCE, composite.discoveryStage.first())
         }
 
-    private class FakeTransport : SharedStudyTransport {
+    @Test
+    fun `discovery succeeds when at least one automatic transport starts`() =
+        runTest {
+            val ble = FakeTransport(failDiscovery = true)
+            val lan = FakeTransport()
+            val composite = CompositeSharedStudyTransport(ble, lan, FakeTransport(), backgroundScope)
+
+            composite.startDiscovery("לוי")
+
+            assertEquals(1, ble.discoveryStarts)
+            assertEquals(1, lan.discoveryStarts)
+        }
+
+    @Test
+    fun `discovery propagates an error when every automatic transport fails`() =
+        runTest {
+            val composite =
+                CompositeSharedStudyTransport(
+                    FakeTransport(failDiscovery = true),
+                    FakeTransport(failDiscovery = true),
+                    FakeTransport(),
+                    backgroundScope,
+                )
+
+            assertFailsWith<IllegalStateException> { composite.startDiscovery("לוי") }
+        }
+
+    private class FakeTransport(
+        private val failDiscovery: Boolean = false,
+    ) : SharedStudyTransport {
         override val bluetoothState = MutableStateFlow(BluetoothState.ON)
         val devices = MutableStateFlow<List<NearbyStudyDevice>>(emptyList())
         override val nearbyDevices = devices
@@ -70,6 +100,7 @@ class CompositeSharedStudyTransportTest {
 
         override suspend fun startDiscovery(localName: String) {
             discoveryStarts += 1
+            if (failDiscovery) error("Discovery failed")
         }
 
         override suspend fun stopDiscovery() = Unit

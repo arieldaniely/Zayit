@@ -123,14 +123,22 @@ void notify_message(std::string const& device_id, std::vector<std::uint8_t> cons
     attached.env->DeleteLocalRef(id);
 }
 
+bool load_exactly(DataReader const& reader, std::uint32_t byte_count) {
+    while (reader.UnconsumedBufferLength() < byte_count) {
+        auto remaining = byte_count - reader.UnconsumedBufferLength();
+        if (reader.LoadAsync(remaining).get() == 0) return false;
+    }
+    return true;
+}
+
 void read_frames(std::string device_id, std::shared_ptr<Connection> connection) {
     try {
         init_apartment(apartment_type::multi_threaded);
         while (true) {
-            if (connection->reader.LoadAsync(sizeof(std::uint32_t)).get() != sizeof(std::uint32_t)) break;
+            if (!load_exactly(connection->reader, sizeof(std::uint32_t))) break;
             auto size = connection->reader.ReadUInt32();
             if (size == 0 || size > kMaximumFrameSize) break;
-            if (connection->reader.LoadAsync(size).get() != size) break;
+            if (!load_exactly(connection->reader, size)) break;
             std::vector<std::uint8_t> payload(size);
             connection->reader.ReadBytes(payload);
             notify_message(device_id, payload);

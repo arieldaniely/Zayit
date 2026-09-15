@@ -1,12 +1,14 @@
 package io.github.kdroidfilter.seforimapp.features.sharedstudy
 
 import io.github.santimattius.structured.annotations.StructuredScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,7 +86,7 @@ class CompositeSharedStudyTransport(
     }
 
     override suspend fun startDiscovery(localName: String) {
-        fallbackJob?.cancel()
+        fallbackJob?.cancelAndJoin()
         _stage.value = DiscoveryStage.AUTOMATIC
         runFor(entries.filter { it.tier == AUTOMATIC_TIER }) { startDiscovery(localName) }
         fallbackJob =
@@ -92,7 +94,9 @@ class CompositeSharedStudyTransport(
                 delay(AUTOMATIC_DISCOVERY_WINDOW_MS)
                 if (automaticPeerAvailable) return@launch
                 _stage.value = DiscoveryStage.BLUETOOTH_PAIRING
-                runFor(entries.filter { it.tier == CLASSIC_TIER }) { startDiscovery(localName) }
+                runCatching {
+                    runFor(entries.filter { it.tier == CLASSIC_TIER }) { startDiscovery(localName) }
+                }
                 delay(CLASSIC_DISCOVERY_WINDOW_MS)
                 if (automaticPeerAvailable) {
                     _stage.value = DiscoveryStage.AUTOMATIC
@@ -103,7 +107,7 @@ class CompositeSharedStudyTransport(
     }
 
     override suspend fun stopDiscovery() {
-        fallbackJob?.cancel()
+        fallbackJob?.cancelAndJoin()
         fallbackJob = null
         runFor(entries) { stopDiscovery() }
     }
@@ -113,7 +117,7 @@ class CompositeSharedStudyTransport(
     }
 
     override suspend fun stopAdvertising() {
-        fallbackJob?.cancel()
+        fallbackJob?.cancelAndJoin()
         fallbackJob = null
         runFor(entries) { stopAdvertising() }
         _stage.value = DiscoveryStage.AUTOMATIC
@@ -147,8 +151,28 @@ class CompositeSharedStudyTransport(
         selected: List<Entry>,
         operation: suspend SharedStudyTransport.() -> Unit,
     ) {
-        supervisorScope {
-            selected.map { entry -> async { runCatching { entry.transport.operation() } } }.awaitAll()
+        if (selected.isEmpty()) return
+        val results =
+            supervisorScope {
+                selected
+                    .map { entry ->
+                        async {
+                            try {
+                                entry.transport.operation()
+                                Result.success(Unit)
+                            } catch (cancellation: CancellationException) {
+                                throw cancellation
+                            } catch (failure: Throwable) {
+                                Result.failure(failure)
+                            }
+                        }
+                    }.awaitAll()
+            }
+        val failures = results.mapNotNull { it.exceptionOrNull() }
+        if (failures.size == selected.size) {
+            val primary = failures.first()
+            failures.drop(1).forEach(primary::addSuppressed)
+            throw primary
         }
     }
 

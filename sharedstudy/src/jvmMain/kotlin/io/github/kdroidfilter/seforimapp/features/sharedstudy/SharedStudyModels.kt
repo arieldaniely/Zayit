@@ -181,6 +181,20 @@ enum class StudyTransportKind { BLE, LOCAL_NETWORK, BLUETOOTH_CLASSIC }
 
 enum class DiscoveryStage { AUTOMATIC, BLUETOOTH_PAIRING, HOTSPOT_GUIDANCE }
 
+/** Stable, UI-independent failures that the application can localize at its presentation boundary. */
+enum class SharedStudyError {
+    DISCOVERY_UNAVAILABLE,
+    DEVICE_UNAVAILABLE,
+    CONNECTION_FAILED,
+    CONNECTION_LOST,
+    MESSAGE_SEND_FAILED,
+}
+
+class SharedStudyTransportException(
+    val error: SharedStudyError,
+    cause: Throwable? = null,
+) : IllegalStateException(error.name, cause)
+
 @Immutable
 data class NearbyStudyDevice(
     val id: String,
@@ -212,7 +226,7 @@ data class SharedStudyState(
     val notes: Map<String, SharedStudyNote> = emptyMap(),
     val pendingInvitation: PendingInvitation? = null,
     val timedOutParticipantName: String? = null,
-    val error: String? = null,
+    val error: SharedStudyError? = null,
 ) {
     val isConnected: Boolean get() = sessionId != null
 }

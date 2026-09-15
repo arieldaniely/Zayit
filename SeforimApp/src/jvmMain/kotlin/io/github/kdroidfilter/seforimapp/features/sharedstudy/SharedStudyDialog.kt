@@ -81,7 +81,7 @@ fun SharedStudyDialog(
             state.timedOutParticipantName?.let { name ->
                 StatusMessage(stringResource(Res.string.shared_study_connection_lost, name), Color(0xFFB3261E))
             }
-            state.error?.takeIf(String::isNotBlank)?.let { StatusMessage(it, Color(0xFFB3261E)) }
+            state.error?.let { StatusMessage(sharedStudyErrorMessage(it), Color(0xFFB3261E)) }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 if (state.isConnected) {
@@ -94,6 +94,18 @@ fun SharedStudyDialog(
         }
     }
 }
+
+@Composable
+private fun sharedStudyErrorMessage(error: SharedStudyError): String =
+    stringResource(
+        when (error) {
+            SharedStudyError.DISCOVERY_UNAVAILABLE -> Res.string.shared_study_error_discovery_unavailable
+            SharedStudyError.DEVICE_UNAVAILABLE -> Res.string.shared_study_error_device_unavailable
+            SharedStudyError.CONNECTION_FAILED -> Res.string.shared_study_error_connection_failed
+            SharedStudyError.CONNECTION_LOST -> Res.string.shared_study_error_connection_lost
+            SharedStudyError.MESSAGE_SEND_FAILED -> Res.string.shared_study_error_message_send_failed
+        },
+    )
 
 @Composable
 private fun DialogHeader(onDismiss: () -> Unit) {

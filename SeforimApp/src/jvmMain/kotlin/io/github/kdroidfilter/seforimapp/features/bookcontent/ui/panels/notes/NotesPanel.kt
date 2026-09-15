@@ -156,10 +156,12 @@ fun NotesPanel(
 
     val primaryLineId = primarySelectedLine?.id
     val remoteNotes =
-        remember(sharedStudyState.notes, sharedStudyState.participants, bookId) {
+        remember(sharedStudyState.notes, sharedStudyState.participants, bookId, sharedStudyCoordinator) {
             val participants = sharedStudyState.participants.associateBy { it.id }
             sharedStudyState.notes.values
-                .filter { it.bookId == bookId }
+                .filter {
+                    it.bookId == bookId && it.authorId != sharedStudyCoordinator.localParticipantId
+                }
                 .sortedBy { it.updatedAt }
                 .map { note -> note to participants[note.authorId] }
         }

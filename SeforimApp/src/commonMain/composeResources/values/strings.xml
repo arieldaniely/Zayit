@@ -816,4 +816,9 @@
     <string name="shared_study_via_classic">Bluetooth</string>
     <string name="shared_study_connection_lost">החיבור אל %s נותק.</string>
     <string name="shared_study_leave">סיים לימוד משותף</string>
+    <string name="shared_study_error_discovery_unavailable">לא הצלחנו להפעיל את החיפוש. בדקו את הגדרות הרשת והחיבור האלחוטי.</string>
+    <string name="shared_study_error_device_unavailable">הלומד כבר אינו זמין ברשת המקומית. נסו לרענן את החיפוש.</string>
+    <string name="shared_study_error_connection_failed">לא הצלחנו להתחבר ללומד.</string>
+    <string name="shared_study_error_connection_lost">החיבור ללימוד המשותף נותק.</string>
+    <string name="shared_study_error_message_send_failed">לא הצלחנו לשלוח את העדכון למשתתפים.</string>
 </resources>

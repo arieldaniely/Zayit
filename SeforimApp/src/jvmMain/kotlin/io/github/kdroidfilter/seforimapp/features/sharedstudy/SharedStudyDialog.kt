@@ -525,11 +525,18 @@ private fun ActiveSessionCard(
                         fontSize = 11.sp,
                         color = JewelTheme.globalColors.text.info,
                     )
-                    Text(
-                        text = state.participants.joinToString { it.displayName }.ifBlank { stringResource(Res.string.shared_study_connected_badge) },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                    )
+                val connectedText =
+                    state.participants
+                        .joinToString {
+                            it.displayName
+                        }.ifBlank {
+                            stringResource(Res.string.shared_study_connected_badge)
+                        }
+                Text(
+                    text = connectedText,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                )
                 }
             }
 
@@ -626,10 +633,13 @@ private fun DiscoverySection(
 
             if (state.nearbyDevices.isNotEmpty()) {
                 Spacer(Modifier.width(6.dp))
+                val countBg =
+                    JewelTheme.globalColors.borders.disabled
+                        .copy(alpha = 0.4f)
                 Box(
                     modifier =
                         Modifier
-                            .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .background(countBg, RoundedCornerShape(10.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     Text(
@@ -751,11 +761,14 @@ private fun DeviceRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        val avatarBg =
+            JewelTheme.globalColors.outlines.focused
+                .copy(alpha = 0.12f)
         Box(
             modifier =
                 Modifier
                     .size(32.dp)
-                    .background(JewelTheme.globalColors.outlines.focused.copy(alpha = 0.12f), CircleShape),
+                    .background(avatarBg, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -837,26 +850,26 @@ private fun ParallelTroubleshootingSection(
         ) {
             // Bluetooth suggestion card
             TroubleshootingCard(
-                modifier = Modifier.weight(1f),
                 icon = Bluetooth,
                 title = stringResource(Res.string.shared_study_bluetooth_suggestion_title),
                 description = stringResource(Res.string.shared_study_bluetooth_suggestion_desc),
                 actionText = stringResource(Res.string.shared_study_open_settings),
-                onAction = { coordinator.openBluetoothSettings() },
                 isExpanded = bluetoothExpanded,
+                onAction = { coordinator.openBluetoothSettings() },
                 onToggleExpand = { bluetoothExpanded = !bluetoothExpanded },
+                modifier = Modifier.weight(1f),
             )
 
             // Wi-Fi / Hotspot suggestion card
             TroubleshootingCard(
-                modifier = Modifier.weight(1f),
                 icon = Wifi,
                 title = stringResource(Res.string.shared_study_wifi_suggestion_title),
                 description = stringResource(Res.string.shared_study_wifi_suggestion_desc),
                 actionText = stringResource(Res.string.shared_study_open_hotspot),
-                onAction = { coordinator.openHotspotSettings() },
                 isExpanded = wifiExpanded,
+                onAction = { coordinator.openHotspotSettings() },
                 onToggleExpand = { wifiExpanded = !wifiExpanded },
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -864,14 +877,14 @@ private fun ParallelTroubleshootingSection(
 
 @Composable
 private fun TroubleshootingCard(
-    modifier: Modifier = Modifier,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     description: String,
     actionText: String,
-    onAction: () -> Unit,
     isExpanded: Boolean,
+    onAction: () -> Unit,
     onToggleExpand: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(8.dp)
 
@@ -944,9 +957,7 @@ private fun TroubleshootingCard(
 }
 
 @Composable
-private fun DiscoveryOffState(
-    onTurnOn: () -> Unit,
-) {
+private fun DiscoveryOffState(onTurnOn: () -> Unit) {
     Box(
         modifier =
             Modifier

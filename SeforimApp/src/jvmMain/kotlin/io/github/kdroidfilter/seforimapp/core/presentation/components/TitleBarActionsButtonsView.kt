@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
@@ -37,6 +38,7 @@ private val SharedStudy = PathIconKey("icons/shared_study.svg", SharedStudyIconA
 fun TitleBarActionsButtonsView() {
     val appGraph = LocalAppGraph.current
     var sharedStudyDialogVisible by remember { mutableStateOf(false) }
+    val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
     val mainAppState = appGraph.mainAppState
     val theme = mainAppState.theme.collectAsState().value
 
@@ -121,11 +123,17 @@ fun TitleBarActionsButtonsView() {
         key = SharedStudy,
         contentDescription = stringResource(Res.string.shared_study),
         onClick = { sharedStudyDialogVisible = true },
-        tooltipText = stringResource(Res.string.shared_study_tooltip),
-        isActive =
-            appGraph.sharedStudyCoordinator.state
-                .collectAsState()
-                .value.isConnected,
+        tooltipText =
+            stringResource(
+                if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) {
+                    Res.string.shared_study_tooltip_active
+                } else {
+                    Res.string.shared_study_tooltip
+                },
+            ),
+        isActive = sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected,
+        indicatorColor =
+            if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) Color(0xFF22A06B) else null,
     )
 
     if (sharedStudyDialogVisible) {

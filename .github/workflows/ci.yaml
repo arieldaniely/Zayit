@@ -131,6 +131,31 @@ jobs:
           graalvm: ${{ matrix.graalvm }}
           jbr-version: '25.0.3b496.62'
 
+      - name: Build and stage Windows Bluetooth adapters
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cmakeArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'ARM64' } else { 'x64' }
+          $platform = if ('${{ matrix.arch }}' -eq 'arm64') { 'windows-arm64' } else { 'windows-x64' }
+          cmake -S sharedstudy/native -B sharedstudy/native/build -A $cmakeArch "-DZAYIT_NATIVE_PLATFORM=$platform"
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
+
+      - name: Build and stage macOS BLE peripheral adapter
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S sharedstudy/native \
+            -B sharedstudy/native/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DZAYIT_NATIVE_PLATFORM=macos-arm64
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
+
       # Build
       - name: Build
         run: ./gradlew ${{ matrix.build_task }} --no-daemon

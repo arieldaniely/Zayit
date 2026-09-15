@@ -401,9 +401,9 @@ fun BookContentView(
             sharedStudyState.notes.values
                 .filter {
                     it.bookId == bookId && it.authorId != sharedStudyCoordinator.localParticipantId
-                }
-                .mapNotNull { note -> sharedParticipantColors[note.authorId]?.let { note.lineId to (note to it) } }
-                .groupBy({ it.first }, { it.second })
+                }.mapNotNull { note ->
+                    sharedParticipantColors[note.authorId]?.let { note.lineId to (note to it) }
+                }.groupBy({ it.first }, { it.second })
         }
     val visibleLineRange by
         remember(listState, lazyPagingItems) {

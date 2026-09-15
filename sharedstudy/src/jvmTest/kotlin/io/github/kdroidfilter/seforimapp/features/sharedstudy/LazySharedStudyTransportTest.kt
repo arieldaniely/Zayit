@@ -39,13 +39,24 @@ class LazySharedStudyTransportTest {
         override val incomingMessages = MutableSharedFlow<IncomingStudyMessage>()
 
         override suspend fun refreshBluetoothState() = Unit
+
         override suspend fun startDiscovery(localName: String) = Unit
+
         override suspend fun stopDiscovery() = Unit
+
         override suspend fun advertise(localName: String) = Unit
+
         override suspend fun stopAdvertising() = Unit
+
         override suspend fun connect(deviceId: String) = Unit
+
         override suspend fun disconnect(deviceId: String) = Unit
-        override suspend fun send(deviceId: String, message: StudyMessage) = Unit
+
+        override suspend fun send(
+            deviceId: String,
+            message: StudyMessage,
+        ) = Unit
+
         override fun openBluetoothSettings() = true
     }
 }

@@ -205,8 +205,11 @@ private fun IdentityCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.24f), CardShape)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .background(
+                    JewelTheme.globalColors.borders.disabled
+                        .copy(alpha = 0.24f),
+                    CardShape,
+                ).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (isEditing) {
@@ -244,7 +247,10 @@ private fun IdentityCard(
 }
 
 @Composable
-private fun InvitationCard(invitation: PendingInvitation, coordinator: SharedStudyCoordinator) {
+private fun InvitationCard(
+    invitation: PendingInvitation,
+    coordinator: SharedStudyCoordinator,
+) {
     val accent = JewelTheme.globalColors.outlines.focused
     Column(
         modifier =
@@ -268,7 +274,10 @@ private fun InvitationCard(invitation: PendingInvitation, coordinator: SharedStu
 }
 
 @Composable
-private fun DiscoveryContent(state: SharedStudyState, coordinator: SharedStudyCoordinator) {
+private fun DiscoveryContent(
+    state: SharedStudyState,
+    coordinator: SharedStudyCoordinator,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (state.bluetoothState) {
             BluetoothState.OFF -> BluetoothHelp(stringResource(Res.string.shared_study_bluetooth_off), coordinator)
@@ -325,7 +334,10 @@ private fun HotspotHelp(coordinator: SharedStudyCoordinator) {
 }
 
 @Composable
-private fun BluetoothHelp(message: String, coordinator: SharedStudyCoordinator) {
+private fun BluetoothHelp(
+    message: String,
+    coordinator: SharedStudyCoordinator,
+) {
     HelpCard(
         message = message,
         buttonText = stringResource(Res.string.shared_study_open_settings),
@@ -334,7 +346,11 @@ private fun BluetoothHelp(message: String, coordinator: SharedStudyCoordinator) 
 }
 
 @Composable
-private fun HelpCard(message: String, buttonText: String, onClick: () -> Unit) {
+private fun HelpCard(
+    message: String,
+    buttonText: String,
+    onClick: () -> Unit,
+) {
     Row(
         modifier =
             Modifier
@@ -350,7 +366,10 @@ private fun HelpCard(message: String, buttonText: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun DeviceList(state: SharedStudyState, coordinator: SharedStudyCoordinator) {
+private fun DeviceList(
+    state: SharedStudyState,
+    coordinator: SharedStudyCoordinator,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(Res.string.shared_study_available_people), fontWeight = FontWeight.SemiBold)
@@ -381,18 +400,28 @@ private fun DeviceList(state: SharedStudyState, coordinator: SharedStudyCoordina
 }
 
 @Composable
-private fun DeviceRow(device: NearbyStudyDevice, coordinator: SharedStudyCoordinator) {
+private fun DeviceRow(
+    device: NearbyStudyDevice,
+    coordinator: SharedStudyCoordinator,
+) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.18f), RoundedCornerShape(9.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .background(
+                    JewelTheme.globalColors.borders.disabled
+                        .copy(alpha = 0.18f),
+                    RoundedCornerShape(9.dp),
+                ).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
-            Modifier.size(30.dp).background(JewelTheme.globalColors.outlines.focused.copy(alpha = 0.12f), CircleShape),
+            Modifier.size(30.dp).background(
+                JewelTheme.globalColors.outlines.focused
+                    .copy(alpha = 0.12f),
+                CircleShape,
+            ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(AllIconsKeys.General.User, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -421,6 +450,9 @@ private fun ConnectedPeople(state: SharedStudyState) {
 }
 
 @Composable
-private fun StatusMessage(text: String, color: Color) {
+private fun StatusMessage(
+    text: String,
+    color: Color,
+) {
     Text(text, color = color, fontSize = 12.sp)
 }

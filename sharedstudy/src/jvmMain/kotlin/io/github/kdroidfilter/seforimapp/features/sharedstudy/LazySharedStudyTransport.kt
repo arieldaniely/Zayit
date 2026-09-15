@@ -60,11 +60,9 @@ class LazySharedStudyTransport(
         message: StudyMessage,
     ) = delegate().send(deviceId, message)
 
-    override fun openBluetoothSettings(): Boolean =
-        initialized?.openBluetoothSettings() ?: PlatformConnectionSettings.openBluetooth()
+    override fun openBluetoothSettings(): Boolean = initialized?.openBluetoothSettings() ?: PlatformConnectionSettings.openBluetooth()
 
-    override fun openHotspotSettings(): Boolean =
-        initialized?.openHotspotSettings() ?: PlatformConnectionSettings.openHotspot()
+    override fun openHotspotSettings(): Boolean = initialized?.openHotspotSettings() ?: PlatformConnectionSettings.openHotspot()
 
     private fun delegate(): SharedStudyTransport =
         initialized ?: synchronized(lock) {

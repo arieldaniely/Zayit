@@ -269,9 +269,10 @@ fun NotesPanel(
                             quote = note.quote.takeIf { it.isNotBlank() },
                             accentStrong = true,
                             accentColor = participant?.let { Color(it.colorArgb.toULong()) },
-                            modifier = Modifier.clickable {
-                                currentOnEvent(BookContentEvent.LoadAndSelectLine(note.lineId))
-                            },
+                            modifier =
+                                Modifier.clickable {
+                                    currentOnEvent(BookContentEvent.LoadAndSelectLine(note.lineId))
+                                },
                         ) {
                             Text(note.body, modifier = Modifier.fillMaxWidth())
                             Text(

@@ -34,12 +34,16 @@ internal object BundledNativeLibrary {
     ): String? =
         when {
             os.contains("win", ignoreCase = true) &&
-                (architecture.contains("aarch64", ignoreCase = true) ||
-                    architecture.contains("arm64", ignoreCase = true)) -> "windows-arm64"
+                (
+                    architecture.contains("aarch64", ignoreCase = true) ||
+                        architecture.contains("arm64", ignoreCase = true)
+                ) -> "windows-arm64"
             os.contains("win", ignoreCase = true) && architecture.contains("64") -> "windows-x64"
             os.contains("mac", ignoreCase = true) &&
-                (architecture.contains("aarch64", ignoreCase = true) ||
-                    architecture.contains("arm64", ignoreCase = true)) -> "macos-arm64"
+                (
+                    architecture.contains("aarch64", ignoreCase = true) ||
+                        architecture.contains("arm64", ignoreCase = true)
+                ) -> "macos-arm64"
             os.contains("mac", ignoreCase = true) -> "macos-x64"
             else -> null
         }

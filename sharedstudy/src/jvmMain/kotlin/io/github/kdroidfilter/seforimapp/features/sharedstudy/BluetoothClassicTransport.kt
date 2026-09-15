@@ -108,14 +108,34 @@ class BluetoothClassicTransport : SharedStudyTransport {
         }.getOrDefault(false)
 
     private external fun nativeInitialize()
+
     private external fun nativeIsBluetoothEnabled(): Boolean
-    private external fun nativeStartDiscovery(localName: String, serviceUuid: String)
+
+    private external fun nativeStartDiscovery(
+        localName: String,
+        serviceUuid: String,
+    )
+
     private external fun nativeStopDiscovery()
-    private external fun nativeStartServer(localName: String, serviceUuid: String)
+
+    private external fun nativeStartServer(
+        localName: String,
+        serviceUuid: String,
+    )
+
     private external fun nativeStopServer()
-    private external fun nativeConnect(deviceId: String, serviceUuid: String)
+
+    private external fun nativeConnect(
+        deviceId: String,
+        serviceUuid: String,
+    )
+
     private external fun nativeDisconnect(deviceId: String)
-    private external fun nativeSend(deviceId: String, payload: ByteArray)
+
+    private external fun nativeSend(
+        deviceId: String,
+        payload: ByteArray,
+    )
 
     companion object {
         const val SERVICE_UUID = "5a617969-7400-5246-434f-4d4d00000001"

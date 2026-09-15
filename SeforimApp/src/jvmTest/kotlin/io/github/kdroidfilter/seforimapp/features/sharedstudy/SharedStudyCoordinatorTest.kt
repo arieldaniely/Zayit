@@ -127,7 +127,11 @@ class SharedStudyCoordinatorTest {
             transport.devices.value = listOf(NearbyStudyDevice("peer-device", "ראובן"))
             coordinator.invite(transport.devices.value.single())
             runCurrent()
-            val invitation = transport.sent.map { it.second }.filterIsInstance<StudyMessage.Invitation>().single()
+            val invitation =
+                transport.sent
+                    .map { it.second }
+                    .filterIsInstance<StudyMessage.Invitation>()
+                    .single()
 
             advanceTimeBy(750L)
             runCurrent()
@@ -208,21 +212,23 @@ class SharedStudyCoordinatorTest {
             advanceTimeBy(5_000L)
             runCurrent()
 
-            assertTrue(coordinator.state.value.participants.none { it.id == "peer" })
+            assertTrue(
+                coordinator.state.value.participants
+                    .none { it.id == "peer" },
+            )
             assertEquals("ראובן", coordinator.state.value.timedOutParticipantName)
         }
 
     private fun TestScope.coordinator(
         transport: FakeTransport,
         now: () -> Long = { testScheduler.currentTime },
-    ) =
-        SharedStudyCoordinator(
-            transport = transport,
-            initialDisplayName = "לוי",
-            localId = "local",
-            now = now,
-            scope = backgroundScope,
-        )
+    ) = SharedStudyCoordinator(
+        transport = transport,
+        initialDisplayName = "לוי",
+        localId = "local",
+        now = now,
+        scope = backgroundScope,
+    )
 
     private class FakeTransport : SharedStudyTransport {
         val state = MutableStateFlow(BluetoothState.ON)

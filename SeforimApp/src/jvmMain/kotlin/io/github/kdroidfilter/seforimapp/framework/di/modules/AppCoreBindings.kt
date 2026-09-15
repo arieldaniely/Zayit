@@ -22,12 +22,12 @@ import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibrar
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
-import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
-import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.PacketizedBleTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.createDesktopBlePlatformBridge
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver

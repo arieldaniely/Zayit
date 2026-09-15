@@ -105,7 +105,15 @@ private fun DemoWorkspace(
                 DefaultButton(onClick = onOpenDialog) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         if (isAvailable || isConnected) Box(Modifier.size(8.dp).background(Color(0xFF22A06B), CircleShape))
-                        Text(if (isConnected) "חברותא פעילה" else if (isAvailable) "זמין לחברותא" else "פתיחת חברותא")
+                        Text(
+                            if (isConnected) {
+                                "חברותא פעילה"
+                            } else if (isAvailable) {
+                                "זמין לחברותא"
+                            } else {
+                                "פתיחת חברותא"
+                            },
+                        )
                     }
                 }
             }
@@ -131,8 +139,11 @@ private fun DemoWorkspace(
                     Text("מסכת ברכות", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("מאימתי קורין את שמע בערבית? משעה שהכהנים נכנסים לאכול בתרומתן…", fontSize = 18.sp)
                     Text(
-                        if (isConnected) "החברים המחוברים מדמים כעת מעבר בין קטעים והוספת הערות."
-                        else "לאחר החיבור יופיעו בצד פעולות מדומות של המשתתפים.",
+                        if (isConnected) {
+                            "החברים המחוברים מדמים כעת מעבר בין קטעים והוספת הערות."
+                        } else {
+                            "לאחר החיבור יופיעו בצד פעולות מדומות של המשתתפים."
+                        },
                         color = JewelTheme.globalColors.text.info,
                     )
                 }
@@ -144,8 +155,10 @@ private fun DemoWorkspace(
                 Modifier
                     .width(300.dp)
                     .fillMaxHeight()
-                    .background(JewelTheme.globalColors.borders.disabled.copy(alpha = 0.16f))
-                    .padding(18.dp),
+                    .background(
+                        JewelTheme.globalColors.borders.disabled
+                            .copy(alpha = 0.16f),
+                    ).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +184,11 @@ private fun DemoWorkspace(
 }
 
 private class DemoSharedStudyTransport : SharedStudyTransport {
-    private data class DemoPeer(val deviceId: String, val participantId: String, val name: String)
+    private data class DemoPeer(
+        val deviceId: String,
+        val participantId: String,
+        val name: String,
+    )
 
     @StructuredScope
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -218,6 +235,7 @@ private class DemoSharedStudyTransport : SharedStudyTransport {
     }
 
     override suspend fun advertise(localName: String) = Unit
+
     override suspend fun stopAdvertising() = Unit
 
     override suspend fun connect(deviceId: String) {
@@ -229,7 +247,10 @@ private class DemoSharedStudyTransport : SharedStudyTransport {
         peers[deviceId]?.let { addEvent("החיבור עם ${it.name} הסתיים") }
     }
 
-    override suspend fun send(deviceId: String, message: StudyMessage) {
+    override suspend fun send(
+        deviceId: String,
+        message: StudyMessage,
+    ) {
         val peer = peers[deviceId] ?: return
         when (message) {
             is StudyMessage.Invitation -> acceptAndSimulate(peer, message.sessionId)
@@ -245,6 +266,7 @@ private class DemoSharedStudyTransport : SharedStudyTransport {
     }
 
     override fun openBluetoothSettings() = true
+
     override fun openHotspotSettings() = true
 
     fun clearEvents() {
@@ -255,7 +277,10 @@ private class DemoSharedStudyTransport : SharedStudyTransport {
         scope.cancel()
     }
 
-    private fun acceptAndSimulate(peer: DemoPeer, sessionId: String) {
+    private fun acceptAndSimulate(
+        peer: DemoPeer,
+        sessionId: String,
+    ) {
         if (simulations.containsKey(peer.deviceId)) return
         simulations[peer.deviceId] =
             scope.launch {

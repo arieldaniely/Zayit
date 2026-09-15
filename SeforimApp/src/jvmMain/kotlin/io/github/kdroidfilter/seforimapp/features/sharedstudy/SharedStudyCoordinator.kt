@@ -94,8 +94,7 @@ class SharedStudyCoordinator(
             runCatching {
                 transport.refreshBluetoothState()
                 transport.startDiscovery(_state.value.displayName.trim())
-            }
-                .onFailure { failure -> _state.update { it.copy(error = failure.message) } }
+            }.onFailure { failure -> _state.update { it.copy(error = failure.message) } }
             _state.update { it.copy(isScanning = false) }
         }
     }

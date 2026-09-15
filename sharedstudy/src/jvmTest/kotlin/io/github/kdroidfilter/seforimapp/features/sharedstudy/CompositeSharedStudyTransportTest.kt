@@ -73,7 +73,9 @@ class CompositeSharedStudyTransportTest {
         }
 
         override suspend fun stopDiscovery() = Unit
+
         override suspend fun advertise(localName: String) = Unit
+
         override suspend fun stopAdvertising() = Unit
 
         override suspend fun connect(deviceId: String) {

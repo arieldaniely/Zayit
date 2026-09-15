@@ -106,16 +106,25 @@ internal class JniBlePeripheralEndpoint : BlePeripheralEndpoint {
         }.getOrDefault(false)
 
     private external fun nativeInitialize()
+
     private external fun nativeIsBluetoothEnabled(): Boolean
+
     private external fun nativeStart(
         serviceUuid: String,
         localName: String,
         writeCharacteristicUuid: String,
         notifyCharacteristicUuid: String,
     )
+
     private external fun nativeStop()
-    private external fun nativeSend(deviceId: String, packet: ByteArray)
+
+    private external fun nativeSend(
+        deviceId: String,
+        packet: ByteArray,
+    )
+
     private external fun nativeDisconnect(deviceId: String)
+
     private external fun nativeMaximumPacketSize(deviceId: String): Int
 
     private companion object {

@@ -11,8 +11,8 @@ import dev.bluefalcon.core.toUuid
 import dev.bluefalcon.engine.macos.jvm.MacosJvmEngine
 import dev.bluefalcon.engine.windows.WindowsEngine
 import io.github.santimattius.structured.annotations.StructuredScope
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -130,52 +130,51 @@ internal class BlueFalconBlePlatformBridge(
         serviceUuid: String,
         writeCharacteristicUuid: String,
         notifyCharacteristicUuid: String,
-    ) =
-        onEngineThread {
-            val peripheral =
-                blueFalcon.peripherals.value.firstOrNull { it.uuid == deviceId }
-                    ?: blueFalcon.retrievePeripheral(deviceId)
-                    ?: error("BLE device is no longer available")
+    ) = onEngineThread {
+        val peripheral =
+            blueFalcon.peripherals.value.firstOrNull { it.uuid == deviceId }
+                ?: blueFalcon.retrievePeripheral(deviceId)
+                ?: error("BLE device is no longer available")
 
-            blueFalcon.connect(peripheral)
-            if (blueFalcon.connectionState(peripheral) != BluetoothPeripheralState.Connected) {
-                withTimeout(CONNECTION_TIMEOUT_MS) {
-                    blueFalcon.connectionStateUpdates
-                        .filter { it.peripheral.uuid == deviceId && it.state == BluetoothPeripheralState.Connected }
-                        .first()
-                }
+        blueFalcon.connect(peripheral)
+        if (blueFalcon.connectionState(peripheral) != BluetoothPeripheralState.Connected) {
+            withTimeout(CONNECTION_TIMEOUT_MS) {
+                blueFalcon.connectionStateUpdates
+                    .filter { it.peripheral.uuid == deviceId && it.state == BluetoothPeripheralState.Connected }
+                    .first()
             }
-
-            blueFalcon.discoverServices(peripheral, listOf(serviceUuid.toUuid()))
-            if (peripheral.services.none { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }) {
-                withTimeout(DISCOVERY_TIMEOUT_MS) {
-                    blueFalcon.serviceDiscoveryUpdates
-                        .filter {
-                            it.peripheral.uuid == deviceId && it.phase == ServiceDiscoveryPhase.ServicesDiscovered
-                        }.first()
-                }
-            }
-            val service =
-                peripheral.services.firstOrNull { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }
-                    ?: error("Shared-study BLE service was not found")
-
-            blueFalcon.discoverCharacteristics(peripheral, service)
-            if (service.characteristics.none { it.uuid.toString().equals(writeCharacteristicUuid, ignoreCase = true) }) {
-                withTimeout(DISCOVERY_TIMEOUT_MS) {
-                    blueFalcon.serviceDiscoveryUpdates
-                        .filter {
-                            it.peripheral.uuid == deviceId &&
-                                it.phase == ServiceDiscoveryPhase.CharacteristicsDiscovered &&
-                                it.service?.uuid == service.uuid
-                        }.first()
-                }
-            }
-
-            val writeCharacteristic = service.requiredCharacteristic(writeCharacteristicUuid)
-            val notifyCharacteristic = service.requiredCharacteristic(notifyCharacteristicUuid)
-            blueFalcon.notifyCharacteristic(peripheral, notifyCharacteristic, true)
-            centralConnections[deviceId] = CentralConnection(peripheral, writeCharacteristic)
         }
+
+        blueFalcon.discoverServices(peripheral, listOf(serviceUuid.toUuid()))
+        if (peripheral.services.none { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }) {
+            withTimeout(DISCOVERY_TIMEOUT_MS) {
+                blueFalcon.serviceDiscoveryUpdates
+                    .filter {
+                        it.peripheral.uuid == deviceId && it.phase == ServiceDiscoveryPhase.ServicesDiscovered
+                    }.first()
+            }
+        }
+        val service =
+            peripheral.services.firstOrNull { it.uuid.toString().equals(serviceUuid, ignoreCase = true) }
+                ?: error("Shared-study BLE service was not found")
+
+        blueFalcon.discoverCharacteristics(peripheral, service)
+        if (service.characteristics.none { it.uuid.toString().equals(writeCharacteristicUuid, ignoreCase = true) }) {
+            withTimeout(DISCOVERY_TIMEOUT_MS) {
+                blueFalcon.serviceDiscoveryUpdates
+                    .filter {
+                        it.peripheral.uuid == deviceId &&
+                            it.phase == ServiceDiscoveryPhase.CharacteristicsDiscovered &&
+                            it.service?.uuid == service.uuid
+                    }.first()
+            }
+        }
+
+        val writeCharacteristic = service.requiredCharacteristic(writeCharacteristicUuid)
+        val notifyCharacteristic = service.requiredCharacteristic(notifyCharacteristicUuid)
+        blueFalcon.notifyCharacteristic(peripheral, notifyCharacteristic, true)
+        centralConnections[deviceId] = CentralConnection(peripheral, writeCharacteristic)
+    }
 
     override suspend fun disconnect(deviceId: String) {
         onEngineThread {
@@ -208,8 +207,7 @@ internal class BlueFalconBlePlatformBridge(
 
     override fun openSettings(): Boolean = PlatformConnectionSettings.openBluetooth()
 
-    private suspend fun <T> onEngineThread(block: suspend () -> T): T =
-        engineDispatcher?.let { withContext(it) { block() } } ?: block()
+    private suspend fun <T> onEngineThread(block: suspend () -> T): T = engineDispatcher?.let { withContext(it) { block() } } ?: block()
 
     private fun dev.bluefalcon.core.BluetoothService.requiredCharacteristic(uuid: String): BluetoothCharacteristic =
         characteristics.firstOrNull { it.uuid.toString().equals(uuid, ignoreCase = true) }
@@ -223,12 +221,9 @@ internal class BlueFalconBlePlatformBridge(
 }
 
 /** Creates the Blue Falcon central engine appropriate for the current desktop OS. */
-fun createDesktopBlePlatformBridge(): BlePlatformBridge =
-    createDesktopBlePlatformBridge(JniBlePeripheralEndpoint())
+fun createDesktopBlePlatformBridge(): BlePlatformBridge = createDesktopBlePlatformBridge(JniBlePeripheralEndpoint())
 
-internal fun createDesktopBlePlatformBridge(
-    peripheralEndpoint: BlePeripheralEndpoint = JniBlePeripheralEndpoint(),
-): BlePlatformBridge {
+internal fun createDesktopBlePlatformBridge(peripheralEndpoint: BlePeripheralEndpoint = JniBlePeripheralEndpoint()): BlePlatformBridge {
     val osName = System.getProperty("os.name").lowercase()
     if (osName.contains("win")) {
         val executor =
@@ -237,18 +232,19 @@ internal fun createDesktopBlePlatformBridge(
             }
         val dispatcher = executor.asCoroutineDispatcher()
         return runCatching {
-            executor.submit(
-                Callable<BlePlatformBridge> {
-                    BlueFalconBlePlatformBridge(
-                        blueFalcon = BlueFalcon(WindowsEngine()),
-                        peripheralEndpoint = peripheralEndpoint,
-                        engineDispatcher = dispatcher,
-                        // BlueFalcon 3.7.7 lets HRESULT 0x800710DF escape nativeScan when the
-                        // adapter is off. Our peripheral adapter reports that state safely.
-                        usePeripheralAdapterState = true,
-                    )
-                },
-            ).get(ENGINE_INITIALIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            executor
+                .submit(
+                    Callable<BlePlatformBridge> {
+                        BlueFalconBlePlatformBridge(
+                            blueFalcon = BlueFalcon(WindowsEngine()),
+                            peripheralEndpoint = peripheralEndpoint,
+                            engineDispatcher = dispatcher,
+                            // BlueFalcon 3.7.7 lets HRESULT 0x800710DF escape nativeScan when the
+                            // adapter is off. Our peripheral adapter reports that state safely.
+                            usePeripheralAdapterState = true,
+                        )
+                    },
+                ).get(ENGINE_INITIALIZATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         }.getOrElse {
             dispatcher.close()
             PeripheralOnlyBlePlatformBridge(peripheralEndpoint)
@@ -275,7 +271,9 @@ internal class PeripheralOnlyBlePlatformBridge(
     override val incomingPackets: Flow<BleIncomingPacket> = peripheralEndpoint.incomingPackets
 
     override suspend fun refreshState() = peripheralEndpoint.refreshState()
+
     override suspend fun startScanning(serviceUuid: String) = Unit
+
     override suspend fun stopScanning() = Unit
 
     override suspend fun startAdvertising(
@@ -307,6 +305,7 @@ internal class PeripheralOnlyBlePlatformBridge(
     ) = peripheralEndpoint.send(deviceId, packet)
 
     override fun maximumPacketSize(deviceId: String): Int = peripheralEndpoint.maximumPacketSize(deviceId)
+
     override fun openSettings(): Boolean = PlatformConnectionSettings.openBluetooth()
 }
 
@@ -316,18 +315,33 @@ internal class UnsupportedBlePlatformBridge : BlePlatformBridge {
     override val incomingPackets = MutableSharedFlow<BleIncomingPacket>().asSharedFlow()
 
     override suspend fun refreshState() = Unit
+
     override suspend fun startScanning(serviceUuid: String) = Unit
+
     override suspend fun stopScanning() = Unit
-    override suspend fun startAdvertising(serviceUuid: String, localName: String) = Unit
+
+    override suspend fun startAdvertising(
+        serviceUuid: String,
+        localName: String,
+    ) = Unit
+
     override suspend fun stopAdvertising() = Unit
+
     override suspend fun connect(
         deviceId: String,
         serviceUuid: String,
         writeCharacteristicUuid: String,
         notifyCharacteristicUuid: String,
     ) = Unit
+
     override suspend fun disconnect(deviceId: String) = Unit
-    override suspend fun write(deviceId: String, packet: ByteArray) = Unit
+
+    override suspend fun write(
+        deviceId: String,
+        packet: ByteArray,
+    ) = Unit
+
     override fun maximumPacketSize(deviceId: String): Int = 20
+
     override fun openSettings(): Boolean = PlatformConnectionSettings.openBluetooth()
 }

@@ -51,6 +51,7 @@ graalHotspot = "22.0.0.2"
 intellijPlatformIcons = "261.27258.48"
 jbrApi = "1.10.1"
 pdfbox = "3.0.5"
+blueFalcon = "3.7.7"
 jbig2Imageio = "3.0.4"
 jaiImageioJpeg2000 = "1.4.0"
 
@@ -119,6 +120,9 @@ jewel-markdown-int-ui-standalone-styling = { module = "org.jetbrains.jewel:jewel
 intellij-platform-icons = { module = "com.jetbrains.intellij.platform:icons", version.ref = "intellijPlatformIcons" }
 jbr-api = { module = "org.jetbrains.runtime:jbr-api", version.ref = "jbrApi" }
 pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+blue-falcon-core = { module = "dev.bluefalcon:blue-falcon-core", version.ref = "blueFalcon" }
+blue-falcon-engine-windows = { module = "dev.bluefalcon:blue-falcon-engine-windows", version.ref = "blueFalcon" }
+blue-falcon-engine-macos-jvm = { module = "dev.bluefalcon:blue-falcon-engine-macos-jvm", version.ref = "blueFalcon" }
 jbig2-imageio = { module = "org.apache.pdfbox:jbig2-imageio", version.ref = "jbig2Imageio" }
 jai-imageio-core = { module = "com.github.jai-imageio:jai-imageio-core", version.ref = "jaiImageioJpeg2000" }
 jai-imageio-jpeg2000 = { module = "com.github.jai-imageio:jai-imageio-jpeg2000", version.ref = "jaiImageioJpeg2000" }

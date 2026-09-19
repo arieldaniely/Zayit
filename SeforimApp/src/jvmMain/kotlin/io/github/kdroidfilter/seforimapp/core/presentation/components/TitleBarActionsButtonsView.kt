@@ -2,6 +2,11 @@ package io.github.kdroidfilter.seforimapp.core.presentation.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
@@ -10,6 +15,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
@@ -23,11 +29,16 @@ import seforimapp.seforimapp.generated.resources.*
 // dropped from IntelliJ Platform icons 262, so the asset is shipped locally.
 private object SystemThemeIconAnchor
 
+private object SharedStudyIconAnchor
+
 private val SystemTheme = PathIconKey("icons/system_theme.svg", SystemThemeIconAnchor::class.java)
+private val SharedStudy = PathIconKey("icons/shared_study.svg", SharedStudyIconAnchor::class.java)
 
 @Composable
 fun TitleBarActionsButtonsView() {
     val appGraph = LocalAppGraph.current
+    var sharedStudyDialogVisible by remember { mutableStateOf(false) }
+    val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
     val mainAppState = appGraph.mainAppState
     val theme = mainAppState.theme.collectAsState().value
 
@@ -105,6 +116,30 @@ fun TitleBarActionsButtonsView() {
             contentDescription = stringResource(Res.string.update_titlebar_tooltip),
             onClick = { appGraph.appUpdateService.openDialog() },
             tooltipText = stringResource(Res.string.update_titlebar_tooltip),
+        )
+    }
+
+    TitleBarActionButton(
+        key = SharedStudy,
+        contentDescription = stringResource(Res.string.shared_study),
+        onClick = { sharedStudyDialogVisible = true },
+        tooltipText =
+            stringResource(
+                if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) {
+                    Res.string.shared_study_tooltip_active
+                } else {
+                    Res.string.shared_study_tooltip
+                },
+            ),
+        isActive = sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected,
+        indicatorColor =
+            if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) Color(0xFF22A06B) else null,
+    )
+
+    if (sharedStudyDialogVisible) {
+        SharedStudyDialog(
+            coordinator = appGraph.sharedStudyCoordinator,
+            onDismiss = { sharedStudyDialogVisible = false },
         )
     }
 

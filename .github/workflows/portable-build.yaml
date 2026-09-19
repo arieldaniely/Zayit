@@ -7,8 +7,10 @@ on:
       - master
       - main
       - work
+      - codex/shared-study-ble
     paths:
       - 'SeforimApp/**'
+      - 'sharedstudy/**'
       - 'SeforimLibrary/**'
       - 'gradle/**'
       - '*.gradle.kts'
@@ -31,6 +33,14 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: gradle
+
+      - name: Build and stage shared-study Bluetooth adapters
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake -S sharedstudy/native -B sharedstudy/native/build -A x64 '-DZAYIT_NATIVE_PLATFORM=windows-x64'
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
 
       - name: Build portable app directory
         run: .\gradlew.bat --no-daemon :SeforimApp:createDistributable

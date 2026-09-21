@@ -27,6 +27,8 @@ using namespace Windows::Devices::Radios;
 using namespace Windows::Storage::Streams;
 
 namespace {
+constexpr std::uint16_t kZayitCompanyId = 0xFFFF;
+constexpr std::size_t kMaximumAdvertisedNameBytes = 20;
 JavaVM* g_vm = nullptr;
 jobject g_owner = nullptr;
 jmethodID g_state_callback = nullptr;
@@ -106,13 +108,29 @@ void rebuild_subscribed_clients() {
 
 void stop_locked() {
     if (g_write_characteristic != nullptr && g_write_token.value != 0) {
-        g_write_characteristic.WriteRequested(g_write_token);
+        try {
+            g_write_characteristic.WriteRequested(g_write_token);
+        } catch (...) {
+        }
     }
     if (g_notify_characteristic != nullptr && g_clients_token.value != 0) {
-        g_notify_characteristic.SubscribedClientsChanged(g_clients_token);
+        try {
+            g_notify_characteristic.SubscribedClientsChanged(g_clients_token);
+        } catch (...) {
+        }
     }
-    if (g_name_publisher != nullptr) g_name_publisher.Stop();
-    if (g_provider != nullptr) g_provider.StopAdvertising();
+    if (g_name_publisher != nullptr) {
+        try {
+            g_name_publisher.Stop();
+        } catch (...) {
+        }
+    }
+    if (g_provider != nullptr) {
+        try {
+            g_provider.StopAdvertising();
+        } catch (...) {
+        }
+    }
     g_clients.clear();
     g_name_publisher = nullptr;
     g_notify_characteristic = nullptr;
@@ -176,8 +194,6 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         auto service_id = guid(to_utf8(service_uuid, env));
         auto write_id = guid(to_utf8(write_uuid, env));
         auto notify_id = guid(to_utf8(notify_uuid, env));
-        auto name = winrt::to_hstring(to_utf8(local_name, env));
-
         std::scoped_lock lock(g_mutex);
         stop_locked();
         if (!peripheral_supported()) throw hresult_error(winrt::hresult(E_NOTIMPL), L"BLE peripheral role is unsupported");
@@ -225,7 +241,10 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
             deferral.Complete();
         });
         g_clients_token = g_notify_characteristic.SubscribedClientsChanged([](auto const&, auto const&) {
-            rebuild_subscribed_clients();
+            try {
+                rebuild_subscribed_clients();
+            } catch (...) {
+            }
         });
 
         GattServiceProviderAdvertisingParameters advertising;
@@ -233,9 +252,25 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
         advertising.IsDiscoverable(true);
         g_provider.StartAdvertising(advertising);
 
+        // Publish a compact app marker and display name separately from the GATT provider.
+        // Advertising the 128-bit service UUID and a Hebrew local name in the same legacy
+        // packet exceeds the 31-byte BLE limit on many Windows adapters. The provider already
+        // advertises the service; this packet lets our unfiltered scanner associate a name with
+        // the same Bluetooth address without making the GATT advertisement invalid.
+        auto advertised_name = to_utf8(local_name, env);
+        if (advertised_name.size() > kMaximumAdvertisedNameBytes) {
+            advertised_name.resize(kMaximumAdvertisedNameBytes);
+        }
+        std::vector<std::uint8_t> name_payload{'Z', 'Y'};
+        name_payload.insert(name_payload.end(), advertised_name.begin(), advertised_name.end());
+        DataWriter name_writer;
+        name_writer.WriteBytes(name_payload);
+        BluetoothLEManufacturerData name_data;
+        name_data.CompanyId(kZayitCompanyId);
+        name_data.Data(name_writer.DetachBuffer());
+
         BluetoothLEAdvertisement advertisement;
-        advertisement.LocalName(name);
-        advertisement.ServiceUuids().Append(service_id);
+        advertisement.ManufacturerData().Append(name_data);
         g_name_publisher = BluetoothLEAdvertisementPublisher(advertisement);
         g_name_publisher.Start();
         notify_state(true);
@@ -254,8 +289,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndpoint_nativeStop(
     JNIEnv*,
     jobject) {
-    std::scoped_lock lock(g_mutex);
-    stop_locked();
+    try {
+        std::scoped_lock lock(g_mutex);
+        stop_locked();
+    } catch (...) {
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -301,12 +339,18 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     try {
         init_apartment(apartment_type::multi_threaded);
     } catch (...) {}
-    auto id = to_utf8(device_id, env);
-    std::scoped_lock lock(g_mutex);
-    auto found = g_clients.find(id);
-    if (found != g_clients.end()) {
-        found->second.Session().Close();
-        g_clients.erase(found);
+    try {
+        auto id = to_utf8(device_id, env);
+        std::scoped_lock lock(g_mutex);
+        auto found = g_clients.find(id);
+        if (found != g_clients.end()) {
+            try {
+                found->second.Session().Close();
+            } catch (...) {
+            }
+            g_clients.erase(found);
+        }
+    } catch (...) {
     }
 }
 
@@ -318,9 +362,13 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     try {
         init_apartment(apartment_type::multi_threaded);
     } catch (...) {}
-    auto id = to_utf8(device_id, env);
-    std::scoped_lock lock(g_mutex);
-    auto found = g_clients.find(id);
-    if (found == g_clients.end()) return 20;
-    return static_cast<jint>(std::max<std::uint16_t>(20, found->second.Session().MaxPduSize() - 3));
+    try {
+        auto id = to_utf8(device_id, env);
+        std::scoped_lock lock(g_mutex);
+        auto found = g_clients.find(id);
+        if (found == g_clients.end()) return 20;
+        return static_cast<jint>(std::max<std::uint16_t>(20, found->second.Session().MaxPduSize() - 3));
+    } catch (...) {
+        return 20;
+    }
 }

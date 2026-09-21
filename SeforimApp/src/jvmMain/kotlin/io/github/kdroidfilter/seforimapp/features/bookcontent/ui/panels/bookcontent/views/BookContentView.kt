@@ -1618,15 +1618,24 @@ private fun LineItem(
 
 @Composable
 private fun RemotePresenceBars(colors: List<Color>) {
-    if (colors.isEmpty()) return
-    Row(
-        modifier = Modifier.width((colors.size.coerceAtMost(3) * 3).dp).fillMaxHeight(),
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        colors.take(3).forEach { color ->
-            Box(Modifier.width(2.dp).fillMaxHeight().background(color, RoundedCornerShape(2.dp)))
-        }
-    }
+    // Keep a stable gutter on every line. Adding/removing width only on the remote participant's
+    // current line made the text reflow during presence updates and could trap the lazy layout in
+    // repeated intrinsic measurement when both participants viewed the same tab.
+    Box(
+        modifier =
+            Modifier
+                .width(10.dp)
+                .fillMaxHeight()
+                .drawBehind {
+                    colors.take(3).forEachIndexed { index, color ->
+                        drawRect(
+                            color = color,
+                            topLeft = Offset(index * 3.dp.toPx(), 0f),
+                            size = Size(2.dp.toPx(), size.height),
+                        )
+                    }
+                },
+    )
 }
 
 @Composable

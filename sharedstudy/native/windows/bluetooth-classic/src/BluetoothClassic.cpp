@@ -148,7 +148,10 @@ void read_frames(std::string device_id, std::shared_ptr<Connection> connection) 
     std::scoped_lock lock(g_mutex);
     auto found = g_connections.find(device_id);
     if (found != g_connections.end() && found->second == connection) g_connections.erase(found);
-    connection->socket.Close();
+    try {
+        connection->socket.Close();
+    } catch (...) {
+    }
 }
 
 void install_connection(std::string const& device_id, StreamSocket const& socket) {
@@ -162,7 +165,12 @@ void install_connection(std::string const& device_id, StreamSocket const& socket
     {
         std::scoped_lock lock(g_mutex);
         auto old = g_connections.find(device_id);
-        if (old != g_connections.end()) old->second->socket.Close();
+        if (old != g_connections.end()) {
+            try {
+                old->second->socket.Close();
+            } catch (...) {
+            }
+        }
         g_connections.insert_or_assign(device_id, connection);
     }
     std::thread(read_frames, device_id, connection).detach();
@@ -187,11 +195,30 @@ bool classic_supported() {
 
 void stop_server_locked() {
     if (g_listener != nullptr && g_connection_token.value != 0) {
-        g_listener.ConnectionReceived(g_connection_token);
+        try {
+            g_listener.ConnectionReceived(g_connection_token);
+        } catch (...) {
+            // WinRT may already have invalidated the event token while the listener was closing.
+        }
     }
-    if (g_provider != nullptr) g_provider.StopAdvertising();
-    if (g_listener != nullptr) g_listener.Close();
-    for (auto const& [_, connection] : g_connections) connection->socket.Close();
+    if (g_provider != nullptr) {
+        try {
+            g_provider.StopAdvertising();
+        } catch (...) {
+        }
+    }
+    if (g_listener != nullptr) {
+        try {
+            g_listener.Close();
+        } catch (...) {
+        }
+    }
+    for (auto const& [_, connection] : g_connections) {
+        try {
+            connection->socket.Close();
+        } catch (...) {
+        }
+    }
     g_connections.clear();
     g_listener = nullptr;
     g_provider = nullptr;
@@ -305,8 +332,13 @@ extern "C" JNIEXPORT void JNICALL
 Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTransport_nativeStopServer(
     JNIEnv*,
     jobject) {
-    std::scoped_lock lock(g_mutex);
-    stop_server_locked();
+    // No C++/WinRT exception may cross JNI: the JVM cannot translate it and terminates the
+    // process (EXCEPTION_UNCAUGHT_CXX_EXCEPTION). Stopping is deliberately idempotent/best-effort.
+    try {
+        std::scoped_lock lock(g_mutex);
+        stop_server_locked();
+    } catch (...) {
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -348,11 +380,17 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_BluetoothClassicTran
         init_apartment(apartment_type::multi_threaded);
     } catch (...) {}
     auto id = to_utf8(device_id, env);
-    std::scoped_lock lock(g_mutex);
-    auto found = g_connections.find(id);
-    if (found != g_connections.end()) {
-        found->second->socket.Close();
-        g_connections.erase(found);
+    try {
+        std::scoped_lock lock(g_mutex);
+        auto found = g_connections.find(id);
+        if (found != g_connections.end()) {
+            try {
+                found->second->socket.Close();
+            } catch (...) {
+            }
+            g_connections.erase(found);
+        }
+    } catch (...) {
     }
 }
 

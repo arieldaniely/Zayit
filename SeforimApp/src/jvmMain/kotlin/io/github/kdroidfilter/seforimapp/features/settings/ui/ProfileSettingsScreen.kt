@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.onboarding.region.RegionConfigEvents
 import io.github.kdroidfilter.seforimapp.features.onboarding.region.RegionConfigState
 import io.github.kdroidfilter.seforimapp.features.onboarding.region.RegionConfigViewModel
@@ -104,7 +103,6 @@ private fun ProfileSettingsView(
                             if (value != userProfileState.firstName) {
                                 currentOnUserProfileEvent(UserProfileEvents.FirstNameChanged(value))
                             }
-                            AppSettings.setUserFirstName(value.trim())
                         }
                         TextField(state = firstNameState, modifier = Modifier.widthIn(max = 240.dp))
                     }
@@ -122,7 +120,6 @@ private fun ProfileSettingsView(
                             if (value != userProfileState.lastName) {
                                 currentOnUserProfileEvent(UserProfileEvents.LastNameChanged(value))
                             }
-                            AppSettings.setUserLastName(value.trim())
                         }
                         TextField(state = lastNameState, modifier = Modifier.widthIn(max = 240.dp))
                     }
@@ -148,11 +145,7 @@ private fun ProfileSettingsView(
                     ListComboBox(
                         items = communityLabels,
                         selectedIndex = userProfileState.selectedCommunityIndex,
-                        onSelectedItemChange = { index ->
-                            onUserProfileEvent(UserProfileEvents.SelectCommunity(index))
-                            val community = userProfileState.communities.getOrNull(index)
-                            AppSettings.setUserCommunityCode(community?.name)
-                        },
+                        onSelectedItemChange = { index -> onUserProfileEvent(UserProfileEvents.SelectCommunity(index)) },
                         modifier = Modifier.fillMaxWidth(0.33f),
                     )
                 }
@@ -174,8 +167,6 @@ private fun ProfileSettingsView(
                         selectedIndex = regionState.selectedCountryIndex,
                         onSelectedItemChange = { index ->
                             onRegionEvent(RegionConfigEvents.SelectCountry(index))
-                            val country = regionState.countries.getOrNull(index)
-                            AppSettings.setRegionCountry(country)
                         },
                         modifier = Modifier.fillMaxWidth(0.33f),
                     )
@@ -193,11 +184,7 @@ private fun ProfileSettingsView(
                     ListComboBox(
                         items = regionState.cities,
                         selectedIndex = regionState.selectedCityIndex,
-                        onSelectedItemChange = { index ->
-                            onRegionEvent(RegionConfigEvents.SelectCity(index))
-                            val city = regionState.cities.getOrNull(index)
-                            AppSettings.setRegionCity(city)
-                        },
+                        onSelectedItemChange = { index -> onRegionEvent(RegionConfigEvents.SelectCity(index)) },
                         enabled = regionState.selectedCountryIndex >= 0,
                         modifier = Modifier.fillMaxWidth(0.33f),
                     )

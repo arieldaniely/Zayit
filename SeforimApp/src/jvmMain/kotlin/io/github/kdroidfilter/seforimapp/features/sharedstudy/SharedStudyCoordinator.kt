@@ -158,6 +158,7 @@ class SharedStudyCoordinator(
     fun publishLocation(location: StudyLocation) {
         val current = _state.value
         if (current.sessionId == null) return
+        if (current.locations[localId] == location) return
         _state.update { it.copy(locations = it.locations + (localId to location)) }
         locationUpdates.trySend(location)
     }
@@ -231,7 +232,13 @@ class SharedStudyCoordinator(
                 }
             is StudyMessage.LocationChanged ->
                 if (message.sessionId == _state.value.sessionId) {
-                    _state.update { it.copy(locations = it.locations + (message.senderId to message.location)) }
+                    _state.update { current ->
+                        if (current.locations[message.senderId] == message.location) {
+                            current
+                        } else {
+                            current.copy(locations = current.locations + (message.senderId to message.location))
+                        }
+                    }
                     forwardFromHost(message, incoming.deviceId)
                 }
             is StudyMessage.NoteChanged ->

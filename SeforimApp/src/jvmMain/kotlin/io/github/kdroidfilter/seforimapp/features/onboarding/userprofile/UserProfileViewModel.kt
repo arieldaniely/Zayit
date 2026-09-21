@@ -44,14 +44,31 @@ class UserProfileViewModel(
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            UserProfileState(communities = communities),
+            currentState(),
         )
 
     fun onEvent(event: UserProfileEvents) {
         when (event) {
-            is UserProfileEvents.FirstNameChanged -> firstName.value = event.value
-            is UserProfileEvents.LastNameChanged -> lastName.value = event.value
-            is UserProfileEvents.SelectCommunity -> selectedCommunityIndex.value = event.index
+            is UserProfileEvents.FirstNameChanged -> {
+                firstName.value = event.value
+                AppSettings.setUserFirstName(event.value.trim())
+            }
+            is UserProfileEvents.LastNameChanged -> {
+                lastName.value = event.value
+                AppSettings.setUserLastName(event.value.trim())
+            }
+            is UserProfileEvents.SelectCommunity -> {
+                selectedCommunityIndex.value = event.index
+                AppSettings.setUserCommunityCode(communities.getOrNull(event.index)?.name)
+            }
         }
     }
+
+    private fun currentState() =
+        UserProfileState(
+            firstName = firstName.value,
+            lastName = lastName.value,
+            communities = communities,
+            selectedCommunityIndex = selectedCommunityIndex.value.takeIf { it in communities.indices } ?: -1,
+        )
 }

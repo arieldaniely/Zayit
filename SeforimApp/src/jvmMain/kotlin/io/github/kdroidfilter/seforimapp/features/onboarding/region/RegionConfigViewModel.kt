@@ -60,8 +60,19 @@ class RegionConfigViewModel(
                 selectedCountryIndex.value = event.index
                 // Reset city selection when country changes
                 selectedCityIndex.value = -1
+                AppSettings.setRegionCountry(countries.getOrNull(event.index))
+                AppSettings.setRegionCity(null)
             }
-            is RegionConfigEvents.SelectCity -> selectedCityIndex.value = event.index
+            is RegionConfigEvents.SelectCity -> {
+                selectedCityIndex.value = event.index
+                val cities =
+                    if (selectedCountryIndex.value >= 0) {
+                        useCase.getCities(selectedCountryIndex.value)
+                    } else {
+                        emptyList()
+                    }
+                AppSettings.setRegionCity(cities.getOrNull(event.index))
+            }
         }
     }
 }

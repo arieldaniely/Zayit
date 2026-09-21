@@ -16,14 +16,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,16 +67,34 @@ internal class BlueFalconBlePlatformBridge(
         }
 
     override val advertisements: Flow<List<BleAdvertisement>> =
-        blueFalcon.peripherals.map { peripherals ->
+        combine(
+            blueFalcon.peripherals,
+            flow {
+                while (true) {
+                    emit(Unit)
+                    delay(ADVERTISEMENT_REFRESH_INTERVAL_MS)
+                }
+            },
+        ) { peripherals, _ ->
+            // BlueFalcon's Windows engine mutates an existing peripheral's name/manufacturer
+            // fields without replacing the Set held by its StateFlow. The small refresh pulse
+            // makes those mutations observable without restarting discovery.
             peripherals
-                .map { peripheral ->
+                .mapNotNull { peripheral ->
+                    val advertisedName =
+                        peripheral.manufacturerData[ZAYIT_MANUFACTURER_ID]
+                            ?.decodeZayitDisplayName()
+                    if (usePeripheralAdapterState && advertisedName == null) return@mapNotNull null
                     BleAdvertisement(
                         deviceId = peripheral.uuid,
-                        displayName = peripheral.name?.takeIf(String::isNotBlank) ?: peripheral.uuid,
+                        displayName =
+                            advertisedName
+                                ?: peripheral.name?.takeIf { it.isNotBlank() && it != peripheral.uuid }
+                                ?: DEFAULT_BLE_DISPLAY_NAME,
                         rssi = peripheral.rssi?.toInt(),
                     )
                 }.sortedWith(compareByDescending<BleAdvertisement> { it.rssi ?: Int.MIN_VALUE }.thenBy { it.displayName })
-        }
+        }.distinctUntilChanged()
 
     override val incomingPackets: Flow<BleIncomingPacket> =
         kotlinx.coroutines.flow.merge(_centralPackets.asSharedFlow(), peripheralEndpoint.incomingPackets)
@@ -105,7 +126,11 @@ internal class BlueFalconBlePlatformBridge(
         }
         onEngineThread {
             blueFalcon.clearPeripherals()
-            blueFalcon.scan(listOf(ServiceFilter(serviceUuid.toUuid())))
+            // On Windows the companion peripheral publisher carries the display name in a small
+            // manufacturer packet, while the GATT provider advertises the service separately.
+            // Scan both packet types and filter by our marker above.
+            val filters = if (usePeripheralAdapterState) emptyList() else listOf(ServiceFilter(serviceUuid.toUuid()))
+            blueFalcon.scan(filters)
         }
     }
 
@@ -214,10 +239,22 @@ internal class BlueFalconBlePlatformBridge(
             ?: error("Shared-study BLE characteristic $uuid was not found")
 
     private companion object {
+        const val ZAYIT_MANUFACTURER_ID = 0xFFFF
+        const val DEFAULT_BLE_DISPLAY_NAME = "Zayit"
+        const val ADVERTISEMENT_REFRESH_INTERVAL_MS = 500L
         const val ATT_WRITE_OVERHEAD = 3
         const val CONNECTION_TIMEOUT_MS = 15_000L
         const val DISCOVERY_TIMEOUT_MS = 10_000L
     }
+}
+
+internal fun ByteArray.decodeZayitDisplayName(): String? {
+    if (size <= 2 || this[0] != 'Z'.code.toByte() || this[1] != 'Y'.code.toByte()) return null
+    return copyOfRange(2, size)
+        .decodeToString()
+        .trimEnd('\uFFFD')
+        .trim()
+        .takeIf(String::isNotBlank)
 }
 
 /** Creates the Blue Falcon central engine appropriate for the current desktop OS. */

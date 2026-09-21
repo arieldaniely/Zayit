@@ -9,10 +9,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PacketizedBleTransportTest {
+    @Test
+    fun `decodes the display name from a Zayit manufacturer packet`() {
+        val packet = byteArrayOf('Z'.code.toByte(), 'Y'.code.toByte()) + "ראובן".encodeToByteArray()
+
+        assertEquals("ראובן", packet.decodeZayitDisplayName())
+        assertNull(byteArrayOf(1, 2, 3).decodeZayitDisplayName())
+    }
+
     @Test
     fun `fragments and reassembles a message using negotiated packet size`() =
         runTest {

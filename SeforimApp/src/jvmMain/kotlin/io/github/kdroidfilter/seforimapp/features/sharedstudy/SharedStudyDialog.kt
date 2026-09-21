@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,7 +49,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.kdroidfilter.seforimapp.core.presentation.components.ExpandCollapseIcon
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
-import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalDivider
 import io.github.kdroidfilter.seforimapp.icons.Bluetooth
 import io.github.kdroidfilter.seforimapp.icons.Wifi
 import org.jetbrains.compose.resources.stringResource
@@ -101,7 +99,6 @@ import seforimapp.seforimapp.generated.resources.shared_study_status_active
 import seforimapp.seforimapp.generated.resources.shared_study_status_connected
 import seforimapp.seforimapp.generated.resources.shared_study_status_off
 import seforimapp.seforimapp.generated.resources.shared_study_status_searching
-import seforimapp.seforimapp.generated.resources.shared_study_troubleshooting_subtitle
 import seforimapp.seforimapp.generated.resources.shared_study_troubleshooting_title
 import seforimapp.seforimapp.generated.resources.shared_study_turn_on_action
 import seforimapp.seforimapp.generated.resources.shared_study_via_ble
@@ -275,7 +272,8 @@ private fun HeaderStatusBadge(state: SharedStudyState) {
                 Triple(
                     stringResource(Res.string.shared_study_status_searching),
                     JewelTheme.globalColors.outlines.focused,
-                    JewelTheme.globalColors.outlines.focused.copy(alpha = 0.12f),
+                    JewelTheme.globalColors.outlines.focused
+                        .copy(alpha = 0.12f),
                 )
             }
             state.hasStartedDiscovery -> {
@@ -289,7 +287,8 @@ private fun HeaderStatusBadge(state: SharedStudyState) {
                 Triple(
                     stringResource(Res.string.shared_study_status_off),
                     JewelTheme.globalColors.text.disabled,
-                    JewelTheme.globalColors.borders.disabled.copy(alpha = 0.25f),
+                    JewelTheme.globalColors.borders.disabled
+                        .copy(alpha = 0.25f),
                 )
             }
         }
@@ -315,7 +314,14 @@ private fun HeaderStatusBadge(state: SharedStudyState) {
             text = badgeText,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = if (state.hasStartedDiscovery || state.isConnected) JewelTheme.globalColors.text.normal else JewelTheme.globalColors.text.info,
+            color =
+                if (state.hasStartedDiscovery ||
+                    state.isConnected
+                ) {
+                    JewelTheme.globalColors.text.normal
+                } else {
+                    JewelTheme.globalColors.text.info
+                },
         )
     }
 }
@@ -344,7 +350,12 @@ private fun UnifiedProfileCard(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Avatar circle with first letter of name
-        val avatarLetter = displayName.trim().firstOrNull()?.toString()?.uppercase() ?: "ל"
+        val avatarLetter =
+            displayName
+                .trim()
+                .firstOrNull()
+                ?.toString()
+                ?.uppercase() ?: "ל"
         Box(
             modifier =
                 Modifier
@@ -525,18 +536,17 @@ private fun ActiveSessionCard(
                         fontSize = 11.sp,
                         color = JewelTheme.globalColors.text.info,
                     )
-                val connectedText =
-                    state.participants
-                        .joinToString {
-                            it.displayName
-                        }.ifBlank {
-                            stringResource(Res.string.shared_study_connected_badge)
-                        }
-                Text(
-                    text = connectedText,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                )
+                    val connectedText =
+                        state.participants
+                            .joinToString { it.displayName }
+                            .ifBlank {
+                                stringResource(Res.string.shared_study_connected_badge)
+                            }
+                    Text(
+                        text = connectedText,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                    )
                 }
             }
 

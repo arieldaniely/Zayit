@@ -124,6 +124,8 @@ object AppSettings {
         _linkLoadLevelFlow.value = getLinkLoadLevel()
         _showZmanimWidgetsFlow.value = isShowZmanimWidgetsEnabled()
         _showTempleCountdownFlow.value = isShowTempleCountdownEnabled()
+        _showHomeWallpaperFlow.value = isShowHomeWallpaperEnabled()
+        _compactModeFlow.value = isCompactModeEnabled()
         // User profile reactive values
         _userFirstNameFlow.value = getUserFirstName() ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""

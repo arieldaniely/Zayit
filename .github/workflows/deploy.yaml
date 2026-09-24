@@ -88,6 +88,10 @@ jobs:
           graalvm: ${{ matrix.graalvm }}
           jbr-version: '25.0.3b496.62'
 
+      - name: Prepare electron-builder for macOS packaging
+        if: startsWith(matrix.os, 'macos')
+        uses: ./.github/actions/prepare-electron-builder
+
       - name: Build and stage Windows Bluetooth adapters
         if: startsWith(matrix.os, 'windows')
         shell: pwsh

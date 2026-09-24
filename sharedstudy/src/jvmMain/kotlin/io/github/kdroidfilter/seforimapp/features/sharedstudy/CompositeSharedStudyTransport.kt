@@ -88,7 +88,32 @@ class CompositeSharedStudyTransport(
     override suspend fun startDiscovery(localName: String) {
         fallbackJob?.cancelAndJoin()
         _stage.value = DiscoveryStage.AUTOMATIC
-        runFor(entries.filter { it.tier == AUTOMATIC_TIER }) { startDiscovery(localName) }
+        val automaticFailure =
+            try {
+                runFor(entries.filter { it.tier == AUTOMATIC_TIER }) { startDiscovery(localName) }
+                null
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Throwable) {
+                failure
+            }
+        if (automaticFailure != null) {
+            _stage.value = DiscoveryStage.BLUETOOTH_PAIRING
+            try {
+                runFor(entries.filter { it.tier == CLASSIC_TIER }) { startDiscovery(localName) }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Throwable) {
+                failure.addSuppressed(automaticFailure)
+                throw failure
+            }
+            fallbackJob =
+                scope.launch {
+                    delay(CLASSIC_DISCOVERY_WINDOW_MS)
+                    if (!automaticPeerAvailable) _stage.value = DiscoveryStage.HOTSPOT_GUIDANCE
+                }
+            return
+        }
         fallbackJob =
             scope.launch {
                 delay(AUTOMATIC_DISCOVERY_WINDOW_MS)

@@ -132,10 +132,6 @@ class SharedStudyCoordinator(
     fun respondToInvitation(accepted: Boolean) {
         val invitation = _state.value.pendingInvitation ?: return
         launchInScope {
-            sendReliably(
-                invitation.deviceId,
-                StudyMessage.InvitationResponse(localId, nextSequence(), invitation.sessionId, accepted),
-            )
             if (accepted) {
                 connectedDeviceIds += invitation.deviceId
                 participantIdByDeviceId[invitation.deviceId]?.let { lastSeenByParticipantId[it] = now() }
@@ -147,7 +143,14 @@ class SharedStudyCoordinator(
                         timedOutParticipantName = null,
                     )
                 }
-            } else {
+            }
+            // A fast host may send the roster while this response is still in flight.
+            // The session must be active before an acceptance can leave this process.
+            sendReliably(
+                invitation.deviceId,
+                StudyMessage.InvitationResponse(localId, nextSequence(), invitation.sessionId, accepted),
+            )
+            if (!accepted) {
                 forgetDevice(invitation.deviceId)
                 transport.disconnect(invitation.deviceId)
                 _state.update { it.copy(pendingInvitation = null) }
@@ -198,15 +201,17 @@ class SharedStudyCoordinator(
             pendingDeliveries.remove(incoming.deviceId to message.messageId)
             return
         }
-        if (message is ReliableStudyMessage) {
+        if (message is StudyMessage.Invitation) {
             acknowledge(incoming.deviceId, message.messageId)
             if (!rememberReliableMessage(message.messageId)) return
-        }
-        if (message is StudyMessage.Invitation) {
             handleInvitation(incoming.deviceId, message)
             return
         }
         if (!belongsToCurrentSession(message)) return
+        if (message is ReliableStudyMessage) {
+            acknowledge(incoming.deviceId, message.messageId)
+            if (!rememberReliableMessage(message.messageId)) return
+        }
 
         deviceIdByParticipantId[message.senderId] = incoming.deviceId
         participantIdByDeviceId[incoming.deviceId] = message.senderId

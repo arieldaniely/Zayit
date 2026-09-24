@@ -97,12 +97,15 @@ class LocalNetworkTransport(
         serverSocket?.close()
         discoverySocket = null
         serverSocket = null
+        // Closing the sockets releases readFrames, whose blocking read is not
+        // interrupted by coroutine cancellation alone.
+        connections.values.forEach { it.socket.close() }
         val activeJobs =
             synchronized(jobs) {
                 jobs.toList().also { jobs.clear() }
             }
         activeJobs.forEach { it.cancelAndJoin() }
-        connections.keys.toList().forEach { disconnect(it) }
+        connections.clear()
         peers.clear()
         _devices.value = emptyList()
     }
@@ -113,8 +116,13 @@ class LocalNetworkTransport(
             peers[deviceId]
                 ?: throw SharedStudyTransportException(SharedStudyError.DEVICE_UNAVAILABLE)
         val socket = Socket()
-        socket.connect(peer.endpoint, CONNECT_TIMEOUT_MS)
-        installConnection(socket, expectedDeviceId = deviceId)
+        try {
+            socket.connect(peer.endpoint, CONNECT_TIMEOUT_MS)
+            installConnection(socket, expectedDeviceId = deviceId)
+        } catch (failure: Throwable) {
+            socket.close()
+            throw failure
+        }
     }
 
     override suspend fun disconnect(deviceId: String) {

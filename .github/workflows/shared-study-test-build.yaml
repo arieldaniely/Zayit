@@ -9,11 +9,13 @@ on:
       - 'SeforimApp/**'
       - 'sharedstudy/**'
       - 'SeforimLibrary'
+      - 'SeforimLibrary/**'
       - 'navigation/**'
       - 'gradle/**'
       - '*.gradle.kts'
       - 'settings.gradle.kts'
       - '.github/workflows/shared-study-test-build.yaml'
+      - '.github/actions/prepare-electron-builder/**'
 
 jobs:
   package:
@@ -96,6 +98,13 @@ jobs:
           :SeforimApp:jvmTest
           --tests 'io.github.kdroidfilter.seforimapp.features.sharedstudy.*'
           --no-daemon
+
+      # Nucleus invokes `npx --yes electron-builder` from a directory below
+      # SeforimApp. Make the pinned version available in its ancestor node_modules
+      # before packaging instead of fetching an unpinned latest release then.
+      - name: Prepare electron-builder for macOS packaging
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/prepare-electron-builder
 
       - name: Package Windows portable test build
         if: runner.os == 'Windows'

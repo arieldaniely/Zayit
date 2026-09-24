@@ -72,13 +72,35 @@ class CompositeSharedStudyTransportTest {
         }
 
     @Test
-    fun `discovery propagates an error when every automatic transport fails`() =
+    fun `classic discovery starts when every automatic transport fails`() =
+        runTest {
+            val classic = FakeTransport()
+            val composite =
+                CompositeSharedStudyTransport(
+                    FakeTransport(failDiscovery = true),
+                    FakeTransport(failDiscovery = true),
+                    classic,
+                    backgroundScope,
+                )
+
+            composite.startDiscovery("לוי")
+
+            assertEquals(1, classic.discoveryStarts)
+            assertEquals(DiscoveryStage.BLUETOOTH_PAIRING, composite.discoveryStage.first())
+
+            advanceTimeBy(8_000L)
+            runCurrent()
+            assertEquals(DiscoveryStage.HOTSPOT_GUIDANCE, composite.discoveryStage.first())
+        }
+
+    @Test
+    fun `discovery propagates an error when all transports fail`() =
         runTest {
             val composite =
                 CompositeSharedStudyTransport(
                     FakeTransport(failDiscovery = true),
                     FakeTransport(failDiscovery = true),
-                    FakeTransport(),
+                    FakeTransport(failDiscovery = true),
                     backgroundScope,
                 )
 

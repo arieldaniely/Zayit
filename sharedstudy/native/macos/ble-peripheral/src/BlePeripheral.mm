@@ -153,13 +153,15 @@ void on_ble_queue(dispatch_block_t block) {
     CBCentral* central = self.centrals[deviceId];
     if (central == nil || self.notifyCharacteristic == nil) return NO;
     if (data.length > central.maximumUpdateValueLength) return NO;
-    if ([self.manager updateValue:data
+    // Preserve packet order while CoreBluetooth applies backpressure.
+    if (self.pendingNotifications.count == 0 &&
+        [self.manager updateValue:data
                 forCharacteristic:self.notifyCharacteristic
              onSubscribedCentrals:@[ central ]]) {
         return YES;
     }
     if (self.pendingNotifications.count >= kMaximumPendingNotifications) {
-        [self.pendingNotifications removeObjectAtIndex:0];
+        return NO;
     }
     [self.pendingNotifications addObject:@{ @"deviceId" : deviceId, @"data" : data }];
     return YES;
@@ -297,7 +299,7 @@ Java_io_github_kdroidfilter_seforimapp_features_sharedstudy_JniBlePeripheralEndp
     env->GetByteArrayRegion(payload, 0, length, reinterpret_cast<jbyte*>(data.mutableBytes));
     __block BOOL sent = NO;
     on_ble_queue(^{ sent = [g_delegate sendData:data toDevice:deviceId]; });
-    if (!sent) throw_java(env, @"The BLE client is not subscribed or the packet exceeds its MTU");
+    if (!sent) throw_java(env, @"The BLE client is not subscribed, the packet exceeds its MTU, or the notification queue is full");
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.sharedstudy
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -273,6 +274,74 @@ class SharedStudyCoordinatorTest {
         }
 
     @Test
+    fun `joining accepts a roster while the response send is suspended`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            runCurrent()
+            transport.receive("host-device", StudyMessage.Invitation("host", 1, "מארח", "session", StudyMode.CHAVRUTA))
+            runCurrent()
+            val sendGate = CompletableDeferred<Unit>()
+            transport.responseSendGate = sendGate
+
+            coordinator.respondToInvitation(true)
+            runCurrent()
+            assertEquals("session", coordinator.state.value.sessionId)
+
+            val roster =
+                listOf(
+                    Participant("host", "מארח", 1, ParticipantRole.HOST),
+                    Participant("local", "לוי", 2, ParticipantRole.PARTICIPANT),
+                )
+            transport.receive("host-device", StudyMessage.Roster("host", 2, "session", roster))
+            runCurrent()
+
+            assertEquals(roster, coordinator.state.value.participants)
+            sendGate.complete(Unit)
+            runCurrent()
+        }
+
+    @Test
+    fun `snapshot from a pending session is not acknowledged or deduplicated`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            runCurrent()
+            transport.receive("host-device", StudyMessage.Invitation("host", 1, "מארח", "session", StudyMode.CHAVRUTA))
+            runCurrent()
+            val snapshot =
+                StudyMessage.SyncSnapshot(
+                    "host",
+                    2,
+                    "session",
+                    listOf(Participant("host", "מארח", 1, ParticipantRole.HOST)),
+                    emptyMap(),
+                    emptyMap(),
+                    messageId = "early-snapshot",
+                )
+
+            transport.receive("host-device", snapshot)
+            runCurrent()
+            assertTrue(
+                transport.sent.none { (_, message) ->
+                    message is StudyMessage.Acknowledgement && message.messageId == snapshot.messageId
+                },
+            )
+
+            coordinator.respondToInvitation(true)
+            runCurrent()
+            transport.receive("host-device", snapshot)
+            runCurrent()
+            assertEquals(snapshot.participants, coordinator.state.value.participants)
+            assertEquals(
+                1,
+                transport.sent.count { (_, message) ->
+                    message is StudyMessage.Acknowledgement && message.messageId == snapshot.messageId
+                },
+            )
+        }
+
+    @Test
     fun `participant is removed after heartbeat timeout`() =
         runTest {
             var clock = 0L
@@ -322,6 +391,7 @@ class SharedStudyCoordinatorTest {
         var refreshCount = 0
         var discoveryCount = 0
         val disconnected = mutableListOf<String>()
+        var responseSendGate: CompletableDeferred<Unit>? = null
 
         override val bluetoothState = state
         override val nearbyDevices = devices
@@ -359,6 +429,7 @@ class SharedStudyCoordinatorTest {
             message: StudyMessage,
         ) {
             sent += deviceId to message
+            if (message is StudyMessage.InvitationResponse && message.accepted) responseSendGate?.await()
         }
 
         override fun openBluetoothSettings() = true

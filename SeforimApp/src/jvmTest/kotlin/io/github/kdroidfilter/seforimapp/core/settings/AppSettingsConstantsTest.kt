@@ -1,10 +1,31 @@
 package io.github.kdroidfilter.seforimapp.core.settings
 
+import com.russhwolf.settings.PropertiesSettings
+import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AppSettingsConstantsTest {
+    @Test
+    fun `initialize refreshes display and font flows from persistent settings`() {
+        val settings = PropertiesSettings(Properties())
+        settings.putBoolean("show_home_wallpaper", false)
+        settings.putBoolean("compact_mode", true)
+        settings.putString("font_book", "tinos")
+
+        try {
+            AppSettings.initialize(settings)
+
+            assertFalse(AppSettings.showHomeWallpaperFlow.value)
+            assertTrue(AppSettings.compactModeFlow.value)
+            assertEquals("tinos", AppSettings.bookFontCodeFlow.value)
+        } finally {
+            AppSettings.initialize(PropertiesSettings(Properties()))
+        }
+    }
+
     @Test
     fun `DEFAULT_TEXT_SIZE is 16`() {
         assertEquals(16f, AppSettings.DEFAULT_TEXT_SIZE)

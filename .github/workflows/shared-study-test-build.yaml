@@ -1,0 +1,137 @@
+name: Shared study test builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/shared-study-ble
+    paths:
+      - 'SeforimApp/**'
+      - 'sharedstudy/**'
+      - 'SeforimLibrary'
+      - 'SeforimLibrary/**'
+      - 'navigation/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/shared-study-test-build.yaml'
+      - '.github/actions/prepare-electron-builder/**'
+
+jobs:
+  package:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            os: windows-latest
+            platform: windows-x64
+            cmake_arch: x64
+            artifact: zayita-shared-study-windows-x64
+          - label: macOS Apple Silicon
+            os: macos-26
+            platform: macos-arm64
+            cmake_arch: arm64
+            artifact: zayita-shared-study-macos-arm64
+          - label: macOS Intel
+            os: macos-26-intel
+            platform: macos-x64
+            cmake_arch: x86_64
+            artifact: zayita-shared-study-macos-x64
+
+    steps:
+      - name: Checkout source (with submodules)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Nucleus and JDK
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
+        with:
+          graalvm: false
+          jbr-version: '25.0.3b496.62'
+
+      - name: Build and stage Windows Bluetooth adapters
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake `
+            -S sharedstudy/native `
+            -B sharedstudy/native/build `
+            -A '${{ matrix.cmake_arch }}' `
+            '-DZAYIT_NATIVE_PLATFORM=${{ matrix.platform }}'
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake `
+            --install sharedstudy/native/build `
+            --config Release `
+            --prefix sharedstudy/src/jvmMain/resources
+          Get-ChildItem 'sharedstudy/src/jvmMain/resources/native/${{ matrix.platform }}/*.dll' |
+            Select-Object Name, Length
+
+      - name: Build and stage macOS BLE peripheral adapter
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S sharedstudy/native \
+            -B sharedstudy/native/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES='${{ matrix.cmake_arch }}' \
+            -DZAYIT_NATIVE_PLATFORM='${{ matrix.platform }}'
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake \
+            --install sharedstudy/native/build \
+            --config Release \
+            --prefix sharedstudy/src/jvmMain/resources
+          file sharedstudy/src/jvmMain/resources/native/${{ matrix.platform }}/libzayit-ble-peripheral.dylib
+
+      - name: Run shared-study tests
+        shell: bash
+        run: >-
+          ./gradlew
+          :sharedstudy:jvmTest
+          :SeforimApp:jvmTest
+          --tests 'io.github.kdroidfilter.seforimapp.features.sharedstudy.*'
+          --no-daemon
+
+      # Nucleus invokes `npx --yes electron-builder` from a directory below
+      # SeforimApp. Make the pinned version available in its ancestor node_modules
+      # before packaging instead of fetching an unpinned latest release then.
+      - name: Prepare electron-builder for macOS packaging
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/prepare-electron-builder
+
+      - name: Package Windows portable test build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\gradlew.bat --no-daemon :SeforimApp:createDistributable
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Compress-Archive `
+            -Path 'SeforimApp/build/compose/binaries/main/app/*' `
+            -DestinationPath 'artifacts/Zayita-shared-study-windows-x64.zip' `
+            -Force
+
+      - name: Package macOS test DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon :SeforimApp:packageReleaseDmg
+          mkdir -p artifacts
+          find SeforimApp/build/compose/binaries/main-release/dmg -name '*.dmg' -exec cp {} artifacts/ \;
+          ls artifacts/*.dmg >/dev/null
+
+      - name: Upload test build
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14

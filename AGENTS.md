@@ -14,14 +14,49 @@
 - `./gradlew :SeforimApp:installDebug` — install Android debug build.
 - `./gradlew :SeforimApp:jvmTest` (or `./gradlew test`) — run tests (desktop-only or all).
 - `./gradlew :SeforimApp:lint` — run static checks.
+- `./gradlew ktlintCheck` / `./gradlew ktlintFormat` — check or auto-format code style with ktlint.
 - `SEFORIM_DB=/path/to/seforim.db ./gradlew :cataloggen:generatePrecomputedCatalog` — regenerate the precomputed catalog.
 
 ## Coding Style & Naming Conventions
-- Kotlin + Compose; 4-space indentation; keep lines ~120 chars.
+- Kotlin + Compose; 4-space indentation; keep lines ~120 chars (max line length: 140).
 - Naming: `PascalCase` for types/composables, `camelCase` for functions/properties, `UPPER_SNAKE_CASE` for constants.
 - UI: prefer `SomethingView` and `SomethingViewModel` naming patterns.
 - Keep shared logic in `commonMain`; avoid leaking platform-specific types across source sets.
 - DI uses Metro (`AppGraph`, `@Provides`); access via `LocalAppGraph` (avoid singletons).
+
+### Ktlint Formatting & Chaining Rules
+- **Chaining after multiline lambdas (`chain-wrapping`)**: When continuing a call chain after a multiline lambda or block ending with `}` on its own line, attach the dot immediately to the closing brace (`}.method(...)`), never on a new line:
+  ```kotlin
+  // Correct
+  items
+      .filter {
+          it.isActive
+      }.map { it.name }
+
+  // Incorrect (causes "Unexpected newline before '.'")
+  items
+      .filter {
+          it.isActive
+      }
+      .map { it.name }
+  ```
+- **Chained member navigation & assertions (`chain-method-continuation`)**: In assertions or nested calls with long property/call chains, break the chain across lines and put each chained method or safe call (`.`, `?.`) on a new line:
+  ```kotlin
+  // Correct
+  assertTrue(
+      coordinator.state.value.participants
+          .none { it.id == "peer" },
+  )
+  assertEquals(
+      "local",
+      coordinator.state.value.notes["note"]
+          ?.body,
+  )
+
+  // Incorrect (causes "Expected newline before '.'" / "Expected newline before '?.'")
+  assertTrue(coordinator.state.value.participants.none { it.id == "peer" })
+  ```
+- **Trailing commas**: Use trailing commas in multiline argument, parameter, and collection lists.
 
 ## Localization & Resources
 - Never hardcode user-visible text; add keys to `SeforimApp/src/commonMain/composeResources/strings.xml`.

@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.24)
+project(zayit_shared_study_native LANGUAGES CXX)
+
+if(NOT DEFINED ZAYIT_NATIVE_PLATFORM)
+    message(FATAL_ERROR "ZAYIT_NATIVE_PLATFORM must identify the packaged runtime platform")
+endif()
+
+if(WIN32)
+    add_subdirectory(windows/ble-peripheral)
+    add_subdirectory(windows/bluetooth-classic)
+elseif(APPLE)
+    enable_language(OBJCXX)
+    add_subdirectory(macos/ble-peripheral)
+else()
+    message(FATAL_ERROR "Shared-study native adapters are only supported on Windows and macOS")
+endif()

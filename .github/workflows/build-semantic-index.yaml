@@ -1,0 +1,143 @@
+name: Build optional Round 2 semantic index
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_release_tag:
+        description: Draft database release tag in arieldaniely/SeforimLibrary
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semantic-round2-index
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      db_tag: ${{ steps.release.outputs.db_tag }}
+    steps:
+      - name: Create unpublished release and pin database release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DB_TOKEN: ${{ secrets.SEFORIM_LIBRARY_TOKEN }}
+          DB_TAG: ${{ inputs.db_release_tag }}
+        run: |
+          set -euo pipefail
+          test -n "$DB_TOKEN" || { echo 'Add SEFORIM_LIBRARY_TOKEN with access to the draft database release'; exit 1; }
+          release_json=$(GH_TOKEN="$DB_TOKEN" gh api "repos/arieldaniely/SeforimLibrary/releases/tags/$DB_TAG")
+          test "$(jq -r .draft <<< "$release_json")" = true || { echo 'The database release must be a draft'; exit 1; }
+          jq -e '[.assets[].name | select(startswith("seforim_bundle.tar.zst.part"))] | length > 0' \
+            <<< "$release_json" > /dev/null
+          tag="semantic-round2-${GITHUB_RUN_ID}"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "Round 2 semantic index ($DB_TAG)" \
+            --notes "Draft optional Round 2 semantic-search bundle for draft database release $DB_TAG. Includes the 256-dimensional line index, ONNX model and matching tokenizer. Model attribution: Judaic Semantic Embedding project, Otzaria. License: CC BY-NC-SA 4.0."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "db_tag=$DB_TAG" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install archive tools
+        run: sudo apt-get update && sudo apt-get install -y zstd zip
+      - name: Download pinned database
+        env:
+          GH_TOKEN: ${{ secrets.SEFORIM_LIBRARY_TOKEN }}
+          DB_TAG: ${{ needs.prepare.outputs.db_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zayit-db"
+          mapfile -t parts < <(gh release view "$DB_TAG" --repo arieldaniely/SeforimLibrary \
+            --json assets --jq '.assets[].name | select(startswith("seforim_bundle.tar.zst.part"))' | sort)
+          test "${#parts[@]}" -gt 0
+          for part in "${parts[@]}"; do
+            gh release download "$DB_TAG" --repo arieldaniely/SeforimLibrary \
+              --pattern "$part" --output -
+          done | tar --use-compress-program=unzstd -xf - -C "$RUNNER_TEMP/zayit-db"
+          db_path=$(find "$RUNNER_TEMP/zayit-db" -name seforim.db -type f -print -quit)
+          test -n "$db_path"
+          echo "SEFORIM_DB=$db_path" >> "$GITHUB_ENV"
+      - name: Download approved gated Round 2 model
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$HF_TOKEN" || { echo 'Add HF_TOKEN with approved model access as a repository secret'; exit 1; }
+          mkdir -p "$RUNNER_TEMP/semantic-model"
+          for name in seforim-embed-round2-int8.onnx tokenizer.json; do
+            curl --fail --location --retry 3 -H "Authorization: Bearer $HF_TOKEN" \
+              "https://huggingface.co/ArieLLL123/judaic-semantic-round2-onnx-zayit/resolve/main/$name" \
+              -o "$RUNNER_TEMP/semantic-model/$name"
+          done
+          cd "$RUNNER_TEMP/semantic-model"
+          echo '659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8  seforim-embed-round2-int8.onnx' | sha256sum -c -
+          echo '0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9  tokenizer.json' | sha256sum -c -
+      - name: Build and publish one bundle part
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew -p SeforimLibrary :search:buildSemanticIndex \
+            "-PseforimDb=$SEFORIM_DB" \
+            "-PsemanticModelDir=$RUNNER_TEMP/semantic-model" \
+            "-PsemanticIndexDir=$RUNNER_TEMP/semantic-index" \
+            "-PshardIndex=$SHARD" -PshardCount=16 --no-daemon
+          shard_name=$(printf 'shard-%02d' "$SHARD")
+          archive="$RUNNER_TEMP/semantic-bundle-part-$(printf '%02d' "$SHARD").zip"
+          mkdir -p "$RUNNER_TEMP/semantic-package/index" "$RUNNER_TEMP/semantic-package/model"
+          mv "$RUNNER_TEMP/semantic-index/$shard_name" "$RUNNER_TEMP/semantic-package/index/$shard_name"
+          if [ "$SHARD" -eq 0 ]; then
+            cp "$RUNNER_TEMP/semantic-model/seforim-embed-round2-int8.onnx" "$RUNNER_TEMP/semantic-package/model/"
+            cp "$RUNNER_TEMP/semantic-model/tokenizer.json" "$RUNNER_TEMP/semantic-package/model/"
+            (cd "$RUNNER_TEMP/semantic-package" && zip -qr "$archive" "index/$shard_name" model)
+            db_sha=$(sha256sum "$SEFORIM_DB" | cut -d' ' -f1)
+            printf '{"format":"zayit-round2-1","databaseSha256":"%s","parts":16}\n' \
+              "$db_sha" > "$RUNNER_TEMP/semantic-bundle.json"
+            gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/semantic-bundle.json" --repo "$GITHUB_REPOSITORY"
+          else
+            (cd "$RUNNER_TEMP/semantic-package" && zip -qr "$archive" "index/$shard_name")
+          fi
+          test "$(stat -c %s "$archive")" -lt 2147483648
+          gh release upload "$RELEASE_TAG" "$archive" --repo "$GITHUB_REPOSITORY"
+
+  verify:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify complete draft bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          count=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '[.assets[].name | select(test("^semantic-bundle-part-[0-9]+\\.zip$"))] | length')
+          test "$count" -eq 16
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '[.assets[].name | select(. == "semantic-bundle.json")] | length' \
+            | grep -qx 1
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft \
+            | grep -qx true

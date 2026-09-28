@@ -4,15 +4,24 @@
 
 ## חבילת ההפצה
 
-האפליקציה מורידה חבילה שפורסמה ב־GitHub Releases של `arieldaniely/Zayit`, או מייבאת את כל חלקי ה־ZIP שלה מקבצים מקומיים. החבילה כוללת את `seforim-embed-round2-int8.onnx`, את `tokenizer.json` התואם ואת כל חלקי אינדקס Lucene. אין הורדה מ־Hugging Face באפליקציה. הקבצים מותקנים יחד תחת `<seforim.db>.semantic/` כדי שהחיפוש המילולי הבסיסי יישאר זמין ללא התקנתם. בהורדה האפליקציה קוראת תחילה את `semantic-bundle.json` הקטן ובוחרת רק Release שחתימת מסד הנתונים שלו תואמת למסד המותקן.
+האפליקציה מורידה חבילה שפורסמה ב־GitHub Releases של `arieldaniely/Zayit`, או מייבאת את כל חלקי ה־ZIP שלה מקבצים מקומיים. החבילה כוללת את `seforim-embed-round2-int8.onnx`, את `tokenizer.json` התואם ואת כל חלקי אינדקס Lucene. אין הורדה מ־Hugging Face באפליקציה. הקבצים מותקנים יחד תחת `<seforim.db>.semantic/` כדי שהחיפוש המילולי הבסיסי יישאר זמין ללא התקנתם. בהורדה האפליקציה קוראת תחילה את `semantic-bundle.json` הקטן ובוחרת רק Release שחתימת מסד הנתונים שלו תואמת למסד המותקן. חבילה בטיוטת Release אינה מופיעה להורדה הציבורית באפליקציה; יש להוריד אותה ידנית מתוך GitHub כשמחוברים לחשבון בעל גישה, ואז לייבא את חלקיה.
 
 לפני התקנה האפליקציה בודקת את חתימות SHA-256 של המודל והטוקנייזר, את נוכחות כל חלקי האינדקס, את ממד הווקטור (256) ואת SHA-256 של מסד הנתונים שממנו נבנה האינדקס. חבילה של גרסת מסד נתונים אחרת לא תותקן. יש לבחור **את כל** קובצי `semantic-bundle-part-XX.zip` יחד בייבוא מקומי.
 
 ## יצירת חבילה ב־GitHub Actions
 
-ה־workflow [`build-semantic-index.yaml`](../.github/workflows/build-semantic-index.yaml) מופעל ידנית. נדרש secret בשם `HF_TOKEN` עם גישה שאושרה למאגר המודל, לצורך *הבנייה בלבד*. ה־workflow מקבע גרסת מאגר נתונים מתוך `kdroidFilter/SeforimLibrary`, מוריד את מודל Round 2, בודק את חתימות הקבצים, ובונה 16 חלקי אינדקס במקביל. כל חלק הוא אינדקס Lucene עצמאי לשורות שמזהיהן שייכים לחלק; החלק הראשון מכיל גם את המודל והטוקנייזר. הפרסום נשאר טיוטה עד שכל 16 החלקים ו־`semantic-bundle.json` עלו.
+ה־workflow [`build-semantic-index.yaml`](../.github/workflows/build-semantic-index.yaml) מקבל את התג של **טיוטת** Release ב־`arieldaniely/SeforimLibrary`. הוא מוריד את מסד הנתונים מהטיוטה, בודק את חתימות קובצי מודל Round 2, ובונה 16 חלקי אינדקס במקביל. כל חלק הוא אינדקס Lucene עצמאי לשורות שמזהיהן שייכים לחלק; החלק הראשון מכיל גם את המודל והטוקנייזר. התוצאה עולה ל־Release חדש ב־`arieldaniely/Zayit` שנשאר **טיוטה גם אחרי שכל החלקים הושלמו**. ה־workflow מוודא את נוכחות 16 החלקים ואת `semantic-bundle.json` ואינו מפרסם אותם לציבור.
 
-על פי [תיעוד ה־runners של GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), שימוש ב־standard runners של מאגר ציבורי הוא בחינם ו־runner של Ubuntu מספק 4 CPU,‏ 16 GB RAM ו־14 GB אחסון. [מגבלת הזמן לכל job](https://docs.github.com/en/actions/reference/limits) היא שש שעות, ו[קובץ Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) מוגבל ל־2 GiB. לכן מספר החלקים נבחר ל־16, וכל חלק נבדק לפני העלאה. עדיין צריך להריץ את ה־workflow על מאגר הייצור ולמדוד זמן, גודל דיסק וכיסוי. אם חלק מסוים חורג ממגבלת הזמן או הדיסק, אפשר לבנות את אותו חלק על מכונת Kaggle באמצעות משימת Gradle שלהלן ולצרף אותו לטיוטת ה־Release לפני פרסום; יש להשתמש באותו מסד נתונים, מודל, טוקנייזר ומספר חלקים.
+כדי לבנות חבילה פרטית לבדיקה:
+
+1. ודאו שלטיוטת מסד הנתונים יש תג ושקובצי `seforim_bundle.tar.zst.part*` מצורפים אליה.
+2. הגדירו ב־`arieldaniely/Zayit` שני Actions secrets: ‏`HF_TOKEN` עם גישה מאושרת למודל, ו־`SEFORIM_LIBRARY_TOKEN` — fine-grained GitHub token של משתמש שרשאי לראות את טיוטת `arieldaniely/SeforimLibrary`, עם הרשאת Contents: read למאגר זה. `GITHUB_TOKEN` של Zayit אינו נותן גישה אוטומטית למאגר השני.
+3. אחרי שקובץ ה־workflow נמצא בענף ברירת המחדל של Zayit, פתחו Actions → Build optional Round 2 semantic index → Run workflow, הזינו `db_release_tag` כתג הטיוטה, והפעילו. GitHub דורש שקובץ workflow להפעלה ידנית יהיה בענף ברירת המחדל; אפשר לבחור את ענף הקוד הרצוי בתפריט ההפעלה.
+4. בסיום מוצלח, פתחו את טיוטת `semantic-round2-*` החדשה ב־Releases של Zayit. הורידו את כל קובצי `semantic-bundle-part-XX.zip` וייבאו אותם יחד מתוך חלונית התקנת החיפוש החכם באפליקציה. אין לבחור את `semantic-bundle.json` לייבוא. השאירו את שתי ה־Releases כטיוטות כל עוד החבילה מיועדת רק לבעלי גישת כתיבה למאגרים.
+
+[תיעוד GitHub על נראות טיוטות Release](https://docs.github.com/en/rest/releases/releases) קובע שרק משתמשים בעלי גישת push מקבלים אותן ברשימות ה־API. [הפעלה ידנית של workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) דורשת שקובץ ה־workflow יהיה בענף ברירת המחדל.
+
+על פי [תיעוד ה־runners של GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), שימוש ב־standard runners של מאגר ציבורי הוא בחינם ו־runner של Ubuntu מספק 4 CPU,‏ 16 GB RAM ו־14 GB אחסון. [מגבלת הזמן לכל job](https://docs.github.com/en/actions/reference/limits) היא שש שעות, ו[קובץ Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) מוגבל ל־2 GiB. לכן מספר החלקים נבחר ל־16, וכל חלק נבדק לפני העלאה. עדיין צריך להריץ את ה־workflow על מסד הנתונים המלא ולמדוד זמן, גודל דיסק וכיסוי. אם חלק מסוים חורג ממגבלת הזמן או הדיסק, אפשר לבנות את אותו חלק על מכונת Kaggle באמצעות משימת Gradle שלהלן ולצרף אותו לטיוטת ה־Release; יש להשתמש באותו מסד נתונים, מודל, טוקנייזר ומספר חלקים.
 
 ```bash
 ./gradlew -p SeforimLibrary :search:buildSemanticIndex \
@@ -22,7 +31,7 @@
   -PshardIndex=0 -PshardCount=16
 ```
 
-המודל דורש גישה מאושרת ב־Hugging Face *רק בסביבת הבנייה*. ה־workflow מפרסם עותק של המודל כחלק מהחבילה; לפני הפעלתו יש לוודא שההפצה תואמת למדיניות הפרסום הרצויה ולרישיון המודל (CC BY-NC-SA 4.0).
+המודל דורש גישה מאושרת ב־Hugging Face *רק בסביבת הבנייה*. ה־workflow אורז עותק של המודל בתוך הטיוטה; לפני פרסום עתידי לציבור יש לוודא שההפצה תואמת למדיניות הפרסום הרצויה ולרישיון המודל (CC BY-NC-SA 4.0).
 
 ## חוזה הקידוד
 

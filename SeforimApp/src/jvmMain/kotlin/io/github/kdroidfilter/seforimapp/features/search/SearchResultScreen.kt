@@ -91,6 +91,7 @@ import seforimapp.seforimapp.generated.resources.*
 data class SearchShellActions(
     val onSubmit: (query: String) -> Unit,
     val onQueryChange: (String) -> Unit,
+    val onModeChange: (io.github.kdroidfilter.seforimlibrary.search.SearchMode) -> Unit,
     val onGlobalExtendedChange: (Boolean) -> Unit,
     val onScroll: (anchorId: Long, anchorIndex: Int, index: Int, offset: Int) -> Unit,
     val onCancelSearch: () -> Unit,
@@ -112,6 +113,8 @@ private fun SearchToolbar(
     initialQuery: String,
     onSubmit: (query: String) -> Unit,
     onQueryChange: (String) -> Unit,
+    mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode,
+    onModeChange: (io.github.kdroidfilter.seforimlibrary.search.SearchMode) -> Unit,
     globalExtended: Boolean,
     onGlobalExtendedChange: (Boolean) -> Unit,
     baseBooksHadNoResults: Boolean = false,
@@ -168,6 +171,8 @@ private fun SearchToolbar(
                 androidx.compose.ui.text
                     .TextStyle(fontSize = 13.sp),
         )
+
+        SearchModePicker(mode, onModeChange)
 
         // Global extended toggle (default off → base books only)
         CustomToggleableChip(
@@ -534,6 +539,8 @@ private fun SearchResultContentMvi(
                     initialQuery = state.query,
                     onSubmit = actions.onSubmit,
                     onQueryChange = actions.onQueryChange,
+                    mode = state.mode,
+                    onModeChange = actions.onModeChange,
                     globalExtended = state.globalExtended,
                     onGlobalExtendedChange = actions.onGlobalExtendedChange,
                     baseBooksHadNoResults = state.baseBooksHadNoResults,

@@ -106,6 +106,8 @@ data class TocSuggestionDto(
 @Immutable
 data class SearchHomeUiState(
     val selectedFilter: SearchFilter = SearchFilter.TEXT,
+    val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
+        io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
     val globalExtended: Boolean = false,
     val suggestionsVisible: Boolean = false,
     val isReferenceLoading: Boolean = false,
@@ -646,6 +648,10 @@ class SearchHomeViewModel(
         _uiState.value = _uiState.value.copy(globalExtended = extended)
     }
 
+    fun onModeChange(mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode) {
+        _uiState.value = _uiState.value.copy(mode = mode)
+    }
+
     /**
      * Dismisses all suggestion popups. Called by the UI layer when navigating away from Home.
      */
@@ -728,6 +734,7 @@ class SearchHomeViewModel(
             val nextSearch =
                 (current.search ?: SearchPersistedState()).copy(
                     query = query,
+                    mode = selected.mode.name,
                     globalExtended = selected.globalExtended,
                     datasetScope = datasetScope,
                     filterCategoryId = filterCategoryId,

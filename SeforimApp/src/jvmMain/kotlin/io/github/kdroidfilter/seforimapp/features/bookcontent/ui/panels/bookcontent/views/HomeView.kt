@@ -54,6 +54,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
+import io.github.kdroidfilter.seforimlibrary.search.SearchMode
 import io.github.kdroidfilter.seforimapp.texteffects.TypewriterPlaceholder
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
@@ -125,6 +127,7 @@ data class HomeSearchCallbacks(
     val onTocQueryChanged: (String) -> Unit,
     val onFilterChange: (SearchFilter) -> Unit,
     val onGlobalExtendedChange: (Boolean) -> Unit,
+    val onModeChange: (SearchMode) -> Unit,
     val onSubmitTextSearch: (String) -> Unit,
     val onOpenReference: () -> Unit,
     val onPickCategory: (Category) -> Unit,
@@ -437,6 +440,8 @@ private fun HomeBody(
                                     },
                                 selectedFilter = searchUi.selectedFilter,
                                 onFilterChange = { searchCallbacks.onFilterChange(it) },
+                                mode = searchUi.mode,
+                                onModeChange = searchCallbacks.onModeChange,
                                 onSubmit =
                                     if (isReferenceMode) {
                                         { openReference() }
@@ -1200,6 +1205,8 @@ internal fun SearchBar(
     state: TextFieldState,
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
+    mode: SearchMode = SearchMode.FLEXIBLE,
+    onModeChange: (SearchMode) -> Unit = {},
     modifier: Modifier = Modifier,
     showToggle: Boolean = true,
     showIcon: Boolean = true,
@@ -1622,6 +1629,7 @@ internal fun SearchBar(
                             ) {
                                 // Chip visible seulement en mode TEXT
                                 if (selectedFilter == SearchFilter.TEXT) {
+                                    SearchModePicker(mode, onModeChange)
                                     CustomToggleableChip(
                                         checked = globalExtended,
                                         onClick = { newChecked ->
@@ -1883,6 +1891,7 @@ private fun HomeViewPreview() {
                 onTocQueryChanged = {},
                 onFilterChange = {},
                 onGlobalExtendedChange = {},
+                onModeChange = {},
                 onSubmitTextSearch = {},
                 onOpenReference = {},
                 onPickCategory = {},

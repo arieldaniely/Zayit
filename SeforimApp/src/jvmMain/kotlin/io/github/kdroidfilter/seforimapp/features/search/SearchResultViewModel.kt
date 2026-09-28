@@ -58,6 +58,8 @@ private const val LAZY_PAGE_SIZE = 25
 @Stable
 data class SearchUiState(
     val query: String = "",
+    val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
+        io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
     val globalExtended: Boolean = false,
     val baseBooksHadNoResults: Boolean = false,
     val isLoading: Boolean = false,
@@ -83,7 +85,7 @@ class SearchResultViewModel(
     @Assisted savedStateHandle: SavedStateHandle,
     private val persistedStore: TabPersistedStateStore,
     private val repository: SeforimRepository,
-    private val lucene: SearchEngine,
+    private val searchEngine: SearchEngine,
     private val titleUpdateManager: TabTitleUpdateManager,
     private val desktopManager: DesktopManager,
     private val historyStore: HistoryStore,
@@ -153,6 +155,10 @@ class SearchResultViewModel(
 
         data class SetQuery(
             val query: String,
+        ) : SearchResultEvents()
+
+        data class SetMode(
+            val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode,
         ) : SearchResultEvents()
 
         data object ExecuteSearch : SearchResultEvents()
@@ -229,6 +235,12 @@ class SearchResultViewModel(
                 setQuery(event.query)
             }
 
+            is SearchResultEvents.SetMode -> {
+                _uiState.value = _uiState.value.copy(mode = event.mode)
+                updatePersistedSearch { it.copy(mode = event.mode.name) }
+                executeSearch()
+            }
+
             is SearchResultEvents.ExecuteSearch -> {
                 executeSearch()
             }
@@ -284,6 +296,7 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState())
+    private val lucene: SearchEngine = ModeBoundSearchEngine(searchEngine) { _uiState.value.mode }
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     private var currentJob: Job? = null
 
@@ -626,6 +639,9 @@ class SearchResultViewModel(
         _uiState.value =
             _uiState.value.copy(
                 query = initialQuery,
+                mode = runCatching {
+                    io.github.kdroidfilter.seforimlibrary.search.SearchMode.valueOf(persisted.mode)
+                }.getOrDefault(io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE),
                 globalExtended = persisted.globalExtended,
                 scrollIndex = persisted.scrollIndex,
                 scrollOffset = persisted.scrollOffset,
@@ -946,6 +962,7 @@ class SearchResultViewModel(
                         }
 
                     var facets =
+                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) null else
                         lucene.computeFacets(
                             query = q,
                             near = DEFAULT_NEAR,

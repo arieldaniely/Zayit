@@ -199,33 +199,56 @@ def main(args: argparse.Namespace) -> None:
     vectors_dir = args.work / "vectors"
     vectors_dir.mkdir(exist_ok=True)
     embed_script = args.repo / "scripts/kaggle_embed_vectors.py"
-    processes = []
-    for gpu in range(2):
-        command = [
-            sys.executable, str(embed_script), "--db", str(database), "--checkpoint", str(checkpoint),
-            "--output", str(vectors_dir), "--gpu", str(gpu), "--gpus", "2", "--shards", "8",
-            "--batch", str(args.batch), "--onnx", str(model_dir / "seforim-embed-round2-int8.onnx"),
-        ]
-        if args.amp:
-            command.append("--amp")
-        processes.append(subprocess.Popen(command, env=env))
-    statuses = [process.wait() for process in processes]
-    if any(status != 0 for status in statuses):
-        raise RuntimeError(f"GPU encoding failed: {statuses}")
-    counts = [json.loads((vectors_dir / f"worker-{gpu}.json").read_text()) for gpu in range(2)]
-    print("GPU workers:", counts, flush=True)
+    worker_files = [vectors_dir / f"worker-{gpu}.json" for gpu in range(2)]
+    vector_files = [vectors_dir / f"shard-{shard:02d}.bin" for shard in range(8)]
+    index = args.work / "index"
+    has_workers = all(f.is_file() for f in worker_files)
+    has_vectors = any(f.is_file() for f in vector_files)
+    has_indexed = any((index / f"shard-{shard:02d}" / "semantic.properties").is_file() for shard in range(8))
+
+    if has_workers and (has_vectors or has_indexed):
+        print("GPU encoding already completed; skipping vector generation", flush=True)
+        counts = [json.loads(f.read_text()) for f in worker_files]
+        print("GPU workers:", counts, flush=True)
+    else:
+        processes = []
+        for gpu in range(2):
+            command = [
+                sys.executable, str(embed_script), "--db", str(database), "--checkpoint", str(checkpoint),
+                "--output", str(vectors_dir), "--gpu", str(gpu), "--gpus", "2", "--shards", "8",
+                "--batch", str(args.batch), "--onnx", str(model_dir / "seforim-embed-round2-int8.onnx"),
+            ]
+            if args.amp:
+                command.append("--amp")
+            processes.append(subprocess.Popen(command, env=env))
+        statuses = [process.wait() for process in processes]
+        if any(status != 0 for status in statuses):
+            raise RuntimeError(f"GPU encoding failed: {statuses}")
+        counts = [json.loads((vectors_dir / f"worker-{gpu}.json").read_text()) for gpu in range(2)]
+        print("GPU workers:", counts, flush=True)
 
     library = args.repo / "SeforimLibrary"
     gradle = library / "gradlew"
     gradle.chmod(gradle.stat().st_mode | 0o111)
-    index = args.work / "index"
+    index.mkdir(exist_ok=True)
     for shard in range(8):
+        shard_dir = index / f"shard-{shard:02d}"
+        manifest = shard_dir / "semantic.properties"
         vector_file = vectors_dir / f"shard-{shard:02d}.bin"
+        if manifest.is_file():
+            content = manifest.read_text(encoding="utf-8", errors="ignore")
+            if f"shardIndex={shard}" in content and "indexed=" in content:
+                print(f"Skipping already indexed shard {shard}/8", flush=True)
+                vector_file.unlink(missing_ok=True)
+                continue
+        if not vector_file.is_file():
+            raise FileNotFoundError(f"Missing vector file for shard {shard}: {vector_file}")
         run_command([
             str(gradle), ":search:buildSemanticIndexFromVectors",
             f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
             f"-PsemanticVectors={vector_file}", f"-PsemanticIndexDir={index}",
-            f"-PshardIndex={shard}", "-PshardCount=8", "--no-daemon", "--max-workers=4",
+            f"-PshardIndex={shard}", "-PshardCount=8",
+            "--no-daemon", "--no-configuration-cache", "--max-workers=4",
         ], cwd=library, env=env)
         vector_file.unlink()
 
@@ -234,7 +257,7 @@ def main(args: argparse.Namespace) -> None:
         str(gradle), ":packaging:packageSemanticBundle",
         f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
         f"-PsemanticIndexDir={index}", f"-PsemanticBundleOutput={archive}",
-        "--no-daemon", "--max-workers=4",
+        "--no-daemon", "--no-configuration-cache", "--max-workers=4",
     ], cwd=library, env=env)
     outputs = sorted(args.output.glob("semantic-bundle.tar.zst*"))
     manifest = args.output / "semantic-bundle.json"

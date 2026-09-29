@@ -93,15 +93,14 @@ def load_model(checkpoint: Path, device: torch.device) -> tuple[PreTrainedTokeni
     metadata = json.loads((checkpoint / "sentence_encoder_config.json").read_text(encoding="utf-8"))
     assert int(metadata["embedding_dim"]) == 256
     assert metadata["passage_prefix"] == "[PASSAGE]"
-    try:
-        tokenizer = PreTrainedTokenizerFast.from_pretrained(checkpoint / "tokenizer")
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(checkpoint / "tokenizer", use_fast=True)
-    if tokenizer.pad_token is None:
-        for candidate in ("[PAD]", "<pad>"):
-            if candidate in tokenizer.get_vocab():
-                tokenizer.pad_token = candidate
-                break
+    tokenizer_file = checkpoint / "tokenizer" / "tokenizer.json"
+    tokenizer = PreTrainedTokenizerFast(tokenizer_file=str(tokenizer_file))
+    vocab = tokenizer.get_vocab()
+    for name, candidate in (("pad_token", "[PAD]"), ("unk_token", "[UNK]"),
+                            ("cls_token", "[CLS]"), ("sep_token", "[SEP]"),
+                            ("mask_token", "[MASK]")):
+        if getattr(tokenizer, name) is None and candidate in vocab:
+            setattr(tokenizer, name, candidate)
     backbone = BertModel.from_pretrained(checkpoint / "backbone")
     model = SentenceEncoder(backbone, 256)
     weights = load_file(str(checkpoint / "projection.safetensors"), device="cpu")

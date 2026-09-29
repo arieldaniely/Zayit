@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from safetensors.torch import load_file
-from transformers import AutoTokenizer, BertModel
+from transformers import AutoTokenizer, BertModel, PreTrainedTokenizerFast
 
 
 MARKS = re.compile(r"[\u0591-\u05BD\u05BF-\u05C7]")
@@ -89,11 +89,19 @@ class SentenceEncoder(nn.Module):
         return F.normalize(self.projection_norm(self.projection(pooled)).float(), p=2, dim=1)
 
 
-def load_model(checkpoint: Path, device: torch.device) -> tuple[AutoTokenizer, SentenceEncoder]:
+def load_model(checkpoint: Path, device: torch.device) -> tuple[PreTrainedTokenizerFast, SentenceEncoder]:
     metadata = json.loads((checkpoint / "sentence_encoder_config.json").read_text(encoding="utf-8"))
     assert int(metadata["embedding_dim"]) == 256
     assert metadata["passage_prefix"] == "[PASSAGE]"
-    tokenizer = AutoTokenizer.from_pretrained(checkpoint / "tokenizer", use_fast=True)
+    try:
+        tokenizer = PreTrainedTokenizerFast.from_pretrained(checkpoint / "tokenizer")
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(checkpoint / "tokenizer", use_fast=True)
+    if tokenizer.pad_token is None:
+        for candidate in ("[PAD]", "<pad>"):
+            if candidate in tokenizer.get_vocab():
+                tokenizer.pad_token = candidate
+                break
     backbone = BertModel.from_pretrained(checkpoint / "backbone")
     model = SentenceEncoder(backbone, 256)
     weights = load_file(str(checkpoint / "projection.safetensors"), device="cpu")

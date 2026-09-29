@@ -4,9 +4,40 @@
 
 ## חבילת ההפצה
 
-האפליקציה מורידה חבילה שפורסמה ב־GitHub Releases של `arieldaniely/Zayit`, או מייבאת את כל חלקי ה־ZIP שלה מקבצים מקומיים. החבילה כוללת את `seforim-embed-round2-int8.onnx`, את `tokenizer.json` התואם ואת כל חלקי אינדקס Lucene. אין הורדה מ־Hugging Face באפליקציה. הקבצים מותקנים יחד תחת `<seforim.db>.semantic/` כדי שהחיפוש המילולי הבסיסי יישאר זמין ללא התקנתם. בהורדה האפליקציה קוראת תחילה את `semantic-bundle.json` הקטן ובוחרת רק Release שחתימת מסד הנתונים שלו תואמת למסד המותקן. חבילה בטיוטת Release אינה מופיעה להורדה הציבורית באפליקציה; יש להוריד אותה ידנית מתוך GitHub כשמחוברים לחשבון בעל גישה, ואז לייבא את חלקיה.
+האפליקציה מורידה חבילה שפורסמה ב־GitHub Releases של `arieldaniely/Zayit`, או מייבאת `semantic-bundle.tar.zst` מקומי (או את כל קובצי `semantic-bundle.tar.zst.partXX` כאשר החבילה פוצלה). החבילה כוללת את `seforim-embed-round2-int8.onnx`, את `tokenizer.json` התואם ואת כל חלקי אינדקס Lucene. אין הורדה מ־Hugging Face באפליקציה. הקבצים מותקנים יחד תחת `<seforim.db>.semantic/` כדי שהחיפוש המילולי הבסיסי יישאר זמין ללא התקנתם. בהורדה האפליקציה קוראת תחילה את `semantic-bundle.json` הקטן ובוחרת רק Release שחתימת מסד הנתונים שלו תואמת למסד המותקן. חבילה בטיוטת Release אינה מופיעה להורדה הציבורית באפליקציה; יש להוריד אותה ידנית מתוך GitHub כשמחוברים לחשבון בעל גישה, ואז לייבא את חלקיה. האפליקציה עדיין מקבלת חבילות ZIP שנוצרו על ידי ה־workflow הקודם.
 
-לפני התקנה האפליקציה בודקת את חתימות SHA-256 של המודל והטוקנייזר, את נוכחות כל חלקי האינדקס, את ממד הווקטור (256) ואת SHA-256 של מסד הנתונים שממנו נבנה האינדקס. חבילה של גרסת מסד נתונים אחרת לא תותקן. יש לבחור **את כל** קובצי `semantic-bundle-part-XX.zip` יחד בייבוא מקומי.
+לפני התקנה האפליקציה בודקת את חתימות SHA-256 של המודל והטוקנייזר, את נוכחות כל חלקי האינדקס, את ממד הווקטור (256) ואת SHA-256 של מסד הנתונים שממנו נבנה האינדקס. חבילה של גרסת מסד נתונים אחרת לא תותקן. בחבילה מפוצלת יש לבחור **את כל** החלקים יחד בייבוא מקומי; אין לבחור את `semantic-bundle.json`.
+
+## יצירה מקומית ממסד הנתונים המותקן
+
+כדי שהאינדקס יתאים בדיוק למסד הנתונים במחשב, השתמשו ב־`seforim.db` שמותקן ב־Zayit. ב־Windows מיקומו בדרך כלל `%APPDATA%\io.github.kdroidfilter.seforimapp\databases\seforim.db`. הסקריפט בונה שמונה חלקי אינדקס באופן סדרתי, משתמש בשמונה עובדים בכל חלק, ומדלג על חלקים שהושלמו אם מריצים אותו שוב. התהליך עשוי לקחת שעות רבות ומשתמש במעבד ובשטח דיסק משמעותיים. רצוי לסגור את Zayit ולא לשנות את מסד הנתונים בזמן הבנייה.
+
+```powershell
+$env:JAVA_HOME = 'C:\path\to\jdk-25'
+.\scripts\build-local-semantic-index.ps1 `
+  -Database "$env:APPDATA\io.github.kdroidfilter.seforimapp\databases\seforim.db" `
+  -ModelDirectory 'C:\path\to\zayit-round2-onnx' `
+  -OutputDirectory '.semantic-local-output\index'
+```
+
+לאחר השלמת כל החלקים, משימת האריזה מוודאת את האינדקס מול המסד והמודל, ויוצרת קובץ zstd יחיד אם גודלו עד כ־1.9 GiB; אם הוא גדול יותר, היא יוצרת חלקים של אותו זרם דחוס. `semantic-bundle.json` מיועד לפרסום ב־Release ולבחירת החבילה הנכונה להורדה, אך אינו נחוץ בייבוא המקומי.
+
+```powershell
+cd SeforimLibrary
+.\gradlew.bat :packaging:packageSemanticBundle `
+  "-PseforimDb=$env:APPDATA\io.github.kdroidfilter.seforimapp\databases\seforim.db" `
+  '-PsemanticModelDir=C:\path\to\zayit-round2-onnx' `
+  '-PsemanticIndexDir=..\.semantic-local-output\index' `
+  '-PsemanticBundleOutput=..\.semantic-local-output\semantic-bundle.tar.zst'
+```
+
+אפשר להעלות את הקובץ או את כל חלקיו יחד עם `semantic-bundle.json` ל־Release טיוטה של Zayit. אם רוצים שהוא יהיה זמין להורדה מתוך האפליקציה לכל משתמש עם מסד תואם, יש לפרסם את ה־Release.
+
+## בנייה ב־Kaggle עם שני T4
+
+המחברת [`build_semantic_index_kaggle_t4x2.ipynb`](../notebooks/build_semantic_index_kaggle_t4x2.ipynb) מורידה את `seforim_bundle.tar.zst.part01/02` מ־[גרסת v2-20260814115718](https://github.com/arieldaniely/SeforimLibrary/releases/tag/v2-20260814115718), בודקת את חתימות הקבצים שפורסמו, ומחלצת את `seforim.db`. היא מקודדת את שורות המסד באצוות על שני T4, בונה שמונה חלקי Lucene מקובצי הווקטורים, ומפיקה את חבילת `tar.zst` עם המודל והטוקנייזר. צריך להפעיל Internet ולבחור GPU T4 x2 בהגדרות המחברת, ולהגדיר את `HF_TOKEN` ב־Kaggle Secrets עם גישה מאושרת למאגרי המודל. מודל ה־ONNX אינו יורד מה־Hugging Face באפליקציה עצמה.
+
+החבילה שתיווצר תתאים למסד של ה־Release הזה בלבד. אם ה־DB המותקן במחשב שונה, יש להתקין את אותה גרסת מסד או לבנות אינדקס מהמסד המותקן. ל־Kaggle מגבלת הרצה של 12 שעות ומגבלת פלט נשמר של 20 GiB; המחברת שומרת את נתוני הביניים בתיקיית scratch ומותירה בתיקיית הפלט רק את קובצי ההפצה. זמן הבנייה בפועל יימדד רק בהרצה מלאה.
 
 ## יצירת חבילה ב־GitHub Actions
 

@@ -840,9 +840,9 @@
     <string name="search_mode_flexible">גמיש</string>
     <string name="search_mode_smart">חכם</string>
     <string name="semantic_install_title">התקנת חיפוש חכם</string>
-    <string name="semantic_install_body">חיפוש חכם דורש חבילת הפצה הכוללת מודל, טוקנייזר ואינדקס תואם למסד הנתונים. אפשר להוריד את החבילה שפורסמה או לייבא את כל חלקי ה־ZIP שלה מהמחשב.</string>
+    <string name="semantic_install_body">חיפוש חכם דורש חבילת הפצה הכוללת מודל, טוקנייזר ואינדקס תואם למסד הנתונים. אפשר להוריד את החבילה שפורסמה או לייבא קובץ tar.zst או את כל חלקיו מהמחשב.</string>
     <string name="semantic_install_busy">מתקין ומאמת קבצים…</string>
     <string name="semantic_install_close">סגור</string>
     <string name="semantic_download_bundle">הורד חבילה</string>
-    <string name="semantic_import_bundle">ייבא קובצי ZIP</string>
+    <string name="semantic_import_bundle">ייבא חבילת חיפוש</string>
 </resources>

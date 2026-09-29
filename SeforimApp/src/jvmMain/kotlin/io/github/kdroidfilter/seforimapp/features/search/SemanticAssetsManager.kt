@@ -1,11 +1,14 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
+import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimlibrary.search.VectorSearcher
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import java.io.SequenceInputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -15,6 +18,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Comparator
+import java.util.Collections
 import java.util.zip.ZipInputStream
 
 /** Installs a complete, versioned index and model bundle beside the database. */
@@ -39,11 +43,25 @@ internal object SemanticAssetsManager {
     @Synchronized
     fun importBundle(archives: List<Path>) {
         require(archives.isNotEmpty()) { "יש לבחור את כל חלקי חבילת החיפוש" }
+        val names = archives.map { it.fileName.toString() }
+        val isZip = names.all { it.endsWith(".zip", ignoreCase = true) }
+        val isSingleZstd = names.size == 1 && names.single().endsWith(".tar.zst", ignoreCase = true)
+        val partPattern = Regex("semantic-bundle\\.tar\\.zst\\.part(\\d+)")
+        val partNumbers = names.map { partPattern.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val isSplitZstd = partNumbers.all { it != null } && partNumbers.filterNotNull().sorted() ==
+            (1..archives.size).toList()
+        require(isZip || isSingleZstd || isSplitZstd) { "בחרו קובץ tar.zst אחד או את כל חלקיו לפי הסדר" }
         val stage = Files.createTempDirectory(db.parent, "semantic-bundle-")
         val backup = stage.resolveSibling("${stage.fileName}-backup")
         try {
-            var extracted = 0L
-            archives.forEach { extracted = extract(it, stage, extracted) }
+            if (isZip) {
+                var extracted = 0L
+                archives.forEach { extracted = extractZip(it, stage, extracted) }
+            } else {
+                extractTarZstd(if (isSingleZstd) archives else archives.sortedBy {
+                    partPattern.matchEntire(it.fileName.toString())!!.groupValues[1].toInt()
+                }, stage)
+            }
             verify(stage)
             if (Files.exists(assetRoot)) Files.move(assetRoot, backup, StandardCopyOption.ATOMIC_MOVE)
             try {
@@ -68,28 +86,40 @@ internal object SemanticAssetsManager {
         val releases = Json.parseToJsonElement(response.body()).jsonArray.filter {
             it.jsonObject["tag_name"]?.jsonPrimitive?.content?.startsWith("semantic-round2-") == true
         }
-        val release = releases.firstOrNull { entry ->
+        val selected = releases.mapNotNull { entry ->
             val manifestUrl = entry.jsonObject["assets"]?.jsonArray.orEmpty()
                 .firstOrNull { it.jsonObject["name"]?.jsonPrimitive?.content == "semantic-bundle.json" }
-                ?.jsonObject?.get("browser_download_url")?.jsonPrimitive?.content ?: return@firstOrNull false
+                ?.jsonObject?.get("browser_download_url")?.jsonPrimitive?.content ?: return@mapNotNull null
             val manifestResponse = client.send(
                 HttpRequest.newBuilder(URI.create(manifestUrl)).header("User-Agent", "Zayit-Semantic-Search").build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
-            manifestResponse.statusCode() == 200 && runCatching {
-                val manifest = Json.parseToJsonElement(manifestResponse.body()).jsonObject
+            if (manifestResponse.statusCode() != 200) return@mapNotNull null
+            val manifest = runCatching {
+                Json.parseToJsonElement(manifestResponse.body()).jsonObject
+            }.getOrNull() ?: return@mapNotNull null
+            val compatible = runCatching {
                 manifest["format"]?.jsonPrimitive?.content == "zayit-round2-1" &&
                     manifest["databaseSha256"]?.jsonPrimitive?.content == databaseSha &&
-                    manifest["parts"]?.jsonPrimitive?.content == "16"
+                    (manifest["parts"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0) > 0
             }.getOrDefault(false)
-        } ?: error("לא פורסמה חבילת חיפוש חכם התואמת למסד הנתונים המותקן")
+            if (compatible) entry to manifest else null
+        }.firstOrNull() ?: error("לא פורסמה חבילת חיפוש חכם התואמת למסד הנתונים המותקן")
+        val (release, manifest) = selected
+        val archiveType = manifest["archiveType"]?.jsonPrimitive?.content ?: "zip"
+        val expectedParts = manifest["parts"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
         val assets = release.jsonObject["assets"]?.jsonArray.orEmpty().mapNotNull { asset ->
             val obj = asset.jsonObject
             val name = obj["name"]?.jsonPrimitive?.content ?: return@mapNotNull null
             val url = obj["browser_download_url"]?.jsonPrimitive?.content ?: return@mapNotNull null
-            if (Regex("semantic-bundle-part-\\d+\\.zip").matches(name)) name to url else null
+            val matches = if (archiveType == "tar.zst") {
+                name == "semantic-bundle.tar.zst" || Regex("semantic-bundle\\.tar\\.zst\\.part\\d+").matches(name)
+            } else {
+                Regex("semantic-bundle-part-\\d+\\.zip").matches(name)
+            }
+            if (matches) name to url else null
         }.sortedBy { it.first }
-        require(assets.size == 16) { "חבילת החיפוש שפורסמה אינה כוללת את כל 16 החלקים" }
+        require(assets.size == expectedParts) { "חבילת החיפוש שפורסמה אינה כוללת את כל החלקים" }
         val downloadDir = Files.createTempDirectory(db.parent, "semantic-download-")
         try {
             val archives = assets.map { (name, url) ->
@@ -115,19 +145,13 @@ internal object SemanticAssetsManager {
         VectorSearcher(root.resolve("index"), 256, db, modelDir).use { }
     }
 
-    private fun extract(archive: Path, stage: Path, previousBytes: Long): Long {
+    private fun extractZip(archive: Path, stage: Path, previousBytes: Long): Long {
         var total = previousBytes
         ZipInputStream(Files.newInputStream(archive)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
                 val name = entry.name.replace('\\', '/')
-                val valid = name == "model/" || name == "index/" ||
-                    name.matches(Regex("model/(?:$MODEL_NAME|tokenizer\\.json)")) ||
-                    name.matches(Regex("index/shard-\\d+/?")) ||
-                    name.matches(Regex("index/shard-\\d+/[^/]+"))
-                require(valid) { "מבנה חבילת החיפוש אינו תקין" }
-                val path = stage.resolve(name).normalize()
-                require(path.startsWith(stage)) { "נתיב לא תקין בחבילה" }
+                val path = entryPath(stage, name)
                 if (entry.isDirectory) {
                     Files.createDirectories(path)
                 } else {
@@ -147,6 +171,42 @@ internal object SemanticAssetsManager {
             }
         }
         return total
+    }
+
+    private fun extractTarZstd(archives: List<Path>, stage: Path) {
+        val inputs = archives.map { Files.newInputStream(it) }
+        SequenceInputStream(Collections.enumeration(inputs)).use { joined ->
+            ZstdInputStream(joined).use { zstd ->
+                TarArchiveInputStream(zstd).use { tar ->
+                    var total = 0L
+                    while (true) {
+                        val entry = tar.nextEntry ?: break
+                        require(!entry.isSymbolicLink && !entry.isLink) { "קישור אינו מותר בחבילה" }
+                        val path = entryPath(stage, entry.name.replace('\\', '/'))
+                        if (entry.isDirectory) {
+                            Files.createDirectories(path)
+                        } else {
+                            require(entry.isFile && entry.size >= 0) { "רשומה לא תקינה בחבילה" }
+                            total += entry.size
+                            require(total <= 20L * 1024 * 1024 * 1024) { "חבילת החיפוש גדולה מדי" }
+                            Files.createDirectories(path.parent)
+                            Files.newOutputStream(path).use { output -> tar.copyTo(output, 64 * 1024) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun entryPath(stage: Path, name: String): Path {
+        val valid = name == "model/" || name == "index/" ||
+            name.matches(Regex("model/(?:$MODEL_NAME|tokenizer\\.json)")) ||
+            name.matches(Regex("index/shard-\\d+/?")) ||
+            name.matches(Regex("index/shard-\\d+/[^/]+"))
+        require(valid) { "מבנה חבילת החיפוש אינו תקין: $name" }
+        return stage.resolve(name).normalize().also { path ->
+            require(path.startsWith(stage)) { "נתיב לא תקין בחבילה" }
+        }
     }
 
     private fun hash(path: Path): String {

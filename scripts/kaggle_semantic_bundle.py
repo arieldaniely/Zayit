@@ -123,9 +123,9 @@ def fetch_models(work: Path) -> tuple[Path, Path]:
     token = get_hf_token()
     source = Path(snapshot_download(
         repo_id=SOURCE_REPO, revision=SOURCE_REVISION, token=token,
-        allow_patterns=["final/*", "final/**/*"],
+        allow_patterns=["round2/final/*", "round2/final/**/*"],
         local_dir=work / "checkpoint-download",
-    )) / "final"
+    )) / "round2" / "final"
     for name in ("sentence_encoder_config.json", "projection.safetensors", "backbone/model.safetensors",
                  "backbone/config.json", "tokenizer/tokenizer.json"):
         if not (source / name).is_file():

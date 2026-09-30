@@ -189,48 +189,58 @@ fun SearchModePicker(
                 Column(
                     modifier =
                         Modifier
-                            .width(272.dp)
-                            .shadow(8.dp, RoundedCornerShape(20.dp))
-                            .clip(RoundedCornerShape(20.dp))
+                            .width(252.dp)
+                            .shadow(8.dp, RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(background)
-                            .border(1.dp, border, RoundedCornerShape(20.dp))
-                            .padding(16.dp),
+                            .border(1.dp, border, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(options[selectedIndex], color = accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text(descriptions[selectedIndex], color = textColor, fontSize = 12.sp)
                     val validating = checking || availability == SemanticAssetsManager.Availability.VALIDATING
-                    if (validating) Text(stringResource(Res.string.semantic_validating), fontSize = 12.sp)
-                    if (availability == SemanticAssetsManager.Availability.INVALID) {
-                        Text(stringResource(Res.string.semantic_invalid_bundle), fontSize = 12.sp)
-                    }
+                    Text(options[selectedIndex], color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (validating) stringResource(Res.string.semantic_validating) else descriptions[selectedIndex],
+                        color = textColor,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
                     val position by animateFloatAsState(selectedIndex.toFloat(), tween(220))
                     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(border.copy(alpha = 0.35f)),
+                            .height(28.dp),
                     ) {
-                        if (smartActive) SmartModeGlow(accent, Modifier.fillMaxSize())
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(24.dp)
+                                .align(Alignment.Center)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(border.copy(alpha = 0.35f)),
+                        ) {
+                            if (smartActive) SmartModeGlow(accent, Modifier.fillMaxSize())
+                        }
                         Canvas(Modifier.fillMaxSize()) {
-                            val step = size.width / 3f
-                            val center = step * (if (rtl) 2f - position else position) + step / 2f
+                            val inset = 14.dp.toPx()
+                            val step = (size.width - inset * 2f) / 2f
+                            val center = inset + step * (if (rtl) 2f - position else position)
                             if (mode != SearchMode.SMART) {
                                 val edge = if (rtl) size.width else 0f
                                 drawRoundRect(
                                     accent,
-                                    topLeft = Offset(minOf(edge, center), 0f),
+                                    topLeft = Offset(minOf(edge, center), 2.dp.toPx()),
                                     size =
                                         androidx.compose.ui.geometry
-                                            .Size(kotlin.math.abs(edge - center), size.height),
-                                    cornerRadius = CornerRadius(size.height / 2),
+                                            .Size(kotlin.math.abs(edge - center), 24.dp.toPx()),
+                                    cornerRadius = CornerRadius(12.dp.toPx()),
                                 )
                             }
                             repeat(3) { index ->
-                                drawCircle(textColor.copy(alpha = 0.25f), 2.dp.toPx(), Offset(step * (index + 0.5f), size.height / 2))
+                                drawCircle(textColor.copy(alpha = 0.25f), 2.dp.toPx(), Offset(inset + step * index, size.height / 2))
                             }
                             drawCircle(Color.Black.copy(alpha = 0.12f), 15.dp.toPx(), Offset(center, size.height / 2 + 1.dp.toPx()))
                             drawCircle(Color.White, 14.dp.toPx(), Offset(center, size.height / 2))
@@ -248,28 +258,12 @@ fun SearchModePicker(
                                             onClick = { selectMode(index) },
                                         ).semantics { contentDescription = options[index] }
                                         .pointerHoverIcon(PointerIcon.Hand),
-                                )
+                                ) {
+                                    Tooltip(tooltip = { Text(options[index]) }) {
+                                        Box(Modifier.fillMaxSize())
+                                    }
+                                }
                             }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth()) {
-                        options.forEachIndexed { index, label ->
-                            Text(
-                                label,
-                                color = if (index == selectedIndex) accent else textColor,
-                                fontSize = 12.sp,
-                                fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Normal,
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .selectable(
-                                            selected = index == selectedIndex,
-                                            enabled = index != 2 || !validating,
-                                            role = Role.RadioButton,
-                                            onClick = { selectMode(index) },
-                                        ).padding(4.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            )
                         }
                     }
                 }

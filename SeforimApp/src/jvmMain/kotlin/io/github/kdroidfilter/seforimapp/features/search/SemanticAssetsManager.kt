@@ -47,16 +47,11 @@ internal object SemanticAssetsManager {
             return false
         }
         return try {
-            val stamp =
-                Files.walk(assetRoot).use { paths ->
-                    (paths.filter { Files.isRegularFile(it) }.toList() + db).sorted().map {
-                        "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
-                    }
-                }
+            val stamp = semanticBundleStamp(assetRoot, db)
             if (stamp != validatedStamp) {
                 _availability.value = Availability.VALIDATING
-                validatedStamp = stamp
                 validate()
+                validatedStamp = stamp
                 _availability.value = Availability.READY
             }
             _availability.value == Availability.READY
@@ -364,3 +359,14 @@ internal object SemanticAssetsManager {
         }
     }
 }
+
+/** Path is Iterable<Path>; wrap the database to append the file, rather than its path components. */
+internal fun semanticBundleStamp(
+    root: Path,
+    database: Path,
+): List<String> =
+    Files.walk(root).use { paths ->
+        (paths.filter { Files.isRegularFile(it) }.toList() + listOf(database)).sorted().map {
+            "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
+        }
+    }

@@ -73,6 +73,8 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -207,7 +209,7 @@ fun SearchResultInBookShellMvi(
     tocCounts: Map<Long, Int>,
     tocTree: TocTree?,
     bookCounts: Map<Long, Int>,
-    loadBookHits: suspend (Long) -> List<SearchResult>,
+    loadBookHits: (Long) -> kotlinx.coroutines.flow.Flow<List<SearchResult>>,
     actions: SearchShellActions,
 ) {
     val tabId = bookUiState.tabId
@@ -363,7 +365,7 @@ private fun SearchResultContentMvi(
     isFiltering: Boolean,
     breadcrumbs: ImmutableMap<Long, List<String>>,
     bookCounts: Map<Long, Int>,
-    loadBookHits: suspend (Long) -> List<SearchResult>,
+    loadBookHits: (Long) -> kotlinx.coroutines.flow.Flow<List<SearchResult>>,
     actions: SearchShellActions,
     tabId: String,
     modifier: Modifier = Modifier,
@@ -386,6 +388,7 @@ private fun SearchResultContentMvi(
     val expandedBooks =
         remember(
             state.query,
+            state.mode,
             state.globalExtended,
             state.scopeCategoryPath.lastOrNull()?.id,
             state.scopeBook?.id,
@@ -394,12 +397,25 @@ private fun SearchResultContentMvi(
     val expandedHits =
         remember(
             state.query,
+            state.mode,
             state.globalExtended,
             state.scopeCategoryPath.lastOrNull()?.id,
             state.scopeBook?.id,
             state.scopeTocId,
         ) { mutableStateMapOf<Long, List<SearchResult>>() }
     val contentScope = rememberCoroutineScope()
+    val expansionJobs =
+        remember(
+            state.query,
+            state.mode,
+            state.globalExtended,
+            state.scopeCategoryPath.lastOrNull()?.id,
+            state.scopeBook?.id,
+            state.scopeTocId,
+        ) { mutableMapOf<Long, Job>() }
+    DisposableEffect(expansionJobs) {
+        onDispose { expansionJobs.values.forEach { it.cancel() } }
+    }
     val currentLoadBookHits by rememberUpdatedState(loadBookHits)
     val onToggleExpand: (BookGroup) -> Unit = { group ->
         val id = group.bookId
@@ -408,11 +424,13 @@ private fun SearchResultContentMvi(
         } else {
             expandedBooks[id] = true
             val loadedCount = 1 + group.secondaries.size
-            if (group.totalCount > loadedCount && id !in expandedHits) {
-                contentScope.launch {
-                    // Always store (even an empty result) so the loading spinner resolves.
-                    expandedHits[id] = runCatching { currentLoadBookHits(id) }.getOrDefault(emptyList())
-                }
+            if (group.totalCount > loadedCount && id !in expandedHits && expansionJobs[id]?.isActive != true) {
+                expansionJobs[id] =
+                    contentScope.launch {
+                        currentLoadBookHits(id)
+                            .catch { expandedHits.putIfAbsent(id, emptyList()) }
+                            .collect { hits -> expandedHits[id] = hits }
+                    }
             }
         }
     }
@@ -546,6 +564,9 @@ private fun SearchResultContentMvi(
                     baseBooksHadNoResults = state.baseBooksHadNoResults,
                 )
 
+                if (state.semanticFallback) {
+                    Text(stringResource(Res.string.semantic_unavailable), modifier = Modifier.padding(top = 8.dp))
+                }
                 Spacer(Modifier.height(12.dp))
                 val loadedResults = maxOf(state.progressCurrent, visibleResults.size)
                 val totalResults =

@@ -849,4 +849,15 @@
     <string name="semantic_install_close">סגור</string>
     <string name="semantic_download_bundle">הורד חבילה</string>
     <string name="semantic_import_bundle">ייבא חבילת חיפוש</string>
+    <string name="search_mode_choose">בחר סוג חיפוש</string>
+    <string name="search_mode_exact_description">התאמה מדויקת למילות החיפוש</string>
+    <string name="search_mode_flexible_description">התאמה גם להטיות ולמילים קרובות</string>
+    <string name="search_mode_smart_description">חיפוש משולב לפי מילים ומשמעות</string>
+    <string name="semantic_validating">בודק זמינות חיפוש חכם…</string>
+    <string name="semantic_unavailable">חיפוש חכם אינו זמין. החיפוש עבר למצב גמיש.</string>
+    <string name="semantic_install_error">לא ניתן להתקין את חבילת החיפוש. יש לבדוק את החיבור ואת הקבצים ולנסות שוב.</string>
+    <string name="semantic_download_error">הורדת החבילה נכשלה. יש לבדוק את החיבור ולנסות שוב.</string>
+    <string name="semantic_no_compatible_bundle">לא נמצאה חבילת חיפוש חכם התואמת למאגר המותקן.</string>
+    <string name="semantic_invalid_bundle">המודל או האינדקס אינם תקינים או אינם תואמים למאגר המותקן. יש להתקין חבילה מתאימה.</string>
+    <string name="semantic_download_progress">מוריד חלק %1$d מתוך %2$d…</string>
 </resources>

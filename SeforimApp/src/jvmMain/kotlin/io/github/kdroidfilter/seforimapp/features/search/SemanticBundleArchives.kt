@@ -13,6 +13,9 @@ internal enum class SemanticBundleImportProblem {
     INVALID_MANIFEST,
     INVALID_SELECTION,
     DAMAGED_ARCHIVE,
+    DOWNLOAD_FAILED,
+    NO_COMPATIBLE_BUNDLE,
+    INVALID_BUNDLE,
 }
 
 internal class SemanticBundleImportException(

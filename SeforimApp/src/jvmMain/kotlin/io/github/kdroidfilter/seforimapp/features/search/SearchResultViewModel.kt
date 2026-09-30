@@ -23,6 +23,7 @@ import io.github.kdroidfilter.seforimapp.features.search.domain.BuildSearchTreeU
 import io.github.kdroidfilter.seforimapp.features.search.domain.CategoryNavigationUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.ExecuteSearchUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.GetBreadcrumbPiecesUseCase
+import io.github.kdroidfilter.seforimapp.features.search.domain.ProgressiveSearchHighlighter
 import io.github.kdroidfilter.seforimapp.features.search.domain.ResultsIndex
 import io.github.kdroidfilter.seforimapp.features.search.domain.ResultsIndexingUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.SearchStatePersistenceUseCase
@@ -58,6 +59,7 @@ private const val LAZY_PAGE_SIZE = 25
 @Stable
 data class SearchUiState(
     val query: String = "",
+    val semanticFallback: Boolean = false,
     val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
         io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
     val globalExtended: Boolean = false,
@@ -236,7 +238,7 @@ class SearchResultViewModel(
             }
 
             is SearchResultEvents.SetMode -> {
-                _uiState.value = _uiState.value.copy(mode = event.mode)
+                _uiState.value = _uiState.value.copy(mode = event.mode, semanticFallback = false)
                 updatePersistedSearch { it.copy(mode = event.mode.name) }
                 executeSearch()
             }
@@ -296,9 +298,39 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState())
-    private val lucene: SearchEngine = ModeBoundSearchEngine(searchEngine) { _uiState.value.mode }
+    private val lucene: SearchEngine =
+        ModeBoundSearchEngine(
+            searchEngine,
+            selectedMode = { _uiState.value.mode },
+            onFallback = {
+                _uiState.update { state ->
+                    state.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                        semanticFallback = true,
+                    )
+                }
+                updatePersistedSearch {
+                    it.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name, snapshot = null)
+                }
+            },
+        )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     private var currentJob: Job? = null
+    private val highlighter =
+        ProgressiveSearchHighlighter(viewModelScope, onUpdate = { hit ->
+            _uiState.update { state ->
+                state.copy(
+                    results =
+                        state.results.map { result ->
+                            if (result.bookId == hit.bookId && result.lineId == hit.lineId) {
+                                result.copy(snippet = hit.snippet)
+                            } else {
+                                result
+                            }
+                        },
+                )
+            }
+        })
 
     // Lazy loading: keep session open for on-demand pagination
     private var currentSession: SearchSession? = null
@@ -653,6 +685,24 @@ class SearchResultViewModel(
                 scopeTocId = persisted.filterTocId.takeIf { it != 0L },
             )
 
+        viewModelScope.launch {
+            val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+            if (!ready && _uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                        semanticFallback = true,
+                    )
+                updatePersistedSearch {
+                    it.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name,
+                        snapshot = null,
+                    )
+                }
+                executeSearch()
+            }
+        }
+
         val filterCategoryId = persisted.filterCategoryId.takeIf { it != 0L }
         val filterBookId = persisted.filterBookId.takeIf { it != 0L }
         val filterTocId = persisted.filterTocId.takeIf { it != 0L }
@@ -748,6 +798,7 @@ class SearchResultViewModel(
                         repeat(pagesToSkip) { session.nextPage(LAZY_PAGE_SIZE) }
                         lazyLoadMutex.withLock {
                             currentSession = session
+                            highlighter.start(session)
                             currentTocAllowedLineIds = lineIds ?: emptySet()
                             currentSearchQuery = q
                         }
@@ -850,6 +901,7 @@ class SearchResultViewModel(
         viewModelScope.launch { historyStore.recordSearchVisit(q, System.currentTimeMillis()) }
         // New search: clear any previous streaming job and reset scroll/anchor state
         currentJob?.cancel()
+        highlighter.cancel()
         _breadcrumbs.value = persistentMapOf()
         // Reset persisted scroll/anchor so restoration targets the top for fresh results.
         updatePersistedSearch {
@@ -1025,6 +1077,7 @@ class SearchResultViewModel(
                     // Store session for lazy loading
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = tocAllowedLineIds
                         currentSearchQuery = q
                     }
@@ -1052,13 +1105,15 @@ class SearchResultViewModel(
                     }
 
                     val results = hitsToResults(filteredHits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
                             progressTotal = firstPage.totalHits,
                         )
+                    }
+                    highlighter.submit(session, filteredHits)
                 } finally {
                     // Clear loading promptly; if a new visibleResults emission is pending, wait briefly
                     // but never block indefinitely (important when final results are empty and identical
@@ -1073,7 +1128,7 @@ class SearchResultViewModel(
                                 .first()
                         }
                     }
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }
@@ -1086,12 +1141,12 @@ class SearchResultViewModel(
         if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
 
         viewModelScope.launch(Dispatchers.Default) {
-            _uiState.value = _uiState.value.copy(isLoadingMore = true)
+            _uiState.update { it.copy(isLoadingMore = true) }
             try {
                 val session = lazyLoadMutex.withLock { currentSession }
                 if (session == null) {
                     // Session not ready yet (e.g., still being restored), reset loading state
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                    _uiState.update { it.copy(isLoadingMore = false) }
                     return@launch
                 }
                 val tocAllowedLineIds = currentTocAllowedLineIds
@@ -1099,7 +1154,7 @@ class SearchResultViewModel(
 
                 val page = session.nextPage(LAZY_PAGE_SIZE)
                 if (page == null) {
-                    _uiState.value = _uiState.value.copy(hasMore = false, isLoadingMore = false)
+                    _uiState.update { it.copy(hasMore = false, isLoadingMore = false) }
                     return@launch
                 }
 
@@ -1113,16 +1168,17 @@ class SearchResultViewModel(
                 }
 
                 val newResults = hitsToResults(filteredHits, query)
-                val currentResults = _uiState.value.results
-                _uiState.value =
-                    _uiState.value.copy(
-                        results = currentResults + newResults,
+                _uiState.update { state ->
+                    state.copy(
+                        results = state.results + newResults,
                         hasMore = !page.isLastPage,
-                        progressCurrent = currentResults.size + newResults.size,
+                        progressCurrent = state.results.size + newResults.size,
                         isLoadingMore = false,
                     )
+                }
+                highlighter.submit(session, filteredHits)
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                _uiState.update { it.copy(isLoadingMore = false) }
             }
         }
     }
@@ -1133,12 +1189,15 @@ class SearchResultViewModel(
      * ponytail: restricts by bookId + baseBookOnly only; active sidebar TOC/category client
      * filters aren't re-applied here — consistent with the facet counts shown on the card.
      */
-    suspend fun loadAllHitsForBook(bookId: Long): List<SearchResult> {
-        val q = currentSearchQuery.takeIf { it.isNotBlank() } ?: _uiState.value.query.trim()
-        if (q.isBlank()) return emptyList()
-        val baseBookOnly = !_uiState.value.globalExtended
-        val scopeTocId = _uiState.value.scopeTocId
-        return withContext(Dispatchers.Default) {
+    fun loadAllHitsForBook(bookId: Long): Flow<List<SearchResult>> =
+        flow {
+            val q = currentSearchQuery.takeIf { it.isNotBlank() } ?: _uiState.value.query.trim()
+            if (q.isBlank()) {
+                emit(emptyList())
+                return@flow
+            }
+            val baseBookOnly = !_uiState.value.globalExtended
+            val scopeTocId = _uiState.value.scopeTocId
             val tocLineIds =
                 scopeTocId?.let { tocId ->
                     val toc = repository.getTocEntry(tocId) ?: return@let emptySet()
@@ -1151,20 +1210,36 @@ class SearchResultViewModel(
                     bookIds = if (tocLineIds == null) listOf(bookId) else null,
                     lineIds = tocLineIds,
                     baseBookOnly = baseBookOnly,
-                ) ?: return@withContext emptyList()
+                )
+            if (session == null) {
+                emit(emptyList())
+                return@flow
+            }
             try {
                 val all = ArrayList<LineHit>()
                 while (true) {
                     val page = session.nextPage(LAZY_PAGE_SIZE) ?: break
                     all += page.hits
+                    emit(hitsToResults(all, q))
                     if (page.isLastPage) break
                 }
-                hitsToResults(all, q)
+                if (all.isEmpty()) emit(emptyList())
+                var results = hitsToResults(all, q)
+                session.highlightUpdates(all).collect { hit ->
+                    results =
+                        results.map { result ->
+                            if (result.bookId == hit.bookId && result.lineId == hit.lineId) {
+                                result.copy(snippet = hit.snippet)
+                            } else {
+                                result
+                            }
+                        }
+                    emit(results)
+                }
             } finally {
                 runCatching { session.close() }
             }
-        }
-    }
+        }.flowOn(Dispatchers.Default)
 
     private suspend fun prepareSearchSession(
         query: String,
@@ -1209,6 +1284,7 @@ class SearchResultViewModel(
 
     fun cancelSearch() {
         currentJob?.cancel()
+        highlighter.cancel()
         // Close session to release resources
         runCatching {
             currentSession?.close()
@@ -1418,6 +1494,7 @@ class SearchResultViewModel(
         if (q.isBlank()) return
 
         currentJob?.cancel()
+        highlighter.cancel()
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
                 _uiState.value = _uiState.value.copy(isLoading = true)
@@ -1490,6 +1567,7 @@ class SearchResultViewModel(
 
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = emptySet()
                         currentSearchQuery = q
                     }
@@ -1510,14 +1588,16 @@ class SearchResultViewModel(
                     _uiState.value = _uiState.value.copy(progressTotal = firstPage.totalHits)
 
                     val results = hitsToResults(firstPage.hits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
                         )
+                    }
+                    highlighter.submit(session, firstPage.hits)
                 } finally {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }
@@ -1636,6 +1716,7 @@ class SearchResultViewModel(
         if (q.isBlank()) return
 
         currentJob?.cancel()
+        highlighter.cancel()
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
                 _uiState.value = _uiState.value.copy(isLoading = true)
@@ -1707,6 +1788,7 @@ class SearchResultViewModel(
 
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = emptySet()
                         currentSearchQuery = q
                     }
@@ -1727,8 +1809,8 @@ class SearchResultViewModel(
                     _uiState.value = _uiState.value.copy(progressTotal = firstPage.totalHits)
 
                     val results = hitsToResults(firstPage.hits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
@@ -1736,8 +1818,10 @@ class SearchResultViewModel(
                             scrollOffset = 0,
                             scrollToAnchorTimestamp = System.currentTimeMillis(),
                         )
+                    }
+                    highlighter.submit(session, firstPage.hits)
                 } finally {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }

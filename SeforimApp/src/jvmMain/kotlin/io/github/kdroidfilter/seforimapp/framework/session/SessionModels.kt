@@ -176,7 +176,7 @@ data class DesktopsState(
 @Serializable
 data class SearchPersistedState(
     val query: String = "",
-    val mode: String = "FLEXIBLE",
+    val mode: String = "SMART",
     val globalExtended: Boolean = false,
     val datasetScope: String = "global",
     val filterCategoryId: Long = 0L,

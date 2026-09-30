@@ -3,12 +3,18 @@ package io.github.kdroidfilter.seforimapp.features.search
 import com.github.luben.zstd.ZstdIOException
 import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.logger.warnln
+import io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder
 import io.github.kdroidfilter.seforimlibrary.search.VectorSearcher
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import java.io.EOFException
+import java.io.IOException
 import java.io.SequenceInputStream
 import java.net.URI
 import java.net.http.HttpClient
@@ -20,10 +26,48 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.Comparator
+import java.util.zip.ZipException
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 /** Installs a complete, versioned index and model bundle beside the database. */
 internal object SemanticAssetsManager {
+    enum class Availability { UNAVAILABLE, VALIDATING, READY, INVALID }
+
+    private val _availability = MutableStateFlow(Availability.UNAVAILABLE)
+    val availability = _availability.asStateFlow()
+    private var validatedStamp: List<String>? = null
+
+    /** Cache expensive validation until the database or any bundle file changes. Call on IO. */
+    @Synchronized
+    fun validatedReady(): Boolean {
+        if (!isReady()) {
+            validatedStamp = null
+            _availability.value = Availability.UNAVAILABLE
+            return false
+        }
+        return try {
+            val stamp =
+                Files.walk(assetRoot).use { paths ->
+                    (paths.filter { Files.isRegularFile(it) }.toList() + db).sorted().map {
+                        "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
+                    }
+                }
+            if (stamp != validatedStamp) {
+                _availability.value = Availability.VALIDATING
+                validatedStamp = stamp
+                validate()
+                _availability.value = Availability.READY
+            }
+            _availability.value == Availability.READY
+        } catch (failure: Throwable) {
+            if (failure !is Exception && failure !is LinkageError) throw failure
+            warnln(failure) { "Semantic bundle validation failed" }
+            _availability.value = Availability.INVALID
+            false
+        }
+    }
+
     private const val MODEL_NAME = "seforim-embed-round2-int8.onnx"
     private const val MODEL_SHA = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
     private const val TOKENIZER_SHA = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
@@ -40,6 +84,7 @@ internal object SemanticAssetsManager {
     fun validate() {
         require(isReady()) { "חבילת החיפוש החכם אינה מותקנת" }
         verify(assetRoot)
+        checkNotNull(SeforimEmbedder.tryLoad(assetRoot.resolve("model"))).use { it.embed("search") }
     }
 
     @Synchronized
@@ -81,7 +126,11 @@ internal object SemanticAssetsManager {
                     stage,
                 )
             }
-            verify(stage)
+            try {
+                verify(stage)
+            } catch (failure: Exception) {
+                throw SemanticBundleImportException(SemanticBundleImportProblem.INVALID_BUNDLE, cause = failure)
+            }
             if (Files.exists(assetRoot)) Files.move(assetRoot, backup, StandardCopyOption.ATOMIC_MOVE)
             try {
                 Files.move(stage, assetRoot, StandardCopyOption.ATOMIC_MOVE)
@@ -89,19 +138,30 @@ internal object SemanticAssetsManager {
                 if (Files.exists(backup)) Files.move(backup, assetRoot, StandardCopyOption.ATOMIC_MOVE)
                 throw failure
             }
+            validatedStamp = null
         } finally {
             if (Files.exists(stage)) deleteTree(stage)
             if (Files.exists(backup) && Files.exists(assetRoot)) deleteTree(backup)
         }
     }
 
-    fun downloadBundle() {
+    fun downloadBundle(onProgress: (Int, Int) -> Unit = { _, _ -> }) {
+        try {
+            downloadAndInstallBundle(onProgress)
+        } catch (failure: SemanticBundleImportException) {
+            throw failure
+        } catch (failure: IOException) {
+            throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED, cause = failure)
+        }
+    }
+
+    private fun downloadAndInstallBundle(onProgress: (Int, Int) -> Unit) {
         val response =
             client.send(
                 HttpRequest.newBuilder(URI.create(RELEASE_API)).header("Accept", "application/vnd.github+json").build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
-        require(response.statusCode() == 200) { "לא ניתן לקרוא את רשימת חבילות החיפוש" }
+        if (response.statusCode() != 200) throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED)
         val databaseSha = hash(db)
         val releases =
             Json.parseToJsonElement(response.body()).jsonArray.filter {
@@ -139,7 +199,7 @@ internal object SemanticAssetsManager {
                                 (manifest["parts"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0) > 0
                         }.getOrDefault(false)
                     if (compatible) entry to manifest else null
-                }.firstOrNull() ?: error("לא פורסמה חבילת חיפוש חכם התואמת למסד הנתונים המותקן")
+                }.firstOrNull() ?: throw SemanticBundleImportException(SemanticBundleImportProblem.NO_COMPATIBLE_BUNDLE)
         val (release, manifest) = selected
         val archiveType = manifest["archiveType"]?.jsonPrimitive?.content ?: "zip"
         val expectedParts = manifest["parts"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
@@ -159,21 +219,26 @@ internal object SemanticAssetsManager {
                         }
                     if (matches) name to url else null
                 }.sortedBy { it.first }
-        require(assets.size == expectedParts) { "חבילת החיפוש שפורסמה אינה כוללת את כל החלקים" }
+        if (assets.size != expectedParts) throw SemanticBundleImportException(SemanticBundleImportProblem.INVALID_MANIFEST)
         val downloadDir = Files.createTempDirectory(db.parent, "semantic-download-")
         try {
             val archives =
-                assets.map { (name, url) ->
+                assets.mapIndexed { index, (name, url) ->
+                    onProgress(index + 1, assets.size)
                     val destination = downloadDir.resolve(name)
                     val result =
                         client.send(
                             HttpRequest.newBuilder(URI.create(url)).header("User-Agent", "Zayit-Semantic-Search").build(),
                             HttpResponse.BodyHandlers.ofInputStream(),
                         )
-                    require(result.statusCode() == 200) { "הורדת חלק $name נכשלה (HTTP ${result.statusCode()})" }
+                    if (result.statusCode() != 200) {
+                        result.body().close()
+                        throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED)
+                    }
                     result.body().use { Files.copy(it, destination) }
                     destination
                 }
+            onProgress(0, 0)
             importBundle(archives)
         } finally {
             deleteTree(downloadDir)
@@ -187,34 +252,42 @@ internal object SemanticAssetsManager {
         VectorSearcher(root.resolve("index"), 256, db, modelDir).use { }
     }
 
-    private fun extractZip(
+    internal fun extractZip(
         archive: Path,
         stage: Path,
         previousBytes: Long,
     ): Long {
         var total = previousBytes
-        ZipInputStream(Files.newInputStream(archive)).use { zip ->
-            while (true) {
-                val entry = zip.nextEntry ?: break
-                val name = entry.name.replace('\\', '/')
-                val path = entryPath(stage, name)
-                if (entry.isDirectory) {
-                    Files.createDirectories(path)
-                } else {
-                    Files.createDirectories(path.parent)
-                    Files.newOutputStream(path).use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            val count = zip.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            require(total <= 20L * 1024 * 1024 * 1024) { "חבילת החיפוש גדולה מדי" }
-                            output.write(buffer, 0, count)
+        try {
+            // Check the central directory too: ZipInputStream alone accepts missing ZIP footers.
+            ZipFile(archive.toFile()).use { }
+            ZipInputStream(Files.newInputStream(archive)).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    val name = entry.name.replace('\\', '/')
+                    val path = entryPath(stage, name)
+                    if (entry.isDirectory) {
+                        Files.createDirectories(path)
+                    } else {
+                        Files.createDirectories(path.parent)
+                        Files.newOutputStream(path).use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val count = zip.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                require(total <= 20L * 1024 * 1024 * 1024) { "חבילת החיפוש גדולה מדי" }
+                                output.write(buffer, 0, count)
+                            }
                         }
                     }
+                    zip.closeEntry()
                 }
-                zip.closeEntry()
             }
+        } catch (failure: ZipException) {
+            throw SemanticBundleImportException(SemanticBundleImportProblem.DAMAGED_ARCHIVE, cause = failure)
+        } catch (failure: EOFException) {
+            throw SemanticBundleImportException(SemanticBundleImportProblem.DAMAGED_ARCHIVE, cause = failure)
         }
         return total
     }

@@ -134,6 +134,7 @@ class SearchHomeViewModel(
     private val settings: Settings,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchHomeUiState())
+    private var modeChosen = false
     val uiState: StateFlow<SearchHomeUiState> = _uiState.asStateFlow()
 
     // Navigation events channel - UI collects and handles navigation
@@ -202,6 +203,12 @@ class SearchHomeViewModel(
     }
 
     init {
+        viewModelScope.launch {
+            val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+            if (ready && !modeChosen) {
+                _uiState.value = _uiState.value.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART)
+            }
+        }
         // Build display name from injected Settings
         runCatching {
             val firstName: String = settings["user_first_name", ""]
@@ -649,6 +656,7 @@ class SearchHomeViewModel(
     }
 
     fun onModeChange(mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode) {
+        modeChosen = true
         _uiState.value = _uiState.value.copy(mode = mode)
     }
 

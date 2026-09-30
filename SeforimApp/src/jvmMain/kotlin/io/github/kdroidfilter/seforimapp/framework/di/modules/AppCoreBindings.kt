@@ -46,9 +46,9 @@ import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStor
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
-import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.HybridSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LineHit
+import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
 import java.nio.file.Paths
 
@@ -169,26 +169,31 @@ object AppCoreBindings {
             personalLibrary.activeArtifacts()?.let {
                 LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
             }
-        val semantic = HybridSearchEngine(
-            lexical = base,
-            modelDir = Paths.get("$dbPath.semantic/model"),
-            indexDir = Paths.get("$dbPath.semantic/index"),
-            dbPath = Paths.get(dbPath),
-            resolveLine = { lineId, bookId, query ->
-                val line = repository.getLine(lineId)
-                val book = repository.getBookCore(bookId)
-                if (line == null || book == null || line.bookId != book.id) null else LineHit(
-                    bookId = book.id,
-                    bookTitle = book.title,
-                    lineId = line.id,
-                    lineIndex = line.lineIndex,
-                    snippet = base.buildSnippet(line.content, query, 5),
-                    score = 0f,
-                    rawText = line.content,
-                    isBaseBook = book.isBaseBook,
-                )
-            },
-        )
+        val semantic =
+            HybridSearchEngine(
+                lexical = base,
+                modelDir = Paths.get("$dbPath.semantic/model"),
+                indexDir = Paths.get("$dbPath.semantic/index"),
+                dbPath = Paths.get(dbPath),
+                resolveLine = { lineId, bookId, query ->
+                    val line = repository.getLine(lineId)
+                    val book = repository.getBookCore(bookId)
+                    if (line == null || book == null || line.bookId != book.id) {
+                        null
+                    } else {
+                        LineHit(
+                            bookId = book.id,
+                            bookTitle = book.title,
+                            lineId = line.id,
+                            lineIndex = line.lineIndex,
+                            snippet = base.buildSnippet(line.content, query, 5),
+                            score = 0f,
+                            rawText = line.content,
+                            isBaseBook = book.isBaseBook,
+                        )
+                    }
+                },
+            )
         return CompositeSearchEngine(semantic, personal)
     }
 

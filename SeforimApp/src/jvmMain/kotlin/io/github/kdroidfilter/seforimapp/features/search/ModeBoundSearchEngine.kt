@@ -19,9 +19,17 @@ internal class ModeBoundSearchEngine(
         lineIds: Collection<Long>?,
         baseBookOnly: Boolean,
         mode: SearchMode,
-    ): SearchSession? = delegate.openSession(
-        query, near, bookFilter, categoryFilter, bookIds, lineIds, baseBookOnly, selectedMode(),
-    )
+    ): SearchSession? =
+        delegate.openSession(
+            query,
+            near,
+            bookFilter,
+            categoryFilter,
+            bookIds,
+            lineIds,
+            baseBookOnly,
+            selectedMode(),
+        )
 
     override fun computeFacets(
         query: String,
@@ -32,7 +40,15 @@ internal class ModeBoundSearchEngine(
         lineIds: Collection<Long>?,
         baseBookOnly: Boolean,
         mode: SearchMode,
-    ): SearchFacets? = delegate.computeFacets(
-        query, near, bookFilter, categoryFilter, bookIds, lineIds, baseBookOnly, selectedMode(),
-    )
+    ): SearchFacets? =
+        delegate.computeFacets(
+            query,
+            near,
+            bookFilter,
+            categoryFilter,
+            bookIds,
+            lineIds,
+            baseBookOnly,
+            selectedMode(),
+        )
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,7 +22,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -35,6 +35,11 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import io.github.kdroidfilter.seforimlibrary.search.SearchMode
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.FileKitMode
+import io.github.vinceglb.filekit.dialogs.openFilePicker
+import io.github.vinceglb.filekit.path
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,94 +50,84 @@ import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.*
 import java.nio.file.Path
-import javax.swing.JFileChooser
 
 @Composable
-fun SearchModePicker(mode: SearchMode, onModeChange: (SearchMode) -> Unit) {
-    val scope = rememberCoroutineScope()
+fun SearchModePicker(
+    mode: SearchMode,
+    onModeChange: (SearchMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var showInstall by remember { mutableStateOf(false) }
-    var checking by remember { mutableStateOf(false) }
-    var checkVersion by remember { mutableIntStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
-    val options = listOf(
-        stringResource(Res.string.search_mode_exact),
-        stringResource(Res.string.search_mode_flexible),
-        stringResource(Res.string.search_mode_smart),
-    )
+    val options =
+        listOf(
+            stringResource(Res.string.search_mode_exact),
+            stringResource(Res.string.search_mode_flexible),
+            stringResource(Res.string.search_mode_smart),
+        )
     val modes = listOf(SearchMode.EXACT, SearchMode.FLEXIBLE, SearchMode.SMART)
+
     fun selectMode(index: Int) {
         expanded = false
         val selected = modes[index]
-        if (selected == SearchMode.SMART) {
-            if (!checking) {
-                checking = true
-                val version = ++checkVersion
-                scope.launch {
-                    val ready = withContext(Dispatchers.IO) {
-                        runCatching { SemanticAssetsManager.validate() }.isSuccess
-                    }
-                    if (version != checkVersion) return@launch
-                    checking = false
-                    if (ready) onModeChange(selected) else showInstall = true
-                }
-            }
+        // Installation and engine initialization verify the bundle. Revalidating here
+        // hashes the entire database and reopens every shard on each mode change.
+        if (selected == SearchMode.SMART && !SemanticAssetsManager.isReady()) {
+            showInstall = true
         } else {
-            checkVersion++
-            checking = false
             onModeChange(selected)
         }
     }
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(9.dp)
     val background = JewelTheme.globalColors.panelBackground
     val border = JewelTheme.globalColors.borders.disabled
     val textColor = JewelTheme.globalColors.text.normal
-    Box {
-        Row(
+    Box(modifier = modifier.width(72.dp).height(28.dp)) {
+        Box(
             modifier =
                 Modifier
-                    .width(76.dp)
-                    .height(34.dp)
+                    .fillMaxSize()
                     .clip(shape)
                     .background(background)
                     .border(1.dp, border, shape)
                     .pointerHoverIcon(PointerIcon.Hand)
                     .clickable { expanded = true }
                     .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 options[modes.indexOf(mode)],
                 color = textColor,
-                fontSize = 10.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                fontFamily = FontFamily.Monospace,
             )
-            Text("⌄", color = textColor, fontSize = 12.sp)
         }
         if (expanded) {
             Popup(
-                popupPositionProvider = object : PopupPositionProvider {
-                    override fun calculatePosition(
-                        anchorBounds: IntRect,
-                        windowSize: IntSize,
-                        layoutDirection: LayoutDirection,
-                        popupContentSize: IntSize,
-                    ): IntOffset = IntOffset(
-                        anchorBounds.left.coerceAtMost((windowSize.width - popupContentSize.width).coerceAtLeast(0)),
-                        if (anchorBounds.bottom + popupContentSize.height <= windowSize.height) {
-                            anchorBounds.bottom + 4
-                        } else {
-                            (anchorBounds.top - popupContentSize.height - 4).coerceAtLeast(0)
-                        },
-                    )
-                },
+                popupPositionProvider =
+                    object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: IntRect,
+                            windowSize: IntSize,
+                            layoutDirection: LayoutDirection,
+                            popupContentSize: IntSize,
+                        ): IntOffset =
+                            IntOffset(
+                                anchorBounds.left.coerceAtMost((windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                                if (anchorBounds.bottom + popupContentSize.height <= windowSize.height) {
+                                    anchorBounds.bottom + 4
+                                } else {
+                                    (anchorBounds.top - popupContentSize.height - 4).coerceAtLeast(0)
+                                },
+                            )
+                    },
                 properties = PopupProperties(focusable = true),
                 onDismissRequest = { expanded = false },
             ) {
                 Column(
                     modifier =
-                        Modifier.width(88.dp)
+                        Modifier
+                            .width(90.dp)
                             .shadow(6.dp, RoundedCornerShape(10.dp))
                             .clip(RoundedCornerShape(10.dp))
                             .background(background)
@@ -143,11 +138,11 @@ fun SearchModePicker(mode: SearchMode, onModeChange: (SearchMode) -> Unit) {
                         Text(
                             text = label,
                             color = textColor,
-                            fontSize = 10.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            fontFamily = FontFamily.Monospace,
                             modifier =
-                                Modifier.fillMaxWidth()
+                                Modifier
+                                    .fillMaxWidth()
                                     .clip(RoundedCornerShape(7.dp))
                                     .pointerHoverIcon(PointerIcon.Hand)
                                     .clickable(
@@ -173,26 +168,49 @@ fun SearchModePicker(mode: SearchMode, onModeChange: (SearchMode) -> Unit) {
 }
 
 @Composable
-private fun SemanticInstallDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
+private fun SemanticInstallDialog(
+    onDismiss: () -> Unit,
+    onReady: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val missingPartsMessage = stringResource(Res.string.semantic_import_missing_parts)
+    val invalidManifestMessage = stringResource(Res.string.semantic_import_invalid_manifest)
+    val invalidSelectionMessage = stringResource(Res.string.semantic_import_invalid_selection)
+    val damagedArchiveMessage = stringResource(Res.string.semantic_import_damaged_archive)
 
-    fun install(action: suspend () -> Unit) {
+    fun install(action: suspend () -> Boolean) {
         busy = true
         error = null
         scope.launch {
             runCatching { action() }
-                .onFailure { error = it.message ?: it.javaClass.simpleName }
-                .onSuccess { onReady() }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    error =
+                        if (it is SemanticBundleImportException) {
+                            when (it.problem) {
+                                SemanticBundleImportProblem.MISSING_PARTS ->
+                                    missingPartsMessage.format(it.missingParts.joinToString(", "))
+                                SemanticBundleImportProblem.INVALID_MANIFEST -> invalidManifestMessage
+                                SemanticBundleImportProblem.INVALID_SELECTION -> invalidSelectionMessage
+                                SemanticBundleImportProblem.DAMAGED_ARCHIVE -> damagedArchiveMessage
+                            }
+                        } else {
+                            it.message ?: it.javaClass.simpleName
+                        }
+                }.onSuccess { installed -> if (installed) onReady() }
             busy = false
         }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            modifier = Modifier.width(490.dp).background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(12.dp))
-                .padding(20.dp),
+            modifier =
+                Modifier
+                    .width(490.dp)
+                    .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(12.dp))
+                    .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(stringResource(Res.string.semantic_install_title))
@@ -201,12 +219,19 @@ private fun SemanticInstallDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
             error?.let { Text(it, color = Color(0xFFB00020)) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DefaultButton(enabled = !busy, onClick = {
-                    install { withContext(Dispatchers.IO) { SemanticAssetsManager.downloadBundle() } }
+                    install {
+                        withContext(Dispatchers.IO) { SemanticAssetsManager.downloadBundle() }
+                        true
+                    }
                 }) { Text(stringResource(Res.string.semantic_download_bundle)) }
                 OutlinedButton(enabled = !busy, onClick = {
-                    val files = chooseFiles()
-                    if (files.isNotEmpty()) {
-                        install { withContext(Dispatchers.IO) { SemanticAssetsManager.importBundle(files) } }
+                    install {
+                        // Native pickers can block; keep the Compose event loop free while they are open.
+                        val files = withContext(Dispatchers.IO) { chooseFiles() }
+                        if (files.isNotEmpty()) {
+                            withContext(Dispatchers.IO) { SemanticAssetsManager.importBundle(files) }
+                        }
+                        files.isNotEmpty()
                     }
                 }) { Text(stringResource(Res.string.semantic_import_bundle)) }
             }
@@ -217,7 +242,8 @@ private fun SemanticInstallDialog(onDismiss: () -> Unit, onReady: () -> Unit) {
     }
 }
 
-private fun chooseFiles(): List<Path> = JFileChooser().run {
-    isMultiSelectionEnabled = true
-    if (showOpenDialog(null) == JFileChooser.APPROVE_OPTION) selectedFiles.map { it.toPath() } else emptyList()
-}
+private suspend fun chooseFiles(): List<Path> =
+    FileKit
+        .openFilePicker(mode = FileKitMode.Multiple())
+        ?.map { Path.of(it.path) }
+        .orEmpty()

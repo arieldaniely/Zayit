@@ -55,11 +55,11 @@ import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
-import io.github.kdroidfilter.seforimlibrary.search.SearchMode
 import io.github.kdroidfilter.seforimapp.texteffects.TypewriterPlaceholder
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.github.kdroidfilter.seforimlibrary.search.SearchMode
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -1205,9 +1205,9 @@ internal fun SearchBar(
     state: TextFieldState,
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
+    modifier: Modifier = Modifier,
     mode: SearchMode = SearchMode.FLEXIBLE,
     onModeChange: (SearchMode) -> Unit = {},
-    modifier: Modifier = Modifier,
     showToggle: Boolean = true,
     showIcon: Boolean = true,
     onSubmit: () -> Unit = {},

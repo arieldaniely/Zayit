@@ -172,7 +172,7 @@ private fun SearchToolbar(
                     .TextStyle(fontSize = 13.sp),
         )
 
-        SearchModePicker(mode, onModeChange)
+        SearchModePicker(mode, onModeChange, modifier = Modifier.height(36.dp))
 
         // Global extended toggle (default off → base books only)
         CustomToggleableChip(

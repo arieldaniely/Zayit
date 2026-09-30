@@ -639,9 +639,11 @@ class SearchResultViewModel(
         _uiState.value =
             _uiState.value.copy(
                 query = initialQuery,
-                mode = runCatching {
-                    io.github.kdroidfilter.seforimlibrary.search.SearchMode.valueOf(persisted.mode)
-                }.getOrDefault(io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE),
+                mode =
+                    runCatching {
+                        io.github.kdroidfilter.seforimlibrary.search.SearchMode
+                            .valueOf(persisted.mode)
+                    }.getOrDefault(io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE),
                 globalExtended = persisted.globalExtended,
                 scrollIndex = persisted.scrollIndex,
                 scrollOffset = persisted.scrollOffset,
@@ -962,13 +964,16 @@ class SearchResultViewModel(
                         }
 
                     var facets =
-                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) null else
-                        lucene.computeFacets(
-                            query = q,
-                            near = DEFAULT_NEAR,
-                            bookIds = facetsBookIds,
-                            baseBookOnly = baseBookOnly,
-                        )
+                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) {
+                            null
+                        } else {
+                            lucene.computeFacets(
+                                query = q,
+                                near = DEFAULT_NEAR,
+                                bookIds = facetsBookIds,
+                                baseBookOnly = baseBookOnly,
+                            )
+                        }
 
                     // Fallback: si aucun résultat en mode "livres de base", basculer en mode approfondi
                     if (facets != null && facets.totalHits == 0L && baseBookOnly) {

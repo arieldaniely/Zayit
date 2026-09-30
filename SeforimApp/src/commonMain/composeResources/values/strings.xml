@@ -840,7 +840,11 @@
     <string name="search_mode_flexible">גמיש</string>
     <string name="search_mode_smart">חכם</string>
     <string name="semantic_install_title">התקנת חיפוש חכם</string>
-    <string name="semantic_install_body">חיפוש חכם דורש חבילת הפצה הכוללת מודל, טוקנייזר ואינדקס תואם למסד הנתונים. אפשר להוריד את החבילה שפורסמה או לייבא קובץ tar.zst או את כל חלקיו מהמחשב.</string>
+    <string name="semantic_install_body">חיפוש חכם דורש חבילת הפצה הכוללת מודל, טוקנייזר ואינדקס תואם למסד הנתונים. אפשר להוריד את החבילה שפורסמה או לייבא אותה מהמחשב. בחבילה מפוצלת יש לשמור את כל החלקים באותה תיקייה ולבחור את החלק הראשון; שאר החלקים יצורפו אוטומטית.</string>
+    <string name="semantic_import_missing_parts">חסרים חלקים מחבילת החיפוש: %1$s. יש לשמור את כל החלקים באותה תיקייה ולבחור שוב את החלק הראשון.</string>
+    <string name="semantic_import_invalid_manifest">קובץ תיאור חבילת החיפוש אינו תקין או אינו תואם לחלקים שבתיקייה. יש להוריד מחדש את החבילה ואת קובץ התיאור שלה.</string>
+    <string name="semantic_import_invalid_selection">יש לבחור חלקים של אותה חבילת חיפוש מאותה תיקייה, בלי חלקים כפולים.</string>
+    <string name="semantic_import_damaged_archive">חבילת החיפוש אינה שלמה או שאחד מחלקיה פגום. יש לוודא שכל החלקים הורדו במלואם ונמצאים באותה תיקייה.</string>
     <string name="semantic_install_busy">מתקין ומאמת קבצים…</string>
     <string name="semantic_install_close">סגור</string>
     <string name="semantic_download_bundle">הורד חבילה</string>

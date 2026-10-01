@@ -8,6 +8,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,6 +48,7 @@ import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyTabPlanner
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -290,6 +292,82 @@ fun NucleusApplicationScope.MainAppWindow(
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,
         ) {
+            val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
+            val autoOpenedSharedStudyTabs =
+                remember(sharedStudyState.sessionId) { mutableStateMapOf<String, Long>() }
+            val dismissedSharedStudyBooks =
+                remember(sharedStudyState.sessionId) { mutableSetOf<Long>() }
+            DisposableEffect(tabsVm, sharedStudyState.sessionId) {
+                val previousListener = tabsVm.onTabClosedListener
+                val listener: (io.github.kdroidfilter.seforim.tabs.TabItem) -> Unit = { tab ->
+                    autoOpenedSharedStudyTabs.remove(tab.destination.tabId)?.let(dismissedSharedStudyBooks::add)
+                    previousListener?.invoke(tab)
+                }
+                tabsVm.onTabClosedListener = listener
+                onDispose {
+                    if (tabsVm.onTabClosedListener === listener) tabsVm.onTabClosedListener = previousListener
+                }
+            }
+            LaunchedEffect(sharedStudyState.locations, state.isActive, sharedStudyState.sessionId) {
+                if (!state.isActive) return@LaunchedEffect
+                sharedStudyState.locations
+                    .filterKeys { it != appGraph.sharedStudyCoordinator.localParticipantId }
+                    .values
+                    .forEach { location ->
+                        val tabsState = tabsVm.state.value
+                        val openTabs =
+                            tabsState.tabs.mapNotNull { tab ->
+                                val destination = tab.destination
+                                val bookId =
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.bookId
+                                        is TabsDestination.PdfContent -> destination.bookId
+                                        else -> return@mapNotNull null
+                                    }
+                                val lineId =
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.lineId
+                                        is TabsDestination.PdfContent -> destination.lineId
+                                    }
+                                SharedStudyTabPlanner.OpenTab(
+                                    tabId = destination.tabId,
+                                    bookId = bookId,
+                                    visibleLineIds = listOfNotNull(lineId),
+                                    active = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.id == tab.id,
+                                )
+                            }
+                        val currentLineId =
+                            tabsState.tabs
+                                .getOrNull(tabsState.selectedTabIndex)
+                                ?.destination
+                                ?.let { destination ->
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.lineId
+                                        is TabsDestination.PdfContent -> destination.lineId
+                                        else -> null
+                                    }
+                                }
+                        val plan =
+                            SharedStudyTabPlanner.plan(
+                                location,
+                                openTabs,
+                                currentLineId,
+                                dismissedBookIds = dismissedSharedStudyBooks,
+                            )
+                        if (plan.action == SharedStudyTabPlanner.Action.OPEN_BACKGROUND_TAB) {
+                            val tabId = UUID.randomUUID().toString()
+                            tabsVm.openBackgroundTab(
+                                TabsDestination.BookContent(
+                                    bookId = location.bookId,
+                                    tabId = tabId,
+                                    lineId = location.lineId,
+                                ),
+                            )
+                            autoOpenedSharedStudyTabs[tabId] = location.bookId
+                        }
+                    }
+            }
+
             MainTitleBar()
 
             // Keep the screen awake while a book is open in the current tab and this window is

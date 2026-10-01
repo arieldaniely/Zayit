@@ -140,7 +140,20 @@ private fun DefaultTabShowcase(
     val layoutDirection = LocalLayoutDirection.current
     val isRtl = layoutDirection == LayoutDirection.Rtl
     val desktopManager = LocalAppGraph.current.desktopManager
+    val sharedStudyCoordinator = LocalAppGraph.current.sharedStudyCoordinator
+    val sharedStudyState by sharedStudyCoordinator.state.collectAsState()
     val windowId = LocalOpenWindow.current.id
+    val remotePresenceColorsByBook =
+        remember(sharedStudyState.locations, sharedStudyState.participants) {
+            sharedStudyState.participants
+                .asSequence()
+                .filter { it.id != sharedStudyCoordinator.localParticipantId }
+                .mapNotNull { participant ->
+                    sharedStudyState.locations[participant.id]?.bookId?.let { bookId ->
+                        bookId to participant.colorArgb
+                    }
+                }.groupBy({ it.first }, { it.second })
+        }
 
     // Track for auto-scrolling (no-op in shrink-to-fit mode)
     var previousTabCount by remember { mutableStateOf(state.tabs.size) }
@@ -149,7 +162,7 @@ private fun DefaultTabShowcase(
 
     // Create TabData objects with RTL support
     val tabs: ImmutableList<TabEntry> =
-        remember(state.tabs, state.selectedTabIndex, isRtl) {
+        remember(state.tabs, state.selectedTabIndex, isRtl, remotePresenceColorsByBook) {
             if (isRtl) {
                 // For RTL: reverse the list and use the reversed index for display
                 state.tabs
@@ -195,6 +208,7 @@ private fun DefaultTabShowcase(
                                         label = label,
                                         state = tabState,
                                         icon = icon,
+                                        presenceColors = remotePresenceColorsByBook[tabItem.destination.bookIdOrNull()].orEmpty(),
                                     )
                                 },
                                 onClose = {},
@@ -273,6 +287,7 @@ private fun DefaultTabShowcase(
                                         label = label,
                                         state = tabState,
                                         icon = icon,
+                                        presenceColors = remotePresenceColorsByBook[tabItem.destination.bookIdOrNull()].orEmpty(),
                                     )
                                 },
                                 onClose = {},
@@ -409,8 +424,8 @@ private fun RtlAwareTabStripContent(
         val maxWidthDp = this.maxWidth
         // Reserve a non-interactive draggable area at the trailing edge to allow window move
         val reservedDragArea = 40.dp
-        // + button (40.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
-        val extrasWidth = 40.dp + 1.dp + 8.dp + reservedDragArea
+        // + button (36.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
+        val extrasWidth = 36.dp + 1.dp + 8.dp + reservedDragArea
         val availableForTabs = (maxWidthDp - extrasWidth).coerceAtLeast(0.dp)
         val tabsCount = tabs.size.coerceAtLeast(1)
         // Chrome-like: tabs shrink to fill available width, capped by a max width
@@ -1041,6 +1056,7 @@ private fun SingleLineTabContent(
     label: String,
     state: TabState,
     icon: Painter?,
+    presenceColors: List<Long>,
     modifier: Modifier = Modifier,
 ) {
     val iconOnly = LocalCompactIconOnly.current
@@ -1060,6 +1076,14 @@ private fun SingleLineTabContent(
                 modifier = Modifier.size(16.dp).alpha(contentAlpha),
             )
         }
+        presenceColors.take(3).forEach { colorArgb ->
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(colorArgb.toULong())),
+            )
+        }
         if (!iconOnly) {
             Text(
                 label,
@@ -1070,6 +1094,13 @@ private fun SingleLineTabContent(
         }
     }
 }
+
+private fun TabsDestination.bookIdOrNull(): Long? =
+    when (this) {
+        is TabsDestination.BookContent -> bookId
+        is TabsDestination.PdfContent -> bookId
+        else -> null
+    }
 
 // Tab context menu using native Jewel styling
 @OptIn(InternalJewelApi::class)

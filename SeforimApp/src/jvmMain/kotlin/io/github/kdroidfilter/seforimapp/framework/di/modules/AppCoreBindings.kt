@@ -15,12 +15,20 @@ import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.PacketizedBleTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.createDesktopBlePlatformBridge
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
@@ -48,6 +56,29 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideMainAppState(): MainAppState = MainAppState()
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideSharedStudyCoordinator(): SharedStudyCoordinator {
+        val profileName = "${AppSettings.getUserFirstName().orEmpty()} ${AppSettings.getUserLastName().orEmpty()}".trim()
+        val fallback = System.getProperty("user.name").orEmpty().ifBlank { "זית" }
+        val displayName = AppSettings.getSharedStudyDisplayName() ?: profileName.ifBlank { fallback }
+        return SharedStudyCoordinator(
+            transport =
+                LazySharedStudyTransport(
+                    factory = {
+                        CompositeSharedStudyTransport(
+                            ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
+                            localNetwork = LocalNetworkTransport(instanceId = AppSettings.getOrCreateSharedStudyDeviceId()),
+                            bluetoothClassic = BluetoothClassicTransport(),
+                        )
+                    },
+                ),
+            initialDisplayName = displayName,
+            localId = AppSettings.getOrCreateSharedStudyDeviceId(),
+            onDisplayNameChanged = AppSettings::setSharedStudyDisplayName,
+        )
+    }
 
     @Provides
     @SingleIn(AppScope::class)

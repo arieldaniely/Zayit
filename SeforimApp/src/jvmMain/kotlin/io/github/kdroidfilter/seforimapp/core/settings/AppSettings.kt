@@ -9,6 +9,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 /**
  * Manages application settings and preferences that persist across app restarts.
@@ -80,6 +81,8 @@ object AppSettings {
     private const val KEY_USER_FIRST_NAME = "user_first_name"
     private const val KEY_USER_LAST_NAME = "user_last_name"
     private const val KEY_USER_COMMUNITY = "user_community" // stores a stable code (e.g., "SEPHARADE")
+    private const val KEY_SHARED_STUDY_DEVICE_ID = "shared_study_device_id"
+    private const val KEY_SHARED_STUDY_DISPLAY_NAME = "shared_study_display_name"
 
     // Theme configuration
     private const val KEY_THEME_MODE = "theme_mode"
@@ -121,6 +124,8 @@ object AppSettings {
         _linkLoadLevelFlow.value = getLinkLoadLevel()
         _showZmanimWidgetsFlow.value = isShowZmanimWidgetsEnabled()
         _showTempleCountdownFlow.value = isShowTempleCountdownEnabled()
+        _showHomeWallpaperFlow.value = isShowHomeWallpaperEnabled()
+        _compactModeFlow.value = isCompactModeEnabled()
         // User profile reactive values
         _userFirstNameFlow.value = getUserFirstName() ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""
@@ -504,6 +509,21 @@ object AppSettings {
     fun setUserLastName(value: String?) {
         settings[KEY_USER_LAST_NAME] = value?.takeIf { it.isNotBlank() } ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""
+    }
+
+    fun getOrCreateSharedStudyDeviceId(): String {
+        val existing: String = settings[KEY_SHARED_STUDY_DEVICE_ID, ""]
+        if (existing.isNotBlank()) return existing
+        return UUID.randomUUID().toString().also { settings[KEY_SHARED_STUDY_DEVICE_ID] = it }
+    }
+
+    fun getSharedStudyDisplayName(): String? {
+        val value: String = settings[KEY_SHARED_STUDY_DISPLAY_NAME, ""]
+        return value.ifBlank { null }
+    }
+
+    fun setSharedStudyDisplayName(value: String) {
+        settings[KEY_SHARED_STUDY_DISPLAY_NAME] = value.trim().take(48)
     }
 
     // Community is stored as a stable code (enum name), not a localized label

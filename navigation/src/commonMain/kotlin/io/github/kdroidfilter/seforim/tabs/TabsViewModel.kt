@@ -339,6 +339,18 @@ class TabsViewModel(
         addTabWithDestination(destination)
     }
 
+    /** Adds a tab without stealing focus from the tab the user is currently reading. */
+    fun openBackgroundTab(destination: TabsDestination) {
+        val newTab =
+            TabItem(
+                id = _nextTabId++,
+                title = getTabTitle(destination),
+                destination = destination,
+                tabType = tabTypeFor(destination),
+            )
+        _state.update { current -> current.copy(tabs = current.tabs + newTab) }
+    }
+
     fun replaceCurrentTabDestination(destination: TabsDestination) {
         val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
         if (currentTab != null) {

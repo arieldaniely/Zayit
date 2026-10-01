@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +10,7 @@ import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import io.github.kdroidfilter.seforimapp.features.search.domain.TorahReferenceSearchHelper
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState

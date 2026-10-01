@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AnimatedHorizontalProgressBar
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Text
@@ -20,7 +20,8 @@ import seforimapp.seforimapp.generated.resources.semantic_install_validating
 
 @Composable
 internal fun SemanticInstallationProgressView() {
-    val progress by LocalAppGraph.current.semanticAssetsManager.installationProgress.collectAsState()
+    val progress by LocalAppGraph.current.semanticAssetsManager.installationProgress
+        .collectAsState()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val fraction = progress?.fraction
         if (progress?.phase == SemanticAssetsManager.InstallationPhase.EXTRACTING && fraction != null) {

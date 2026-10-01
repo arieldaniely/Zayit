@@ -51,8 +51,6 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryPanel
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
@@ -739,7 +737,6 @@ fun BookTextMenus(
     wordLookupResult?.let { result ->
         WordLookupDialog(result = result, onDismiss = { wordLookupResult = null })
     }
-
 }
 
 /**

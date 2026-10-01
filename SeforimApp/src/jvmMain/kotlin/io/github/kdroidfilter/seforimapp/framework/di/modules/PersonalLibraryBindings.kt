@@ -9,8 +9,8 @@ import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibrar
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
-import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
@@ -22,7 +22,10 @@ import java.nio.file.Path
 object PersonalLibraryBindings {
     @Provides
     @SingleIn(AppScope::class)
-    fun providePersonalLibraryManager(settings: Settings, databasePathProvider: DatabasePathProvider): PersonalLibraryManager {
+    fun providePersonalLibraryManager(
+        settings: Settings,
+        databasePathProvider: DatabasePathProvider,
+    ): PersonalLibraryManager {
         val storage =
             Path
                 .of(getUserSettingsDatabasePath())

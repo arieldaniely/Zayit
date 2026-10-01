@@ -36,9 +36,10 @@ class PersonalLibraryServiceTest {
                 updated to null
             }
             val catalogCache = mockk<CatalogCache>(relaxed = true)
-            val databasePathProvider = mockk<DatabasePathProvider> {
-                every { get() } returns "base.db"
-            }
+            val databasePathProvider =
+                mockk<DatabasePathProvider> {
+                    every { get() } returns "base.db"
+                }
             try {
                 val service = PersonalLibraryService(manager, overlay, search, repository, databasePathProvider, catalogCache)
                 val job = launch(Dispatchers.Default) { service.requestSynchronize(original) }

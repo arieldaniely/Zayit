@@ -17,12 +17,16 @@ fun requestedDatabaseFile(appSettings: AppSettings): File {
 }
 
 /** The folder used for downloads, extraction and disk-space checks. */
-fun databaseInstallDirectory(appSettings: AppSettings): File = requestedDatabaseFile(appSettings).absoluteFile.parentFile ?: defaultDatabasesDirectory()
+fun databaseInstallDirectory(appSettings: AppSettings): File =
+    requestedDatabaseFile(appSettings).absoluteFile.parentFile ?: defaultDatabasesDirectory()
 
 fun databaseFileIn(directory: File): File = File(directory, BOOKS_DATABASE_FILE_NAME)
 
 /** Records a folder choice without moving or copying any existing database. */
-fun selectDatabaseDirectory(appSettings: AppSettings, directory: File): File {
+fun selectDatabaseDirectory(
+    appSettings: AppSettings,
+    directory: File,
+): File {
     require(directory.isDirectory) { "Database location must be an existing directory" }
     val databaseFile = databaseFileIn(directory).absoluteFile
     appSettings.setDatabasePath(databaseFile.path)
@@ -37,7 +41,10 @@ fun installationRootDirectory(appSettings: AppSettings): File = databaseInstallD
 
 fun databaseDirectoryInRoot(root: File): File = File(root, "databases")
 
-fun selectInstallationRoot(appSettings: AppSettings, root: File): File {
+fun selectInstallationRoot(
+    appSettings: AppSettings,
+    root: File,
+): File {
     require(root.isDirectory) { "Installation root must be an existing directory" }
     val directory = databaseDirectoryInRoot(root)
     check(directory.isDirectory || directory.mkdirs()) { "Could not create database directory" }

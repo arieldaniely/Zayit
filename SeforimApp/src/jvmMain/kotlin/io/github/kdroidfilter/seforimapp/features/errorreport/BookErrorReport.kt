@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.errorreport
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -31,8 +30,8 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.kdroidfilter.seforim.htmlparser.buildAnnotatedFromHtml
 import io.github.kdroidfilter.seforimapp.core.formatHebrewSourceReference
 import io.github.kdroidfilter.seforimapp.core.resolveLineRangeFromSelection
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
@@ -279,7 +278,15 @@ fun BookErrorReportDialog(
                                 status = ReportStatus.SENDING
                                 scope.launch {
                                     status =
-                                        if (BookErrorReportService.send(repository, draft, email, details, databaseVersionManager).isSuccess) {
+                                        if (BookErrorReportService
+                                                .send(
+                                                    repository,
+                                                    draft,
+                                                    email,
+                                                    details,
+                                                    databaseVersionManager,
+                                                ).isSuccess
+                                        ) {
                                             ReportStatus.SUCCESS
                                         } else {
                                             ReportStatus.FAILURE

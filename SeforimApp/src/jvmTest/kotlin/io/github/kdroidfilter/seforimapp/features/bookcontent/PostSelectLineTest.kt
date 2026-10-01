@@ -3,7 +3,6 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
-import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
@@ -16,10 +15,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.ContentUs
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.NavigationUseCase
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.NotesUseCase
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.TocUseCase
-import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
-import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
 import io.github.kdroidfilter.seforimapp.testAppSettings
 import io.github.kdroidfilter.seforimlibrary.core.models.AltTocEntry
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
@@ -83,9 +80,11 @@ class PostSelectLineTest {
         repository = mockk(relaxed = true)
         titleUpdateManager = TabTitleUpdateManager()
         tabsViewModel = mockk(relaxed = true)
-        every { tabsViewModel.state } returns MutableStateFlow(
-            io.github.kdroidfilter.seforim.tabs.TabsState(emptyList(), 0),
-        )
+        every { tabsViewModel.state } returns
+            MutableStateFlow(
+                io.github.kdroidfilter.seforim.tabs
+                    .TabsState(emptyList(), 0),
+            )
         desktopManager = mockk(relaxed = true)
         historyStore = mockk(relaxed = true)
         every { desktopManager.tabsViewModelFor(testTabId) } returns tabsViewModel
@@ -143,7 +142,6 @@ class PostSelectLineTest {
             useCaseFactory = useCaseFactory,
             titleUpdateManager = titleUpdateManager,
             desktopManager = desktopManager,
-
             sessionManager = mockk { every { isRestoringSession } returns MutableStateFlow(false) },
             appSettings = testAppSettings(),
             catalogCache = mockk { every { revision } returns MutableStateFlow(0L) },

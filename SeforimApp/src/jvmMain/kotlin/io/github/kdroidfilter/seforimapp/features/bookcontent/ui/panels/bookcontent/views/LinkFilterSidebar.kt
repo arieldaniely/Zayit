@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -14,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.SearchResultCategoryTreeView
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.Res
@@ -83,7 +83,10 @@ internal fun resolveLinkFilterBookIds(
     }
 }
 
-private fun buildLinkFilterTree(availableBookIds: Set<Long>, catalogCache: CatalogCache): List<SearchResultViewModel.SearchTreeCategory> {
+private fun buildLinkFilterTree(
+    availableBookIds: Set<Long>,
+    catalogCache: CatalogCache,
+): List<SearchResultViewModel.SearchTreeCategory> {
     if (availableBookIds.isEmpty()) return emptyList()
     val books = catalogCache.getAllBooks().orEmpty().filter { it.id in availableBookIds }
     val booksByCategory = books.groupBy { it.categoryId }

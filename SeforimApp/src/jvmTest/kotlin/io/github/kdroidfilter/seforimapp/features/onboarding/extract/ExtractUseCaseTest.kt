@@ -77,9 +77,7 @@ class ExtractUseCaseTest {
             }
         }
 
-    private suspend fun withInstallRoot(
-        block: suspend (File, File, AppSettings, DatabasePathProvider, TalmudPdfService) -> Unit,
-    ) {
+    private suspend fun withInstallRoot(block: suspend (File, File, AppSettings, DatabasePathProvider, TalmudPdfService) -> Unit) {
         val appSettings = testAppSettings()
         val databasePathProvider = DatabasePathProvider(appSettings)
         val talmudPdfService = TalmudPdfService(databasePathProvider)

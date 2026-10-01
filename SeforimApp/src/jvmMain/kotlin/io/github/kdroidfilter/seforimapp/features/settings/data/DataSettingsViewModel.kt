@@ -9,7 +9,6 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
 import io.github.kdroidfilter.seforimapp.framework.database.databaseFileIn
-import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.database.selectDatabaseDirectory
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope

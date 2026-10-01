@@ -11,9 +11,9 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLa
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
@@ -377,7 +377,10 @@ private data class PdfAvailability(
     val isActionAvailable: Boolean = false,
 )
 
-private fun isTalmudBavliBook(book: SeforimBook, catalogCache: CatalogCache): Boolean {
+private fun isTalmudBavliBook(
+    book: SeforimBook,
+    catalogCache: CatalogCache,
+): Boolean {
     val categoriesById = catalogCache.getCategoriesById() ?: return false
     val titles = mutableListOf<String>()
     var currentId: Long? = book.categoryId

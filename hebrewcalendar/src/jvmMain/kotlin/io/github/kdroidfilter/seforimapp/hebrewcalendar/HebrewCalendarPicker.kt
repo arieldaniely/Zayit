@@ -251,8 +251,7 @@ fun HebrewCalendarPicker(
                         ).clickable(enabled = !isDateSearchEditing) {
                             if (!pickingYear) yearPageStart = displayedYear - YEARS_PER_PAGE / 2
                             pickingYear = !pickingYear
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        }.padding(horizontal = 10.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 if (isDateSearchEditing) {
@@ -316,8 +315,9 @@ fun HebrewCalendarPicker(
                     Text(
                         text =
                             when {
-                                pickingYear -> "${formatYear(yearPageStart, calendarMode, hebrewDateFormatter)} – " +
-                                    formatYear(yearPageStart + YEARS_PER_PAGE - 1, calendarMode, hebrewDateFormatter)
+                                pickingYear ->
+                                    "${formatYear(yearPageStart, calendarMode, hebrewDateFormatter)} – " +
+                                        formatYear(yearPageStart + YEARS_PER_PAGE - 1, calendarMode, hebrewDateFormatter)
                                 calendarMode == CalendarMode.GREGORIAN -> displayedMonth.format(monthTitleFormatter)
                                 else -> formatHebrewMonthTitle(displayedHebrewMonth, hebrewDateFormatter)
                             },

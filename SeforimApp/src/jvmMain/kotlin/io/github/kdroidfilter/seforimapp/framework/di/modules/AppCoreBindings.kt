@@ -1,7 +1,5 @@
 package io.github.kdroidfilter.seforimapp.framework.di.modules
 
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.BindingContainer
@@ -22,10 +20,12 @@ import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
@@ -70,6 +70,7 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideCatalogAccess(catalogCache: CatalogCache): CatalogAccess = CatalogAccess { catalogCache.getCatalog() }
+
     @Provides
     @SingleIn(AppScope::class)
     fun provideSharedStudyCoordinator(appSettings: AppSettings): SharedStudyCoordinator {
@@ -144,7 +145,10 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideRepository(personalLibrary: PersonalLibraryManager, databasePathProvider: DatabasePathProvider): SeforimRepository {
+    fun provideRepository(
+        personalLibrary: PersonalLibraryManager,
+        databasePathProvider: DatabasePathProvider,
+    ): SeforimRepository {
         val dbPath = databasePathProvider.get()
         val personalArtifacts =
             runCatching { personalLibrary.synchronize().second }

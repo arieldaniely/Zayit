@@ -1,10 +1,10 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
+import com.github.luben.zstd.ZstdInputStream
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
-import dev.zacsweers.metro.SingleIn
-import dev.zacsweers.metro.Inject
-import com.github.luben.zstd.ZstdInputStream
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +24,6 @@ private const val TALMUD_BAVLI_DIR = "תלמוד בבלי"
 private const val TALMUD_ROOT_TITLE = "תלמוד"
 private const val BAVLI_CATEGORY_TITLE = "בבלי"
 private const val DOWNLOAD_URL = "https://github.com/arieldaniely/SeforimLibrary/releases/latest/download/talmud_bavli_latest.tar.zst"
-
 
 @Inject
 @SingleIn(AppScope::class)
@@ -140,9 +139,10 @@ class TalmudPdfService(
             }
         }
     }
+
     companion object {
         fun isTalmudBavliTitle(title: String?): Boolean = title == TALMUD_BAVLI_DIR
-    
+
         fun isTalmudBavliCategoryPath(titles: Iterable<String>): Boolean {
             var hasTalmudRoot = false
             var hasBavliCategory = false
@@ -154,7 +154,5 @@ class TalmudPdfService(
             }
             return hasTalmudRoot && hasBavliCategory
         }
-    
     }
-
 }

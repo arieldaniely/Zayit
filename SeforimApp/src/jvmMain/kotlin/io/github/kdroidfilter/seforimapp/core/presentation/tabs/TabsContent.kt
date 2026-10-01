@@ -58,7 +58,6 @@ import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomController
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.pdf.applyPdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeNavigationEvent
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShellMvi

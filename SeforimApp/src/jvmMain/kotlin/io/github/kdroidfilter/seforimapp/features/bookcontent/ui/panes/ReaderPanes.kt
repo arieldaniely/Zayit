@@ -532,7 +532,13 @@ private fun SatelliteScope.PaneBody(
     val tabId = item.destination.tabId
     key(tabId) {
         when (val destination = item.destination) {
-            is TabsDestination.Home, is TabsDestination.BookContent, is TabsDestination.PdfContent -> BookPaneBody(session, destination, pane, search = null)
+            is TabsDestination.Home, is TabsDestination.BookContent, is TabsDestination.PdfContent ->
+                BookPaneBody(
+                    session,
+                    destination,
+                    pane,
+                    search = null,
+                )
             is TabsDestination.Search -> BookPaneBody(session, destination, pane, search = destination)
             else -> Unit
         }
@@ -560,7 +566,12 @@ private fun BookPaneBody(
                 if (search != null) {
                     SearchTreePane(owner = owner, destination = search, uiState = uiState, onEvent = onEvent, modifier = modifier)
                 } else {
-                    CategoryTreePanel(uiState = uiState, onEvent = onEvent, modifier = modifier, isPdfEdition = destination is TabsDestination.PdfContent)
+                    CategoryTreePanel(
+                        uiState = uiState,
+                        onEvent = onEvent,
+                        modifier = modifier,
+                        isPdfEdition = destination is TabsDestination.PdfContent,
+                    )
                 }
             ReaderPane.Toc ->
                 if (search != null) {

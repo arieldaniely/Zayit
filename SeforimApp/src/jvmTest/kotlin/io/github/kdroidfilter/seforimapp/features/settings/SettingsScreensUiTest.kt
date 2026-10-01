@@ -24,7 +24,6 @@ import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import org.jetbrains.jewel.ui.component.InlineInformationBanner
-import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertTrue
 

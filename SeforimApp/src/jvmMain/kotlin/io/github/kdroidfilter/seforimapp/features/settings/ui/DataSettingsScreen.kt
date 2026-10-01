@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.settings.ui
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,12 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import io.github.kdroidfilter.seforimapp.features.search.SemanticInstallationProgressView
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
 import io.github.kdroidfilter.seforimapp.features.settings.data.SelectedDatabaseStatus
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker

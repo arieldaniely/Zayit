@@ -50,8 +50,7 @@ class DatabaseVersionManager(
         return isVersionCompatible(currentVersion, MINIMUM_REQUIRED_VERSION)
     }
 
-    fun isDatabaseVersionCompatible(databaseFile: File): Boolean =
-        Companion.isDatabaseVersionCompatible(databaseFile)
+    fun isDatabaseVersionCompatible(databaseFile: File): Boolean = Companion.isDatabaseVersionCompatible(databaseFile)
 
     companion object {
         /**

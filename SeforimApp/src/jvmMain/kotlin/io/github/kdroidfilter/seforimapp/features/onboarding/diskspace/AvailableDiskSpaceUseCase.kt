@@ -1,7 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.diskspace
 
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import dev.nucleusframework.systeminfo.SystemInfo
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

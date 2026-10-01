@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.databaselocation
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +27,7 @@ import io.github.kdroidfilter.seforimapp.framework.database.databaseDirectoryInR
 import io.github.kdroidfilter.seforimapp.framework.database.databaseFileIn
 import io.github.kdroidfilter.seforimapp.framework.database.installationRootDirectory
 import io.github.kdroidfilter.seforimapp.framework.database.selectInstallationRoot
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
 import io.github.vinceglb.filekit.path
@@ -149,7 +149,10 @@ fun DatabaseLocationScreen(
     }
 }
 
-private fun inspectDirectory(directory: File, databaseVersionManager: DatabaseVersionManager): DatabaseLocationStatus {
+private fun inspectDirectory(
+    directory: File,
+    databaseVersionManager: DatabaseVersionManager,
+): DatabaseLocationStatus {
     val databaseFile = databaseFileIn(databaseDirectoryInRoot(directory))
     return when {
         !databaseFile.isFile -> DatabaseLocationStatus.NOT_FOUND

@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent
 
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
@@ -23,7 +22,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
@@ -32,6 +30,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcont
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -134,7 +133,8 @@ private fun BookContentPanelContent(
     tabUi: BookTabUi,
     mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
-    val linkLoadLevel by LocalAppGraph.current.appSettings.linkLoadLevelFlow.collectAsState()
+    val linkLoadLevel by LocalAppGraph.current.appSettings.linkLoadLevelFlow
+        .collectAsState()
     val providers = uiState.providers ?: return
     val selectedBook = uiState.navigation.selectedBook ?: return
     // Latched: once laid out, the text stays composed whatever the panes do next.
@@ -201,46 +201,46 @@ private fun BookContentPanelContent(
                 if (mainContentOverride != null) {
                     mainContentOverride(paneCardModifier)
                 } else {
-                val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
-                BookContentView(
-                    bookId = selectedBook.id,
-                    lazyPagingItems = lazyPagingItems,
-                    selectedLineIds = uiState.content.selectedLineIds,
-                    primarySelectedLineId = uiState.content.primarySelectedLineId,
-                    isTocEntrySelection = uiState.content.isTocEntrySelection,
-                    onLineSelect = { line, isModifier ->
-                        onEvent(BookContentEvent.LineSelected(line, isModifier))
-                    },
-                    onEvent = onEvent,
-                    tabId = uiState.tabId,
-                    showDiacritics = showDiacritics,
-                    draftNote = noteDraft,
-                    modifier = paneCardModifier,
-                    preservedListState = bookListState,
-                    scrollIndex = uiState.content.scrollIndex,
-                    scrollOffset = uiState.content.scrollOffset,
-                    scrollToLineTimestamp = uiState.content.scrollToLineTimestamp,
-                    anchorId = uiState.content.anchorId,
-                    anchorIndex = uiState.content.anchorIndex,
-                    topAnchorLineId = uiState.content.topAnchorLineId,
-                    topAnchorTimestamp = uiState.content.topAnchorRequestTimestamp,
-                    onScroll = { anchorId, anchorIndex, scrollIndex, scrollOffset ->
-                        onEvent(
-                            BookContentEvent.ContentScrolled(
-                                anchorId = anchorId,
-                                anchorIndex = anchorIndex,
-                                scrollIndex = scrollIndex,
-                                scrollOffset = scrollOffset,
-                            ),
-                        )
-                    },
-                    altHeadingsByLineId = uiState.altToc.lineHeadingsByLineId.asStableAltHeadings(),
-                    lineConnections = connectionsCache,
-                    onPrefetchLineConnections = prefetchConnections,
-                    isSelected = isSelected,
-                    bookCharCounts = bookCharCounts,
-                    onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
-                )
+                    val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
+                    BookContentView(
+                        bookId = selectedBook.id,
+                        lazyPagingItems = lazyPagingItems,
+                        selectedLineIds = uiState.content.selectedLineIds,
+                        primarySelectedLineId = uiState.content.primarySelectedLineId,
+                        isTocEntrySelection = uiState.content.isTocEntrySelection,
+                        onLineSelect = { line, isModifier ->
+                            onEvent(BookContentEvent.LineSelected(line, isModifier))
+                        },
+                        onEvent = onEvent,
+                        tabId = uiState.tabId,
+                        showDiacritics = showDiacritics,
+                        draftNote = noteDraft,
+                        modifier = paneCardModifier,
+                        preservedListState = bookListState,
+                        scrollIndex = uiState.content.scrollIndex,
+                        scrollOffset = uiState.content.scrollOffset,
+                        scrollToLineTimestamp = uiState.content.scrollToLineTimestamp,
+                        anchorId = uiState.content.anchorId,
+                        anchorIndex = uiState.content.anchorIndex,
+                        topAnchorLineId = uiState.content.topAnchorLineId,
+                        topAnchorTimestamp = uiState.content.topAnchorRequestTimestamp,
+                        onScroll = { anchorId, anchorIndex, scrollIndex, scrollOffset ->
+                            onEvent(
+                                BookContentEvent.ContentScrolled(
+                                    anchorId = anchorId,
+                                    anchorIndex = anchorIndex,
+                                    scrollIndex = scrollIndex,
+                                    scrollOffset = scrollOffset,
+                                ),
+                            )
+                        },
+                        altHeadingsByLineId = uiState.altToc.lineHeadingsByLineId.asStableAltHeadings(),
+                        lineConnections = connectionsCache,
+                        onPrefetchLineConnections = prefetchConnections,
+                        isSelected = isSelected,
+                        bookCharCounts = bookCharCounts,
+                        onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
+                    )
                 }
             }
         }

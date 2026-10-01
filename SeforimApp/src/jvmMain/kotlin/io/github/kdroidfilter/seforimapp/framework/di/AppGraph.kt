@@ -1,7 +1,5 @@
 package io.github.kdroidfilter.seforimapp.framework.di
 
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metrox.viewmodel.ViewModelGraph
@@ -20,12 +18,14 @@ import io.github.kdroidfilter.seforimapp.features.database.update.DatabasePrepar
 import io.github.kdroidfilter.seforimapp.features.database.update.navigation.DatabaseUpdateProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.data.OnboardingProcessRepository
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
-import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService

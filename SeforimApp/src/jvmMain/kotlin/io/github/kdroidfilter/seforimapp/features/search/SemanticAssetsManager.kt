@@ -401,7 +401,6 @@ class SemanticAssetsManager(
             }
         }
     }
-
 }
 
 /** Path is Iterable<Path>; wrap the database to append the file, rather than its path components. */

@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string]$PdfDirectory,
     [Parameter(Mandatory = $true)][string]$SemanticDirectory,
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
-    [ValidateRange(1, 22)][int]$CompressionLevel = 6
+    [ValidateRange(1, 22)][int]$CompressionLevel = 22
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,17 +47,13 @@ if (Test-Path -LiteralPath $pdfBundle) { throw "Output already exists: $pdfBundl
 & $gradle -p $libraryRoot ':packaging:packageArtifacts' `
     "-PseforimDb=$databasePath" "-PpdfLibraryDir=$pdfPath" `
     '-PpdfOnly=true' '-PincludePdf=true' '-PincludeVectors=false' "-PbundleOutput=$pdfBundle" `
-    '-PsplitPartBytes=9223372036854775807' "-PzstdLevel=$CompressionLevel" `
+    "-PzstdLevel=$CompressionLevel" `
     '-x' ':packaging:writeReleaseInfo' '-x' ':packaging:downloadLexicalDb'
 if ($LASTEXITCODE -ne 0) { throw 'PDF packaging failed' }
-if ((Get-Item -LiteralPath $pdfBundle).Length -ge 2GB) {
-    throw 'The PDF supplement must be smaller than 2 GiB for the current app downloader'
-}
-
 & $gradle -p $libraryRoot ':packaging:packageSemanticBundle' `
     "-PseforimDb=$databasePath" "-PsemanticModelDir=$(Join-Path $semanticPath 'model')" `
     "-PsemanticIndexDir=$(Join-Path $semanticPath 'index')" `
-    "-PsemanticBundleOutput=$(Join-Path $outputPath 'semantic-bundle.tar.zst')"
+    "-PsemanticBundleOutput=$(Join-Path $outputPath 'semantic-bundle.tar.zst')" "-PzstdLevel=$CompressionLevel"
 if ($LASTEXITCODE -ne 0) { throw 'Semantic packaging failed' }
 
 # Keep unsplit archives locally, but list only the parts when a bundle was split.

@@ -1,3 +1,4 @@
+import { distributionName, distributionOrder, isDistributionArchive } from '../distributions';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +26,7 @@ import {
 
 const GITHUB_OWNER = 'arieldaniely';
 const GITHUB_REPO = 'Zayit';
-const DB_OWNER = 'kdroidFilter';
+const DB_OWNER = 'arieldaniely';
 const DB_REPO = 'SeforimLibrary';
 
 interface Asset {
@@ -293,14 +294,14 @@ export function DownloadModal() {
         if (!dbResp.ok) throw new Error(t('dl.errors.githubError', { status: dbResp.status }));
         const dbData = await dbResp.json();
         const parts = (dbData.assets || [])
-          .filter((a: { name: string }) => /seforim_bundle|part0?1|part0?2|\.part/i.test(a.name))
-          .map((a: { id: number; name: string; browser_download_url: string; size: number; label?: string }) => ({
+          .filter((a: { name: string }) => isDistributionArchive(a.name) || a.name === 'semantic-bundle.json')
+          .map((a: { id: number; name: string; browser_download_url: string; size: number; label?: string; digest?: string }) => ({
             id: a.id,
             name: a.name,
             url: a.browser_download_url,
             size: formatFileSize(a.size),
             rawSize: a.size,
-            sha256: a.label || '',
+            sha256: (a.digest || '').replace(/^sha256:/, '') || a.label || '',
           }))
           .sort((x: Asset, y: Asset) => x.name.localeCompare(y.name, undefined, { numeric: true }));
         setDbAssets(parts);
@@ -1404,7 +1405,14 @@ function DatabaseSection({
   setIncludeDb: (v: boolean) => void;
   t: (key: string) => string;
 }) {
-  const totalDbSize = dbAssets.reduce((acc, a) => acc + (a.rawSize || 0), 0);
+  const groups = distributionOrder.map((name) => ({
+    name,
+    assets: dbAssets.filter((asset) => distributionName(asset.name) === name),
+  })).filter((group) => group.assets.length > 0);
+  const [selectedDistribution, setSelectedDistribution] = useState('seforim_bundle');
+  const selected = groups.find((group) => group.name === selectedDistribution) || groups[0];
+  const selectedAssets = selected?.assets || [];
+  const totalDbSize = selectedAssets.reduce((acc, a) => acc + (a.rawSize || 0), 0);
 
   return (
     <div className="download-section download-section-db">
@@ -1428,6 +1436,18 @@ function DatabaseSection({
               {t('dl.database.offlineInfo')}
             </p>
           </div>
+          <label className="download-toggle-row">
+            <span>{t('dl.database.distribution')}</span>
+            <select value={selected?.name || ''} onChange={(event) => {
+              setSelectedDistribution(event.target.value);
+              setIncludeDb(true);
+            }} style={{ background: 'var(--bg-main)', color: 'var(--text-main)', padding: '0.5rem' }}>
+              {groups.map((group) => (
+                <option key={group.name} value={group.name}>{t(`dl.database.variants.${group.name}`)}</option>
+              ))}
+            </select>
+          </label>
+          <p className="download-small-text">{t('dl.database.allParts')}</p>
           <div className="download-toggle-row">
             <button className="download-toggle-button inline" onClick={() => setIncludeDb(!includeDb)}>
               {includeDb ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -1440,7 +1460,7 @@ function DatabaseSection({
                 {t('dl.database.totalSize')}: {formatFileSize(totalDbSize)}
               </p>
               <div className="download-assets-list compact">
-                {dbAssets.map((asset) => (
+                {selectedAssets.map((asset) => (
                   <div key={asset.id} className="download-db-item">
                     <div className="download-asset-line">
                       <div className="download-asset-meta">

@@ -117,8 +117,7 @@ class DatabaseCleanupUseCase {
             // stale pending-cleanup marker
             // download / extraction leftovers
             name.endsWith(".tar.zst") ||
-            name.endsWith(".part01") ||
-            name.endsWith(".part02") ||
+            Regex(".*\\.part\\d+", RegexOption.IGNORE_CASE).matches(name) ||
             name.endsWith(".zst") ||
             name.endsWith(".tmp")
     }

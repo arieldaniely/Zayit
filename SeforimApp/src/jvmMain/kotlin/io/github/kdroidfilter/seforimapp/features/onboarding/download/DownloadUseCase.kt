@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.download
 
+import io.github.kdroidfilter.seforimapp.features.onboarding.data.selectDistributionArchives
 import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import io.github.kdroidfilter.seforimapp.network.HttpsConnectionFactory
 import io.github.kdroidfilter.seforimapp.releasefetcher.github.GitHubReleaseFetcher
@@ -14,7 +15,7 @@ class DownloadUseCase(
     private val gitHubReleaseFetcher: GitHubReleaseFetcher,
 ) {
     /**
-     * Downloads the latest split bundle (.tar.zst split into .part01/.part02) and extracts it directly,
+     * Downloads the latest split bundle (.tar.zst split into numbered parts) and extracts it directly,
      * without creating an intermediate .tar file. If only a single .tar.zst exists (no parts), it is
      * downloaded and extracted as well.
      *
@@ -30,13 +31,9 @@ class DownloadUseCase(
                     ?: error("No release found")
 
             // Choose one complete distribution, never mix parts from optional bundles or variants.
-            val allAssets = latestRelease.assets
-            val partPattern = Regex("seforim_bundle\\.tar\\.zst\\.part(\\d+)", RegexOption.IGNORE_CASE)
-            val partAssets =
-                allAssets
-                    .filter { partPattern.matches(it.name) }
-                    .sortedBy { partPattern.matchEntire(it.name)!!.groupValues[1].toInt() }
-            val singleAsset = allAssets.firstOrNull { it.name.equals("seforim_bundle.tar.zst", ignoreCase = true) }
+            val selectedAssets = selectDistributionArchives(latestRelease.assets, "seforim_bundle.tar.zst") { it.name }
+            val partAssets = selectedAssets.filter { it.name.contains(".part") }
+            val singleAsset = selectedAssets.firstOrNull { it.name == "seforim_bundle.tar.zst" }
 
             val dbDir = databaseInstallDirectory().apply { mkdirs() }
 
@@ -77,18 +74,13 @@ class DownloadUseCase(
             }
 
             if (partAssets.isNotEmpty()) {
-                require(
-                    partAssets.size >= 2 &&
-                        partAssets.map {
-                            partPattern.matchEntire(it.name)!!.groupValues[1].toInt()
-                        } == (1..partAssets.size).toList(),
-                ) { "Missing bundle parts" }
                 val knownTotal = partAssets.sumOf { it.size.toLong() }.takeIf { it > 0L }
                 var downloaded = 0L
                 val files =
                     partAssets.map { asset ->
                         val file = File(dbDir, asset.name)
                         downloadFile(asset.browser_download_url, file) { read, _ -> report(downloaded + read, knownTotal) }
+                        require(file.length() == asset.size.toLong()) { "Incomplete bundle part: ${asset.name}" }
                         downloaded += file.length()
                         file
                     }

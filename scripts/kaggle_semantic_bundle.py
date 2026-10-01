@@ -23,7 +23,7 @@ from huggingface_hub import hf_hub_download, snapshot_download
 
 SOURCE_REPO = "ArieLLL123/judaic-semantic-teacher-8x512-retrieval-v5-round2"
 SOURCE_REVISION = "8d7016cf472fb436dbd3ac843ef4d407c28d08f4"
-ONNX_REPO = "ArieLLL123/judaic-semantic-round2-onnx-zayit"
+ONNX_REPO = "ArieLLL123/Meivin-Embed-0.1"
 MODEL_SHA = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
 TOKENIZER_SHA = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
 
@@ -214,8 +214,7 @@ def main(args: argparse.Namespace) -> None:
         if final_tag == args.db_release_tag:
             raise ValueError('Final release must use a new tag')
         publisher = Publisher(token)
-        publisher.draft(args.db_repository, final_tag, f'Distributions for {args.db_release_tag}')
-        publisher.draft(args.app_repository, 'semantic-round2-' + final_tag, f'Semantic index for {args.db_release_tag}')
+        args.publish_tag = publisher.allocate(args.db_repository, args.app_repository, final_tag, args.work)
     assets = release_assets(args.db_repository, args.db_release_tag, token)
     identity = {"repository": args.db_repository, "tag": args.db_release_tag,
                 "allDistributions": args.all_distributions,
@@ -241,10 +240,8 @@ def main(args: argparse.Namespace) -> None:
         from kaggle_publish_distributions import extract_complete
 
         extract_complete(parts, args.work, MultipartStream)
-        for name in ('seforim.db', 'seforim.db.lucene', 'seforim.db.lookup.lucene',
-                     'catalog.pb', 'lexical.db', 'release_info.txt'):
-            if not (args.work / name).exists():
-                raise FileNotFoundError(f'Missing base artifact: {name}')
+        if not database.is_file():
+            raise FileNotFoundError('The source release does not contain seforim.db')
     else:
         extract_database(parts, database)
     database_sha = sha256(database)
@@ -259,6 +256,24 @@ def main(args: argparse.Namespace) -> None:
     checkpoint, model_dir = fetch_models(args.work)
     java_home = install_java25(args.work)
     env = dict(os.environ, JAVA_HOME=str(java_home), RAYON_NUM_THREADS="2", OMP_NUM_THREADS="2")
+    if args.all_distributions:
+        library = args.repo / "SeforimLibrary"
+        gradle = library / "gradlew"
+        gradle.chmod(gradle.stat().st_mode | 0o111)
+        tasks = []
+        if not all((database.parent / name).is_dir() and any((database.parent / name).iterdir())
+                   for name in ('seforim.db.lucene', 'seforim.db.lookup.lucene')):
+            tasks.append(':searchindex:buildLuceneIndexDefault')
+        if not (database.parent / 'catalog.pb').is_file():
+            tasks.append(':catalog:buildCatalog')
+        if not (database.parent / 'lexical.db').is_file():
+            tasks.append(':packaging:downloadLexicalDb')
+        if not (database.parent / 'release_info.txt').is_file():
+            tasks.append(':packaging:writeReleaseInfo')
+        if tasks:
+            run_command([str(gradle), *tasks, f'-PseforimDb={database}',
+                         f'-PreleaseName={args.db_release_tag}', '-PinMemoryDb=false',
+                         '--no-daemon', '--no-configuration-cache', '--max-workers=4'], cwd=library, env=env)
     vectors_dir = args.work / "vectors-single"
     vectors_dir.mkdir(exist_ok=True)
     embed_script = args.repo / "scripts/kaggle_embed_vectors.py"
@@ -346,7 +361,7 @@ def main(args: argparse.Namespace) -> None:
     run_command([
         str(gradle), ":packaging:packageSemanticBundle",
         f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
-        f"-PsemanticIndexDir={index}", f"-PsemanticBundleOutput={archive}",
+        f"-PsemanticIndexDir={index}", f"-PsemanticBundleOutput={archive}", "-PzstdLevel=22",
         "--no-daemon", "--no-configuration-cache", "--max-workers=4",
     ], cwd=library, env=env)
     outputs = sorted(args.output.glob("semantic-bundle.tar.zst*"))

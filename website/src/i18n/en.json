@@ -204,7 +204,17 @@
       "hideFiles": "Hide database files",
       "offlineInfo": "If you plan to install Zayita without an internet connection, also download the database from the original Zayit release (separate download). The database is not distributed by the Zayita project.",
       "totalSize": "Total database files size",
-      "noFilesAvailable": "No database files available."
+      "noFilesAvailable": "No database files available.",
+      "distribution": "Choose a download package",
+      "allParts": "For a split package, download every part to the same folder.",
+      "variants": {
+        "seforim_bundle": "Full package — database, PDF and semantic search (recommended)",
+        "seforim_bundle-no-pdf": "Database and semantic search, without PDF",
+        "seforim_bundle-no-vectors": "Database and PDF, without semantic search",
+        "seforim_bundle-database-only": "Database and text indexes only",
+        "talmud_bavli_latest": "PDF supplement only",
+        "semantic-bundle": "Model and vectors supplement only"
+      }
     },
     "fileSize": {
       "mb": "MB",

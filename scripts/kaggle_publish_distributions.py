@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import uuid
 import json
 import re
 import shutil
@@ -11,11 +12,12 @@ from pathlib import Path
 from urllib.parse import quote
 
 import requests
-import zstandard
 
 
 def extract_complete(parts, destination, stream_class):
     """A completion marker prevents reuse of a partially extracted bundle."""
+    import zstandard
+
     destination = destination.resolve()
     marker = destination / '.base-extracted'
     if marker.exists():
@@ -61,6 +63,33 @@ class Publisher:
         if not release['draft']:
             raise ValueError(f'Release {repository}@{tag} is already published; choose a new tag')
         return release
+
+    def allocate(self, repository, app_repository, requested_tag, work):
+        """Resume our drafts, or allocate a fresh tag even if FULL already exists."""
+        state = work / 'publication.json'
+        if state.exists():
+            saved = json.loads(state.read_text(encoding='utf-8'))
+            if (saved['repository'], saved['appRepository']) != (repository, app_repository):
+                raise ValueError('Publication work directory belongs to another repository')
+            releases = [self.api('GET', f'repos/{repo}/releases/{saved[key]}')
+                        for repo, key in ((repository, 'releaseId'), (app_repository, 'semanticReleaseId'))]
+            if all(release['draft'] for release in releases):
+                return saved['tag']
+        # GitHub permits only one release per tag. A unique derived tag preserves existing releases.
+        while True:
+            tag = requested_tag + '-' + uuid.uuid4().hex[:12]
+            try:
+                release = self.draft(repository, tag, 'Building all six distributions')
+                semantic = self.draft(app_repository, 'semantic-round2-' + tag, 'Building semantic supplement')
+                break
+            except requests.HTTPError as error:
+                if error.response.status_code != 422:
+                    raise
+        state.write_text(json.dumps({'repository': repository, 'appRepository': app_repository,
+                                     'tag': tag, 'releaseId': release['id'],
+                                     'semanticReleaseId': semantic['id']}), encoding='utf-8')
+        print('Publication tag:', tag, flush=True)
+        return tag
 
     def upload(self, repository, release, file, digest):
         for attempt in range(3):
@@ -167,15 +196,13 @@ def build_distributions(args, database, model_dir, index, env, token, sha256, do
         if name == 'semantic-bundle':
             command = [gradle, ':packaging:packageSemanticBundle', f'-PseforimDb={database}',
                        f'-PsemanticModelDir={model_dir}', f'-PsemanticIndexDir={index}',
-                       f'-PsemanticBundleOutput={archive}']
+                       f'-PsemanticBundleOutput={archive}', '-PzstdLevel=22']
         else:
             command = [gradle, ':packaging:packageArtifacts', f'-PseforimDb={database}',
                        f'-PpdfLibraryDir={pdf_dir}', f'-PsemanticBundleDir={semantic_dir}',
                        f'-PincludePdf={str(pdf).lower()}', f'-PincludeVectors={str(vectors).lower()}',
-                       f'-PpdfOnly={str(pdf_only).lower()}', f'-PbundleOutput={archive}', '-PzstdLevel=6',
+                       f'-PpdfOnly={str(pdf_only).lower()}', f'-PbundleOutput={archive}', '-PzstdLevel=22',
                        '-x', ':packaging:writeReleaseInfo', '-x', ':packaging:downloadLexicalDb']
-            if pdf_only:
-                command.append('-PsplitPartBytes=9223372036854775807')
         run_command(command + common, cwd=library, env=env)
         parts = sorted(stage.glob(archive.name + '.part*'))
         files = parts or [archive]
@@ -195,7 +222,8 @@ def build_distributions(args, database, model_dir, index, env, token, sha256, do
         archive.unlink(missing_ok=True)
     manifest = args.output / 'distributions.json'
     manifest.write_text(json.dumps({'databaseSha256': sha256(database), 'databaseRelease': args.db_release_tag,
-                                   'pdfSource': identity, 'defaultBundle': 'seforim_bundle', 'assets': entries},
+                                   'compressionLevel': 22, 'vectorEncoding': 'int8-maxabs-v1', 'shardCount': 1,
+                                   'releaseTag': tag, 'pdfSource': identity, 'defaultBundle': 'seforim_bundle', 'assets': entries},
                                   indent=2), encoding='utf-8')
     checksums = args.output / 'checksums.sha256'
     checksums.write_text(''.join(f"{entry['sha256']}  {entry['name']}\n" for entry in entries), encoding='utf-8')

@@ -1,10 +1,15 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
 import com.github.luben.zstd.ZstdInputStream
+import io.github.kdroidfilter.seforimapp.features.onboarding.data.selectDistributionArchives
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
@@ -20,7 +25,7 @@ import kotlin.io.path.createTempFile
 private const val TALMUD_BAVLI_DIR = "תלמוד בבלי"
 private const val TALMUD_ROOT_TITLE = "תלמוד"
 private const val BAVLI_CATEGORY_TITLE = "בבלי"
-private const val DOWNLOAD_URL = "https://github.com/arieldaniely/SeforimLibrary/releases/latest/download/talmud_bavli_latest.tar.zst"
+private const val RELEASE_URL = "https://api.github.com/repos/arieldaniely/SeforimLibrary/releases/latest"
 
 object TalmudPdfService {
     private val pdfTitleCache = AtomicReference<Set<String>?>(null)
@@ -95,20 +100,61 @@ object TalmudPdfService {
         val tmp = createTempFile(prefix = "talmud_bavli_", suffix = ".tar.zst")
         try {
             val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build()
-            val request = HttpRequest.newBuilder(URI.create(DOWNLOAD_URL)).GET().build()
-            val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
-            require(response.statusCode() in 200..299) { "Download failed: HTTP ${response.statusCode()}" }
-            val total = response.headers().firstValueAsLong("Content-Length").orElse(-1L)
+            val release =
+                client.send(
+                    HttpRequest.newBuilder(URI.create(RELEASE_URL)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString(),
+                )
+            require(release.statusCode() == 200) { "Could not fetch PDF release" }
+            val assets =
+                Json
+                    .parseToJsonElement(release.body())
+                    .jsonObject
+                    .getValue("assets")
+                    .jsonArray
+            val selected =
+                selectDistributionArchives(assets, "talmud_bavli_latest.tar.zst") {
+                    it.jsonObject
+                        .getValue("name")
+                        .jsonPrimitive.content
+                }
+            val total =
+                selected.sumOf {
+                    it.jsonObject
+                        .getValue("size")
+                        .jsonPrimitive.content
+                        .toLong()
+                }
+            var copied = 0L
             Files.newOutputStream(tmp).use { out ->
-                response.body().use { input ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var copied = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        out.write(buffer, 0, read)
-                        copied += read
-                        onProgress(copied, total)
+                for (asset in selected) {
+                    val url =
+                        asset.jsonObject
+                            .getValue("browser_download_url")
+                            .jsonPrimitive.content
+                    val response =
+                        client.send(
+                            HttpRequest.newBuilder(URI.create(url)).GET().build(),
+                            HttpResponse.BodyHandlers.ofInputStream(),
+                        )
+                    response.body().use { input ->
+                        require(response.statusCode() in 200..299) { "Download failed: HTTP ${response.statusCode()}" }
+                        val expected =
+                            asset.jsonObject
+                                .getValue("size")
+                                .jsonPrimitive.content
+                                .toLong()
+                        var partBytes = 0L
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            out.write(buffer, 0, read)
+                            copied += read
+                            partBytes += read
+                            onProgress(copied, total)
+                        }
+                        require(partBytes == expected) { "Incomplete PDF bundle part" }
                     }
                 }
             }

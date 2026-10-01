@@ -10,54 +10,65 @@ class PersonalLibraryOverlay(
     @Synchronized
     fun attach(database: Path?) {
         val connection = driver.getConnection()
-        driver.setPersonalOverlayAttached(false)
-        TABLES.asReversed().forEach { table ->
-            connection.createStatement().use { it.execute("DROP VIEW IF EXISTS temp.\"$table\"") }
-        }
-        runCatching { connection.createStatement().use { it.execute("DETACH DATABASE personal") } }
-        if (database == null) return
-        val escaped = database.toAbsolutePath().toString().replace("'", "''")
-        connection.createStatement().use { it.execute("ATTACH DATABASE '$escaped' AS personal") }
-        connection.createStatement().use { statement ->
-            // ATTACH starts with SQLite's tiny default cache and mmap disabled for the new schema.
-            // The personal database is much smaller than the multi-gigabyte corpus. Giving both
-            // schemas a 256 MiB page cache made the app retain hundreds of unnecessary megabytes
-            // after a UNION scan. A 64 MiB cache plus 128 MiB mmap keeps indexed reads hot without
-            // duplicating the main database's memory budget.
-            statement.execute("PRAGMA personal.cache_size=-65536")
-            statement.execute("PRAGMA personal.mmap_size=134217728")
-        }
-        ensureTargetBookHints(connection)
-        val targetBookIds = HashSet<Long>()
-        val sourceTargetBookIds = HashSet<Long>()
-        val mentionBookIds = HashSet<Long>()
-        connection.createStatement().use { statement ->
-            statement
-                .executeQuery(
-                    "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
-                ).use { rows ->
-                    while (rows.next()) {
-                        val bookId = rows.getLong(1)
-                        targetBookIds += bookId
-                        if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
-                        if (rows.getInt(3) != 0) mentionBookIds += bookId
+        synchronized(connection) {
+            driver.clearStatementCache()
+            driver.setPersonalOverlayAttached(false)
+            TABLES.asReversed().forEach { table ->
+                connection.createStatement().use { it.execute("DROP VIEW IF EXISTS temp.\"$table\"") }
+            }
+            val attached =
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("PRAGMA database_list").use { rows ->
+                        var found = false
+                        while (rows.next()) if (rows.getString("name") == "personal") found = true
+                        found
                     }
                 }
-        }
-        TABLES.forEach { table ->
-            connection.createStatement().use {
-                it.execute(
-                    "CREATE TEMP VIEW \"$table\" AS " +
-                        "SELECT * FROM main.\"$table\" UNION ALL SELECT * FROM personal.\"$table\"",
-                )
+            if (attached) connection.createStatement().use { it.execute("DETACH DATABASE personal") }
+            if (database == null) return
+            val escaped = database.toAbsolutePath().toString().replace("'", "''")
+            connection.createStatement().use { it.execute("ATTACH DATABASE '$escaped' AS personal") }
+            connection.createStatement().use { statement ->
+                // ATTACH starts with SQLite's tiny default cache and mmap disabled for the new schema.
+                // The personal database is much smaller than the multi-gigabyte corpus. Giving both
+                // schemas a 256 MiB page cache made the app retain hundreds of unnecessary megabytes
+                // after a UNION scan. A 64 MiB cache plus 128 MiB mmap keeps indexed reads hot without
+                // duplicating the main database's memory budget.
+                statement.execute("PRAGMA personal.cache_size=-65536")
+                statement.execute("PRAGMA personal.mmap_size=134217728")
             }
+            ensureTargetBookHints(connection)
+            val targetBookIds = HashSet<Long>()
+            val sourceTargetBookIds = HashSet<Long>()
+            val mentionBookIds = HashSet<Long>()
+            connection.createStatement().use { statement ->
+                statement
+                    .executeQuery(
+                        "SELECT bookId,hasSourceLinks,hasMentionLinks FROM personal.personal_link_target_book",
+                    ).use { rows ->
+                        while (rows.next()) {
+                            val bookId = rows.getLong(1)
+                            targetBookIds += bookId
+                            if (rows.getInt(2) != 0) sourceTargetBookIds += bookId
+                            if (rows.getInt(3) != 0) mentionBookIds += bookId
+                        }
+                    }
+            }
+            TABLES.forEach { table ->
+                connection.createStatement().use {
+                    it.execute(
+                        "CREATE TEMP VIEW \"$table\" AS " +
+                            "SELECT * FROM main.\"$table\" UNION ALL SELECT * FROM personal.\"$table\"",
+                    )
+                }
+            }
+            driver.setPersonalOverlayAttached(
+                attached = true,
+                targetBookIds = targetBookIds,
+                sourceTargetBookIds = sourceTargetBookIds,
+                mentionBookIds = mentionBookIds,
+            )
         }
-        driver.setPersonalOverlayAttached(
-            attached = true,
-            targetBookIds = targetBookIds,
-            sourceTargetBookIds = sourceTargetBookIds,
-            mentionBookIds = mentionBookIds,
-        )
     }
 
     private fun ensureTargetBookHints(connection: java.sql.Connection) {

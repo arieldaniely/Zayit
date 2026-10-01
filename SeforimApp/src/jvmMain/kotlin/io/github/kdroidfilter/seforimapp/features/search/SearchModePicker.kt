@@ -373,13 +373,10 @@ private fun SemanticInstallDialog(
             Text(stringResource(Res.string.semantic_install_title))
             Text(stringResource(Res.string.semantic_install_body))
             if (busy) {
-                Text(
-                    if (downloadPart > 0) {
-                        stringResource(Res.string.semantic_download_progress, downloadPart, downloadTotal)
-                    } else {
-                        stringResource(Res.string.semantic_install_busy)
-                    },
-                )
+                if (downloadPart > 0) {
+                    Text(stringResource(Res.string.semantic_download_progress, downloadPart, downloadTotal))
+                }
+                SemanticInstallationProgressView()
             }
             error?.let {
                 Text(it, color = Color(0xFFB00020), modifier = Modifier.heightIn(max = 100.dp).verticalScroll(rememberScrollState()))

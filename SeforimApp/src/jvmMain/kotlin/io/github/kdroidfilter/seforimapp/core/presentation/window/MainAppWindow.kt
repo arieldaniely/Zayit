@@ -32,6 +32,9 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.energymanager.EnergyManager
+import dev.nucleusframework.taskbarprogress.tao.hideTaskbarProgress
+import dev.nucleusframework.taskbarprogress.tao.showTaskbarIndeterminate
+import dev.nucleusframework.taskbarprogress.tao.showTaskbarProgress
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
@@ -45,6 +48,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShort
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
 import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
@@ -264,6 +268,20 @@ fun NucleusApplicationScope.MainAppWindow(
         // Hook up the native window: focus tracking feeds DesktopManager (dock menu, deep links
         // and desktop actions target the focused window), and toFront() needs the handle.
         val nucleusWin = nucleusWindow
+        val semanticProgress by SemanticAssetsManager.installationProgress.collectAsState()
+        val semanticAvailability by SemanticAssetsManager.availability.collectAsState()
+        LaunchedEffect(nucleusWin, semanticProgress, semanticAvailability) {
+            val fraction = semanticProgress?.fraction
+            when {
+                fraction != null -> nucleusWin.showTaskbarProgress(fraction.toDouble())
+                semanticProgress != null || semanticAvailability == SemanticAssetsManager.Availability.VALIDATING ->
+                    nucleusWin.showTaskbarIndeterminate()
+                else -> nucleusWin.hideTaskbarProgress()
+            }
+        }
+        DisposableEffect(nucleusWin) {
+            onDispose { nucleusWin.hideTaskbarProgress() }
+        }
         DisposableEffect(nucleusWin) {
             openWindow.nucleusWindow = nucleusWin
             onDispose {

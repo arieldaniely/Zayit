@@ -4,12 +4,66 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
 import java.nio.file.Files
 import java.sql.DriverManager
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PersonalLibraryImporterTest {
+    @Test
+    fun skipsDamagedBooksAndImportsRemainingTxtAndDocx() {
+        val temp = Files.createTempDirectory("personal-library-mixed")
+        try {
+            val baseDatabase = temp.resolve("base.db")
+            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            val books = Files.createDirectory(temp.resolve("books"))
+            books.resolve("01-valid.txt").writeText("טקסט ראשון")
+            Files.write(books.resolve("02-broken.txt"), byteArrayOf(0xC3.toByte(), 0x28))
+            books.resolve("03-broken.docx").writeText("not a ZIP")
+            ZipOutputStream(Files.newOutputStream(books.resolve("04-valid.docx"))).use { zip ->
+                zip.putNextEntry(ZipEntry("word/document.xml"))
+                zip.write(
+                    """
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+                        <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>פרק א</w:t></w:r></w:p>
+                        <w:p><w:r><w:t>טקסט שני</w:t></w:r></w:p>
+                    </w:body></w:document>
+                    """.trimIndent().toByteArray(),
+                )
+                zip.closeEntry()
+            }
+            val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
+            val folder = PersonalBookFolder("mixed", books.toString(), "Mixed")
+            val progress = mutableListOf<Float>()
+            val (artifacts, summaries) = importer.build(listOf(folder), "mixed", progress::add)
+            val summary = summaries.getValue(folder.id)
+            assertEquals(2, summary.books)
+            assertEquals(listOf("02-broken.txt", "03-broken.docx"), summary.failedFiles)
+            assertEquals(1f, progress.last())
+            assertEquals(progress.sorted(), progress)
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT title,totalLines FROM book ORDER BY title").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("01-valid", rows.getString(1))
+                        assertTrue(rows.next())
+                        assertEquals("04-valid", rows.getString(1))
+                        assertEquals(2, rows.getInt(2))
+                        assertTrue(!rows.next())
+                    }
+                    statement.executeQuery("SELECT text FROM tocText").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("פרק א", rows.getString(1))
+                    }
+                }
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
+
     @Test
     fun importsPlainFolderWithoutOtzariaSubdirectory() {
         val temp = Files.createTempDirectory("personal-library-import")

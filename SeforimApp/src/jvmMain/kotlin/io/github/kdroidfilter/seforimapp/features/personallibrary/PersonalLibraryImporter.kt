@@ -180,7 +180,7 @@ class PersonalLibraryImporter(
             val files =
                 Files.walk(root).use { stream ->
                     stream
-                        .filter { it.isRegularFile() && it.extension.equals("txt", true) }
+                        .filter { it.isRegularFile() && it.extension.lowercase() in BOOK_EXTENSIONS }
                         .filter { !it.startsWith(root.resolve("links")) }
                         .filter { !it.nameWithoutExtension.startsWith("הערות על ") }
                         .sorted()
@@ -200,7 +200,7 @@ class PersonalLibraryImporter(
                     val title = normalizeLabel(rawTitle)
                     val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
                     val meta = metadata[rawTitle] ?: metadata[title]
-                    val lines = Files.readAllLines(file, Charsets.UTF_8)
+                    val lines = readPersonalBook(file)
                     val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
                     val notes =
                         listOf(title, rawTitle)
@@ -662,7 +662,7 @@ class PersonalLibraryImporter(
             stream
                 .filter { it.isRegularFile() }
                 .filter { file ->
-                    (file.extension.equals("txt", true) && !file.startsWith(root.resolve("links"))) ||
+                    (file.extension.lowercase() in BOOK_EXTENSIONS && !file.startsWith(root.resolve("links"))) ||
                         (file.extension.equals("json", true) && file.startsWith(root.resolve("links")))
                 }.mapToLong { Files.size(it).coerceAtLeast(1L) }
                 .sum()
@@ -694,8 +694,9 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v3-skip-errors"
-        val SUPPORTED_EXTENSIONS = setOf("txt", "json")
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v3-docx-skip-errors"
+        val BOOK_EXTENSIONS = setOf("txt", "docx")
+        val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 
         fun normalizeLabel(value: String): String =

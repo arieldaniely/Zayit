@@ -12,15 +12,19 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.*
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
+import io.github.kdroidfilter.seforimlibrary.core.models.Book as SeforimBook
 
 @Composable
 fun StartVerticalBar(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
+    showNotes: Boolean = true,
 ) {
     VerticalLateralBar(
         position = VerticalLateralBarPosition.Start,
@@ -47,7 +51,7 @@ fun StartVerticalBar(
             }
         },
         bottomContent = {
-            if (uiState.navigation.selectedBook != null) {
+            if (showNotes) {
                 SelectableIconButtonWithToolip(
                     toolTipText = stringResource(Res.string.notes_pane_tooltip),
                     onClick = { onEvent(BookContentEvent.ToggleNotes) },
@@ -55,6 +59,7 @@ fun StartVerticalBar(
                     icon = NotebookPen,
                     iconDescription = stringResource(Res.string.notes_pane),
                     label = stringResource(Res.string.notes_pane),
+                    shortcutHint = if (PlatformInfo.isMacOS) "E+⌘" else "E+Ctrl",
                 )
             }
         },
@@ -66,17 +71,27 @@ fun EndVerticalBar(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
+    isPdfEdition: Boolean = false,
+    pdfCanZoomIn: Boolean = false,
+    pdfCanZoomOut: Boolean = false,
+    onPdfZoomIn: () -> Unit = {},
+    onPdfZoomOut: () -> Unit = {},
 ) {
+    val talmudPdfService = LocalAppGraph.current.talmudPdfService
+
     val appSettings = LocalAppGraph.current.appSettings
     // Collect current text size from settings
     val rawTextSize by appSettings.textSizeFlow.collectAsState()
+    val linkLoadLevel by appSettings.linkLoadLevelFlow.collectAsState()
 
     // Determine if zoom buttons should be selected based on text size
     // Also check if we've reached min/max limits to disable buttons appropriately
-    val canZoomIn = rawTextSize < AppSettings.MAX_TEXT_SIZE
-    val canZoomOut = rawTextSize > AppSettings.MIN_TEXT_SIZE
+    val canZoomIn = if (isPdfEdition) pdfCanZoomIn else rawTextSize < AppSettings.MAX_TEXT_SIZE
+    val canZoomOut = if (isPdfEdition) pdfCanZoomOut else rawTextSize > AppSettings.MIN_TEXT_SIZE
 
     val selectedBook = uiState.navigation.selectedBook
+    val catalogCache = LocalAppGraph.current.catalogCache
+    val pdfLibraryVersion by talmudPdfService.libraryVersion.collectAsState()
     val noBookSelected = selectedBook == null
     val selectedLine = uiState.content.primaryLine
     val providers = uiState.providers
@@ -85,6 +100,7 @@ fun EndVerticalBar(
         initialValue = LineResourceAvailability(),
         key1 = selectedLine?.id,
         key2 = providers,
+        key3 = linkLoadLevel,
     ) {
         if (selectedLine == null || providers == null) {
             value = LineResourceAvailability()
@@ -103,12 +119,17 @@ fun EndVerticalBar(
             runSuspendCatching {
                 providers.getAvailableSourcesForLine(selectedLine.id)
             }.getOrNull()?.isNotEmpty()
+        val mentionsAvailable =
+            runSuspendCatching {
+                providers.getAvailableMentionsForLine(selectedLine.id)
+            }.getOrNull()?.isNotEmpty()
 
         value =
             LineResourceAvailability(
                 targumAvailable = targumAvailable,
                 commentariesAvailable = commentariesAvailable,
                 sourcesAvailable = sourcesAvailable,
+                mentionsAvailable = mentionsAvailable,
             )
     }
 
@@ -118,12 +139,14 @@ fun EndVerticalBar(
             // Platform-specific shortcut hint for Zoom In
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomIn) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_in_tooltip)
+                    } else if (canZoomIn) {
                         stringResource(Res.string.zoom_in_tooltip)
                     } else {
                         stringResource(Res.string.zoom_in_tooltip) + " (${AppSettings.MAX_TEXT_SIZE.toInt()}sp max)"
                     },
-                onClick = { appSettings.increaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomIn() else appSettings.increaseTextSize() },
                 isSelected = false,
                 enabled = canZoomIn,
                 icon = ZoomIn,
@@ -133,12 +156,14 @@ fun EndVerticalBar(
             )
             SelectableIconButtonWithToolip(
                 toolTipText =
-                    if (canZoomOut) {
+                    if (isPdfEdition) {
+                        stringResource(Res.string.pdf_zoom_out_tooltip)
+                    } else if (canZoomOut) {
                         stringResource(Res.string.zoom_out_tooltip)
                     } else {
                         stringResource(Res.string.zoom_out_tooltip) + " (${AppSettings.MIN_TEXT_SIZE.toInt()}sp min)"
                     },
-                onClick = { appSettings.decreaseTextSize() },
+                onClick = { if (isPdfEdition) onPdfZoomOut() else appSettings.decreaseTextSize() },
                 isSelected = false,
                 enabled = canZoomOut,
                 icon = ZoomOut,
@@ -147,8 +172,41 @@ fun EndVerticalBar(
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
 
+            if (!noBookSelected && isPdfEdition) {
+                SelectableIconButtonWithToolip(
+                    toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
+                    onClick = { onEvent(BookContentEvent.OpenTextEdition) },
+                    isSelected = false,
+                    icon = Book_2,
+                    iconDescription = stringResource(Res.string.back_to_text_edition),
+                    label = stringResource(Res.string.back_to_text_edition),
+                )
+            } else if (!noBookSelected) {
+                val pdfAvailability by produceState(
+                    initialValue = PdfAvailability(),
+                    key1 = selectedBook.id,
+                    key2 = selectedBook.title,
+                    key3 = pdfLibraryVersion,
+                ) {
+                    val isBavli = isTalmudBavliBook(selectedBook, catalogCache)
+                    val hasFile = talmudPdfService.hasPdfForTitle(selectedBook.title)
+                    value = PdfAvailability(isSupported = isBavli, isActionAvailable = isBavli && hasFile)
+                }
+                if (pdfAvailability.isSupported && pdfAvailability.isActionAvailable) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText = stringResource(Res.string.open_pdf_edition_tooltip),
+                        onClick = { onEvent(BookContentEvent.OpenPdfEdition) },
+                        isSelected = false,
+                        enabled = true,
+                        icon = JournalText,
+                        iconDescription = stringResource(Res.string.open_pdf_edition),
+                        label = stringResource(Res.string.open_pdf_edition),
+                    )
+                }
+            }
+
             // Diacritics toggle button - only when a book is selected and has nekudot/teamim
-            if (!noBookSelected) {
+            if (!noBookSelected && !isPdfEdition) {
                 val bookHasDiacritics = selectedBook.hasNekudot || selectedBook.hasTeamim
                 if (bookHasDiacritics) {
                     SelectableIconButtonWithToolip(
@@ -182,10 +240,16 @@ fun EndVerticalBar(
 //            )
         },
         bottomContent = {
-            val targumEnabled = selectedBook?.hasTargumConnection == true
-            val commentaryEnabled = selectedBook?.hasCommentaryConnection == true
-            val sourcesEnabled = selectedBook?.hasSourceConnection == true
-            val linksEnabled = (selectedBook?.hasReferenceConnection == true) || (selectedBook?.hasOtherConnection == true)
+            val targumEnabled = selectedBook?.hasTargumConnection == true || lineAvailability.targumAvailable == true
+            val commentaryEnabled =
+                selectedBook?.hasCommentaryConnection == true || lineAvailability.commentariesAvailable == true
+            val sourcesEnabled =
+                selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
+            val mentionsEnabled =
+                selectedBook?.hasReferenceConnection == true ||
+                    selectedBook?.hasOtherConnection == true ||
+                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true) ||
+                    lineAvailability.mentionsAvailable == true
 
             // Hide both buttons on Home (no book selected)
             if (!noBookSelected) {
@@ -201,6 +265,11 @@ fun EndVerticalBar(
                     selectedLine != null &&
                         lineAvailability.sourcesAvailable == false &&
                         !uiState.content.showSources
+
+                val mentionsDisabledForLine =
+                    selectedLine != null &&
+                        lineAvailability.mentionsAvailable == false &&
+                        !uiState.content.showMentions
 
                 val targumTooltip =
                     when {
@@ -221,7 +290,6 @@ fun EndVerticalBar(
                         else -> stringResource(Res.string.show_sources_tooltip)
                     }
 
-                // Show Targum only when available for the book
                 if (targumEnabled) {
                     SelectableIconButtonWithToolip(
                         toolTipText = targumTooltip,
@@ -232,6 +300,23 @@ fun EndVerticalBar(
                         label = stringResource(Res.string.show_targumim),
                         enabled = !targumDisabledForLine,
                         shortcutHint = if (PlatformInfo.isMacOS) "K+⇧+⌘" else "K+Shift+Ctrl",
+                    )
+                }
+
+                if (mentionsEnabled) {
+                    SelectableIconButtonWithToolip(
+                        toolTipText =
+                            when {
+                                mentionsDisabledForLine -> stringResource(Res.string.no_mentions_for_line)
+                                selectedLine == null -> stringResource(Res.string.select_line_for_mentions)
+                                else -> stringResource(Res.string.show_mentions_tooltip)
+                            },
+                        onClick = { onEvent(BookContentEvent.ToggleMentions) },
+                        isSelected = uiState.content.showMentions,
+                        icon = Quote,
+                        iconDescription = stringResource(Res.string.show_mentions),
+                        label = stringResource(Res.string.show_mentions),
+                        enabled = selectedLine != null && !mentionsDisabledForLine,
                     )
                 }
 
@@ -284,4 +369,23 @@ private data class LineResourceAvailability(
     val targumAvailable: Boolean? = null,
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
+    val mentionsAvailable: Boolean? = null,
 )
+
+private data class PdfAvailability(
+    val isSupported: Boolean = false,
+    val isActionAvailable: Boolean = false,
+)
+
+private fun isTalmudBavliBook(book: SeforimBook, catalogCache: CatalogCache): Boolean {
+    val categoriesById = catalogCache.getCategoriesById() ?: return false
+    val titles = mutableListOf<String>()
+    var currentId: Long? = book.categoryId
+    var safety = 64
+    while (currentId != null && safety-- > 0) {
+        val category = categoriesById[currentId] ?: return false
+        titles += category.title
+        currentId = category.parentId
+    }
+    return TalmudPdfService.isTalmudBavliCategoryPath(titles)
+}

@@ -3,9 +3,11 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcon
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -17,10 +19,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -28,7 +35,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.paging.LoadState
@@ -37,6 +47,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforim.htmlparser.SkiaHtmlImageBuilder
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
+import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
@@ -46,6 +57,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.Pane
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.Filter
+import io.github.kdroidfilter.seforimapp.icons.FilterFilled
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
@@ -60,27 +73,36 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.CircularProgressIndicator
-import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.*
 import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.hide_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.links
+import seforimapp.seforimapp.generated.resources.mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
+import seforimapp.seforimapp.generated.resources.no_mentions_for_line
 import seforimapp.seforimapp.generated.resources.no_sources_for_line
+import seforimapp.seforimapp.generated.resources.paging_error_loading_more
 import seforimapp.seforimapp.generated.resources.select_line_for_links
+import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.select_line_for_sources
+import seforimapp.seforimapp.generated.resources.show_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.sources
 
 // Per-side vertical padding applied by `LinkItem`'s Column. Exposed so the scrollbar
 // can derive the exact per-item padding contribution as `2 × LinkItemVerticalPaddingPerSide`.
 private val LinkItemVerticalPaddingPerSide = 8.dp
+private const val MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT = 1200
+private const val MAX_COLLAPSED_LINK_ITEM_LINES = 6
 
 @OptIn(ExperimentalSplitPaneApi::class)
 @Composable
 private fun SingleLineTargumView(
     selectedLine: Line?,
+    onEvent: (BookContentEvent) -> Unit,
     buildLinksPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
     getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     getLinkCharCountsForLine: suspend (Long, Long, ConnectionType) -> List<Int>,
+    getLinePath: suspend (Long) -> String,
     showDiacritics: Boolean,
     commentariesScrollIndex: Int = 0,
     commentariesScrollOffset: Int = 0,
@@ -98,7 +120,10 @@ private fun SingleLineTargumView(
     emptyRes: StringResource = Res.string.no_links_for_line,
 ) {
     val appSettings = LocalAppGraph.current.appSettings
+
     val rawTextSize by appSettings.textSizeFlow.collectAsState()
+    val catalogCache = LocalAppGraph.current.catalogCache
+    val linkLoadLevel by appSettings.linkLoadLevelFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -115,6 +140,7 @@ private fun SingleLineTargumView(
     )
 
     val currentGetAvailableLinksForLine by rememberUpdatedState(getAvailableLinksForLine)
+    val currentGetLinePath by rememberUpdatedState(getLinePath)
     val currentOnSelectedSourcesChange by rememberUpdatedState(onSelectedSourcesChange)
     val currentOnScroll by rememberUpdatedState(onScroll)
 
@@ -123,11 +149,15 @@ private fun SingleLineTargumView(
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
     val boldScaleForPlatform =
         remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 
     val paneInteractionSource = remember { MutableInteractionSource() }
+    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
+    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
+    var selectedFilterCategoryIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
+    var selectedFilterBookIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     Column(
         modifier =
@@ -139,6 +169,17 @@ private fun SingleLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
+            actions =
+                if (supportsBookFilter) {
+                    {
+                        LinkFilterSidebarToggleButton(
+                            isVisible = isFilterSidebarVisible,
+                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
+                        )
+                    }
+                } else {
+                    null
+                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -151,29 +192,31 @@ private fun SingleLineTargumView(
 
                 else -> {
                     val cachedSources =
-                        remember(selectedLine.id, lineConnections, availabilityType) {
+                        remember(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
+                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }
                         }
 
-                    var titleToIdMap by remember(selectedLine.id, cachedSources) {
+                    var titleToIdMap by remember(selectedLine.id, cachedSources, linkLoadLevel) {
                         mutableStateOf<Map<String, Long>>(cachedSources ?: emptyMap())
                     }
 
-                    LaunchedEffect(selectedLine.id, lineConnections) {
+                    LaunchedEffect(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
                         val cached =
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
+                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }
-                        if (cached != null) {
-                            titleToIdMap = cached
+                        if (cached != null) titleToIdMap = cached
+                        if (cached != null && !supportsBookFilter) {
                             return@LaunchedEffect
                         }
 
@@ -198,6 +241,19 @@ private fun SingleLineTargumView(
                             remember(titleToIdMap) {
                                 titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                             }
+                        val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
+                        val filteredBookIds =
+                            if (supportsBookFilter) {
+                                resolveLinkFilterBookIds(
+                                    availableBookIds = availableBookIds,
+                                    catalogCache = catalogCache,
+                                    selectedCategoryIds = selectedFilterCategoryIds,
+                                    selectedBookIds = selectedFilterBookIds,
+                                )
+                            } else {
+                                availableBookIds
+                            }
+                        val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                         val selectedSources =
                             remember(titleToIdMap, initiallySelectedSourceIds) {
@@ -211,9 +267,9 @@ private fun SingleLineTargumView(
                         }
 
                         val sourceSections =
-                            availableSources.mapNotNull { meta ->
+                            displayedSources.mapNotNull { meta ->
                                 val pagerFlow =
-                                    remember(selectedLine.id, meta.bookId) {
+                                    remember(selectedLine.id, meta.bookId, availabilityType, linkLoadLevel) {
                                         buildLinksPagerFor(selectedLine.id, meta.bookId).distinctUntilChanged()
                                     }
                                 val lazyPagingItems = pagerFlow.collectAsLazyPagingItems()
@@ -258,6 +314,7 @@ private fun SingleLineTargumView(
                             selectedLine.id,
                             sectionBookIds,
                             availabilityType,
+                            linkLoadLevel,
                         ) {
                             value =
                                 runSuspendCatching {
@@ -276,6 +333,8 @@ private fun SingleLineTargumView(
                                 }.getOrElse { sectionBookIds.map { emptyList() } }
                                     .flatMap { listOf(0) + it }
                         }
+
+                        var expandedItemIds by remember(selectedLine.id) { mutableStateOf(setOf<Long>()) }
 
                         val density = LocalDensity.current
                         val textMeasurer = rememberTextMeasurer()
@@ -305,84 +364,170 @@ private fun SingleLineTargumView(
                             }
                         }
 
-                        SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                                    state = listState,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    sourceSections.forEach { section ->
-                                        item(key = "header-${section.bookId}") {
-                                            Text(
-                                                text = section.title,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = (commentTextSize * 1.1f).sp,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.fillMaxWidth(),
-                                            )
-                                        }
+                        val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
+                            derivedStateOf {
+                                computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
+                            }
+                        }
 
-                                        items(
-                                            count = section.items.itemCount,
-                                            key = { index ->
-                                                section.items
-                                                    .peek(index)
-                                                    ?.link
-                                                    ?.id ?: "source-${section.bookId}-$index"
-                                            },
-                                        ) { index ->
-                                            section.items[index]?.let { item ->
-                                                LinkItem(
-                                                    linkId = item.link.id,
-                                                    targetText = item.targetText,
-                                                    commentTextSize = commentTextSize,
-                                                    lineHeight = lineHeight,
-                                                    fontFamily = targumFontFamily,
-                                                    boldScale = boldScaleForPlatform,
-                                                    highlightQuery = highlightQuery,
-                                                    onClick = { onLinkClick(item) },
-                                                    showDiacritics = showDiacritics,
-                                                    annotationCache = annotationCache,
-                                                    onLayoutWidthMeasure = { width ->
-                                                        if (textLayoutWidthPx == 0 && width > 0) {
-                                                            textLayoutWidthPx = width
-                                                        }
-                                                    },
+                        LinkFilterScaffold(
+                            isVisible = isFilterSidebarVisible && supportsBookFilter,
+                            sidebarOnLeft = availabilityType == ConnectionType.MENTION,
+                            availableBookIds = availableBookIds,
+                            selectedCategoryIds = selectedFilterCategoryIds,
+                            selectedBookIds = selectedFilterBookIds,
+                            onCategoryCheckedChange = { id, checked ->
+                                selectedFilterCategoryIds =
+                                    if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
+                            },
+                            onBookCheckedChange = { id, checked ->
+                                selectedFilterBookIds =
+                                    if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
+                            },
+                        ) {
+                            SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                                        state = listState,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        sourceSections.forEach { section ->
+                                            item(key = "header-${section.bookId}") {
+                                                SourceSectionHeader(
+                                                    title = section.title,
+                                                    textSize = commentTextSize,
+                                                    onClick =
+                                                        when (availabilityType) {
+                                                            ConnectionType.SOURCE -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenSourceBookInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
+                                                            }
+                                                            ConnectionType.MENTION -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenBookByIdInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
+                                                            }
+                                                            else -> {
+                                                                {
+                                                                    onEvent(
+                                                                        BookContentEvent.OpenBookByIdInNewTab(
+                                                                            bookId = section.bookId,
+                                                                            baseLineIds = listOf(selectedLine.id),
+                                                                        ),
+                                                                    )
+                                                                }
+                                                            }
+                                                        },
                                                 )
                                             }
-                                        }
 
-                                        when (val state = section.items.loadState.append) {
-                                            is LoadState.Error ->
-                                                item(key = "append-error-${section.bookId}") {
-                                                    Box(
-                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                        contentAlignment = Alignment.Center,
-                                                    ) {
-                                                        Text(text = state.error.message ?: "Error loading more")
+                                            items(
+                                                count = section.items.itemCount,
+                                                key = { index ->
+                                                    section.items
+                                                        .peek(index)
+                                                        ?.link
+                                                        ?.id ?: "source-${section.bookId}-$index"
+                                                },
+                                            ) { index ->
+                                                section.items[index]?.let { item ->
+                                                    val targetPath by produceState("", item.link.targetLineId, availabilityType) {
+                                                        val tocPath =
+                                                            if (supportsBookFilter) {
+                                                                currentGetLinePath(
+                                                                    item.link.targetLineId,
+                                                                )
+                                                            } else {
+                                                                ""
+                                                            }
+                                                        value = buildLinkTargetPath(item.targetBookTitle, tocPath)
                                                     }
+                                                    LinkItem(
+                                                        linkId = item.link.id,
+                                                        targetText = item.targetText,
+                                                        targetPath = if (supportsBookFilter) targetPath else "",
+                                                        onPathClick = {
+                                                            onEvent(
+                                                                BookContentEvent.OpenCommentaryTarget(
+                                                                    bookId = item.link.targetBookId,
+                                                                    lineId = item.link.targetLineId,
+                                                                ),
+                                                            )
+                                                        },
+                                                        commentTextSize = commentTextSize,
+                                                        lineHeight = lineHeight,
+                                                        fontFamily = targumFontFamily,
+                                                        boldScale = boldScaleForPlatform,
+                                                        highlightQuery = highlightQuery,
+                                                        onClick = { onLinkClick(item) },
+                                                        isExpanded = item.link.id in expandedItemIds,
+                                                        onToggleExpand = {
+                                                            val id = item.link.id
+                                                            expandedItemIds =
+                                                                if (id in expandedItemIds) {
+                                                                    expandedItemIds - id
+                                                                } else {
+                                                                    expandedItemIds + id
+                                                                }
+                                                        },
+                                                        showDiacritics = showDiacritics,
+                                                        annotationCache = annotationCache,
+                                                        onLayoutWidthMeasure = { width ->
+                                                            if (textLayoutWidthPx == 0 && width > 0) {
+                                                                textLayoutWidthPx = width
+                                                            }
+                                                        },
+                                                    )
                                                 }
+                                            }
 
-                                            is LoadState.Loading ->
-                                                item(key = "append-loading-${section.bookId}") {
-                                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                        CircularProgressIndicator()
+                                            when (val state = section.items.loadState.append) {
+                                                is LoadState.Error ->
+                                                    item(key = "append-error-${section.bookId}") {
+                                                        Box(
+                                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                            contentAlignment = Alignment.Center,
+                                                        ) {
+                                                            Text(
+                                                                text =
+                                                                    state.error.message
+                                                                        ?: stringResource(Res.string.paging_error_loading_more),
+                                                            )
+                                                        }
                                                     }
-                                                }
 
-                                            else -> {}
+                                                is LoadState.Loading ->
+                                                    item(key = "append-loading-${section.bookId}") {
+                                                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                            CircularProgressIndicator()
+                                                        }
+                                                    }
+
+                                                else -> {}
+                                            }
                                         }
                                     }
+                                    TargumScrollbar(
+                                        listState = listState,
+                                        allCharCounts = effectiveCharCounts,
+                                        capacity = capacity,
+                                        lineHeightPx = lineHeightPx,
+                                        paddingPerItemPx = paddingPerItemPx,
+                                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                                    )
                                 }
-                                TargumScrollbar(
-                                    listState = listState,
-                                    allCharCounts = allCharCounts,
-                                    capacity = capacity,
-                                    lineHeightPx = lineHeightPx,
-                                    paddingPerItemPx = paddingPerItemPx,
-                                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                                )
                             }
                         }
                     }
@@ -415,22 +560,35 @@ fun LineTargumView(
 
     // Sélectionner les bons providers et callbacks selon le type
     val isSourceType = availabilityType == ConnectionType.SOURCE
+    val isMentionType = availabilityType == ConnectionType.MENTION
 
     val buildPagerFor =
-        if (isSourceType) providers.buildSourcesPagerFor else providers.buildLinksPagerFor
+        when {
+            isSourceType -> providers.buildSourcesPagerFor
+            isMentionType -> providers.buildMentionsPagerFor
+            else -> providers.buildLinksPagerFor
+        }
     val getAvailableForLine =
-        if (isSourceType) providers.getAvailableSourcesForLine else providers.getAvailableLinksForLine
+        when {
+            isSourceType -> providers.getAvailableSourcesForLine
+            isMentionType -> providers.getAvailableMentionsForLine
+            else -> providers.getAvailableLinksForLine
+        }
     val initiallySelectedIds =
-        if (isSourceType) contentState.selectedSourceIds else contentState.selectedTargumSourceIds
+        when {
+            isSourceType -> contentState.selectedSourceIds
+            isMentionType -> emptySet()
+            else -> contentState.selectedTargumSourceIds
+        }
 
     val onSelectedSourcesChange =
-        remember(contentState.primaryLine, isSourceType) {
+        remember(contentState.primaryLine, isSourceType, isMentionType) {
             { ids: Set<Long> ->
                 contentState.primaryLine?.let { line ->
-                    if (isSourceType) {
-                        onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
-                    } else {
-                        onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
+                    when {
+                        isSourceType -> onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
+                        isMentionType -> Unit
+                        else -> onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
                     }
                 }
                 Unit
@@ -460,22 +618,36 @@ fun LineTargumView(
         }
 
     val onHide =
-        remember(isSourceType) {
+        remember(isSourceType, isMentionType) {
             {
-                if (isSourceType) {
-                    onEvent(BookContentEvent.ToggleSources)
-                } else {
-                    onEvent(BookContentEvent.ToggleTargum)
+                when {
+                    isSourceType -> onEvent(BookContentEvent.ToggleSources)
+                    isMentionType -> onEvent(BookContentEvent.ToggleMentions)
+                    else -> onEvent(BookContentEvent.ToggleTargum)
                 }
             }
         }
 
     // Titres et messages selon le type
-    val titleRes = if (isSourceType) Res.string.sources else Res.string.links
+    val titleRes =
+        when {
+            isSourceType -> Res.string.sources
+            isMentionType -> Res.string.mentions
+            else -> Res.string.links
+        }
     val selectLineRes =
-        if (isSourceType) Res.string.select_line_for_sources else Res.string.select_line_for_links
-    val emptyRes = if (isSourceType) Res.string.no_sources_for_line else Res.string.no_links_for_line
-    val fontCodeFlow = if (isSourceType) appSettings.sourceFontCodeFlow else appSettings.targumFontCodeFlow
+        when {
+            isSourceType -> Res.string.select_line_for_sources
+            isMentionType -> Res.string.select_line_for_mentions
+            else -> Res.string.select_line_for_links
+        }
+    val emptyRes =
+        when {
+            isSourceType -> Res.string.no_sources_for_line
+            isMentionType -> Res.string.no_mentions_for_line
+            else -> Res.string.no_links_for_line
+        }
+    val fontCodeFlow = if (isSourceType || isMentionType) appSettings.sourceFontCodeFlow else appSettings.targumFontCodeFlow
 
     if (isManualMultiSelection) {
         MultiLineTargumView(
@@ -490,9 +662,11 @@ fun LineTargumView(
     } else {
         SingleLineTargumView(
             selectedLine = contentState.primaryLine,
+            onEvent = onEvent,
             buildLinksPagerFor = buildPagerFor,
             getAvailableLinksForLine = getAvailableForLine,
             getLinkCharCountsForLine = providers.getLinkCharCountsForLine,
+            getLinePath = providers.getLinePath,
             commentariesScrollIndex = contentState.commentariesScrollIndex,
             commentariesScrollOffset = contentState.commentariesScrollOffset,
             initiallySelectedSourceIds = initiallySelectedIds,
@@ -533,6 +707,8 @@ private fun MultiLineTargumView(
     val currentOnEvent by rememberUpdatedState(onEvent)
 
     val rawTextSize by appSettings.textSizeFlow.collectAsState()
+    val catalogCache = LocalAppGraph.current.catalogCache
+    val linkLoadLevel by appSettings.linkLoadLevelFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -553,17 +729,27 @@ private fun MultiLineTargumView(
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
     val boldScaleForPlatform =
         remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 
     val paneInteractionSource = remember { MutableInteractionSource() }
+    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
+    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
+    var selectedFilterCategoryIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
+    var selectedFilterBookIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     // Use multi-line provider to get aggregated available links
-    val titleToIdMap by produceState<Map<String, Long>>(emptyMap(), selectedLineIds, availabilityType) {
+    val titleToIdMap by produceState<Map<String, Long>>(
+        emptyMap(),
+        selectedLineIds,
+        availabilityType,
+        linkLoadLevel,
+    ) {
         value =
             when (availabilityType) {
                 ConnectionType.SOURCE -> providers.getAvailableSourcesForLines(selectedLineIds)
+                ConnectionType.MENTION -> providers.getAvailableMentionsForLines(selectedLineIds)
                 else -> providers.getAvailableLinksForLines(selectedLineIds)
             }
     }
@@ -571,11 +757,13 @@ private fun MultiLineTargumView(
     val titleRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.sources
+            ConnectionType.MENTION -> Res.string.mentions
             else -> Res.string.links
         }
     val emptyRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.no_sources_for_line
+            ConnectionType.MENTION -> Res.string.no_mentions_for_line
             else -> Res.string.no_links_for_line
         }
 
@@ -589,6 +777,17 @@ private fun MultiLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
+            actions =
+                if (supportsBookFilter) {
+                    {
+                        LinkFilterSidebarToggleButton(
+                            isVisible = isFilterSidebarVisible,
+                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
+                        )
+                    }
+                } else {
+                    null
+                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -606,15 +805,31 @@ private fun MultiLineTargumView(
                     remember(titleToIdMap) {
                         titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                     }
+                val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
+                val filteredBookIds =
+                    if (supportsBookFilter) {
+                        resolveLinkFilterBookIds(
+                            availableBookIds = availableBookIds,
+                            catalogCache = catalogCache,
+                            selectedCategoryIds = selectedFilterCategoryIds,
+                            selectedBookIds = selectedFilterBookIds,
+                        )
+                    } else {
+                        availableBookIds
+                    }
+                val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                 // Build pagers for each source using multi-line provider
                 val sourceSections =
-                    availableSources.mapNotNull { meta ->
+                    displayedSources.mapNotNull { meta ->
                         val pagerFlow =
-                            remember(selectedLineIds, meta.bookId, availabilityType) {
+                            remember(selectedLineIds, meta.bookId, availabilityType, linkLoadLevel) {
                                 when (availabilityType) {
                                     ConnectionType.SOURCE ->
                                         providers.buildSourcesPagerForLines(selectedLineIds, meta.bookId)
+
+                                    ConnectionType.MENTION ->
+                                        providers.buildMentionsPagerForLines(selectedLineIds, meta.bookId)
 
                                     else ->
                                         providers.buildLinksPagerForLines(selectedLineIds, meta.bookId)
@@ -659,6 +874,7 @@ private fun MultiLineTargumView(
                     selectedLineIds,
                     sectionBookIds,
                     availabilityType,
+                    linkLoadLevel,
                 ) {
                     value =
                         runSuspendCatching {
@@ -677,6 +893,8 @@ private fun MultiLineTargumView(
                         }.getOrElse { sectionBookIds.map { emptyList() } }
                             .flatMap { listOf(0) + it }
                 }
+
+                var expandedItemIds by remember(selectedLineIds) { mutableStateOf(setOf<Long>()) }
 
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
@@ -706,99 +924,187 @@ private fun MultiLineTargumView(
                     }
                 }
 
-                SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                            state = listState,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            sourceSections.forEach { section ->
-                                item(key = "header-${section.bookId}") {
-                                    Text(
-                                        text = section.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = (commentTextSize * 1.1f).sp,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                }
+                val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
+                    derivedStateOf {
+                        computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
+                    }
+                }
 
-                                items(
-                                    count = section.items.itemCount,
-                                    key = { index ->
-                                        section.items
-                                            .peek(index)
-                                            ?.link
-                                            ?.id ?: "multi-source-${section.bookId}-$index"
-                                    },
-                                ) { index ->
-                                    section.items[index]?.let { item ->
-                                        LinkItem(
-                                            linkId = item.link.id,
-                                            targetText = item.targetText,
-                                            commentTextSize = commentTextSize,
-                                            lineHeight = lineHeight,
-                                            fontFamily = targumFontFamily,
-                                            boldScale = boldScaleForPlatform,
-                                            highlightQuery = highlightQuery,
-                                            onClick = {
-                                                val mods = windowInfo.keyboardModifiers
-                                                if (mods.isCtrlPressed || mods.isMetaPressed) {
+                LinkFilterScaffold(
+                    isVisible = isFilterSidebarVisible && supportsBookFilter,
+                    sidebarOnLeft = availabilityType == ConnectionType.MENTION,
+                    availableBookIds = availableBookIds,
+                    selectedCategoryIds = selectedFilterCategoryIds,
+                    selectedBookIds = selectedFilterBookIds,
+                    onCategoryCheckedChange = { id, checked ->
+                        selectedFilterCategoryIds =
+                            if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
+                    },
+                    onBookCheckedChange = { id, checked ->
+                        selectedFilterBookIds =
+                            if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
+                    },
+                ) {
+                    SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                                state = listState,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                sourceSections.forEach { section ->
+                                    item(key = "header-${section.bookId}") {
+                                        SourceSectionHeader(
+                                            title = section.title,
+                                            textSize = commentTextSize,
+                                            onClick =
+                                                when (availabilityType) {
+                                                    ConnectionType.SOURCE -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenSourceBookInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
+                                                    }
+                                                    ConnectionType.MENTION -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenBookByIdInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
+                                                    }
+                                                    else -> {
+                                                        {
+                                                            onEvent(
+                                                                BookContentEvent.OpenBookByIdInNewTab(
+                                                                    bookId = section.bookId,
+                                                                    baseLineIds = selectedLineIds,
+                                                                ),
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                        )
+                                    }
+
+                                    items(
+                                        count = section.items.itemCount,
+                                        key = { index ->
+                                            section.items
+                                                .peek(index)
+                                                ?.link
+                                                ?.id ?: "multi-source-${section.bookId}-$index"
+                                        },
+                                    ) { index ->
+                                        section.items[index]?.let { item ->
+                                            val targetPath by produceState("", item.link.targetLineId, availabilityType) {
+                                                val tocPath = if (supportsBookFilter) providers.getLinePath(item.link.targetLineId) else ""
+                                                value = buildLinkTargetPath(item.targetBookTitle, tocPath)
+                                            }
+                                            LinkItem(
+                                                linkId = item.link.id,
+                                                targetText = item.targetText,
+                                                targetPath = if (supportsBookFilter) targetPath else "",
+                                                onPathClick = {
                                                     onEvent(
                                                         BookContentEvent.OpenCommentaryTarget(
                                                             bookId = item.link.targetBookId,
                                                             lineId = item.link.targetLineId,
                                                         ),
                                                     )
+                                                },
+                                                commentTextSize = commentTextSize,
+                                                lineHeight = lineHeight,
+                                                fontFamily = targumFontFamily,
+                                                boldScale = boldScaleForPlatform,
+                                                highlightQuery = highlightQuery,
+                                                onClick = {
+                                                    onEvent(
+                                                        BookContentEvent.OpenCommentaryTarget(
+                                                            bookId = item.link.targetBookId,
+                                                            lineId = item.link.targetLineId,
+                                                        ),
+                                                    )
+                                                },
+                                                isExpanded = item.link.id in expandedItemIds,
+                                                onToggleExpand = {
+                                                    val id = item.link.id
+                                                    expandedItemIds =
+                                                        if (id in expandedItemIds) {
+                                                            expandedItemIds - id
+                                                        } else {
+                                                            expandedItemIds + id
+                                                        }
+                                                },
+                                                showDiacritics = showDiacritics,
+                                                annotationCache = annotationCache,
+                                                onLayoutWidthMeasure = { width ->
+                                                    if (textLayoutWidthPx == 0 && width > 0) {
+                                                        textLayoutWidthPx = width
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
+
+                                    when (val state = section.items.loadState.append) {
+                                        is LoadState.Error ->
+                                            item(key = "append-error-${section.bookId}") {
+                                                Box(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    Text(text = state.error.message ?: stringResource(Res.string.paging_error_loading_more))
                                                 }
-                                            },
-                                            showDiacritics = showDiacritics,
-                                            annotationCache = annotationCache,
-                                            onLayoutWidthMeasure = { width ->
-                                                if (textLayoutWidthPx == 0 && width > 0) {
-                                                    textLayoutWidthPx = width
+                                            }
+
+                                        is LoadState.Loading ->
+                                            item(key = "append-loading-${section.bookId}") {
+                                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                    CircularProgressIndicator()
                                                 }
-                                            },
-                                        )
+                                            }
+
+                                        else -> {}
                                     }
                                 }
-
-                                when (val state = section.items.loadState.append) {
-                                    is LoadState.Error ->
-                                        item(key = "append-error-${section.bookId}") {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Text(text = state.error.message ?: "Error loading more")
-                                            }
-                                        }
-
-                                    is LoadState.Loading ->
-                                        item(key = "append-loading-${section.bookId}") {
-                                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                CircularProgressIndicator()
-                                            }
-                                        }
-
-                                    else -> {}
-                                }
                             }
+                            TargumScrollbar(
+                                listState = listState,
+                                allCharCounts = effectiveCharCounts,
+                                capacity = capacity,
+                                lineHeightPx = lineHeightPx,
+                                paddingPerItemPx = paddingPerItemPx,
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                            )
                         }
-                        TargumScrollbar(
-                            listState = listState,
-                            allCharCounts = allCharCounts,
-                            capacity = capacity,
-                            lineHeightPx = lineHeightPx,
-                            paddingPerItemPx = paddingPerItemPx,
-                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                        )
                     }
                 }
             }
         }
     }
+}
+
+private fun buildLinkTargetPath(
+    bookTitle: String,
+    tocPath: String,
+): String {
+    val normalizedBookTitle = bookTitle.trim()
+    val normalizedTocPath = tocPath.trim().replace(" ← ", " > ")
+    val sectionPath =
+        when {
+            normalizedTocPath == normalizedBookTitle -> ""
+            normalizedTocPath.startsWith("$normalizedBookTitle > ") ->
+                normalizedTocPath.removePrefix("$normalizedBookTitle > ").trim()
+            else -> normalizedTocPath
+        }
+    return listOf(normalizedBookTitle, sectionPath).filter { it.isNotBlank() }.joinToString(" > ")
 }
 
 private data class SourceSection(
@@ -816,6 +1122,8 @@ private data class SourceMeta(
 private fun LinkItem(
     linkId: Long,
     targetText: String,
+    targetPath: String,
+    onPathClick: () -> Unit,
     commentTextSize: Float,
     lineHeight: Float,
     fontFamily: FontFamily,
@@ -824,21 +1132,38 @@ private fun LinkItem(
     showDiacritics: Boolean,
     annotationCache: StableAnnotatedCache,
     boldScale: Float = 1.0f,
+    isExpanded: Boolean = false,
+    onToggleExpand: () -> Unit = {},
     onLayoutWidthMeasure: (Int) -> Unit = {},
 ) {
+    val windowInfo = LocalWindowInfo.current
+
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = LinkItemVerticalPaddingPerSide, horizontal = 16.dp)
                 .pointerInput(linkId) {
-                    detectTapGestures(onTap = { onClick() })
+                    detectTapGestures(onTap = {
+                        val mods = windowInfo.keyboardModifiers
+                        if (mods.isCtrlPressed || mods.isMetaPressed) {
+                            onClick()
+                        } else {
+                            onToggleExpand()
+                        }
+                    })
                 },
     ) {
         val processedText =
             remember(linkId, targetText, showDiacritics) {
                 if (showDiacritics) targetText else HebrewTextUtils.removeAllDiacritics(targetText)
             }
+        val shouldCollapse =
+            remember(processedText) {
+                processedText.length > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT
+            }
+        val maxLines = if (shouldCollapse && !isExpanded) MAX_COLLAPSED_LINK_ITEM_LINES else Int.MAX_VALUE
+        val overflow = if (shouldCollapse && !isExpanded) TextOverflow.Ellipsis else TextOverflow.Clip
 
         // Footnote marker color from theme
         val footnoteMarkerColor = JewelTheme.globalColors.outlines.focused
@@ -879,6 +1204,8 @@ private fun LinkItem(
                 fontSize = commentTextSize.sp,
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
+                maxLines = maxLines,
+                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
@@ -901,11 +1228,194 @@ private fun LinkItem(
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
                 inlineContent = inlineImageContent,
+                maxLines = maxLines,
+                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
                 },
             )
         }
+
+        if (targetPath.isNotBlank()) {
+            val pathInteractionSource = remember { MutableInteractionSource() }
+            val isPathHovered by pathInteractionSource.collectIsHoveredAsState()
+            Text(
+                text = targetPath,
+                color = JewelTheme.globalColors.text.info,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Left,
+                textDecoration = if (isPathHovered) TextDecoration.Underline else TextDecoration.None,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .hoverable(pathInteractionSource)
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .pointerInput(targetPath) { detectTapGestures(onTap = { onPathClick() }) },
+            )
+        }
     }
+}
+
+@Composable
+private fun SourceSectionHeader(
+    title: String,
+    textSize: Float,
+    onClick: (() -> Unit)?,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    Text(
+        text = title,
+        fontWeight = FontWeight.Bold,
+        fontSize = (textSize * 1.1f).sp,
+        textAlign = TextAlign.Center,
+        textDecoration =
+            if (onClick != null && isHovered) {
+                TextDecoration.Underline
+            } else {
+                TextDecoration.None
+            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .hoverable(interactionSource)
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .pointerInput(title) { detectTapGestures(onTap = { onClick() }) }
+                    } else {
+                        Modifier
+                    },
+                ),
+    )
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun LinkFilterSidebarToggleButton(
+    isVisible: Boolean,
+    onToggle: () -> Unit,
+) {
+    val icon: ImageVector = if (isVisible) FilterFilled else Filter
+    val toggleText =
+        stringResource(
+            if (isVisible) Res.string.hide_links_filter_sidebar else Res.string.show_links_filter_sidebar,
+        )
+    Tooltip({ Text(toggleText) }) {
+        IconButton(onClick = onToggle) { _ ->
+            Icon(
+                painter = rememberVectorPainter(icon),
+                contentDescription = toggleText,
+                modifier = Modifier.size(16.dp),
+                tint = JewelTheme.globalColors.text.normal,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LinkFilterScaffold(
+    isVisible: Boolean,
+    sidebarOnLeft: Boolean,
+    availableBookIds: Set<Long>,
+    selectedCategoryIds: Set<Long>,
+    selectedBookIds: Set<Long>,
+    onCategoryCheckedChange: (Long, Boolean) -> Unit,
+    onBookCheckedChange: (Long, Boolean) -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val movableContent = remember(content) { movableContentOf(content) }
+
+    if (!isVisible) {
+        movableContent()
+        return
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        val sidebar: @Composable () -> Unit = {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                LinkFilterSidebar(
+                    availableBookIds = availableBookIds,
+                    selectedCategoryIds = selectedCategoryIds,
+                    selectedBookIds = selectedBookIds,
+                    onCategoryCheckedChange = onCategoryCheckedChange,
+                    onBookCheckedChange = onBookCheckedChange,
+                    modifier = Modifier.width(230.dp).fillMaxHeight(),
+                )
+            }
+        }
+        val mainContent: @Composable () -> Unit = {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Box(modifier = Modifier.fillMaxSize()) { movableContent() }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (sidebarOnLeft) {
+                sidebar()
+                VerticalDivider()
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
+            } else {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
+                VerticalDivider()
+                sidebar()
+            }
+        }
+    }
+}
+
+private fun computeEffectiveCharCounts(
+    sourceSections: List<SourceSection>,
+    allCharCounts: List<Int>,
+    expandedItemIds: Set<Long>,
+    capacity: Int,
+): List<Int> {
+    if (allCharCounts.isEmpty()) return emptyList()
+    val result = ArrayList<Int>(allCharCounts.size)
+    var globalIdx = 0
+    for (section in sourceSections) {
+        if (globalIdx >= allCharCounts.size) break
+        // Header entry in allCharCounts is 0
+        result.add(allCharCounts[globalIdx++])
+        val itemCount = section.items.itemCount
+        for (i in 0 until itemCount) {
+            if (globalIdx >= allCharCounts.size) break
+            val rawCount = allCharCounts[globalIdx++]
+            val item = section.items.peek(i)
+            val isExpanded = item != null && item.link.id in expandedItemIds
+            val effectiveCount =
+                if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT && !isExpanded) {
+                    if (capacity > 0) {
+                        minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
+                    } else {
+                        minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
+                    }
+                } else {
+                    rawCount
+                }
+            result.add(effectiveCount)
+        }
+    }
+    // Any remaining items if allCharCounts has entries beyond loaded sections
+    while (globalIdx < allCharCounts.size) {
+        val rawCount = allCharCounts[globalIdx++]
+        val effectiveCount =
+            if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT) {
+                if (capacity > 0) {
+                    minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
+                } else {
+                    minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
+                }
+            } else {
+                rawCount
+            }
+        result.add(effectiveCount)
+    }
+    return result
 }

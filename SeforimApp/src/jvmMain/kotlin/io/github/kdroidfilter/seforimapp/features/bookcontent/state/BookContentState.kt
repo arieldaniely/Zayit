@@ -26,6 +26,9 @@ data class Providers(
     val getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     val buildSourcesPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
     val getAvailableSourcesForLine: suspend (Long) -> Map<String, Long>,
+    val buildMentionsPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
+    val getAvailableMentionsForLine: suspend (Long) -> Map<String, Long>,
+    val hasAdditionalMentionsForBook: (Long) -> Boolean,
     // Multi-line pagers (for multi-selection)
     val buildCommentariesPagerForLines: (List<Long>, Long?) -> Flow<PagingData<CommentaryWithText>>,
     val getCommentatorGroupsForLines: suspend (List<Long>) -> List<CommentatorGroup>,
@@ -33,6 +36,9 @@ data class Providers(
     val getAvailableLinksForLines: suspend (List<Long>) -> Map<String, Long>,
     val buildSourcesPagerForLines: (List<Long>, Long?) -> Flow<PagingData<CommentaryWithText>>,
     val getAvailableSourcesForLines: suspend (List<Long>) -> Map<String, Long>,
+    val buildMentionsPagerForLines: (List<Long>, Long?) -> Flow<PagingData<CommentaryWithText>>,
+    val getAvailableMentionsForLines: suspend (List<Long>) -> Map<String, Long>,
+    val getLinePath: suspend (Long) -> String,
     // Char-count vectors used by the commentary scrollbar to derive visual-line metrics.
     // Mirror the pager ordering above; failures fold to an empty list.
     val getCommentaryCharCountsForLine: suspend (Long, Long) -> List<Int>,
@@ -80,6 +86,7 @@ data class BookContentState
         val navigation: NavigationState = NavigationState(),
         val toc: TocState = TocState(),
         val notes: NotesState = NotesState(),
+        val history: HistoryState = HistoryState(),
         val altToc: AltTocState = AltTocState(),
         val content: ContentState = ContentState(),
         val layout: LayoutState = LayoutState(),
@@ -126,6 +133,13 @@ data class NotesState(
 )
 
 @Immutable
+data class HistoryState(
+    val isVisible: Boolean = false,
+    val scrollIndex: Int = 0,
+    val scrollOffset: Int = 0,
+)
+
+@Immutable
 data class ContentState(
     // Data
     val lines: List<Line> = emptyList(),
@@ -138,6 +152,7 @@ data class ContentState(
     val showCommentaries: Boolean = false,
     val showTargum: Boolean = false,
     val showSources: Boolean = false,
+    val showMentions: Boolean = false,
     // Scroll positions
     val paragraphScrollPosition: Int = 0,
     val chapterScrollPosition: Int = 0,

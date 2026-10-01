@@ -1,0 +1,10 @@
+Mekorot Rashi font
+===================
+
+Typeface: Mekorot/Makor
+Fixes and adjustments: Yoram Gnat, Culmus
+Source: https://github.com/aharonium/fonts/tree/master/Fonts/Hebrew%20Letters%20with%20Vowels%20%28no%20cantillation%29/Mekorot%20%28LPPL%29/Rashi
+License: LaTeX Project Public License v1.3a (LPPL-1.3a)
+License text: https://spdx.org/licenses/LPPL-1.3a.html
+
+The font is distributed unmodified under its original filename, Mekorot-Rashi.ttf.

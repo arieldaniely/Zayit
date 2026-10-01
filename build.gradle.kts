@@ -19,6 +19,10 @@ plugins {
 }
 
 allprojects {
+    configurations.all {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-common")
+    }
+
     // Exclude jewel module from ktlint (JetBrains fork with its own style)
     if (project.name != "jewel") {
         apply(plugin = "org.jlleitschuh.gradle.ktlint")

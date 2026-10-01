@@ -9,6 +9,7 @@ data class TabItem(
     val title: String = "Default Tab",
     val destination: TabsDestination = TabsDestination.Home(UUID.randomUUID().toString()),
     val tabType: TabType = TabType.SEARCH,
+    val isPinned: Boolean = false,
 )
 
 @Immutable

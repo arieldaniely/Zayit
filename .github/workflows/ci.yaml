@@ -1,6 +1,10 @@
 name: CI - Build Check
 
 on:
+  push:
+    branches:
+      - master
+      - main
   pull_request:
     branches:
       - master
@@ -87,11 +91,11 @@ jobs:
             build_task: ":SeforimApp:packageGraalvmDeb"
             graalvm: true
 
-          # Windows x64 (GraalVM)
+          # Windows x64 (JBR, matching the portable runtime; PDFBox rendering uses AWT)
           - os: windows-latest
             arch: amd64
-            build_task: ":SeforimApp:packageGraalvmNsis"
-            graalvm: true
+            build_task: ":SeforimApp:createReleaseDistributable :SeforimApp:packageReleaseNsis"
+            graalvm: false
             rust_target: x86_64-pc-windows-msvc
 
           # Windows ARM64 (JBR - no Liberica NIK)
@@ -104,8 +108,8 @@ jobs:
           # macOS Apple Silicon (ARM64)
           - os: macos-26
             arch: arm64
-            build_task: ":SeforimApp:packageGraalvmDmg"
-            graalvm: true
+            build_task: ":SeforimApp:packageReleaseDmg"
+            graalvm: false
 
     steps:
       - name: Checkout source (with submodules)
@@ -114,57 +118,52 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Cache electron-builder toolsets
+        if: runner.os == 'Linux'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-${{ runner.os }}-${{ runner.arch }}-26.15.3
+
       - name: Setup Nucleus
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
-
-      - name: Setup GraalVM (Liberica NIK)
-        if: matrix.graalvm
-        uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '25'
-          distribution: 'liberica'
+          graalvm: ${{ matrix.graalvm }}
+          jbr-version: '25.0.3b496.62'
+
+      - name: Prepare electron-builder for macOS packaging
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/prepare-electron-builder
+
+      - name: Build and stage Windows Bluetooth adapters
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cmakeArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'ARM64' } else { 'x64' }
+          $platform = if ('${{ matrix.arch }}' -eq 'arm64') { 'windows-arm64' } else { 'windows-x64' }
+          cmake -S sharedstudy/native -B sharedstudy/native/build -A $cmakeArch "-DZAYIT_NATIVE_PLATFORM=$platform"
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
+
+      - name: Build and stage macOS BLE peripheral adapter
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S sharedstudy/native \
+            -B sharedstudy/native/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DZAYIT_NATIVE_PLATFORM=macos-arm64
+          cmake --build sharedstudy/native/build --config Release --parallel
+          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
 
       # Build
       - name: Build
         run: ./gradlew ${{ matrix.build_task }} --no-daemon
         shell: bash
-
-      # Build Rust installer for Windows
-      - name: Install Rust toolchain
-        if: runner.os == 'Windows'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Build Windows installer (.exe)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cd installer
-
-          # Create resources directory
-          New-Item -ItemType Directory -Force -Path resources | Out-Null
-
-          # Copy splash image
-          Copy-Item "..\SeforimApp\src\jvmMain\assets\common\splash.png" "resources\splash.png"
-
-          # Find NSIS installer (GraalVM or Release path)
-          $nsisFile = Get-ChildItem "..\SeforimApp\build\compose\binaries\main\graalvm-nsis\zayit-*-nsis.exe","..\SeforimApp\build\compose\binaries\main-release\nsis\zayit-*-nsis.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $nsisFile) {
-            Write-Error "NSIS installer not found"
-            exit 1
-          }
-          Copy-Item $nsisFile.FullName "resources\zayit-nsis.exe"
-          $nsisBaseName = $nsisFile.BaseName
-          Write-Host "Found NSIS: $nsisBaseName"
-
-          # Build Rust installer
-          cargo build --release --target ${{ matrix.rust_target }}
-
-          # Rename exe to match NSIS name
-          $exeName = "$nsisBaseName.exe"
-          Move-Item "target\${{ matrix.rust_target }}\release\zayit-installer.exe" "target\${{ matrix.rust_target }}\release\$exeName"
-          Write-Host "Built installer: $exeName"
 
       # Upload Artifacts
       - name: Upload Linux .deb
@@ -180,7 +179,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: windows-exe-${{ matrix.arch }}
-          path: installer/target/${{ matrix.rust_target }}/release/*.exe
+          path: |
+            SeforimApp/build/compose/binaries/main/graalvm-nsis/*.exe
+            SeforimApp/build/compose/binaries/main-release/nsis/*.exe
           if-no-files-found: error
 
       - name: Upload macOS .dmg
@@ -188,5 +189,17 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: macos-dmg-${{ matrix.arch }}
-          path: SeforimApp/build/compose/binaries/main/graalvm-dmg/*.dmg
+          path: |
+            SeforimApp/build/compose/binaries/main/graalvm-dmg/*.dmg
+            SeforimApp/build/compose/binaries/main-release/dmg/*.dmg
           if-no-files-found: error
+
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: packaging-diagnostics-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            SeforimApp/build/compose/logs/**
+            SeforimApp/build/compose/tmp/*.args.txt
+          if-no-files-found: ignore

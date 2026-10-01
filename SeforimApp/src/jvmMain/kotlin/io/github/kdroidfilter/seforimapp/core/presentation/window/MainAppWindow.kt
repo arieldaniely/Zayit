@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -49,6 +50,10 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShort
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
+import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyTabPlanner
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -176,10 +181,14 @@ fun NucleusApplicationScope.MainAppWindow(
                     openFavoritesTab()
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.T) {
-                    tabsVm.onEvent(TabsEvents.OnAdd)
+                    tabsVm.onEvent(
+                        if (keyEvent.isShiftPressed) TabsEvents.ReopenLastClosedTab else TabsEvents.OnAdd,
+                    )
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.W) {
-                    tabsVm.onEvent(TabsEvents.OnClose(currentIndex))
+                    tabsVm.onEvent(
+                        if (keyEvent.isShiftPressed) TabsEvents.CloseAll else TabsEvents.OnClose(currentIndex),
+                    )
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.Tab) {
                     val count = currentTabs.size
@@ -217,12 +226,28 @@ fun NucleusApplicationScope.MainAppWindow(
                         }
                     true
                 } else {
-                    processKeyShortcuts(
-                        keyEvent = keyEvent,
-                        appSettings = appSettings,
-                        onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
-                        tabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId ?: "",
-                    )
+                    val currentDest = currentTabs.getOrNull(currentIndex)?.destination
+                    val zoomCommand =
+                        if (currentDest is TabsDestination.PdfContent) {
+                            pdfZoomCommand(
+                                key = keyEvent.key,
+                                type = keyEvent.type,
+                                isCtrlPressed = keyEvent.isCtrlPressed,
+                                isMetaPressed = keyEvent.isMetaPressed,
+                            )
+                        } else {
+                            null
+                        }
+                    if (zoomCommand != null && currentDest is TabsDestination.PdfContent) {
+                        PdfZoomControllerRegistry.dispatch(currentDest.tabId, zoomCommand)
+                    } else {
+                        processKeyShortcuts(
+                            keyEvent = keyEvent,
+                            appSettings = appSettings,
+                            onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
+                            tabId = currentDest?.tabId ?: "",
+                        )
+                    }
                 }
             } else {
                 false
@@ -280,7 +305,83 @@ fun NucleusApplicationScope.MainAppWindow(
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,
         ) {
-            MainTitleBar(Modifier.e2eCapture(openWindow.id + E2e.TITLE_BAR))
+            val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
+            val autoOpenedSharedStudyTabs =
+                remember(sharedStudyState.sessionId) { mutableStateMapOf<String, Long>() }
+            val dismissedSharedStudyBooks =
+                remember(sharedStudyState.sessionId) { mutableSetOf<Long>() }
+            DisposableEffect(tabsVm, sharedStudyState.sessionId) {
+                val previousListener = tabsVm.onTabClosedListener
+                val listener: (io.github.kdroidfilter.seforim.tabs.TabItem) -> Unit = { tab ->
+                    autoOpenedSharedStudyTabs.remove(tab.destination.tabId)?.let(dismissedSharedStudyBooks::add)
+                    previousListener?.invoke(tab)
+                }
+                tabsVm.onTabClosedListener = listener
+                onDispose {
+                    if (tabsVm.onTabClosedListener === listener) tabsVm.onTabClosedListener = previousListener
+                }
+            }
+            LaunchedEffect(sharedStudyState.locations, state.isActive, sharedStudyState.sessionId) {
+                if (!state.isActive) return@LaunchedEffect
+                sharedStudyState.locations
+                    .filterKeys { it != appGraph.sharedStudyCoordinator.localParticipantId }
+                    .values
+                    .forEach { location ->
+                        val tabsState = tabsVm.state.value
+                        val openTabs =
+                            tabsState.tabs.mapNotNull { tab ->
+                                val destination = tab.destination
+                                val bookId =
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.bookId
+                                        is TabsDestination.PdfContent -> destination.bookId
+                                        else -> return@mapNotNull null
+                                    }
+                                val lineId =
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.lineId
+                                        is TabsDestination.PdfContent -> destination.lineId
+                                    }
+                                SharedStudyTabPlanner.OpenTab(
+                                    tabId = destination.tabId,
+                                    bookId = bookId,
+                                    visibleLineIds = listOfNotNull(lineId),
+                                    active = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.id == tab.id,
+                                )
+                            }
+                        val currentLineId =
+                            tabsState.tabs
+                                .getOrNull(tabsState.selectedTabIndex)
+                                ?.destination
+                                ?.let { destination ->
+                                    when (destination) {
+                                        is TabsDestination.BookContent -> destination.lineId
+                                        is TabsDestination.PdfContent -> destination.lineId
+                                        else -> null
+                                    }
+                                }
+                        val plan =
+                            SharedStudyTabPlanner.plan(
+                                location,
+                                openTabs,
+                                currentLineId,
+                                dismissedBookIds = dismissedSharedStudyBooks,
+                            )
+                        if (plan.action == SharedStudyTabPlanner.Action.OPEN_BACKGROUND_TAB) {
+                            val tabId = UUID.randomUUID().toString()
+                            tabsVm.openBackgroundTab(
+                                TabsDestination.BookContent(
+                                    bookId = location.bookId,
+                                    tabId = tabId,
+                                    lineId = location.lineId,
+                                ),
+                            )
+                            autoOpenedSharedStudyTabs[tabId] = location.bookId
+                        }
+                    }
+            }
+
+            MainTitleBar()
 
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).

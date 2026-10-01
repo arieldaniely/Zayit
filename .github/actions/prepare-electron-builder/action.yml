@@ -1,0 +1,18 @@
+name: Prepare electron-builder
+description: Install a pinned electron-builder version for Nucleus packaging
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        for attempt in 1 2 3; do
+          if npm install --prefix SeforimApp --no-save --no-package-lock --ignore-scripts electron-builder@26.15.3; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            exit 1
+          fi
+          sleep $((attempt * 10))
+        done
+        ./SeforimApp/node_modules/.bin/electron-builder --version

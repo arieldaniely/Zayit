@@ -35,7 +35,7 @@ export function useSEO() {
 
     // Update canonical and hreflang for current language
     const langParam = currentLang === 'he' ? '?lang=he' : '';
-    updateLinkTag('canonical', `https://www.zayitapp.com/${langParam}`);
+    updateLinkTag('canonical', `https://arieldaniely.github.io/Zayit/${langParam}`);
 
     // Update JSON-LD structured data
     updateJsonLd(currentLang, t);
@@ -62,7 +62,7 @@ function updateMetaTag(
 }
 
 function updateLinkTag(rel: string, href: string) {
-  let element = document.querySelector(
+  const element = document.querySelector(
     `link[rel="${rel}"]`
   ) as HTMLLinkElement | null;
 
@@ -81,7 +81,7 @@ function updateJsonLd(lang: string, t: (key: string) => string) {
     try {
       const data = JSON.parse(softwareAppScript.textContent || '{}');
       if (data['@type'] === 'SoftwareApplication') {
-        data.name = lang === 'he' ? 'זית' : 'Zayit';
+        data.name = lang === 'he' ? 'זיתא' : 'Zayita';
         data.alternateName = t('seo.title');
         data.description = t('seo.description');
         softwareAppScript.textContent = JSON.stringify(data, null, 2);

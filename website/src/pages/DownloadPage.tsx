@@ -23,7 +23,7 @@ import {
   Info,
 } from 'lucide-react';
 
-const GITHUB_OWNER = 'kdroidFilter';
+const GITHUB_OWNER = 'arieldaniely';
 const GITHUB_REPO = 'Zayit';
 const DB_OWNER = 'kdroidFilter';
 const DB_REPO = 'SeforimLibrary';
@@ -151,11 +151,22 @@ function filterAssetsByPlatform(assets: Asset[], platform: Platform): Asset[] {
 
   if (platform.os === 'windows') {
     return assets
-      // The -nsis.exe is the silent installer used by the auto-updater only; users get the Rust wrapper.
-      .filter((a) => /\.(msi|exe)$/i.test(a.name) && !/-nsis\.exe$/i.test(a.name))
+      .filter((a) => (/\.(msi|exe)$/i.test(a.name) || (/portable.*\.zip$/i.test(a.name) && /windows/i.test(a.name))))
       .sort((a, b) => {
-        if (a.name.toLowerCase().endsWith('.exe') && !b.name.toLowerCase().endsWith('.exe')) return -1;
-        if (!a.name.toLowerCase().endsWith('.exe') && b.name.toLowerCase().endsWith('.exe')) return 1;
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        const aIsInstaller = aName.endsWith('.exe') && !aName.includes('-nsis');
+        const bIsInstaller = bName.endsWith('.exe') && !bName.includes('-nsis');
+        if (aIsInstaller && !bIsInstaller) return -1;
+        if (!aIsInstaller && bIsInstaller) return 1;
+
+        const aIsPortable = aName.includes('portable') && aName.endsWith('.zip');
+        const bIsPortable = bName.includes('portable') && bName.endsWith('.zip');
+        if (aIsPortable && !bIsPortable) return -1;
+        if (!aIsPortable && bIsPortable) return 1;
+
+        if (aName.endsWith('.exe') && !bName.endsWith('.exe')) return -1;
+        if (!aName.endsWith('.exe') && bName.endsWith('.exe')) return 1;
         return 0;
       });
   }
@@ -204,7 +215,7 @@ function groupAssetsByArch(assets: Asset[]): ArchGroups {
 
 function getLaunchCommand(kind: 'mac' | 'linux'): string {
   const file = kind === 'mac' ? 'launch.mac' : 'launch.linux';
-  const base = window.location.origin + '/download/';
+  const base = new URL(`${import.meta.env.BASE_URL}download/`, window.location.origin).toString();
   return `curl -L ${base}${file} | bash`;
 }
 
@@ -349,7 +360,7 @@ export function DownloadModal() {
   const cinematicEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
   const dramaticEase: [number, number, number, number] = [0.34, 1.56, 0.64, 1];
 
-  const windowsAssets = assets.filter((a) => /\.(msi|exe)$/i.test(a.name));
+  const windowsAssets = assets.filter((a) => (/\.(msi|exe)$/i.test(a.name) || (/portable.*\.zip$/i.test(a.name) && /windows/i.test(a.name))));
   const macAssets = assets.filter((a) => /\.dmg$/i.test(a.name));
   const debAssets = assets.filter((a) => /\.deb$/i.test(a.name));
   const rpmAssets = assets.filter((a) => /\.rpm$/i.test(a.name));
@@ -371,7 +382,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')}</h1>
             <p className="download-subtitle flex items-center justify-center gap-2">
               {getOSIcon(platform.os)}
@@ -396,7 +407,7 @@ export function DownloadModal() {
       return (
         <>
           <div className="text-center mb-7">
-            <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+            <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
             <h1 className="download-title">{t('dl.header.title')} — {t('dl.common.download')}</h1>
           </div>
 
@@ -418,7 +429,7 @@ export function DownloadModal() {
       <>
         {/* Header */}
         <div className="text-center mb-7">
-          <img src="/icon.png" alt="Zayit" className="download-logo mx-auto" />
+          <img src={`${import.meta.env.BASE_URL}icon.png`} alt="Zayita" className="download-logo mx-auto" />
           <h1 className="download-title">{t('dl.header.downloadTitle')}</h1>
           <p className="download-subtitle flex items-center justify-center gap-2 flex-wrap">
             {getOSIcon(platform.os)}
@@ -741,7 +752,7 @@ function Footer() {
     <div className="download-footer">
       <div className="download-footer-links">
         <a
-          href="https://github.com/kdroidFilter/Zayit"
+          href="https://github.com/arieldaniely/Zayit"
           target="_blank"
           rel="noopener noreferrer"
           className="download-footer-link"
@@ -749,7 +760,7 @@ function Footer() {
           <Github size={20} />
         </a>
         <a
-          href="https://ko-fi.com/lomityaesh"
+          href="https://github.com/arieldaniely/Zayit/issues"
           target="_blank"
           rel="noopener noreferrer"
           className="download-footer-link download-footer-link-donate"
@@ -865,7 +876,9 @@ function WindowsDownloadSection({
 
   if (platform.arch && archGroups[platform.arch as keyof ArchGroups]?.length > 0) {
     const archAssets = archGroups[platform.arch as keyof ArchGroups];
-    const exeAsset = archAssets.find((a) => a.name.toLowerCase().endsWith('.exe'));
+    const exeAsset = archAssets.find((a) => a.name.toLowerCase().endsWith('.exe') && !a.name.toLowerCase().includes('-nsis'))
+      || archAssets.find((a) => a.name.toLowerCase().endsWith('.exe'));
+    const portableAsset = archAssets.find((a) => a.name.toLowerCase().includes('portable') && a.name.toLowerCase().endsWith('.zip'));
     const msiAsset = archAssets.find((a) => a.name.toLowerCase().endsWith('.msi'));
     const recommended = exeAsset || archAssets[0];
     const otherArch = platform.arch === 'x64' ? 'arm64' : 'x64';
@@ -887,6 +900,28 @@ function WindowsDownloadSection({
             <span>{t('dl.common.downloadNow')}</span>
           </a>
         </div>
+
+        {/* Portable Version Card */}
+        {portableAsset && (
+          <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'rgba(255,215,0,0.05)', borderRadius: '12px', border: '1px solid rgba(255,215,0,0.15)' }}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div style={{ flex: '1 1 240px' }}>
+                <h3 style={{ margin: '0 0 0.25rem', color: 'var(--text-main)', fontSize: '0.95rem', fontWeight: 600 }} className="flex items-center gap-2">
+                  <Package size={16} style={{ color: 'var(--gold)' }} />
+                  <span>{t('dl.windows.portableTitle')}</span>
+                </h3>
+                <p style={{ margin: 0, color: 'var(--gold-soft)', fontSize: '0.85rem' }}>
+                  {t('dl.windows.portableDesc')}
+                </p>
+              </div>
+              <a href={portableAsset.url} target="_blank" rel="noopener noreferrer" className="download-btn download-btn-secondary" style={{ whiteSpace: 'nowrap' }}>
+                <Download size={16} />
+                <span>{t('dl.windows.downloadPortable')} ({portableAsset.size})</span>
+              </a>
+            </div>
+          </div>
+        )}
+
         {hasSupplementary && (
           <div style={{ marginTop: '1rem', textAlign: 'center' }}>
             <button className="download-toggle-button" onClick={() => setShowAllAssets(!showAllAssets)}>
@@ -945,6 +980,7 @@ function WindowsDownloadSection({
             archDesc={t('dl.windows.mostModern')}
             archLabel={archLabel}
             getArchIcon={getArchIcon}
+            t={t}
           />
         )}
         {archGroups.arm64.length > 0 && (
@@ -954,6 +990,7 @@ function WindowsDownloadSection({
             archDesc={t('dl.windows.surfaceAndSimilar')}
             archLabel={archLabel}
             getArchIcon={getArchIcon}
+            t={t}
           />
         )}
       </div>
@@ -967,14 +1004,18 @@ function ArchOption({
   archDesc,
   archLabel,
   getArchIcon,
+  t,
 }: {
   assets: Asset[];
   archKey: string;
   archDesc: string;
   archLabel: (arch: string | null, os?: string) => string;
   getArchIcon: (arch: string) => React.ReactNode;
+  t: (key: string) => string;
 }) {
-  const exeAsset = assets.find((a) => a.name.toLowerCase().endsWith('.exe'));
+  const exeAsset = assets.find((a) => a.name.toLowerCase().endsWith('.exe') && !a.name.toLowerCase().includes('-nsis'))
+    || assets.find((a) => a.name.toLowerCase().endsWith('.exe'));
+  const portableAsset = assets.find((a) => a.name.toLowerCase().includes('portable') && a.name.toLowerCase().endsWith('.zip'));
   const msiAsset = assets.find((a) => a.name.toLowerCase().endsWith('.msi'));
   const primary = exeAsset || assets[0];
 
@@ -989,6 +1030,12 @@ function ArchOption({
         <Download size={18} />
         <span>{primary.name} ({primary.size})</span>
       </a>
+      {portableAsset && (
+        <a href={portableAsset.url} target="_blank" rel="noopener noreferrer" className="download-btn download-btn-secondary w-full mt-2">
+          <Package size={16} />
+          <span>{t('dl.windows.portableTitle')} ({portableAsset.size})</span>
+        </a>
+      )}
       {msiAsset && exeAsset && (
         <a href={msiAsset.url} target="_blank" rel="noopener noreferrer" className="download-btn download-btn-secondary w-full mt-2">
           <Download size={18} />

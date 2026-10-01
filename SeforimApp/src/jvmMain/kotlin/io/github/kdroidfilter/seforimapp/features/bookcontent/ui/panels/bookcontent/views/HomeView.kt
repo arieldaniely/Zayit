@@ -77,11 +77,13 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.fullWidthItem
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.texteffects.TypewriterPlaceholder
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.github.kdroidfilter.seforimlibrary.search.SearchMode
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -107,19 +109,21 @@ import io.github.kdroidfilter.seforimlibrary.core.models.Book as BookModel
 
 // Suggestion models for the scope picker
 @Immutable
-private data class CategorySuggestion(
+internal data class CategorySuggestion(
     val category: Category,
     val path: List<String>,
 )
 
 @Immutable
-private data class BookSuggestion(
+internal data class BookSuggestion(
     val book: BookModel,
     val path: List<String>,
+    val isPdf: Boolean = false,
+    val targetToc: TocEntry? = null,
 )
 
 @Immutable
-private data class TocSuggestion(
+internal data class TocSuggestion(
     val toc: TocEntry,
     val path: List<String>,
 )
@@ -147,10 +151,11 @@ data class HomeSearchCallbacks(
     val onTocQueryChanged: (String) -> Unit,
     val onFilterChange: (SearchFilter) -> Unit,
     val onGlobalExtendedChange: (Boolean) -> Unit,
+    val onModeChange: (SearchMode) -> Unit,
     val onSubmitTextSearch: (String) -> Unit,
     val onOpenReference: () -> Unit,
     val onPickCategory: (Category) -> Unit,
-    val onPickBook: (BookModel) -> Unit,
+    val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
 )
 
@@ -446,7 +451,7 @@ private fun HomeBody(
                                     val mappedBookSuggestionsForBar =
                                         searchUi.bookSuggestions
                                             .map { bs ->
-                                                BookSuggestion(bs.book, bs.path)
+                                                BookSuggestion(bs.book, bs.path, bs.isPdf, bs.targetToc)
                                             }.toImmutableList()
                                     val mappedTocSuggestionsForBar =
                                         searchUi.tocSuggestions.map { ts ->
@@ -473,6 +478,8 @@ private fun HomeBody(
                                             },
                                         selectedFilter = searchUi.selectedFilter,
                                         onFilterChange = { searchCallbacks.onFilterChange(it) },
+                                        mode = searchUi.mode,
+                                        onModeChange = searchCallbacks.onModeChange,
                                         onSubmit =
                                             if (isReferenceMode) {
                                                 { openReference() }
@@ -511,18 +518,20 @@ private fun HomeBody(
                                             },
                                         placeholderText = null,
                                         submitOnEnterInReference = isReferenceMode && isTocInTopBar,
+                                        submitCombinedReference = isReferenceMode,
                                         globalExtended = searchUi.globalExtended,
                                         onGlobalExtendedChange = { searchCallbacks.onGlobalExtendedChange(it) },
                                         isBookLoading = searchUi.isReferenceLoading && !isTocInTopBar,
                                         isTocLoading = searchUi.isTocLoading && isTocInTopBar,
                                         onPickBook = { picked ->
-                                            searchCallbacks.onPickBook(picked.book)
+                                            searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                            picked.targetToc?.let(searchCallbacks.onPickToc)
                                             skipNextReferenceQuery = true
                                             referenceSearchState.edit { replace(0, length, "") }
                                             skipNextTocQuery = true
                                             tocSearchState.edit { replace(0, length, "") }
                                             skipNextTocQuery = false
-                                            tocEditedSinceBook = false
+                                            tocEditedSinceBook = picked.targetToc != null
                                             focusAfterDelay(scope, 80, mainSearchFocusRequester)
                                         },
                                         onPickToc = { picked ->
@@ -601,7 +610,8 @@ private fun HomeBody(
                                                     referenceSearchState.edit { replace(0, length, full) }
                                                 },
                                                 onPickBook = { picked ->
-                                                    searchCallbacks.onPickBook(picked.book)
+                                                    searchCallbacks.onPickBook(picked.book, picked.isPdf)
+                                                    picked.targetToc?.let(searchCallbacks.onPickToc)
                                                     skipNextReferenceQuery = true
                                                     referenceSearchState.edit { replace(0, length, "") }
                                                     skipNextTocQuery = true
@@ -681,41 +691,14 @@ internal fun FreezableCenter(
     }
 }
 
-/**
- * App logo shown on the Home screen.
- * In light mode: always golden tint (text mask + subtle SoftLight on logo).
- * In dark mode: accent color tint from the current theme.
- */
 @Composable
 private fun LogoImage(modifier: Modifier = Modifier) {
-    val isDark = JewelTheme.isDark
-    val accent = JewelTheme.globalColors.outlines.focused
-    val logoTint = if (isDark) accent else AccentColor.Gold.forMode(isDark = false)
-    val tintAlpha = 0.25f
-
-    Box(modifier) {
-        // Base layer: full logo with original colors
-        Image(
-            painterResource(Res.drawable.zayit_new_logo),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-        // Subtle tint overlay: SoftLight preserves transparency, tints only colored areas
-        Image(
-            painterResource(Res.drawable.zayit_new_logo),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            alpha = tintAlpha,
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-        // Text overlay: tint color painted through the text alpha mask
-        Image(
-            painterResource(Res.drawable.zayit_new_logo_text),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-    }
+    Image(
+        painter = painterResource(Res.drawable.zayita_home_logo),
+        contentDescription = stringResource(Res.string.app_name),
+        modifier = modifier,
+        contentScale = ContentScale.Fit,
+    )
 }
 
 @Composable
@@ -834,6 +817,7 @@ private fun ReferenceByCategorySection(
                 onSubmit = onSubmit,
                 submitOnEnterIfSelection = submitOnEnterIfSelection,
                 submitOnEnterInReference = submitAfterPick,
+                submitCombinedReference = submitAfterPick,
                 autoFocus = false,
                 onClearBook = {
                     onClearBook()
@@ -1252,11 +1236,13 @@ private fun SuggestionRow(
 }
 
 @Composable
-private fun SearchBar(
+internal fun SearchBar(
     state: TextFieldState,
     selectedFilter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
     modifier: Modifier = Modifier,
+    mode: SearchMode = SearchMode.FLEXIBLE,
+    onModeChange: (SearchMode) -> Unit = {},
     showToggle: Boolean = true,
     showIcon: Boolean = true,
     onSubmit: () -> Unit = {},
@@ -1288,6 +1274,7 @@ private fun SearchBar(
     submitOnEnterIfSelection: Boolean = false,
     // In reference-mode first field, pressing Enter should also submit when a book is picked
     submitOnEnterInReference: Boolean = false,
+    submitCombinedReference: Boolean = false,
     // Advanced search toggle
     globalExtended: Boolean = false,
     onGlobalExtendedChange: (Boolean) -> Unit = {},
@@ -1526,7 +1513,9 @@ private fun SearchBar(
                                                 val picked = bookSuggestions.getOrNull(idx)
                                                 if (picked != null) {
                                                     handlePickBook(picked)
-                                                    if (submitOnEnterInReference) handleSubmit()
+                                                    if (submitOnEnterInReference || (submitCombinedReference && picked.targetToc != null)) {
+                                                        submitAfterFrame(scope)
+                                                    }
                                                 }
                                             }
                                             true
@@ -1649,6 +1638,7 @@ private fun SearchBar(
                             ) {
                                 // Chip visible seulement en mode TEXT
                                 if (selectedFilter == SearchFilter.TEXT) {
+                                    SearchModePicker(mode, onModeChange)
                                     CustomToggleableChip(
                                         checked = globalExtended,
                                         onClick = { newChecked ->
@@ -1765,7 +1755,10 @@ private fun SearchBar(
                             categorySuggestions = categorySuggestions,
                             bookSuggestions = bookSuggestions,
                             onPickCategory = ::handlePickCategory,
-                            onPickBook = ::handlePickBook,
+                            onPickBook = { picked ->
+                                handlePickBook(picked)
+                                if (submitCombinedReference && picked.targetToc != null) submitAfterFrame(scope)
+                            },
                             focusedIndex = focusedIndex,
                             emptyMessage = if (showBookEmptyState) stringResource(Res.string.autocomplete_no_results) else null,
                             isLoading = showBookLoading,
@@ -1907,10 +1900,11 @@ private fun HomeViewPreview() {
                 onTocQueryChanged = {},
                 onFilterChange = {},
                 onGlobalExtendedChange = {},
+                onModeChange = {},
                 onSubmitTextSearch = {},
                 onOpenReference = {},
                 onPickCategory = {},
-                onPickBook = {},
+                onPickBook = { _, _ -> },
                 onPickToc = {},
             )
         HomeView(

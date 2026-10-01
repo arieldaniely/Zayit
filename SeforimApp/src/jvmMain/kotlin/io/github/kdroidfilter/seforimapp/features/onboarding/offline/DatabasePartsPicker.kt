@@ -26,10 +26,12 @@ import java.io.File
 suspend fun pickDatabaseParts(onPart01Picked: (String?) -> Unit = {}): String? {
     val part01Path =
         withContext(Dispatchers.IO) {
-            FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("part01")))
+            FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("part01", "zst")))
         }?.path
     onPart01Picked(part01Path)
     if (part01Path.isNullOrBlank()) return null
+
+    if (part01Path.endsWith(".zst", ignoreCase = true)) return part01Path
 
     // Part02 lives next to part01 in the common case; only prompt when it is missing.
     val part01File = File(part01Path)
@@ -40,5 +42,5 @@ suspend fun pickDatabaseParts(onPart01Picked: (String?) -> Unit = {}): String? {
         withContext(Dispatchers.IO) {
             FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("part02")))
         }?.path
-    return if (!part02Path.isNullOrBlank()) part01Path else null
+    return if (part02Path != null && File(part02Path).canonicalFile == part02File.canonicalFile) part01Path else null
 }

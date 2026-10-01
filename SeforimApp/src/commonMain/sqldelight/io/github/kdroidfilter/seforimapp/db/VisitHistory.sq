@@ -9,28 +9,30 @@ CREATE TABLE IF NOT EXISTS visit_history (
     visitedAt INTEGER NOT NULL,
     visitCount INTEGER NOT NULL DEFAULT 1,
     tocEntryId INTEGER,
-    lineId INTEGER
+    lineId INTEGER,
+    searchContext TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_visit_history_time ON visit_history(visitedAt);
 
 upsertVisit:
-INSERT INTO visit_history(key, kind, bookId, searchQuery, title, visitedAt, visitCount, tocEntryId, lineId)
-VALUES (:key, :kind, :bookId, :searchQuery, :title, :visitedAt, 1, :tocEntryId, :lineId)
+INSERT INTO visit_history(key, kind, bookId, searchQuery, title, visitedAt, visitCount, tocEntryId, lineId, searchContext)
+VALUES (:key, :kind, :bookId, :searchQuery, :title, :visitedAt, 1, :tocEntryId, :lineId, :searchContext)
 ON CONFLICT(key) DO UPDATE SET
     visitedAt = excluded.visitedAt,
     title = excluded.title,
     lineId = excluded.lineId,
+    searchContext = excluded.searchContext,
     visitCount = visitCount + 1;
 
 selectRecent:
-SELECT * FROM visit_history ORDER BY visitedAt DESC LIMIT :limitCount;
+SELECT * FROM visit_history ORDER BY visitedAt DESC, key ASC LIMIT :limitCount OFFSET :offsetCount;
 
 searchByTitle:
 SELECT * FROM visit_history
 WHERE title LIKE '%' || :query || '%'
-ORDER BY visitedAt DESC
-LIMIT :limitCount;
+ORDER BY visitedAt DESC, key ASC
+LIMIT :limitCount OFFSET :offsetCount;
 
 deleteByKey:
 DELETE FROM visit_history WHERE key = :key;

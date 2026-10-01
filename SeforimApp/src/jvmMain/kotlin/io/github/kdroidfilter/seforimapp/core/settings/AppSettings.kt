@@ -12,6 +12,7 @@ import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 /**
  * Manages application settings and preferences that persist across app restarts.
@@ -54,6 +55,9 @@ class AppSettings(
     private val _homeWidgetsLayoutFlow = MutableStateFlow(settings.getStringOrNull(KEY_HOME_WIDGETS_LAYOUT))
     val homeWidgetsLayoutFlow: StateFlow<String?> = _homeWidgetsLayoutFlow.asStateFlow()
 
+    private val _showTempleCountdownFlow = MutableStateFlow(isShowTempleCountdownEnabled())
+    val showTempleCountdownFlow: StateFlow<Boolean> = _showTempleCountdownFlow.asStateFlow()
+
     // StateFlow for homepage wallpaper visibility
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
     val showHomeWallpaperFlow: StateFlow<Boolean> = _showHomeWallpaperFlow.asStateFlow()
@@ -61,6 +65,9 @@ class AppSettings(
     // StateFlow for compact mode
     private val _compactModeFlow = MutableStateFlow(isCompactModeEnabled())
     val compactModeFlow: StateFlow<Boolean> = _compactModeFlow.asStateFlow()
+
+    private val _linkLoadLevelFlow = MutableStateFlow(getLinkLoadLevel())
+    val linkLoadLevelFlow: StateFlow<Int> = _linkLoadLevelFlow.asStateFlow()
 
     // Font preference flows
     private val _bookFontCodeFlow = MutableStateFlow(getBookFontCode())
@@ -79,12 +86,16 @@ class AppSettings(
     private val findQueryFlowByTab = mutableMapOf<String, MutableStateFlow<String>>()
     private val findBarOpenFlowByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
     private val findSmartModeByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
+    private val deepLinkMarkedLineByTab = mutableMapOf<String, MutableStateFlow<Long?>>()
 
     private fun queryFlowFor(tabId: String): MutableStateFlow<String> = findQueryFlowByTab.getOrPut(tabId) { MutableStateFlow("") }
 
     private fun findOpenFlowFor(tabId: String): MutableStateFlow<Boolean> = findBarOpenFlowByTab.getOrPut(tabId) { MutableStateFlow(false) }
 
     private fun smartModeFlowFor(tabId: String): MutableStateFlow<Boolean> = findSmartModeByTab.getOrPut(tabId) { MutableStateFlow(false) }
+
+    private fun markedLineFlowFor(tabId: String): MutableStateFlow<Long?> =
+        deepLinkMarkedLineByTab.getOrPut(tabId) { MutableStateFlow(null) }
 
     fun findQueryFlow(tabId: String): StateFlow<String> = queryFlowFor(tabId).asStateFlow()
 
@@ -115,6 +126,15 @@ class AppSettings(
     }
 
     fun findSmartModeFlow(tabId: String): StateFlow<Boolean> = smartModeFlowFor(tabId).asStateFlow()
+
+    fun deepLinkMarkedLineFlow(tabId: String): StateFlow<Long?> = markedLineFlowFor(tabId).asStateFlow()
+
+    fun setDeepLinkMarkedLine(
+        tabId: String,
+        lineId: Long?,
+    ) {
+        markedLineFlowFor(tabId).value = lineId
+    }
 
     fun setFindSmartMode(
         tabId: String,
@@ -232,6 +252,13 @@ class AppSettings(
         }
     }
 
+    /** Email remembered locally for subsequent book-error reports. */
+    fun getErrorReportEmail(): String = settings[KEY_ERROR_REPORT_EMAIL, ""]
+
+    fun setErrorReportEmail(email: String) {
+        settings[KEY_ERROR_REPORT_EMAIL] = email.trim()
+    }
+
     // Session persistence preference
     fun isPersistSessionEnabled(): Boolean = settings[KEY_PERSIST_SESSION, true]
 
@@ -258,6 +285,14 @@ class AppSettings(
         _homeWidgetsLayoutFlow.value = layout
     }
 
+    // Temple destruction countdown visibility
+    fun isShowTempleCountdownEnabled(): Boolean = settings[KEY_SHOW_TEMPLE_COUNTDOWN, true]
+
+    fun setShowTempleCountdownEnabled(enabled: Boolean) {
+        settings[KEY_SHOW_TEMPLE_COUNTDOWN] = enabled
+        _showTempleCountdownFlow.value = enabled
+    }
+
     // Homepage wallpaper visibility
     fun isShowHomeWallpaperEnabled(): Boolean = settings[KEY_SHOW_HOME_WALLPAPER, true]
 
@@ -272,6 +307,22 @@ class AppSettings(
     fun setCompactModeEnabled(enabled: Boolean) {
         settings[KEY_COMPACT_MODE] = enabled
         _compactModeFlow.value = enabled
+    }
+
+    fun getLinkLoadLevel(): Int =
+        settings[KEY_LINK_LOAD_LEVEL, DEFAULT_LINK_LOAD_LEVEL]
+            .coerceIn(MIN_LINK_LOAD_LEVEL, MAX_LINK_LOAD_LEVEL)
+
+    fun setLinkLoadLevel(level: Int) {
+        val clamped = level.coerceIn(MIN_LINK_LOAD_LEVEL, MAX_LINK_LOAD_LEVEL)
+        settings[KEY_LINK_LOAD_LEVEL] = clamped
+        _linkLoadLevelFlow.value = clamped
+    }
+
+    fun isTalmudPdfInstallSkipped(): Boolean = settings[KEY_TALMUD_PDF_INSTALL_SKIPPED, false]
+
+    fun setTalmudPdfInstallSkipped(skipped: Boolean) {
+        settings[KEY_TALMUD_PDF_INSTALL_SKIPPED] = skipped
     }
 
     // Saved session blob (JSON)
@@ -347,6 +398,21 @@ class AppSettings(
     fun setUserLastName(value: String?) {
         settings[KEY_USER_LAST_NAME] = value?.takeIf { it.isNotBlank() } ?: ""
         _userLastNameFlow.value = getUserLastName() ?: ""
+    }
+
+    fun getOrCreateSharedStudyDeviceId(): String {
+        val existing: String = settings[KEY_SHARED_STUDY_DEVICE_ID, ""]
+        if (existing.isNotBlank()) return existing
+        return UUID.randomUUID().toString().also { settings[KEY_SHARED_STUDY_DEVICE_ID] = it }
+    }
+
+    fun getSharedStudyDisplayName(): String? {
+        val value: String = settings[KEY_SHARED_STUDY_DISPLAY_NAME, ""]
+        return value.ifBlank { null }
+    }
+
+    fun setSharedStudyDisplayName(value: String) {
+        settings[KEY_SHARED_STUDY_DISPLAY_NAME] = value.trim().take(48)
     }
 
     // Community is stored as a stable code (enum name), not a localized label
@@ -443,6 +509,7 @@ class AppSettings(
         _homeWidgetsLayoutFlow.value = null
         _showHomeWallpaperFlow.value = true
         _compactModeFlow.value = false
+        _linkLoadLevelFlow.value = DEFAULT_LINK_LOAD_LEVEL
         _bookFontCodeFlow.value = DEFAULT_BOOK_FONT
         _commentaryFontCodeFlow.value = DEFAULT_COMMENTARY_FONT
         _targumFontCodeFlow.value = DEFAULT_TARGUM_FONT
@@ -516,8 +583,6 @@ class AppSettings(
         private const val KEY_THEME_STYLE = "theme_style"
         private const val KEY_ACCENT_COLOR = "accent_color"
 
-        // Zmanim widgets visibility
-
         // Home widgets the user placed, in order ("id:SIZE,…"); unset means the default layout
         private const val KEY_HOME_WIDGETS_LAYOUT = "home_widgets_layout"
 
@@ -526,5 +591,15 @@ class AppSettings(
 
         // Compact mode for vertical bars
         private const val KEY_COMPACT_MODE = "compact_mode"
+        private const val KEY_SHOW_TEMPLE_COUNTDOWN = "show_temple_countdown"
+        private const val KEY_LINK_LOAD_LEVEL = "link_load_level"
+        private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
+        private const val KEY_ERROR_REPORT_EMAIL = "error_report_email"
+        private const val KEY_SHARED_STUDY_DEVICE_ID = "shared_study_device_id"
+        private const val KEY_SHARED_STUDY_DISPLAY_NAME = "shared_study_display_name"
+
+        const val DEFAULT_LINK_LOAD_LEVEL = 1
+        const val MIN_LINK_LOAD_LEVEL = 0
+        const val MAX_LINK_LOAD_LEVEL = 3
     }
 }

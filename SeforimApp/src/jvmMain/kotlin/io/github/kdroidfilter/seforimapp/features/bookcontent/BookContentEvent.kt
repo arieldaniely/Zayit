@@ -42,6 +42,9 @@ sealed interface BookContentEvent {
     // Notes pane
     data object ToggleNotes : BookContentEvent
 
+    // History pane
+    data object ToggleHistory : BookContentEvent
+
     data class NotesScrolled(
         val index: Int,
         val offset: Int,
@@ -106,13 +109,28 @@ sealed interface BookContentEvent {
         val baseLineIds: List<Long> = emptyList(),
     ) : BookContentEvent
 
+    data class OpenSourceBookInNewTab(
+        val bookId: Long,
+        val baseLineIds: List<Long>,
+    ) : BookContentEvent
+
     data object ToggleCommentaries : BookContentEvent
 
     data object ToggleTargum : BookContentEvent
 
     data object ToggleSources : BookContentEvent
 
+    data object ToggleMentions : BookContentEvent
+
     data object ToggleDiacritics : BookContentEvent
+
+    data object OpenPdfEdition : BookContentEvent
+
+    data object OpenTextEdition : BookContentEvent
+
+    data class OpenPdfEditionForBook(
+        val book: io.github.kdroidfilter.seforimlibrary.core.models.Book,
+    ) : BookContentEvent
 
     data class ContentScrolled(
         val anchorId: Long,

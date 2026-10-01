@@ -370,9 +370,9 @@ class AppUpdateService(
     }
 
     companion object {
-        const val DOWNLOAD_URL = "https://kdroidfilter.github.io/Zayit/download"
+        const val DOWNLOAD_URL = "https://arieldaniely.github.io/Zayit/download"
 
-        private const val GITHUB_OWNER = "kdroidFilter"
+        private const val GITHUB_OWNER = "arieldaniely"
         private const val GITHUB_REPO = "Zayit"
 
         /** Builds the production service wired to GitHub releases through the native SSL client. */

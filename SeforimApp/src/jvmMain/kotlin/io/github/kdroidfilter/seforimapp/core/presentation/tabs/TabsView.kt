@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -36,12 +37,16 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondary
 import androidx.compose.ui.input.pointer.isTertiary
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -74,6 +79,8 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.Bookmark
+import io.github.kdroidfilter.seforimapp.icons.BookmarkFilled
 import io.github.kdroidfilter.seforimapp.icons.CloseAll
 import io.github.kdroidfilter.seforimapp.icons.Link
 import io.github.kdroidfilter.seforimapp.icons.Tab_close
@@ -115,6 +122,8 @@ private data class TabEntry(
     val key: String,
     val data: TabData,
     val labelProvider: @Composable () -> String,
+    val isPinned: Boolean,
+    val onTogglePin: () -> Unit,
     val onClose: () -> Unit,
     val onClick: () -> Unit,
     val onCloseAll: () -> Unit,
@@ -163,7 +172,20 @@ private fun TabStripScope.DefaultTabShowcase(
     val layoutDirection = LocalLayoutDirection.current
     val isRtl = layoutDirection == LayoutDirection.Rtl
     val desktopManager = LocalAppGraph.current.desktopManager
+    val sharedStudyCoordinator = LocalAppGraph.current.sharedStudyCoordinator
+    val sharedStudyState by sharedStudyCoordinator.state.collectAsState()
     val windowId = LocalOpenWindow.current.id
+    val remotePresenceColorsByBook =
+        remember(sharedStudyState.locations, sharedStudyState.participants) {
+            sharedStudyState.participants
+                .asSequence()
+                .filter { it.id != sharedStudyCoordinator.localParticipantId }
+                .mapNotNull { participant ->
+                    sharedStudyState.locations[participant.id]?.bookId?.let { bookId ->
+                        bookId to participant.colorArgb
+                    }
+                }.groupBy({ it.first }, { it.second })
+        }
 
     // Track for auto-scrolling (no-op in shrink-to-fit mode)
     var previousTabCount by remember { mutableStateOf(state.tabs.size) }
@@ -172,7 +194,7 @@ private fun TabStripScope.DefaultTabShowcase(
 
     // Create TabData objects with RTL support
     val tabs: ImmutableList<TabEntry> =
-        remember(state.tabs, state.selectedTabIndex, isRtl) {
+        remember(state.tabs, state.selectedTabIndex, isRtl, remotePresenceColorsByBook) {
             if (isRtl) {
                 // For RTL: reverse the list and use the reversed index for display
                 state.tabs
@@ -218,6 +240,7 @@ private fun TabStripScope.DefaultTabShowcase(
                                         label = label,
                                         state = tabState,
                                         icon = icon,
+                                        presenceColors = remotePresenceColorsByBook[tabItem.destination.bookIdOrNull()].orEmpty(),
                                     )
                                 },
                                 onClose = {},
@@ -236,6 +259,8 @@ private fun TabStripScope.DefaultTabShowcase(
                             key = tabItem.destination.tabId,
                             data = tabData,
                             labelProvider = labelProvider,
+                            isPinned = tabItem.isPinned,
+                            onTogglePin = { onEvents(TabsEvents.OnTogglePin(actualIndex)) },
                             onClose = { onEvents(TabsEvents.OnClose(actualIndex)) },
                             onClick = { onEvents(TabsEvents.OnSelect(actualIndex)) },
                             onCloseAll = { onEvents(TabsEvents.CloseAll) },
@@ -300,6 +325,7 @@ private fun TabStripScope.DefaultTabShowcase(
                                         label = label,
                                         state = tabState,
                                         icon = icon,
+                                        presenceColors = remotePresenceColorsByBook[tabItem.destination.bookIdOrNull()].orEmpty(),
                                     )
                                 },
                                 onClose = {},
@@ -318,6 +344,8 @@ private fun TabStripScope.DefaultTabShowcase(
                             key = tabItem.destination.tabId,
                             data = tabData,
                             labelProvider = labelProvider,
+                            isPinned = tabItem.isPinned,
+                            onTogglePin = { onEvents(TabsEvents.OnTogglePin(index)) },
                             onClose = { onEvents(TabsEvents.OnClose(index)) },
                             onClick = { onEvents(TabsEvents.OnSelect(index)) },
                             onCloseAll = { onEvents(TabsEvents.CloseAll) },
@@ -446,8 +474,8 @@ private fun TabStripScope.RtlAwareTabStripContent(
         val maxWidthDp = this.maxWidth
         // Reserve a non-interactive draggable area at the trailing edge to allow window move
         val reservedDragArea = 40.dp
-        // + button (40.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
-        val extrasWidth = 40.dp + 1.dp + 8.dp + reservedDragArea
+        // + button (36.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
+        val extrasWidth = 36.dp + 1.dp + 8.dp + reservedDragArea
         val availableForTabs = (maxWidthDp - extrasWidth).coerceAtLeast(0.dp)
         val tabsCount = tabs.size.coerceAtLeast(1)
         // Chrome-like: tabs shrink to fill available width, capped by a max width
@@ -558,6 +586,8 @@ private fun TabStripScope.RtlAwareTabStripContent(
                                             tabCount = tabs.size,
                                             tabWidth = tabWidth,
                                             labelProvider = tabEntry.labelProvider,
+                                            isPinned = tabEntry.isPinned,
+                                            onTogglePin = tabEntry.onTogglePin,
                                             onClick = tabEntry.onClick,
                                             onClose = {
                                                 if (!closingKeys.contains(tabEntry.key)) {
@@ -653,6 +683,8 @@ private fun RtlAwareTab(
     tabCount: Int,
     tabWidth: Dp,
     labelProvider: @Composable () -> String,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
     onClick: () -> Unit,
     onClose: () -> Unit,
     onCloseAll: () -> Unit,
@@ -789,7 +821,7 @@ private fun RtlAwareTab(
                     }.padding(tabStyle.metrics.tabPadding)
                     .onPointerEvent(PointerEventType.Release) { ev ->
                         // Middle-click closes tab (Chrome-like)
-                        if (ev.button.isTertiary) onClose()
+                        if (ev.button.isTertiary && !isPinned) onClose()
                         // Right-click opens context menu
                         if (ev.button.isSecondary) {
                             val p = ev.changes.firstOrNull()?.position ?: Offset.Zero
@@ -810,7 +842,7 @@ private fun RtlAwareTab(
                 val isSelected = tabData.selected
                 // Hide close for non-selected tabs when space is tight, always show for selected
                 val showCloseIcon =
-                    tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
+                    !isPinned && tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
 
                 val closeIconComposable: @Composable () -> Unit = {
                     if (showCloseIcon) {
@@ -923,6 +955,8 @@ private fun RtlAwareTab(
 
         if (contextMenuOpen) {
             // Resource strings must be resolved outside MenuScope
+            val closeLabel = stringResource(Res.string.close_tab)
+            val pinLabel = stringResource(if (isPinned) Res.string.unpin_tab else Res.string.pin_tab)
             val closeAllLabel = stringResource(Res.string.close_all_tabs)
             val closeOthersLabel = stringResource(Res.string.close_other_tabs)
             val closeLeftLabel = stringResource(Res.string.close_tabs_left)
@@ -940,6 +974,24 @@ private fun RtlAwareTab(
                 contextClickOffset = contextClickOffset,
                 onDismissRequest = { contextMenuOpen = false },
             ) {
+                tabContextMenuItem(
+                    label = pinLabel,
+                    icon = if (isPinned) BookmarkFilled else Bookmark,
+                    onClick = {
+                        contextMenuOpen = false
+                        onTogglePin()
+                    },
+                )
+                if (!isPinned) {
+                    tabContextMenuItem(
+                        label = closeLabel,
+                        icon = Tab_close,
+                        onClick = {
+                            contextMenuOpen = false
+                            onClose()
+                        },
+                    )
+                }
                 if (onDetach != null) {
                     tabContextMenuItem(
                         label = detachLabel,
@@ -1073,6 +1125,7 @@ private fun SingleLineTabContent(
     label: String,
     state: TabState,
     icon: Painter?,
+    presenceColors: List<Long>,
     modifier: Modifier = Modifier,
 ) {
     val iconOnly = LocalCompactIconOnly.current
@@ -1092,6 +1145,14 @@ private fun SingleLineTabContent(
                 modifier = Modifier.size(16.dp).alpha(contentAlpha),
             )
         }
+        presenceColors.take(3).forEach { colorArgb ->
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(colorArgb.toULong())),
+            )
+        }
         if (!iconOnly) {
             Text(
                 label,
@@ -1102,6 +1163,13 @@ private fun SingleLineTabContent(
         }
     }
 }
+
+private fun TabsDestination.bookIdOrNull(): Long? =
+    when (this) {
+        is TabsDestination.BookContent -> bookId
+        is TabsDestination.PdfContent -> bookId
+        else -> null
+    }
 
 // Tab context menu using native Jewel styling
 @OptIn(InternalJewelApi::class)
@@ -1159,6 +1227,8 @@ private fun TabContextMenu(
 private fun copyToClipboard(text: String) {
     Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
 }
+
+
 
 private fun MenuScope.tabContextMenuItem(
     label: String,

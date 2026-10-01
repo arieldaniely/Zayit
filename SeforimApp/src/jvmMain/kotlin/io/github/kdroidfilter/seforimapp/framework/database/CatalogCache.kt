@@ -1,8 +1,13 @@
 package io.github.kdroidfilter.seforimapp.framework.database
 
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryCatalogMerger
 import io.github.kdroidfilter.seforimapp.logger.errorln
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
@@ -35,6 +40,8 @@ class CatalogCache(
 
     @Volatile
     private var _allBooksWithAltFlags: Set<Book>? = null
+    private val _revision = MutableStateFlow(0L)
+    val revision: StateFlow<Long> = _revision.asStateFlow()
 
     /**
      * Gets the cached catalog, loading it if necessary.
@@ -149,7 +156,7 @@ class CatalogCache(
     private fun loadCatalog(): PrecomputedCatalog? =
         try {
             val dbPath = databasePathProvider.get()
-            val catalog = CatalogLoader.loadCatalog(dbPath)
+            val catalog = CatalogLoader.loadCatalog(dbPath)?.let(PersonalLibraryCatalogMerger::merge)
 
             if (catalog != null) {
                 infoln { "[CatalogCache] Precomputed catalog loaded: ${catalog.totalCategories} categories, ${catalog.totalBooks} books" }
@@ -162,4 +169,23 @@ class CatalogCache(
             errorln { "[CatalogCache] Failed to load precomputed catalog: ${e.message}" }
             null
         }
+
+    /**
+     * Forces a reload of the catalog (useful after regeneration).
+     * Also clears extracted data caches.
+     */
+    fun reloadCatalog() {
+        _catalog = loadCatalog()
+        _rootCategories = null
+        _categoryChildren = null
+        _categoriesById = null
+        _allBooks = null
+        _allBooksWithAltFlags = null
+        _revision.value++
+    }
+
+    /**
+     * Checks if the catalog is available.
+     */
+    fun isCatalogAvailable(): Boolean = getCatalog() != null
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,7 +79,8 @@ import seforimapp.seforimapp.generated.resources.settings_cancel
 @Composable
 fun ListPageContainer(
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
+    scrollable: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
@@ -84,6 +88,7 @@ fun ListPageContainer(
                 Modifier
                     .widthIn(max = 720.dp)
                     .fillMaxWidth()
+                    .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                     .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -284,6 +289,7 @@ fun ListRow(
     leadingContent: @Composable (RowScope.() -> Unit)? = null,
     showDivider: Boolean = true,
     compact: Boolean = false,
+    subtitle: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -325,14 +331,24 @@ fun ListRow(
                     colorFilter = ColorFilter.tint(leadingTint),
                 )
             }
-            Text(
-                text = title,
-                fontSize = if (compact) 12.sp else 14.sp,
-                color = JewelTheme.globalColors.text.normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = title,
+                    fontSize = if (compact) 12.sp else 14.sp,
+                    color = JewelTheme.globalColors.text.normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        fontSize = 12.sp,
+                        color = JewelTheme.globalColors.text.info,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             DeleteButton(visible = isHovered, onClick = onDelete)
         }
         if (showDivider) {

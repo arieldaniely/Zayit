@@ -33,6 +33,14 @@ sealed interface TabsDestination {
     /** Full visit-history page (the chrome://history equivalent). */
     @Serializable
     @Immutable
+    data class PdfContent(
+        val bookId: Long,
+        override val tabId: String,
+        val lineId: Long? = null,
+    ) : TabsDestination
+
+    @Serializable
+    @Immutable
     data class History(
         override val tabId: String,
     ) : TabsDestination

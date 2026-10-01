@@ -1,0 +1,702 @@
+package io.github.kdroidfilter.seforimapp.features.personallibrary
+
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import io.github.kdroidfilter.seforimlibrary.core.models.BookMetadata
+import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
+import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
+import io.github.kdroidfilter.seforimlibrary.search.PersonalLuceneIndexBuilder
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import org.jsoup.Jsoup
+import org.jsoup.safety.Safelist
+import java.nio.ByteBuffer
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.MessageDigest
+import java.sql.Connection
+import java.sql.DriverManager
+import kotlin.io.path.extension
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.nameWithoutExtension
+import kotlin.io.path.readText
+import kotlin.streams.toList
+
+class PersonalLibraryImporter(
+    private val baseDatabase: Path,
+    private val generationsDirectory: Path,
+) {
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+        }
+
+    fun fingerprint(folders: List<PersonalBookFolder>): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.add(baseDatabase.toAbsolutePath().normalize().toString())
+        digest.add(IMPORT_FORMAT_VERSION)
+        digest.add(Files.size(baseDatabase).toString())
+        digest.add(Files.getLastModifiedTime(baseDatabase).toMillis().toString())
+        folders.filter { it.enabled }.sortedBy { it.id }.forEach { folder ->
+            digest.add(folder.id)
+            digest.add(folder.path)
+            digest.add(folder.placement.name)
+            val root = Path.of(folder.path)
+            require(root.isDirectory()) { "תיקיית הספרים אינה זמינה: ${folder.path}" }
+            Files.walk(root).use { stream ->
+                stream
+                    .filter { it.isRegularFile() }
+                    .filter { it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+                    .sorted()
+                    .forEach { file ->
+                        digest.add(root.relativize(file).toString().replace('\\', '/'))
+                        digest.add(Files.size(file).toString())
+                        digest.add(Files.getLastModifiedTime(file).toMillis().toString())
+                    }
+            }
+        }
+        return digest.digest().toHex()
+    }
+
+    fun build(
+        folders: List<PersonalBookFolder>,
+        generation: String,
+        onProgress: ((Float) -> Unit)? = null,
+    ): Pair<PersonalLibraryArtifacts, Map<String, PersonalImportSummary>> {
+        val progress = ProgressReporter(onProgress)
+        val generationDir = generationsDirectory.resolve(generation)
+        val database = generationDir.resolve("personal.db")
+        val index = generationDir.resolve("personal.lucene")
+        if (database.isRegularFile() && Files.isDirectory(index)) {
+            progress.report(1f)
+            return PersonalLibraryArtifacts(generation, database, index) to emptyMap()
+        }
+        Files.createDirectories(generationDir)
+        val stagingDb = generationDir.resolve("personal.db.building")
+        Files.deleteIfExists(stagingDb)
+        createSchema(stagingDb)
+        progress.report(SCHEMA_END)
+        val summaries =
+            importInto(stagingDb, folders.filter { it.enabled }) { fraction ->
+                progress.report(SCHEMA_END + fraction * (IMPORT_END - SCHEMA_END))
+            }
+        progress.report(IMPORT_END)
+        PersonalLuceneIndexBuilder.build(stagingDb, index) { current, total ->
+            progress.report(IMPORT_END + current.toFloat() / total * (INDEX_END - IMPORT_END))
+        }
+        Files.move(stagingDb, database)
+        progress.report(1f, force = true)
+        return PersonalLibraryArtifacts(generation, database, index) to summaries
+    }
+
+    private fun createSchema(database: Path) {
+        val driver = JdbcSqliteDriver("jdbc:sqlite:$database")
+        try {
+            SeforimDb.Schema.create(driver)
+        } finally {
+            driver.close()
+        }
+    }
+
+    private fun importInto(
+        database: Path,
+        folders: List<PersonalBookFolder>,
+        onProgress: ((Float) -> Unit)? = null,
+    ): Map<String, PersonalImportSummary> {
+        val totalBytes = folders.sumOf(::importableBytes).coerceAtLeast(1L)
+        var completedBytes = 0L
+
+        fun completed(bytes: Long) {
+            completedBytes = (completedBytes + bytes).coerceAtMost(totalBytes)
+            onProgress?.invoke(completedBytes.toFloat() / totalBytes)
+        }
+        val base = BaseLibraryIndex.load(baseDatabase)
+        val ids = StableNegativeIds()
+        DriverManager.getConnection("jdbc:sqlite:$database").use { target ->
+            target.createStatement().use {
+                it.execute("PRAGMA foreign_keys=OFF")
+                it.execute("PRAGMA journal_mode=DELETE")
+                it.execute("PRAGMA synchronous=NORMAL")
+                it.execute(
+                    "CREATE TABLE IF NOT EXISTS personal_link_target_book " +
+                        "(bookId INTEGER PRIMARY KEY NOT NULL,hasSourceLinks INTEGER NOT NULL DEFAULT 0," +
+                        "hasMentionLinks INTEGER NOT NULL DEFAULT 0)",
+                )
+            }
+            target.autoCommit = false
+            try {
+                val context = ImportContext(target, base, ids)
+                val counts = linkedMapOf<String, PersonalImportSummary>()
+                folders.forEach { folder ->
+                    counts[folder.id] = context.importFolder(folder, ::completed)
+                    val added = context.importLinks(folder, ::completed)
+                    counts[folder.id] = counts.getValue(folder.id).copy(links = added)
+                }
+                context.finishLinks()
+                target.commit()
+                return counts
+            } catch (error: Throwable) {
+                target.rollback()
+                throw error
+            }
+        }
+    }
+
+    private inner class ImportContext(
+        private val connection: Connection,
+        private val base: BaseLibraryIndex,
+        private val ids: StableNegativeIds,
+    ) {
+        private val categoryParents = HashMap<Long, Long?>(base.categoryParents)
+        private val categoryLevels = HashMap<Long, Int>(base.categoryLevels)
+        private val personalCategories = HashMap<String, Long>()
+        private val booksByTitle = HashMap<String, BookRef>(base.booksByTitle)
+        private val personalBooksByFolderAndTitle = HashMap<Pair<String, String>, BookRef>()
+        private val booksWithSourceLinks = HashSet<Long>()
+        private val booksWithTargetLinks = HashSet<Long>()
+        private val sourceTargetBooks = HashSet<Long>()
+        private val mentionTargetBooks = HashSet<Long>()
+        private val flagsByBook = HashMap<Long, MutableSet<ConnectionType>>()
+
+        fun importFolder(
+            folder: PersonalBookFolder,
+            onBytesProcessed: (Long) -> Unit,
+        ): PersonalImportSummary {
+            val root = Path.of(folder.path)
+            val metadata = loadMetadata(root)
+            val sourceId = ids.id("source:${folder.id}")
+            execute("INSERT INTO source(id,name) VALUES(?,?)", sourceId, "Personal:${folder.id}")
+            val folderRoot =
+                when (folder.placement) {
+                    PersonalFolderPlacement.PERSONAL_BOOKS -> {
+                        val personalRoot = ensurePersonalCategory("global:personal", null, "ספרים אישיים", 0)
+                        ensurePersonalCategory("folder:${folder.id}", personalRoot, folder.displayName, 1)
+                    }
+                    PersonalFolderPlacement.MERGE_WITH_LIBRARY -> null
+                }
+            val files =
+                Files.walk(root).use { stream ->
+                    stream
+                        .filter { it.isRegularFile() && it.extension.equals("txt", true) }
+                        .filter { !it.startsWith(root.resolve("links")) }
+                        .filter { !it.nameWithoutExtension.startsWith("הערות על ") }
+                        .sorted()
+                        .toList()
+                }
+            var bookCount = 0
+            files.forEach { file ->
+                val relative = root.relativize(file)
+                val parentSegments = (0 until relative.nameCount - 1).map { relative.getName(it).toString() }
+                val categoryId = resolveBookCategory(folder, folderRoot, parentSegments)
+                val rawTitle = file.nameWithoutExtension
+                val title = normalizeLabel(rawTitle)
+                val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
+                val meta = metadata[rawTitle] ?: metadata[title]
+                val lines = Files.readAllLines(file, Charsets.UTF_8)
+                val fileBytes = Files.size(file).coerceAtLeast(1L)
+                val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
+                var reportedBytes = 0L
+                val notes =
+                    listOf(title, rawTitle)
+                        .distinct()
+                        .asSequence()
+                        .map { file.parent.resolve("הערות על $it.txt") }
+                        .firstOrNull { it.isRegularFile() }
+                        ?.readText(Charsets.UTF_8)
+                execute(
+                    """
+                    INSERT INTO book(id,categoryId,sourceId,title,heRef,heShortDesc,notesContent,orderIndex,totalLines)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                    """.trimIndent(),
+                    bookId,
+                    categoryId,
+                    sourceId,
+                    title,
+                    title,
+                    meta?.heShortDesc,
+                    notes,
+                    meta?.order?.toLong() ?: 999L,
+                    lines.size,
+                )
+                meta?.author?.takeIf { it.isNotBlank() }?.let { author ->
+                    val authorId = ids.id("author:$author")
+                    execute("INSERT OR IGNORE INTO author(id,name) VALUES(?,?)", authorId, author)
+                    execute("INSERT INTO book_author(bookId,authorId) VALUES(?,?)", bookId, authorId)
+                }
+                meta?.pubPlace?.takeIf { it.isNotBlank() }?.let { place ->
+                    val id = ids.id("place:$place")
+                    execute("INSERT OR IGNORE INTO pub_place(id,name) VALUES(?,?)", id, place)
+                    execute("INSERT INTO book_pub_place(bookId,pubPlaceId) VALUES(?,?)", bookId, id)
+                }
+                meta?.pubDate?.takeIf { it.isNotBlank() }?.let { date ->
+                    val id = ids.id("date:$date")
+                    execute("INSERT OR IGNORE INTO pub_date(id,date) VALUES(?,?)", id, date)
+                    execute("INSERT INTO book_pub_date(bookId,pubDateId) VALUES(?,?)", bookId, id)
+                }
+                meta?.extraTitles.orEmpty().filter { it.isNotBlank() }.forEach { term ->
+                    execute("INSERT OR IGNORE INTO book_acronym(bookId,term) VALUES(?,?)", bookId, term)
+                }
+                val lineIds =
+                    insertLinesAndToc(bookId, title, lines) { completedLines ->
+                        val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
+                        if (expected > reportedBytes) {
+                            onBytesProcessed(expected - reportedBytes)
+                            reportedBytes = expected
+                        }
+                    }
+                if (reportedBytes < fileBytes) onBytesProcessed(fileBytes - reportedBytes)
+                val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
+                booksByTitle[comparable(title)] = ref
+                personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
+                bookCount++
+            }
+            return PersonalImportSummary(bookCount, 0)
+        }
+
+        private fun resolveBookCategory(
+            folder: PersonalBookFolder,
+            folderRoot: Long?,
+            segments: List<String>,
+        ): Long {
+            if (segments.isEmpty()) {
+                if (folderRoot != null) return folderRoot
+                return ensurePersonalCategory("merge-root:${folder.id}", null, folder.displayName, 0)
+            }
+            var parent = folderRoot
+            var logicalPath = ""
+            segments.forEachIndexed { index, raw ->
+                val title = normalizeLabel(raw)
+                logicalPath = if (logicalPath.isEmpty()) title else "$logicalPath/$title"
+                val baseMatch =
+                    if (folder.placement == PersonalFolderPlacement.MERGE_WITH_LIBRARY) {
+                        base.categoryByParentAndTitle[parent to comparable(title)]
+                    } else {
+                        null
+                    }
+                parent = baseMatch ?: ensurePersonalCategory(
+                    "category:${folder.id}:$logicalPath",
+                    parent,
+                    title,
+                    (parent?.let { categoryLevels[it] + 1 } ?: index),
+                )
+            }
+            return requireNotNull(parent)
+        }
+
+        private fun ensurePersonalCategory(
+            key: String,
+            parent: Long?,
+            title: String,
+            level: Int,
+        ): Long {
+            personalCategories[key]?.let { return it }
+            val id = ids.id(key)
+            execute("INSERT INTO category(id,parentId,title,level,orderIndex) VALUES(?,?,?,?,999)", id, parent, title, level)
+            categoryParents[id] = parent
+            categoryLevels[id] = level
+            execute("INSERT INTO category_closure(ancestorId,descendantId) VALUES(?,?)", id, id)
+            var ancestor = parent
+            val seen = HashSet<Long>()
+            while (ancestor != null && seen.add(ancestor)) {
+                execute("INSERT OR IGNORE INTO category_closure(ancestorId,descendantId) VALUES(?,?)", ancestor, id)
+                ancestor = categoryParents[ancestor]
+            }
+            personalCategories[key] = id
+            return id
+        }
+
+        private fun insertLinesAndToc(
+            bookId: Long,
+            title: String,
+            lines: List<String>,
+            onLineProcessed: (Int) -> Unit,
+        ): List<Long> {
+            val result = ArrayList<Long>(lines.size)
+            val occurrences = HashMap<String, Int>()
+            val parentStack = HashMap<Int, Long>()
+            var currentToc: Long? = null
+            lines.forEachIndexed { index, content ->
+                val occurrence = occurrences.merge(content, 1, Int::plus)!! - 1
+                val lineId = ids.id("line:$bookId:${sha256(content)}:$occurrence")
+                val level =
+                    HEADER
+                        .find(content)
+                        ?.groupValues
+                        ?.get(1)
+                        ?.toIntOrNull() ?: 0
+                var tocId: Long? = currentToc
+                if (level > 0) {
+                    val heading = Jsoup.clean(content, Safelist.none()).trim()
+                    if (heading.isNotBlank()) {
+                        val textId = ids.id("toc-text:$heading")
+                        execute("INSERT OR IGNORE INTO tocText(id,text) VALUES(?,?)", textId, heading)
+                        val parent = (level - 1 downTo 1).firstNotNullOfOrNull { parentStack[it] }
+                        // TOC queries use the primary key as their cheap, indexed display order.
+                        // Generic hashed negative IDs would scramble sibling headings, so encode
+                        // the source line position for personal TOC entries.
+                        val entryId = ids.orderedTocId(bookId, index)
+                        execute(
+                            "INSERT INTO tocEntry(id,bookId,parentId,textId,level,lineId) VALUES(?,?,?,?,?,?)",
+                            entryId,
+                            bookId,
+                            parent,
+                            textId,
+                            level,
+                            lineId,
+                        )
+                        parentStack.keys.filter { it >= level }.forEach(parentStack::remove)
+                        parentStack[level] = entryId
+                        currentToc = entryId
+                        tocId = entryId
+                    }
+                }
+                execute(
+                    "INSERT INTO line(id,bookId,lineIndex,content,heRef,tocEntryId,charCount) VALUES(?,?,?,?,?,?,?)",
+                    lineId,
+                    bookId,
+                    index,
+                    content,
+                    "$title ${index + 1}",
+                    tocId,
+                    visibleLength(content),
+                )
+                tocId?.let { execute("INSERT INTO line_toc(lineId,tocEntryId) VALUES(?,?)", lineId, it) }
+                result += lineId
+                onLineProcessed(index + 1)
+            }
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    """
+                    UPDATE tocEntry SET hasChildren=1 WHERE id IN
+                    (SELECT DISTINCT parentId FROM tocEntry WHERE bookId=$bookId AND parentId IS NOT NULL)
+                    """.trimIndent(),
+                )
+                statement.executeUpdate(
+                    """
+                    UPDATE tocEntry SET isLastChild=1 WHERE id IN
+                    (SELECT MAX(id) FROM tocEntry WHERE bookId=$bookId GROUP BY parentId)
+                    """.trimIndent(),
+                )
+            }
+            return result
+        }
+
+        fun importLinks(
+            folder: PersonalBookFolder,
+            onBytesProcessed: (Long) -> Unit,
+        ): Int {
+            val linksDirectory = Path.of(folder.path).resolve("links")
+            if (!linksDirectory.isDirectory()) return 0
+            var count = 0
+            Files.list(linksDirectory).use { stream ->
+                stream.filter { it.isRegularFile() && it.extension.equals("json", true) }.sorted().forEach { file ->
+                    val fileBytes = Files.size(file).coerceAtLeast(1L)
+                    val sourceTitle = comparable(file.nameWithoutExtension.removeSuffix("_links"))
+                    val source = personalBooksByFolderAndTitle[folder.id to sourceTitle] ?: booksByTitle[sourceTitle] ?: return@forEach
+                    val links = runCatching { json.decodeFromString<List<PersonalLinkData>>(file.readText()) }.getOrDefault(emptyList())
+                    links.forEachIndexed { index, data ->
+                        val targetTitle =
+                            comparable(
+                                data.path
+                                    .substringAfterLast('\\')
+                                    .substringAfterLast('/')
+                                    .substringBeforeLast('.'),
+                            )
+                        val target = booksByTitle[targetTitle] ?: return@forEachIndexed
+                        val sourceIndex = (data.sourceLine.toInt() - 1).coerceAtLeast(0)
+                        val targetIndex = (data.targetLine.toInt() - 1).coerceAtLeast(0)
+                        val sourceLineId = source.lineIds.getOrNull(sourceIndex) ?: return@forEachIndexed
+                        val targetLineId =
+                            target.lineIds.getOrNull(targetIndex)
+                                ?: base.lineId(target.id, targetIndex) ?: return@forEachIndexed
+                        val declaredType = ConnectionType.fromString(data.connectionType)
+                        val isExplicitSource = declaredType == ConnectionType.SOURCE
+                        val type = if (isExplicitSource) ConnectionType.COMMENTARY else declaredType
+                        val storedSourceBook = if (isExplicitSource) target else source
+                        val storedTargetBook = if (isExplicitSource) source else target
+                        val storedSourceLineId = if (isExplicitSource) targetLineId else sourceLineId
+                        val storedTargetLineId = if (isExplicitSource) sourceLineId else targetLineId
+                        val storedTargetIndex = if (isExplicitSource) sourceIndex else targetIndex
+                        val typeId = base.connectionTypes[type.name] ?: return@forEachIndexed
+                        val linkId = ids.id("link:${folder.id}:${file.fileName}:$index:$storedSourceLineId:$storedTargetLineId")
+                        execute(
+                            """
+                            INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
+                            targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)
+                            """.trimIndent(),
+                            linkId,
+                            storedSourceBook.id,
+                            storedTargetBook.id,
+                            storedSourceLineId,
+                            storedTargetLineId,
+                            storedTargetIndex,
+                            storedTargetBook.order,
+                            typeId,
+                        )
+                        booksWithSourceLinks += storedSourceBook.id
+                        booksWithTargetLinks += storedTargetBook.id
+                        if (
+                            type == ConnectionType.COMMENTARY ||
+                            type == ConnectionType.SUPER_COMMENTARY ||
+                            type == ConnectionType.TARGUM ||
+                            type == ConnectionType.MIDRASH ||
+                            type == ConnectionType.PARSHANUT ||
+                            type == ConnectionType.DIBUR_HAMATCHIL ||
+                            type == ConnectionType.EIN_MISHPAT
+                        ) {
+                            sourceTargetBooks += storedTargetBook.id
+                        }
+                        if (type == ConnectionType.REFERENCE || type == ConnectionType.OTHER) {
+                            mentionTargetBooks += storedTargetBook.id
+                        }
+                        flagsByBook.getOrPut(storedSourceBook.id, ::mutableSetOf).add(type)
+                        flagsByBook.getOrPut(storedTargetBook.id, ::mutableSetOf).add(
+                            if (isExplicitSource) ConnectionType.SOURCE else type,
+                        )
+                        count++
+                    }
+                    onBytesProcessed(fileBytes)
+                }
+            }
+            return count
+        }
+
+        fun finishLinks() {
+            booksWithTargetLinks.filter { it > 0L }.forEach { bookId ->
+                execute(
+                    "INSERT OR REPLACE INTO personal_link_target_book(" +
+                        "bookId,hasSourceLinks,hasMentionLinks) VALUES(?,?,?)",
+                    bookId,
+                    if (bookId in sourceTargetBooks) 1 else 0,
+                    if (bookId in mentionTargetBooks) 1 else 0,
+                )
+            }
+            execute(
+                "INSERT INTO schema_meta(key,value) VALUES(?,?) " +
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                TARGET_BOOK_HINTS_KEY,
+                "1",
+            )
+            (booksWithSourceLinks + booksWithTargetLinks).filter { it < 0 }.forEach { bookId ->
+                execute(
+                    "INSERT INTO book_has_links(bookId,hasSourceLinks,hasTargetLinks) VALUES(?,?,?)",
+                    bookId,
+                    if (bookId in booksWithSourceLinks) 1 else 0,
+                    if (bookId in booksWithTargetLinks) 1 else 0,
+                )
+            }
+            flagsByBook.filterKeys { it < 0 }.forEach { (bookId, flags) ->
+                execute(
+                    """
+                    UPDATE book SET hasTargumConnection=?,hasReferenceConnection=?,hasSourceConnection=?,
+                    hasCommentaryConnection=?,hasOtherConnection=? WHERE id=?
+                    """.trimIndent(),
+                    if (ConnectionType.TARGUM in flags) 1 else 0,
+                    if (ConnectionType.REFERENCE in flags) 1 else 0,
+                    if (ConnectionType.SOURCE in flags) 1 else 0,
+                    if (flags.any { it == ConnectionType.COMMENTARY || it == ConnectionType.SUPER_COMMENTARY }) 1 else 0,
+                    if (ConnectionType.OTHER in flags) 1 else 0,
+                    bookId,
+                )
+            }
+        }
+
+        private fun execute(
+            sql: String,
+            vararg values: Any?,
+        ) {
+            connection.prepareStatement(sql).use { statement ->
+                values.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    private fun loadMetadata(root: Path): Map<String, BookMetadata> {
+        val file = root.resolve("metadata.json")
+        if (!file.isRegularFile()) return emptyMap()
+        val content = file.readText(Charsets.UTF_8)
+        return runCatching { json.decodeFromString<Map<String, BookMetadata>>(content) }.getOrElse {
+            runCatching { json.decodeFromString<List<BookMetadata>>(content).associateBy(BookMetadata::title) }.getOrDefault(emptyMap())
+        }
+    }
+
+    @Serializable
+    private data class PersonalLinkData(
+        @SerialName("line_index_1") val sourceLine: Double,
+        @SerialName("path_2") val path: String,
+        @SerialName("line_index_2") val targetLine: Double,
+        @SerialName("Conection Type") val connectionType: String = "",
+    )
+
+    private data class BookRef(
+        val id: Long,
+        val title: String,
+        val categoryId: Long,
+        val order: Int,
+        val lineIds: List<Long> = emptyList(),
+    )
+
+    private class BaseLibraryIndex private constructor(
+        val categoryParents: Map<Long, Long?>,
+        val categoryLevels: Map<Long, Int>,
+        val categoryByParentAndTitle: Map<Pair<Long?, String>, Long>,
+        val booksByTitle: Map<String, BookRef>,
+        val connectionTypes: Map<String, Long>,
+        private val database: Path,
+    ) {
+        private val lineIdsByBook = HashMap<Long, List<Long>>()
+
+        @Synchronized
+        fun lineId(
+            bookId: Long,
+            lineIndex: Int,
+        ): Long? =
+            lineIdsByBook
+                .getOrPut(bookId) {
+                    DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                        connection.prepareStatement("SELECT id FROM line WHERE bookId=? ORDER BY lineIndex").use { statement ->
+                            statement.setLong(1, bookId)
+                            statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getLong(1)) } }
+                        }
+                    }
+                }.getOrNull(lineIndex)
+
+        companion object {
+            fun load(database: Path): BaseLibraryIndex =
+                DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                    val parents = HashMap<Long, Long?>()
+                    val levels = HashMap<Long, Int>()
+                    val categories = HashMap<Pair<Long?, String>, Long>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,parentId,title,level FROM category").use { rows ->
+                            while (rows.next()) {
+                                val id = rows.getLong(1)
+                                val parent = rows.getLong(2).let { if (rows.wasNull()) null else it }
+                                parents[id] = parent
+                                levels[id] = rows.getInt(4)
+                                categories[parent to comparable(rows.getString(3))] = id
+                            }
+                        }
+                    }
+                    val books = HashMap<String, BookRef>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,title,categoryId,orderIndex FROM book ORDER BY sourceId").use { rows ->
+                            while (rows.next()) {
+                                val ref = BookRef(rows.getLong(1), rows.getString(2), rows.getLong(3), rows.getInt(4))
+                                books.putIfAbsent(comparable(ref.title), ref)
+                            }
+                        }
+                    }
+                    val types = HashMap<String, Long>()
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT id,name FROM connection_type").use { rows ->
+                            while (rows.next()) types[rows.getString(2)] = rows.getLong(1)
+                        }
+                    }
+                    BaseLibraryIndex(parents, levels, categories, books, types, database)
+                }
+        }
+    }
+
+    private class StableNegativeIds {
+        private val keysById = HashMap<Long, String>()
+
+        fun id(key: String): Long {
+            var salt = 0
+            while (true) {
+                val bytes = MessageDigest.getInstance("SHA-256").digest("$key#$salt".toByteArray())
+                // Reserve -1 for legacy UI/session sentinels.
+                val positive = (ByteBuffer.wrap(bytes).int.toLong() and 0x7fff_ffffL).coerceAtLeast(2L)
+                val candidate = -positive
+                if (claim(candidate, key)) return candidate
+                salt++
+            }
+        }
+
+        /** Allocates a stable TOC id whose numeric order matches the heading's line order. */
+        fun orderedTocId(
+            bookId: Long,
+            lineIndex: Int,
+        ): Long {
+            require(bookId in -Int.MAX_VALUE.toLong()..-2L) { "Unexpected personal book id: $bookId" }
+            require(lineIndex >= 0) { "Negative TOC line index: $lineIndex" }
+
+            // Generic hashed ids occupy [-Int.MAX_VALUE, -2]. This 64-bit range is
+            // separate, and reversing the low bits makes earlier negative ids sort first.
+            val bookPart = -bookId
+            val reversedLineIndex = Int.MAX_VALUE.toLong() - lineIndex.toLong()
+            val candidate = -((bookPart shl 31) or reversedLineIndex)
+            check(claim(candidate, "toc:$bookId:$lineIndex")) { "Duplicate TOC entry at line $lineIndex" }
+            return candidate
+        }
+
+        private fun claim(
+            candidate: Long,
+            key: String,
+        ): Boolean {
+            val previous = keysById.putIfAbsent(candidate, key)
+            return previous == null || previous == key
+        }
+    }
+
+    private fun MessageDigest.add(value: String) = update(value.toByteArray(Charsets.UTF_8))
+
+    private fun importableBytes(folder: PersonalBookFolder): Long {
+        val root = Path.of(folder.path)
+        return Files.walk(root).use { stream ->
+            stream
+                .filter { it.isRegularFile() }
+                .filter { file ->
+                    (file.extension.equals("txt", true) && !file.startsWith(root.resolve("links"))) ||
+                        (file.extension.equals("json", true) && file.startsWith(root.resolve("links")))
+                }.mapToLong { Files.size(it).coerceAtLeast(1L) }
+                .sum()
+        }
+    }
+
+    private class ProgressReporter(
+        private val callback: ((Float) -> Unit)?,
+    ) {
+        private var last = -1f
+
+        fun report(
+            value: Float,
+            force: Boolean = false,
+        ) {
+            val next = value.coerceIn(0f, 1f).coerceAtLeast(last)
+            if (force || last < 0f || next - last >= MIN_PROGRESS_STEP) {
+                last = next
+                callback?.invoke(next)
+            }
+        }
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    private companion object {
+        private const val SCHEMA_END = 0.03f
+        private const val IMPORT_END = 0.62f
+        private const val INDEX_END = 0.98f
+        private const val MIN_PROGRESS_STEP = 0.001f
+        private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v2-ordered-toc"
+        val SUPPORTED_EXTENSIONS = setOf("txt", "json")
+        val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+
+        fun normalizeLabel(value: String): String =
+            value
+                .trim()
+                .replace('"', '״')
+                .replace('׳', '’')
+                .replace(Regex("\\s+"), " ")
+
+        fun comparable(value: String): String = normalizeLabel(value).replace("״", "").replace("’", "").lowercase()
+
+        fun sha256(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).toHex()
+
+        fun visibleLength(value: String): Int = Jsoup.clean(value, Safelist.none()).length
+    }
+}

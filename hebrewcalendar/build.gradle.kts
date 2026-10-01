@@ -26,5 +26,9 @@ kotlin {
             }
             implementation(libs.kosherkotlin)
         }
+
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+        }
     }
 }

@@ -3,6 +3,8 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
+import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
@@ -21,6 +23,7 @@ import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
 import io.github.kdroidfilter.seforimapp.testAppSettings
 import io.github.kdroidfilter.seforimlibrary.core.models.AltTocEntry
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
+import io.github.vinceglb.filekit.FileKit
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,7 +58,9 @@ class PostSelectLineTest {
     private lateinit var repository: SeforimRepository
     private lateinit var useCaseFactory: BookContentUseCaseFactory
     private lateinit var titleUpdateManager: TabTitleUpdateManager
+    private lateinit var tabsViewModel: TabsViewModel
     private lateinit var desktopManager: DesktopManager
+    private lateinit var historyStore: HistoryStore
 
     // Mocked use cases
     private lateinit var contentUseCase: ContentUseCase
@@ -71,26 +76,17 @@ class PostSelectLineTest {
 
     @BeforeTest
     fun setup() {
+        FileKit.init("io.github.kdroidfilter.seforimapp.test")
         Dispatchers.setMain(testDispatcher)
 
         persistedStore = TabPersistedStateStore()
         repository = mockk(relaxed = true)
         titleUpdateManager = TabTitleUpdateManager()
-        desktopManager =
-            DesktopManager(
-                tabPersistedStateStore = persistedStore,
-                thumbnails =
-                    TabThumbnailStore(
-                        kotlin.io.path
-                            .createTempDirectory()
-                            .toFile(),
-                    ),
-                titleUpdateManager = titleUpdateManager,
-                searchHomeViewModelFactory = {
-                    SearchHomeViewModel(TabPersistedStateStore(), mockk(relaxed = true), mockk(relaxed = true), testAppSettings())
-                },
-                defaultDesktopName = "D1",
-            )
+        tabsViewModel = mockk(relaxed = true)
+        desktopManager = mockk(relaxed = true)
+        historyStore = mockk(relaxed = true)
+        every { desktopManager.tabsViewModelFor(testTabId) } returns tabsViewModel
+        every { desktopManager.tabExistsFlow(testTabId) } returns flowOf(true)
 
         // Create mocked use cases
         contentUseCase = mockk(relaxed = true)
@@ -144,9 +140,11 @@ class PostSelectLineTest {
             useCaseFactory = useCaseFactory,
             titleUpdateManager = titleUpdateManager,
             desktopManager = desktopManager,
-            historyStore = mockk<HistoryStore>(relaxed = true),
+
             sessionManager = mockk { every { isRestoringSession } returns MutableStateFlow(false) },
             appSettings = testAppSettings(),
+            catalogCache = mockk { every { revision } returns MutableStateFlow(0L) },
+            historyStore = historyStore,
         )
     }
 

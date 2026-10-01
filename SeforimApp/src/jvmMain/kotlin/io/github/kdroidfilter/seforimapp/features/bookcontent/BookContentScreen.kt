@@ -51,6 +51,11 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryPanel
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
+import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
+import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
+import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Ink_pen
@@ -83,9 +88,13 @@ import seforimapp.seforimapp.generated.resources.context_menu_add_note
 import seforimapp.seforimapp.generated.resources.context_menu_copy_link
 import seforimapp.seforimapp.generated.resources.context_menu_copy_with_source
 import seforimapp.seforimapp.generated.resources.context_menu_copy_without_nikud
+import seforimapp.seforimapp.generated.resources.context_menu_expand_acronym
 import seforimapp.seforimapp.generated.resources.context_menu_find_in_page
 import seforimapp.seforimapp.generated.resources.context_menu_highlight
+import seforimapp.seforimapp.generated.resources.context_menu_report_book_error
 import seforimapp.seforimapp.generated.resources.context_menu_search_selected_text
+import seforimapp.seforimapp.generated.resources.context_menu_show_word_definition
+import seforimapp.seforimapp.generated.resources.context_menu_show_word_lookup
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.InputEvent
@@ -360,7 +369,7 @@ private fun resolveWholeLineNoteDraft(
     lineId: Long,
     lines: List<io.github.kdroidfilter.seforimlibrary.core.models.Line>,
 ): NoteDraftAnchor? {
-    if (lineId <= 0) return null
+    if (lineId == 0L || lineId == -1L) return null
     val line = lines.firstOrNull { it.id == lineId } ?: return null
     val plain = buildAnnotatedFromHtml(line.content, baseTextSize = 16f, boldScale = 1f).text
     if (plain.isEmpty()) return null
@@ -434,12 +443,19 @@ fun BookTextMenus(
     tabUi: BookTabUi,
     content: @Composable () -> Unit,
 ) {
+    var errorReportDraft by remember { mutableStateOf<BookErrorReportDraft?>(null) }
+    var wordLookupResult by remember { mutableStateOf<WordLookupResult?>(null) }
+    LaunchedEffect(Unit) { runCatching { WordLookupIndex.preload() } }
     val searchSelectedLabel = stringResource(Res.string.context_menu_search_selected_text)
     val findInPageLabel = stringResource(Res.string.context_menu_find_in_page)
     val copyWithoutNikudLabel = stringResource(Res.string.context_menu_copy_without_nikud)
     val copyWithSourceLabel = stringResource(Res.string.context_menu_copy_with_source)
     val copyLinkLabel = stringResource(Res.string.context_menu_copy_link)
     val addNoteLabel = stringResource(Res.string.context_menu_add_note)
+    val reportBookErrorLabel = stringResource(Res.string.context_menu_report_book_error)
+    val showWordDefinitionLabel = stringResource(Res.string.context_menu_show_word_definition)
+    val expandAcronymLabel = stringResource(Res.string.context_menu_expand_acronym)
+    val showWordLookupLabel = stringResource(Res.string.context_menu_show_word_lookup)
     val baseTextContextMenu = LocalTextContextMenu.current
     val tabId = uiState.tabId
     val selectedBook = uiState.navigation.selectedBook
@@ -463,6 +479,10 @@ fun BookTextMenus(
             copyWithoutNikudLabel,
             copyWithSourceLabel,
             copyLinkLabel,
+            reportBookErrorLabel,
+            showWordDefinitionLabel,
+            expandAcronymLabel,
+            showWordLookupLabel,
             showDiacritics,
             bookHasDiacritics,
             bookId,
@@ -552,11 +572,30 @@ fun BookTextMenus(
                                                         selectionContext.visibleLines.value.lines,
                                                     )?.first?.id
                                                 } else {
-                                                    selectionContext.currentLineId.value.takeIf { it > 0 }
+                                                    selectionContext.currentLineId.value.takeIf { it != 0L && it != -1L }
                                                 }
                                             val link = bookShareLink(bookForCopy.id, lineId)
                                             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
                                             clipboard.setContents(StringSelection(link), null)
+                                        },
+                                    )
+                                }
+                                val lookupText = selectedText.ifBlank { selectionContext.contextWord.value }
+                                val lookup = WordLookupIndex.lookup(lookupText)
+                                if (lookup != null) {
+                                    val lookupLabel =
+                                        when {
+                                            lookup.dictionarySenses.isNotEmpty() && lookup.acronymExpansions.isNotEmpty() ->
+                                                showWordLookupLabel
+                                            lookup.acronymExpansions.isNotEmpty() -> expandAcronymLabel
+                                            else -> showWordDefinitionLabel
+                                        }
+                                    add(
+                                        ContextMenuItemOption(
+                                            icon = TextSearchContextMenuIconKey,
+                                            label = lookupLabel,
+                                        ) {
+                                            wordLookupResult = lookup
                                         },
                                     )
                                 }
@@ -589,14 +628,24 @@ fun BookTextMenus(
                                 )
                                 // Add note (main pane only): anchors a note to the selected text,
                                 // or to the whole right-clicked line when nothing is selected.
-                                if (bookId > 0 &&
+                                if (bookId != 0L &&
+                                    bookId != -1L &&
                                     selectionContext.activeCommentaryColumn.value
                                         .isEmpty() &&
-                                    (selectedText.isNotBlank() || selectionContext.currentLineId.value > 0)
+                                    (
+                                        selectedText.isNotBlank() ||
+                                            selectionContext.currentLineId.value.let { it != 0L && it != -1L }
+                                    )
                                 ) {
                                     add(
                                         ContextMenuItemOptionWithKeybinding(
                                             icon = AllIconsKeys.Actions.Annotate,
+                                            keybinding =
+                                                if (hostOs.isMacOS) {
+                                                    linkedSetOf("⌘", "E")
+                                                } else {
+                                                    linkedSetOf("Ctrl", "E")
+                                                },
                                             label = addNoteLabel,
                                         ) {
                                             val lines = selectionContext.visibleLines.value.lines
@@ -614,9 +663,34 @@ fun BookTextMenus(
                                         },
                                     )
                                 }
+                                // Report a textual error to Otzaria. A selection is preferred;
+                                // without one, use the complete right-clicked line as context.
+                                if (bookForCopy != null &&
+                                    selectionContext.activeCommentaryColumn.value.isEmpty() &&
+                                    (
+                                        selectedText.isNotBlank() ||
+                                            selectionContext.currentLineId.value.let { it != 0L && it != -1L }
+                                    )
+                                ) {
+                                    add(
+                                        ContextMenuItemOption(
+                                            icon = AllIconsKeys.Actions.Report,
+                                            label = reportBookErrorLabel,
+                                        ) {
+                                            errorReportDraft =
+                                                createBookErrorReportDraft(
+                                                    book = bookForCopy,
+                                                    selectedText = selectedText,
+                                                    visibleLines = selectionContext.visibleLines.value.lines,
+                                                    currentLineId = selectionContext.currentLineId.value,
+                                                    rootTitle = selectionContext.activeBook.value?.rootTitle,
+                                                )
+                                        },
+                                    )
+                                }
                                 // Highlight color picker (last item): persists a position-based
                                 // highlight for the selected text on its resolved line.
-                                if (selectedText.isNotBlank() && bookId > 0) {
+                                if (selectedText.isNotBlank() && bookId != 0L && bookId != -1L) {
                                     add(
                                         ContextMenuHighlightColorPicker(
                                             colors = HighlightColors.allWithClear,
@@ -654,6 +728,18 @@ fun BookTextMenus(
         LocalContextMenuRepresentation provides BookContentContextMenuRepresentationWithKeybindings,
         content = content,
     )
+    errorReportDraft?.let { draft ->
+        BookErrorReportDialog(
+            draft = draft,
+            repository = LocalAppGraph.current.repository,
+            onDismiss = { errorReportDraft = null },
+        )
+    }
+
+    wordLookupResult?.let { result ->
+        WordLookupDialog(result = result, onDismiss = { wordLookupResult = null })
+    }
+
 }
 
 /**
@@ -673,6 +759,12 @@ fun BookContentScreen(
     isRestoringSession: Boolean = false,
     isSelected: Boolean = true,
     bookCharCounts: IntArray? = null,
+    isPdfEdition: Boolean = false,
+    pdfCanZoomIn: Boolean = false,
+    pdfCanZoomOut: Boolean = false,
+    onPdfZoomIn: () -> Unit = {},
+    onPdfZoomOut: () -> Unit = {},
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val currentOnEvent by rememberUpdatedState(onEvent)
     val tabId = uiState.tabId
@@ -720,6 +812,7 @@ fun BookContentScreen(
             bookCharCounts = bookCharCounts,
             noteDraft = tabUi.noteDraft,
             tabUi = tabUi,
+            mainContentOverride = mainContentOverride,
         )
     }
 }

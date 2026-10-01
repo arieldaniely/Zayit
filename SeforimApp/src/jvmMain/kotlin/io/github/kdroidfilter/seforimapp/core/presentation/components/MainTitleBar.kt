@@ -48,16 +48,19 @@ fun DecoratedWindowScope.MainTitleBar(modifier: Modifier = Modifier) {
                 .value.showTitleBarIcon
         BoxWithConstraints(modifier = Modifier.align(Alignment.Start)) {
             val windowWidth = maxWidth
-            // Non-macOS gets the extra Tab Search and Favorites buttons (macOS uses the
-            // native History/Favorites menus)
-            val actionButtonCount = (if (PlatformInfo.isMacOS) 2 else 6) + if (updateIconVisible) 1 else 0
-            val iconWidth: Dp = 40.dp
+            // Non-macOS gets the extra Favorites button (macOS uses the native menus).
+            // TitleBarActionsButtonsView contains: SharedStudy, Home, Find, and on non-macOS also Favorites, Theme, Settings.
+            // Tab Search lives at the leading edge of the tabs area and is accounted for there.
+            val actionButtonCount = (if (PlatformInfo.isMacOS) 3 else 6) + if (updateIconVisible) 1 else 0
+            val iconWidth: Dp = 36.dp
             val desktopSwitcherWidth: Dp = DESKTOP_SWITCHER_WIDTH
             val actionButtonsWidth = iconWidth * actionButtonCount + desktopSwitcherWidth
+            val macOsTrafficLightsWidth: Dp = 80.dp
+            val windowsControlsWidth: Dp = 140.dp
             val iconsAreaWidth: Dp =
                 when (PlatformInfo.currentOS) {
-                    Platform.MacOS -> actionButtonsWidth + iconWidth * 2 // traffic lights space
-                    Platform.Windows -> actionButtonsWidth + iconWidth * 3.5f // window controls
+                    Platform.MacOS -> actionButtonsWidth + macOsTrafficLightsWidth // traffic lights space
+                    Platform.Windows -> actionButtonsWidth + windowsControlsWidth // window controls
                     else -> actionButtonsWidth + windowControlButtonWidth * windowControlCount
                 }
             val tabsAreaWidth: Dp = (windowWidth - iconsAreaWidth).coerceAtLeast(0.dp)
@@ -68,6 +71,9 @@ fun DecoratedWindowScope.MainTitleBar(modifier: Modifier = Modifier) {
                             .align(Alignment.Start)
                             .width(tabsAreaWidth),
                 ) {
+                    if (!PlatformInfo.isMacOS) {
+                        TabSearchButton()
+                    }
                     TabsView()
                 }
                 Row(

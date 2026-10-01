@@ -31,6 +31,12 @@ class FontCatalogTest {
     }
 
     @Test
+    fun `FontCatalog contains Mekorot Rashi replacement`() {
+        val codes = FontCatalog.options.map { it.code }
+        assertTrue("mekorotrashi" in codes)
+    }
+
+    @Test
     fun `FontCatalog contains taameyashkenaz`() {
         val codes = FontCatalog.options.map { it.code }
         assertTrue("taameyashkenaz" in codes)

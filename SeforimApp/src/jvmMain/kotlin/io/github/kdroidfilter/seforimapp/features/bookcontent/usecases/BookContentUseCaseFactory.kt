@@ -22,6 +22,7 @@ class BookContentUseCaseFactory(
     private val repository: SeforimRepository,
     private val categoryDisplaySettingsStore: CategoryDisplaySettingsStore,
     private val catalogCache: CatalogCache,
+    private val appSettings: io.github.kdroidfilter.seforimapp.core.settings.AppSettings,
 ) {
     /**
      * Creates a [TocUseCase] for managing table of contents.
@@ -56,7 +57,7 @@ class BookContentUseCaseFactory(
     fun createCommentariesUseCase(
         stateManager: BookContentStateManager,
         scope: CoroutineScope,
-    ): CommentariesUseCase = CommentariesUseCase(repository, stateManager, scope)
+    ): CommentariesUseCase = CommentariesUseCase(repository, appSettings, stateManager, scope)
 
     /**
      * Creates a [CategoryDisplaySettingsUseCase] for managing category display settings.

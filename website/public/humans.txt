@@ -1,6 +1,6 @@
 /* TEAM */
 Developer: KDroid Filter
-Site: https://github.com/kdroidFilter
+Site: https://github.com/arieldaniely/Zayit
 From: Israel
 
 /* THANKS */

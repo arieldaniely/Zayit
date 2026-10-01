@@ -2,6 +2,7 @@
 
 package io.github.kdroidfilter.seforimapp.features.search
 
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -17,12 +18,14 @@ import dev.zacsweers.metrox.viewmodel.ViewModelAssistedFactoryKey
 import io.github.kdroidfilter.seforim.tabs.*
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
+import io.github.kdroidfilter.seforimapp.core.history.SearchVisitContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.search.domain.BuildSearchTreeUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.CategoryNavigationUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.ExecuteSearchUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.GetBreadcrumbPiecesUseCase
+import io.github.kdroidfilter.seforimapp.features.search.domain.ProgressiveSearchHighlighter
 import io.github.kdroidfilter.seforimapp.features.search.domain.ResultsIndex
 import io.github.kdroidfilter.seforimapp.features.search.domain.ResultsIndexingUseCase
 import io.github.kdroidfilter.seforimapp.features.search.domain.SearchStatePersistenceUseCase
@@ -58,6 +61,9 @@ private const val LAZY_PAGE_SIZE = 25
 @Stable
 data class SearchUiState(
     val query: String = "",
+    val semanticFallback: Boolean = false,
+    val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
+        io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
     val globalExtended: Boolean = false,
     val baseBooksHadNoResults: Boolean = false,
     val isLoading: Boolean = false,
@@ -83,11 +89,12 @@ class SearchResultViewModel(
     @Assisted savedStateHandle: SavedStateHandle,
     private val persistedStore: TabPersistedStateStore,
     private val repository: SeforimRepository,
-    private val lucene: SearchEngine,
+    private val searchEngine: SearchEngine,
     private val titleUpdateManager: TabTitleUpdateManager,
     private val desktopManager: DesktopManager,
     private val historyStore: HistoryStore,
     private val appSettings: AppSettings,
+    private val semanticAssetsManager: SemanticAssetsManager,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(SearchResultViewModel::class)
@@ -156,6 +163,10 @@ class SearchResultViewModel(
             val query: String,
         ) : SearchResultEvents()
 
+        data class SetMode(
+            val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode,
+        ) : SearchResultEvents()
+
         data object ExecuteSearch : SearchResultEvents()
 
         data object CancelSearch : SearchResultEvents()
@@ -168,6 +179,11 @@ class SearchResultViewModel(
         ) : SearchResultEvents()
 
         data class OpenResult(
+            val result: SearchResult,
+            val openInNewTab: Boolean,
+        ) : SearchResultEvents()
+
+        data class OpenPdfResult(
             val result: SearchResult,
             val openInNewTab: Boolean,
         ) : SearchResultEvents()
@@ -225,6 +241,12 @@ class SearchResultViewModel(
                 setQuery(event.query)
             }
 
+            is SearchResultEvents.SetMode -> {
+                _uiState.value = _uiState.value.copy(mode = event.mode, semanticFallback = false)
+                updatePersistedSearch { it.copy(mode = event.mode.name) }
+                executeSearch()
+            }
+
             is SearchResultEvents.ExecuteSearch -> {
                 executeSearch()
             }
@@ -239,6 +261,10 @@ class SearchResultViewModel(
 
             is SearchResultEvents.OpenResult -> {
                 openResult(event.result, event.openInNewTab)
+            }
+
+            is SearchResultEvents.OpenPdfResult -> {
+                openPdfResult(event.result, event.openInNewTab)
             }
 
             is SearchResultEvents.RequestBreadcrumb -> {
@@ -276,8 +302,40 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState())
+    private val lucene: SearchEngine =
+        ModeBoundSearchEngine(
+            searchEngine,
+            selectedMode = { _uiState.value.mode },
+            onFallback = {
+                _uiState.update { state ->
+                    state.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                        semanticFallback = true,
+                    )
+                }
+                updatePersistedSearch {
+                    it.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name, snapshot = null)
+                }
+            },
+            semanticReady = semanticAssetsManager::validatedReady,
+        )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     private var currentJob: Job? = null
+    private val highlighter =
+        ProgressiveSearchHighlighter(viewModelScope, onUpdate = { hit ->
+            _uiState.update { state ->
+                state.copy(
+                    results =
+                        state.results.map { result ->
+                            if (result.bookId == hit.bookId && result.lineId == hit.lineId) {
+                                result.copy(snippet = hit.snippet)
+                            } else {
+                                result
+                            }
+                        },
+                )
+            }
+        })
 
     // Lazy loading: keep session open for on-demand pagination
     private var currentSession: SearchSession? = null
@@ -618,18 +676,41 @@ class SearchResultViewModel(
         _uiState.value =
             _uiState.value.copy(
                 query = initialQuery,
+                mode =
+                    runCatching {
+                        io.github.kdroidfilter.seforimlibrary.search.SearchMode
+                            .valueOf(persisted.mode)
+                    }.getOrDefault(io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE),
                 globalExtended = persisted.globalExtended,
                 scrollIndex = persisted.scrollIndex,
                 scrollOffset = persisted.scrollOffset,
                 anchorId = persisted.anchorId,
                 anchorIndex = persisted.anchorIndex,
                 textSize = appSettings.getTextSize(),
-                scopeTocId = persisted.filterTocId.takeIf { it > 0 },
+                scopeTocId = persisted.filterTocId.takeIf { it != 0L },
             )
 
-        val filterCategoryId = persisted.filterCategoryId.takeIf { it > 0 }
-        val filterBookId = persisted.filterBookId.takeIf { it > 0 }
-        val filterTocId = persisted.filterTocId.takeIf { it > 0 }
+        viewModelScope.launch {
+            val ready = withContext(Dispatchers.IO) { semanticAssetsManager.validatedReady() }
+            if (!ready && _uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) {
+                _uiState.value =
+                    _uiState.value.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                        semanticFallback = true,
+                    )
+                updatePersistedSearch {
+                    it.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name,
+                        snapshot = null,
+                    )
+                }
+                executeSearch()
+            }
+        }
+
+        val filterCategoryId = persisted.filterCategoryId.takeIf { it != 0L }
+        val filterBookId = persisted.filterBookId.takeIf { it != 0L }
+        val filterTocId = persisted.filterTocId.takeIf { it != 0L }
 
         // Restore scope book from either book filter or TOC filter.
         when {
@@ -682,9 +763,9 @@ class SearchResultViewModel(
                     val q = initialQuery
                     val baseBookOnly = !_uiState.value.globalExtended
                     // Re-open session with same filters for lazy loading continuation
-                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-                    val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-                    val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+                    val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+                    val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
                     // Collect line IDs for TOC filter if applicable
                     val lineIds: Set<Long>? =
                         if (fetchTocId != null && fetchBookId != null) {
@@ -702,7 +783,7 @@ class SearchResultViewModel(
                         }
                     val finalBookIds: List<Long>? =
                         when {
-                            fetchBookId != null && fetchBookId > 0 -> listOf(fetchBookId)
+                            fetchBookId != null -> listOf(fetchBookId)
                             !allowedBooks.isNullOrEmpty() -> allowedBooks
                             else -> null
                         }
@@ -722,6 +803,7 @@ class SearchResultViewModel(
                         repeat(pagesToSkip) { session.nextPage(LAZY_PAGE_SIZE) }
                         lazyLoadMutex.withLock {
                             currentSession = session
+                            highlighter.start(session)
                             currentTocAllowedLineIds = lineIds ?: emptySet()
                             currentSearchQuery = q
                         }
@@ -754,9 +836,9 @@ class SearchResultViewModel(
                 facetsComputed = true
             }
             // Reconstruct currentKey from fetch scope.
-            val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-            val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-            val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+            val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+            val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+            val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
             currentKey =
                 SearchParamsKey(
                     query = _uiState.value.query,
@@ -820,10 +902,10 @@ class SearchResultViewModel(
     fun executeSearch() {
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
-        // Record the executed search into the visit history (deduplicated by query)
-        viewModelScope.launch { historyStore.recordSearchVisit(q, System.currentTimeMillis()) }
+        recordSearchVisit(q)
         // New search: clear any previous streaming job and reset scroll/anchor state
         currentJob?.cancel()
+        highlighter.cancel()
         _breadcrumbs.value = persistentMapOf()
         // Reset persisted scroll/anchor so restoration targets the top for fresh results.
         updatePersistedSearch {
@@ -869,9 +951,9 @@ class SearchResultViewModel(
                 }
                 try {
                     val persisted = persistedSearchState()
-                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it > 0 } ?: persisted.filterCategoryId.takeIf { it > 0 }
-                    val fetchBookId = persisted.fetchBookId.takeIf { it > 0 } ?: persisted.filterBookId.takeIf { it > 0 }
-                    val fetchTocId = persisted.fetchTocId.takeIf { it > 0 } ?: persisted.filterTocId.takeIf { it > 0 }
+                    val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
+                    val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
+                    val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
                     // Apply persisted/initial global-extended flag to UI state so toolbar reflects it
                     val extended = persisted.globalExtended
                     if (_uiState.value.globalExtended != extended) {
@@ -893,7 +975,8 @@ class SearchResultViewModel(
                         }
                     val persistedScopeBook =
                         when {
-                            persisted.filterBookId > 0 -> repository.getBookCore(persisted.filterBookId)
+                            persisted.filterBookId != 0L && persisted.filterBookId != -1L ->
+                                repository.getBookCore(persisted.filterBookId)
                             else -> null
                         }
                     val resolvedScopeBook =
@@ -937,12 +1020,16 @@ class SearchResultViewModel(
                         }
 
                     var facets =
-                        lucene.computeFacets(
-                            query = q,
-                            near = DEFAULT_NEAR,
-                            bookIds = facetsBookIds,
-                            baseBookOnly = baseBookOnly,
-                        )
+                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) {
+                            null
+                        } else {
+                            lucene.computeFacets(
+                                query = q,
+                                near = DEFAULT_NEAR,
+                                bookIds = facetsBookIds,
+                                baseBookOnly = baseBookOnly,
+                            )
+                        }
 
                     // Fallback: si aucun résultat en mode "livres de base", basculer en mode approfondi
                     if (facets != null && facets.totalHits == 0L && baseBookOnly) {
@@ -994,6 +1081,7 @@ class SearchResultViewModel(
                     // Store session for lazy loading
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = tocAllowedLineIds
                         currentSearchQuery = q
                     }
@@ -1021,13 +1109,15 @@ class SearchResultViewModel(
                     }
 
                     val results = hitsToResults(filteredHits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
                             progressTotal = firstPage.totalHits,
                         )
+                    }
+                    highlighter.submit(session, filteredHits)
                 } finally {
                     // Clear loading promptly; if a new visibleResults emission is pending, wait briefly
                     // but never block indefinitely (important when final results are empty and identical
@@ -1042,7 +1132,7 @@ class SearchResultViewModel(
                                 .first()
                         }
                     }
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }
@@ -1055,12 +1145,12 @@ class SearchResultViewModel(
         if (_uiState.value.isLoadingMore || !_uiState.value.hasMore) return
 
         viewModelScope.launch(Dispatchers.Default) {
-            _uiState.value = _uiState.value.copy(isLoadingMore = true)
+            _uiState.update { it.copy(isLoadingMore = true) }
             try {
                 val session = lazyLoadMutex.withLock { currentSession }
                 if (session == null) {
                     // Session not ready yet (e.g., still being restored), reset loading state
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                    _uiState.update { it.copy(isLoadingMore = false) }
                     return@launch
                 }
                 val tocAllowedLineIds = currentTocAllowedLineIds
@@ -1068,7 +1158,7 @@ class SearchResultViewModel(
 
                 val page = session.nextPage(LAZY_PAGE_SIZE)
                 if (page == null) {
-                    _uiState.value = _uiState.value.copy(hasMore = false, isLoadingMore = false)
+                    _uiState.update { it.copy(hasMore = false, isLoadingMore = false) }
                     return@launch
                 }
 
@@ -1082,16 +1172,17 @@ class SearchResultViewModel(
                 }
 
                 val newResults = hitsToResults(filteredHits, query)
-                val currentResults = _uiState.value.results
-                _uiState.value =
-                    _uiState.value.copy(
-                        results = currentResults + newResults,
+                _uiState.update { state ->
+                    state.copy(
+                        results = state.results + newResults,
                         hasMore = !page.isLastPage,
-                        progressCurrent = currentResults.size + newResults.size,
+                        progressCurrent = state.results.size + newResults.size,
                         isLoadingMore = false,
                     )
+                }
+                highlighter.submit(session, filteredHits)
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingMore = false)
+                _uiState.update { it.copy(isLoadingMore = false) }
             }
         }
     }
@@ -1102,31 +1193,57 @@ class SearchResultViewModel(
      * ponytail: restricts by bookId + baseBookOnly only; active sidebar TOC/category client
      * filters aren't re-applied here — consistent with the facet counts shown on the card.
      */
-    suspend fun loadAllHitsForBook(bookId: Long): List<SearchResult> {
-        val q = currentSearchQuery.takeIf { it.isNotBlank() } ?: _uiState.value.query.trim()
-        if (q.isBlank()) return emptyList()
-        val baseBookOnly = !_uiState.value.globalExtended
-        return withContext(Dispatchers.Default) {
+    fun loadAllHitsForBook(bookId: Long): Flow<List<SearchResult>> =
+        flow {
+            val q = currentSearchQuery.takeIf { it.isNotBlank() } ?: _uiState.value.query.trim()
+            if (q.isBlank()) {
+                emit(emptyList())
+                return@flow
+            }
+            val baseBookOnly = !_uiState.value.globalExtended
+            val scopeTocId = _uiState.value.scopeTocId
+            val tocLineIds =
+                scopeTocId?.let { tocId ->
+                    val toc = repository.getTocEntry(tocId) ?: return@let emptySet()
+                    collectLineIdsForTocSubtree(toc.id, toc.bookId)
+                }
             val session =
                 lucene.openSession(
                     query = q,
                     near = DEFAULT_NEAR,
-                    bookIds = listOf(bookId),
+                    bookIds = if (tocLineIds == null) listOf(bookId) else null,
+                    lineIds = tocLineIds,
                     baseBookOnly = baseBookOnly,
-                ) ?: return@withContext emptyList()
+                )
+            if (session == null) {
+                emit(emptyList())
+                return@flow
+            }
             try {
                 val all = ArrayList<LineHit>()
                 while (true) {
                     val page = session.nextPage(LAZY_PAGE_SIZE) ?: break
                     all += page.hits
+                    emit(hitsToResults(all, q))
                     if (page.isLastPage) break
                 }
-                hitsToResults(all, q)
+                if (all.isEmpty()) emit(emptyList())
+                var results = hitsToResults(all, q)
+                session.highlightUpdates(all).collect { hit ->
+                    results =
+                        results.map { result ->
+                            if (result.bookId == hit.bookId && result.lineId == hit.lineId) {
+                                result.copy(snippet = hit.snippet)
+                            } else {
+                                result
+                            }
+                        }
+                    emit(results)
+                }
             } finally {
                 runCatching { session.close() }
             }
-        }
-    }
+        }.flowOn(Dispatchers.Default)
 
     private suspend fun prepareSearchSession(
         query: String,
@@ -1171,6 +1288,7 @@ class SearchResultViewModel(
 
     fun cancelSearch() {
         currentJob?.cancel()
+        highlighter.cancel()
         // Close session to release resources
         runCatching {
             currentSession?.close()
@@ -1366,11 +1484,37 @@ class SearchResultViewModel(
         }
     }
 
-    /**
-     * Execute a Lucene search with a direct filter (category, book, or TOC).
-     * Used by filterByXxx functions for instant filtering.
-     * NOTE: Does NOT rebuild the tree - keeps the original tree structure for navigation.
-     */
+    private fun recordSearchVisit(query: String) {
+        val state = persistedSearchState()
+        val mode = _uiState.value.mode.name
+        val extended = _uiState.value.globalExtended
+        val timestamp = System.currentTimeMillis()
+        val categoryId = state.fetchCategoryId.takeIf { it != 0L } ?: state.filterCategoryId
+        val bookId = state.fetchBookId.takeIf { it != 0L } ?: state.filterBookId
+        val tocId = state.fetchTocId.takeIf { it != 0L } ?: state.filterTocId
+        viewModelScope.launch {
+            val title =
+                runSuspendCatching {
+                    when {
+                        tocId != 0L -> {
+                            val toc = repository.getTocEntry(tocId)
+                            val book = repository.getBookCore(toc?.bookId ?: bookId)
+                            listOfNotNull(book?.title, toc?.text).joinToString(" › ")
+                        }
+                        bookId != 0L -> repository.getBookCore(bookId)?.title.orEmpty()
+                        categoryId != 0L -> buildCategoryPath(categoryId).joinToString(" › ") { it.title }
+                        else -> ""
+                    }
+                }.getOrDefault("")
+            historyStore.recordSearchVisit(
+                query,
+                timestamp,
+                SearchVisitContext(mode, extended, categoryId, bookId, tocId, title),
+            )
+        }
+    }
+
+    /** Executes a scoped search while keeping the existing navigation tree. */
     private fun executeDirectFilterSearch(
         categoryId: Long? = null,
         bookId: Long? = null,
@@ -1379,7 +1523,9 @@ class SearchResultViewModel(
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
 
+        recordSearchVisit(q)
         currentJob?.cancel()
+        highlighter.cancel()
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
                 _uiState.value = _uiState.value.copy(isLoading = true)
@@ -1452,6 +1598,7 @@ class SearchResultViewModel(
 
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = emptySet()
                         currentSearchQuery = q
                     }
@@ -1472,14 +1619,16 @@ class SearchResultViewModel(
                     _uiState.value = _uiState.value.copy(progressTotal = firstPage.totalHits)
 
                     val results = hitsToResults(firstPage.hits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
                         )
+                    }
+                    highlighter.submit(session, firstPage.hits)
                 } finally {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }
@@ -1598,6 +1747,7 @@ class SearchResultViewModel(
         if (q.isBlank()) return
 
         currentJob?.cancel()
+        highlighter.cancel()
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
                 _uiState.value = _uiState.value.copy(isLoading = true)
@@ -1626,7 +1776,7 @@ class SearchResultViewModel(
                             tocBookCache.getOrPut(tocId) {
                                 runSuspendCatching { repository.getTocEntry(tocId)?.bookId }.getOrNull() ?: -1L
                             }
-                        if (bookId > 0) {
+                        if (bookId != 0L && bookId != -1L) {
                             lineIdsToFilter += collectLineIdsForTocSubtree(tocId, bookId)
                         }
                     }
@@ -1669,6 +1819,7 @@ class SearchResultViewModel(
 
                     lazyLoadMutex.withLock {
                         currentSession = session
+                        highlighter.start(session)
                         currentTocAllowedLineIds = emptySet()
                         currentSearchQuery = q
                     }
@@ -1689,8 +1840,8 @@ class SearchResultViewModel(
                     _uiState.value = _uiState.value.copy(progressTotal = firstPage.totalHits)
 
                     val results = hitsToResults(firstPage.hits, q)
-                    _uiState.value =
-                        _uiState.value.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             results = results,
                             hasMore = !firstPage.isLastPage,
                             progressCurrent = results.size,
@@ -1698,8 +1849,10 @@ class SearchResultViewModel(
                             scrollOffset = 0,
                             scrollToAnchorTimestamp = System.currentTimeMillis(),
                         )
+                    }
+                    highlighter.submit(session, firstPage.hits)
                 } finally {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
             }
     }
@@ -1736,7 +1889,7 @@ class SearchResultViewModel(
             if (hasAnyChecked) return@launch
             val persistedFilterBook = persistedSearchState().filterBookId
             val hasExplicitToc = _uiState.value.scopeTocId != null
-            if (persistedFilterBook <= 0L && !hasExplicitToc) {
+            if (persistedFilterBook == 0L && !hasExplicitToc) {
                 _uiState.value = _uiState.value.copy(scopeBook = null)
             }
         }
@@ -1790,6 +1943,28 @@ class SearchResultViewModel(
                     lineId = result.lineId,
                 ),
             )
+        }
+    }
+
+    private fun openPdfResult(
+        result: SearchResult,
+        openInNewTab: Boolean,
+    ) {
+        viewModelScope.launch {
+            val targetTabId = if (openInNewTab) UUID.randomUUID().toString() else tabId
+            val destination =
+                TabsDestination.PdfContent(
+                    bookId = result.bookId,
+                    tabId = targetTabId,
+                    lineId = result.lineId,
+                )
+            val tabsViewModel = desktopManager.tabsViewModelFor(tabId) ?: return@launch
+            if (openInNewTab) {
+                tabsViewModel.openTab(destination)
+            } else {
+                tabsViewModel.replaceCurrentTabDestination(destination)
+            }
+            titleUpdateManager.updateTabTitle(targetTabId, result.bookTitle, TabType.BOOK)
         }
     }
 

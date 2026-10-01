@@ -12,4 +12,14 @@ data class DataSettingsState(
     val exportFailed: Boolean = false,
     val importFailed: Boolean = false,
     val resetDone: Boolean = false,
+    val databaseDirectory: String = "",
+    val selectedDatabaseDirectory: String? = null,
+    val selectedDatabaseStatus: SelectedDatabaseStatus? = null,
 )
+
+enum class SelectedDatabaseStatus {
+    READY,
+    UPDATE_REQUIRED,
+    NOT_FOUND,
+    INVALID_DIRECTORY,
+}

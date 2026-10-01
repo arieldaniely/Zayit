@@ -2912,6 +2912,12 @@
         },
         {
             "bundle": "sun.util.logging.resources.logging"
+        },
+        {
+            "glob": "META-INF/services/javax.imageio.spi.*"
+        },
+        {
+            "glob": "jumplist_icons/**"
         }
     ]
 }

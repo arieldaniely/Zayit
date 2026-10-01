@@ -23,11 +23,17 @@ class DisplaySettingsViewModel(
     private val maxCommentatorsPerPage = MutableStateFlow(appSettings.getMaxCommentatorsPerPage())
 
     val state =
-        combine(showHomeWallpaper, compactMode, maxCommentatorsPerPage) { wallpaper, compact, maxCommentators ->
+        combine(
+            showHomeWallpaper,
+            compactMode,
+            maxCommentatorsPerPage,
+            appSettings.linkLoadLevelFlow,
+        ) { wallpaper, compact, maxCommentators, linkLevel ->
             DisplaySettingsState(
                 showHomeWallpaper = wallpaper,
                 compactMode = compact,
                 maxCommentatorsPerPage = maxCommentators,
+                linkLoadLevel = linkLevel,
             )
         }.stateIn(
             viewModelScope,
@@ -36,6 +42,7 @@ class DisplaySettingsViewModel(
                 showHomeWallpaper = showHomeWallpaper.value,
                 compactMode = compactMode.value,
                 maxCommentatorsPerPage = maxCommentatorsPerPage.value,
+                linkLoadLevel = appSettings.getLinkLoadLevel(),
             ),
         )
 
@@ -53,6 +60,7 @@ class DisplaySettingsViewModel(
                 appSettings.setMaxCommentatorsPerPage(event.value)
                 maxCommentatorsPerPage.value = appSettings.getMaxCommentatorsPerPage()
             }
+            is DisplaySettingsEvents.SetLinkLoadLevel -> appSettings.setLinkLoadLevel(event.value)
         }
     }
 }

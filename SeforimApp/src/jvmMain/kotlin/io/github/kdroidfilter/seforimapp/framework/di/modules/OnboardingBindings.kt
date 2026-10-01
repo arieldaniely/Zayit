@@ -28,18 +28,23 @@ object OnboardingBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideDownloadUseCase(): DownloadUseCase =
+    fun provideDownloadUseCase(appSettings: AppSettings): DownloadUseCase =
         DownloadUseCase(
             gitHubReleaseFetcher = databaseFetcher,
+            appSettings = appSettings,
         )
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideExtractUseCase(appSettings: AppSettings): ExtractUseCase = ExtractUseCase(appSettings)
+    fun provideExtractUseCase(
+        appSettings: AppSettings,
+        databasePathProvider: DatabasePathProvider,
+        talmudPdfService: io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService,
+    ): ExtractUseCase = ExtractUseCase(appSettings, databasePathProvider, talmudPdfService)
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideAvailableDiskSpaceUseCase(): AvailableDiskSpaceUseCase = AvailableDiskSpaceUseCase()
+    fun provideAvailableDiskSpaceUseCase(appSettings: AppSettings): AvailableDiskSpaceUseCase = AvailableDiskSpaceUseCase(appSettings)
 
     @Provides
     @SingleIn(AppScope::class)

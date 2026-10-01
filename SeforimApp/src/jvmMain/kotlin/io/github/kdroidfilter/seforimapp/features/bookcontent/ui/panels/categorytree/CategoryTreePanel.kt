@@ -26,6 +26,7 @@ fun CategoryTreePanel(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     modifier: Modifier = Modifier,
+    isPdfEdition: Boolean = false,
 ) {
     val paneHoverSource = remember { MutableInteractionSource() }
     Column(modifier = modifier.hoverable(paneHoverSource)) {
@@ -48,6 +49,7 @@ fun CategoryTreePanel(
             // Classic navigation tree only (search variant is a dedicated composable)
             CategoryBookTreeView(
                 navigationState = uiState.navigation,
+                isPdfEdition = isPdfEdition,
                 onCategoryClick = { onEvent(BookContentEvent.CategorySelected(it)) },
                 onBookClick = {
                     val mods = windowInfo.keyboardModifiers
@@ -57,6 +59,7 @@ fun CategoryTreePanel(
                         onEvent(BookContentEvent.BookSelected(it))
                     }
                 },
+                onPdfBookClick = { onEvent(BookContentEvent.OpenPdfEditionForBook(it)) },
                 onScroll = { index, offset -> onEvent(BookContentEvent.BookTreeScrolled(index, offset)) },
             )
         }

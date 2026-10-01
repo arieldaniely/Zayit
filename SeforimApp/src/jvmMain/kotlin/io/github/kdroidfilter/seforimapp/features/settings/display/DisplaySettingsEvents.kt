@@ -12,4 +12,8 @@ sealed interface DisplaySettingsEvents {
     data class SetMaxCommentatorsPerPage(
         val value: Int,
     ) : DisplaySettingsEvents
+
+    data class SetLinkLoadLevel(
+        val value: Int,
+    ) : DisplaySettingsEvents
 }

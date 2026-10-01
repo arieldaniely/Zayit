@@ -33,7 +33,7 @@ class BookContentStateManager(
         val tocVisible = persisted.isTocVisible
         val notesVisible = persisted.isNotesVisible
         val bottomPaneVisible = persisted.showCommentaries || persisted.showSources
-        val targumVisible = persisted.showTargum
+        val targumVisible = persisted.showTargum || persisted.showMentions
 
         return BookContentState(
             tabId = tabId,
@@ -53,7 +53,7 @@ class BookContentStateManager(
                 TocState(
                     expandedEntries = persisted.expandedTocEntryIds,
                     children = emptyMap(),
-                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it > 0 },
+                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it != 0L && it != -1L },
                     isVisible = tocVisible,
                     scrollIndex = persisted.tocScrollIndex,
                     scrollOffset = persisted.tocScrollOffset,
@@ -68,11 +68,12 @@ class BookContentStateManager(
             content =
                 ContentState(
                     selectedLines = emptySet(), // Les objets Line seront chargés par le ViewModel
-                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it > 0 },
+                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it != 0L && it != -1L },
                     isTocEntrySelection = persisted.isTocEntrySelection,
                     showCommentaries = persisted.showCommentaries,
                     showTargum = persisted.showTargum,
                     showSources = persisted.showSources,
+                    showMentions = persisted.showMentions,
                     scrollIndex = persisted.contentScrollIndex,
                     scrollOffset = persisted.contentScrollOffset,
                     // A restored tab with no saved position opens on its selected line: its pager is
@@ -186,6 +187,16 @@ class BookContentStateManager(
     }
 
     /**
+     * Updates history pane state only.
+     */
+    fun updateHistory(
+        save: Boolean = true,
+        transform: HistoryState.() -> HistoryState,
+    ) {
+        update(save) { copy(history = history.transform()) }
+    }
+
+    /**
      * Met à jour uniquement le contenu
      */
     fun updateContent(
@@ -223,6 +234,7 @@ class BookContentStateManager(
                 scrollIndex = 0,
                 scrollOffset = 0,
                 showSources = false,
+                showMentions = false,
                 topAnchorLineId = -1L,
                 topAnchorRequestTimestamp = 0L,
             )
@@ -276,6 +288,7 @@ class BookContentStateManager(
                 showCommentaries = currentState.content.showCommentaries,
                 showTargum = currentState.content.showTargum,
                 showSources = currentState.content.showSources,
+                showMentions = currentState.content.showMentions,
                 paragraphScrollPosition = currentState.content.paragraphScrollPosition,
                 chapterScrollPosition = currentState.content.chapterScrollPosition,
                 selectedChapter = currentState.content.selectedChapter,

@@ -7,8 +7,13 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
+import io.github.kdroidfilter.seforimapp.framework.database.databaseFileIn
+import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.database.selectDatabaseDirectory
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
@@ -30,9 +35,41 @@ import java.util.Locale
 @Inject
 class DataSettingsViewModel(
     private val appSettings: AppSettings,
+    private val databaseVersionManager: DatabaseVersionManager,
 ) : ViewModel() {
     private val _state = MutableStateFlow(DataSettingsState())
     val state: StateFlow<DataSettingsState> = _state.asStateFlow()
+
+    fun inspectBooksDatabaseDirectory(directory: File) {
+        val status =
+            when {
+                !directory.isDirectory -> SelectedDatabaseStatus.INVALID_DIRECTORY
+                !databaseFileIn(directory).isFile -> SelectedDatabaseStatus.NOT_FOUND
+                databaseVersionManager.isDatabaseVersionCompatible(databaseFileIn(directory)) ->
+                    SelectedDatabaseStatus.READY
+                else -> SelectedDatabaseStatus.UPDATE_REQUIRED
+            }
+        _state.update {
+            it.copy(
+                selectedDatabaseDirectory = directory.absolutePath,
+                selectedDatabaseStatus = status,
+            )
+        }
+    }
+
+    fun useSelectedBooksDatabaseDirectory() {
+        val directory = state.value.selectedDatabaseDirectory?.let(::File) ?: return
+        if (!directory.isDirectory) {
+            _state.update { it.copy(selectedDatabaseStatus = SelectedDatabaseStatus.INVALID_DIRECTORY) }
+            return
+        }
+        selectDatabaseDirectory(appSettings, directory)
+        restartApplication()
+    }
+
+    fun clearSelectedBooksDatabaseDirectory() {
+        _state.update { it.copy(selectedDatabaseDirectory = null, selectedDatabaseStatus = null) }
+    }
 
     fun exportToFile(exportDir: File) {
         if (!exportDir.isDirectory) {
@@ -51,7 +88,7 @@ class DataSettingsViewModel(
                 }
 
                 val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
-                val exportFile = File(exportDir, "zayit_backup_$timestamp.db")
+                val exportFile = File(exportDir, "zayita_backup_$timestamp.db")
 
                 Files.copy(
                     dbFile.toPath(),
@@ -95,11 +132,7 @@ class DataSettingsViewModel(
         }
     }
 
-    /**
-     * Wipes everything: books database, search indexes and all personal data (notes, highlights,
-     * session) — both the managed databases directory and any custom DB location — then clears the
-     * settings and restarts the app.
-     */
+    /** Wipes this app's managed data and settings, but never deletes an externally selected books database. */
     fun resetApp() {
         viewModelScope.launch(Dispatchers.IO) {
             val dbDir = File(FileKit.databasesDir.path)
@@ -118,29 +151,11 @@ class DataSettingsViewModel(
                 }
             }
 
-            // Also clean a custom DB location, if the user pointed the books DB elsewhere.
-            if (!customDbPath.isNullOrBlank()) {
-                val customDbFile = File(customDbPath)
-                val customBaseDir = customDbFile.parentFile
-                runCatching { if (customDbFile.exists()) customDbFile.delete() }
-                if (customBaseDir != null && customBaseDir.exists() && customBaseDir != dbDir) {
-                    listOf(
-                        customDbFile.name + ".lucene",
-                        customDbFile.name + ".lookup.lucene",
-                        "lexical.db",
-                        "catalog.pb",
-                        "release_info.txt",
-                    ).forEach { name ->
-                        val f = File(customBaseDir, name)
-                        if (f.exists()) {
-                            runCatching { if (f.isDirectory) f.deleteRecursively() else f.delete() }
-                        }
-                    }
-                }
-            }
-
             _state.update { it.copy(resetDone = true) }
             restartApplication()
         }
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

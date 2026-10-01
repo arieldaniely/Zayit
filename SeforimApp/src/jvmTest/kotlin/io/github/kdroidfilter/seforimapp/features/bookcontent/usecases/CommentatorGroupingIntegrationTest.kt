@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.usecases
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
+import io.github.kdroidfilter.seforimapp.testAppSettings
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -81,7 +82,7 @@ class CommentatorGroupingIntegrationTest {
                 ?: error("Book $bookId not found in DB — corpus mismatch")
         val stateManager = BookContentStateManager("test-tab", TabPersistedStateStore())
         stateManager.updateNavigation { copy(selectedBook = book) }
-        return CommentariesUseCase(repo, stateManager, scope!!)
+        return CommentariesUseCase(repo, testAppSettings(), stateManager, scope!!)
     }
 
     @Test

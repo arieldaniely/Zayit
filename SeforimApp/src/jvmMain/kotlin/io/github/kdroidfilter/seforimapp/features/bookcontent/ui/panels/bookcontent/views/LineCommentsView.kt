@@ -536,7 +536,10 @@ private fun CommentatorsGrid(
     columnScroll: CommentariesColumnScroll,
     onEvent: (BookContentEvent) -> Unit,
 ) {
-    val pagerFlowCache = remember(selection) { mutableMapOf<Long, Flow<PagingData<CommentaryWithText>>>() }
+    val appSettings = LocalAppGraph.current.appSettings
+
+    val linkLoadLevel by appSettings.linkLoadLevelFlow.collectAsState()
+    val pagerFlowCache = remember(selection, linkLoadLevel) { mutableMapOf<Long, Flow<PagingData<CommentaryWithText>>>() }
     val listStateCache = remember(selection) { mutableMapOf<Long, LazyListState>() }
     val restoredCommentatorIds = remember(selection) { mutableStateMapOf<Long, Boolean>() }
 
@@ -547,7 +550,7 @@ private fun CommentatorsGrid(
         onFlushPersist = { onEvent(BookContentEvent.FlushCommentariesState) },
     ) { commentatorId ->
         val pagerFlow =
-            remember(commentatorId, pagerFlowCache) {
+            remember(commentatorId, pagerFlowCache, linkLoadLevel) {
                 // The open commentator's TEXT is built lazily here, on first display — it is NOT
                 // covered by the connections prefetch (which only loads the commentator list).
                 pagerFlowCache.getOrPut(commentatorId) {
@@ -1197,7 +1200,7 @@ private fun rememberCommentariesLayoutConfig(
     val maxCommentatorsPerPage by appSettings.maxCommentatorsPerPageFlow.collectAsState()
     val boldScaleForPlatform =
         remember(commentaryFontCode) {
-            val lacksBold = commentaryFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            val lacksBold = commentaryFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
             if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
         }
 

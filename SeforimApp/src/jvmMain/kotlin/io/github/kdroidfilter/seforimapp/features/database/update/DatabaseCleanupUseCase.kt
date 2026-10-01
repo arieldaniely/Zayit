@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.database.update
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.vinceglb.filekit.FileKit
@@ -49,16 +50,16 @@ class DatabaseCleanupUseCase(
         withContext(Dispatchers.IO) {
             val currentDbPath = appSettings.getDatabasePath()
 
-            // The old database is going away: forget the recorded path and the cached
-            // resolution so the app re-resolves the freshly installed location later.
-            appSettings.setDatabasePath(null)
+            // Keep the recorded location: the fresh database must be downloaded back into
+            // the folder the user selected. Only invalidate the runtime path cache while the
+            // old file is removed.
             databasePathProvider.reset()
 
             // Candidate directories: the real DB directory (may be non-default for
             // legacy installs) plus the current default databases directory.
             val dirs = LinkedHashSet<File>()
             currentDbPath?.let { File(it).parentFile?.let(dirs::add) }
-            runCatching { File(FileKit.databasesDir.path) }.getOrNull()?.let(dirs::add)
+            runCatching { File(portableDatabasesDirPath()) }.getOrNull()?.let(dirs::add)
 
             var freed = 0L
             val undeletable = mutableListOf<File>()
@@ -98,14 +99,17 @@ class DatabaseCleanupUseCase(
     /** True for files this app installs alongside the database and must remove on reinstall. */
     private fun isDatabaseArtifact(file: File): Boolean {
         val name = file.name.lowercase()
-        return name.endsWith(".db") ||
-            // seforim.db, lexical.db
-            name.endsWith(".db-wal") ||
-            name.endsWith(".db-shm") ||
-            // SQLite WAL/SHM sidecars
-            name.endsWith(".lucene") ||
-            name.contains(".lookup.lucene") ||
-            // Lucene index dirs
+        return name in
+            setOf(
+                "seforim.db",
+                "lexical.db",
+                "seforim.db-wal",
+                "seforim.db-shm",
+                "lexical.db-wal",
+                "lexical.db-shm",
+                "seforim.db.lucene",
+                "seforim.db.lookup.lucene",
+            ) ||
             name == "catalog.pb" ||
             // precomputed catalog (previously mis-targeted as ".proto")
             name == "release_info.txt" ||
@@ -148,3 +152,6 @@ class DatabaseCleanupUseCase(
         }
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

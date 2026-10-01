@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-REPO="kdroidFilter/Zayit"
+REPO="arieldaniely/Zayit"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 # Detect package system using /etc/os-release (more reliable than checking commands)
@@ -59,12 +59,12 @@ release_json="$(curl -fsSL "${API_URL}")"
 if [ "${pkg_type}" = "deb" ]; then
   echo "Looking for .deb asset for architecture: ${deb_arch}..."
   asset_url="$(printf '%s\n' "${release_json}" \
-    | grep -Eo "https://github.com/${REPO}/releases/download/[^\" ]*zayit_[0-9.]+_${deb_arch}\\.deb" \
+    | grep -Eo "https://github.com/${REPO}/releases/download/[^\" ]*zayita_[0-9.]+_${deb_arch}\\.deb" \
     | head -n 1 || true)"
 else
   echo "Looking for .rpm asset for architecture: ${rpm_arch}..."
   asset_url="$(printf '%s\n' "${release_json}" \
-    | grep -Eo "https://github.com/${REPO}/releases/download/[^\" ]*zayit-[0-9.]+-1\\.${rpm_arch}\\.rpm" \
+    | grep -Eo "https://github.com/${REPO}/releases/download/[^\" ]*zayita-[0-9.]+-1\\.${rpm_arch}\\.rpm" \
     | head -n 1 || true)"
 fi
 
@@ -73,8 +73,8 @@ if [ -z "${asset_url}" ]; then
   exit 1
 fi
 
-tmpdir="$(mktemp -d -t zayit-pkg.XXXXXX)"
-tmpfile="${tmpdir}/zayit.${pkg_type}"
+tmpdir="$(mktemp -d -t zayita-pkg.XXXXXX)"
+tmpfile="${tmpdir}/zayita.${pkg_type}"
 
 cleanup() {
   rm -rf "${tmpdir}"
@@ -84,7 +84,7 @@ trap cleanup EXIT
 echo "Downloading: ${asset_url}"
 curl -fL --progress-bar -o "${tmpfile}" "${asset_url}"
 
-PKG_NAME="zayit"
+PKG_NAME="zayita"
 
 # Remove any previously installed version before installing the new one.
 if [ "${pkg_type}" = "deb" ]; then

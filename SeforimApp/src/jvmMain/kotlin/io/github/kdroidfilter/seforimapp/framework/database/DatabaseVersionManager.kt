@@ -50,12 +50,26 @@ class DatabaseVersionManager(
         return isVersionCompatible(currentVersion, MINIMUM_REQUIRED_VERSION)
     }
 
+    fun isDatabaseVersionCompatible(databaseFile: File): Boolean =
+        Companion.isDatabaseVersionCompatible(databaseFile)
+
     companion object {
         /**
          * Minimum required database version for this application release.
          * This should be updated when database schema or data structure changes.
          */
         private const val MINIMUM_REQUIRED_VERSION = "20260601094341"
+
+        fun getDatabaseVersion(databaseFile: File): String? {
+            val versionFile = File(databaseFile.absoluteFile.parentFile, "release_info.txt")
+            if (!versionFile.exists()) return null
+            return runCatching { versionFile.readText().trim() }.getOrNull()
+        }
+
+        fun isDatabaseVersionCompatible(databaseFile: File): Boolean {
+            val currentVersion = getDatabaseVersion(databaseFile) ?: return false
+            return isVersionCompatible(currentVersion, MINIMUM_REQUIRED_VERSION)
+        }
 
         /**
          * Compares two version strings in yyyyMMddHHmmss format.

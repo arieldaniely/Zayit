@@ -37,7 +37,7 @@ fun VersionVerificationScreen(
         true -> {
             // Version compatible - naviguer vers le profil utilisateur
             LaunchedEffect(Unit) {
-                navController.navigate(OnBoardingDestination.UserProfilScreen) {
+                navController.navigate(OnBoardingDestination.PdfLibrarySetupScreen) {
                     popUpTo<OnBoardingDestination.VersionVerificationScreen> { inclusive = true }
                 }
             }

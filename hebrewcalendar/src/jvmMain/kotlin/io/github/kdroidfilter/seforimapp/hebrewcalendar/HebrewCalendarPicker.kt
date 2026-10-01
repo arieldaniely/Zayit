@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,14 +26,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -57,6 +67,8 @@ import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_mode_gregori
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_mode_hebrew
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_next_month
 import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_prev_month
+import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_search_date_invalid
+import seforimapp.hebrewcalendar.generated.resources.hebrewcalendar_search_date_placeholder
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -101,6 +113,14 @@ fun HebrewCalendarPicker(
             CalendarMode.GREGORIAN -> displayedMonth.year
             CalendarMode.HEBREW -> displayedHebrewMonth.year
         }
+    var dateSearchValue by remember { mutableStateOf(TextFieldValue()) }
+    var dateSearchError by remember { mutableStateOf(false) }
+    var isDateSearchEditing by remember { mutableStateOf(false) }
+    val dateSearchFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(isDateSearchEditing) {
+        if (isDateSearchEditing) dateSearchFocusRequester.requestFocus()
+    }
 
     val hebrewDateFormatter =
         remember {
@@ -139,6 +159,32 @@ fun HebrewCalendarPicker(
             }
         }
 
+    fun submitDateSearch() {
+        val parsedDate = parseFlexibleDate(dateSearchValue.text, calendarMode)
+        if (parsedDate == null) {
+            dateSearchError = true
+            dateSearchValue = TextFieldValue()
+            return
+        }
+        dateSearchError = false
+        isDateSearchEditing = false
+        selectedDate = parsedDate
+        displayedMonth = YearMonth.from(parsedDate)
+        displayedHebrewMonth = hebrewYearMonthFromLocalDate(parsedDate)
+        onDateSelect(parsedDate)
+    }
+
+    fun startDateSearch() {
+        dateSearchValue = TextFieldValue()
+        dateSearchError = false
+        isDateSearchEditing = true
+    }
+
+    fun cancelDateSearch() {
+        dateSearchError = false
+        isDateSearchEditing = false
+    }
+
     Column(
         modifier = modifier.width(CALENDAR_MENU_WIDTH),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -152,6 +198,7 @@ fun HebrewCalendarPicker(
                         onSelect = {
                             calendarMode = CalendarMode.HEBREW
                             displayedHebrewMonth = hebrewYearMonthFromLocalDate(selectedDate)
+                            cancelDateSearch()
                         },
                     ),
                     SegmentedControlButtonData(
@@ -160,6 +207,7 @@ fun HebrewCalendarPicker(
                         onSelect = {
                             calendarMode = CalendarMode.GREGORIAN
                             displayedMonth = YearMonth.from(selectedDate)
+                            cancelDateSearch()
                         },
                     ),
                 ),
@@ -192,24 +240,99 @@ fun HebrewCalendarPicker(
                         .weight(1f)
                         .clip(monthShape)
                         .background(JewelTheme.globalColors.toolwindowBackground, monthShape)
-                        .border(1.dp, JewelTheme.globalColors.borders.disabled, monthShape)
-                        .clickable {
+                        .border(
+                            1.dp,
+                            if (dateSearchError) {
+                                JewelTheme.globalColors.borders.focused
+                            } else {
+                                JewelTheme.globalColors.borders.disabled
+                            },
+                            monthShape,
+                        ).clickable(enabled = !isDateSearchEditing) {
                             if (!pickingYear) yearPageStart = displayedYear - YEARS_PER_PAGE / 2
                             pickingYear = !pickingYear
-                        }.padding(horizontal = 10.dp, vertical = 6.dp),
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text =
-                        when {
-                            pickingYear ->
-                                "${formatYear(yearPageStart, calendarMode, hebrewDateFormatter)} – " +
-                                    formatYear(yearPageStart + YEARS_PER_PAGE - 1, calendarMode, hebrewDateFormatter)
-                            calendarMode == CalendarMode.GREGORIAN -> displayedMonth.format(monthTitleFormatter)
-                            else -> formatHebrewMonthTitle(displayedHebrewMonth, hebrewDateFormatter)
+                if (isDateSearchEditing) {
+                    BasicTextField(
+                        value = dateSearchValue,
+                        onValueChange = {
+                            dateSearchValue = it
+                            dateSearchError = false
                         },
-                    textAlign = TextAlign.Center,
-                    style = JewelTheme.defaultTextStyle.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                        singleLine = true,
+                        textStyle =
+                            JewelTheme.defaultTextStyle.copy(
+                                color = JewelTheme.globalColors.text.normal,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center,
+                            ),
+                        cursorBrush = SolidColor(JewelTheme.globalColors.outlines.focused),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .focusRequester(dateSearchFocusRequester)
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                                    when (event.key) {
+                                        Key.Enter, Key.NumPadEnter -> {
+                                            submitDateSearch()
+                                            true
+                                        }
+
+                                        Key.Escape -> {
+                                            cancelDateSearch()
+                                            true
+                                        }
+
+                                        else -> false
+                                    }
+                                },
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                if (dateSearchValue.text.isEmpty()) {
+                                    Text(
+                                        text =
+                                            stringResource(
+                                                if (dateSearchError) {
+                                                    Res.string.hebrewcalendar_search_date_invalid
+                                                } else {
+                                                    Res.string.hebrewcalendar_search_date_placeholder
+                                                },
+                                            ),
+                                        color = JewelTheme.globalColors.text.disabled,
+                                        textAlign = TextAlign.Center,
+                                        fontSize = 14.sp,
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+                } else {
+                    Text(
+                        text =
+                            when {
+                                pickingYear -> "${formatYear(yearPageStart, calendarMode, hebrewDateFormatter)} – " +
+                                    formatYear(yearPageStart + YEARS_PER_PAGE - 1, calendarMode, hebrewDateFormatter)
+                                calendarMode == CalendarMode.GREGORIAN -> displayedMonth.format(monthTitleFormatter)
+                                else -> formatHebrewMonthTitle(displayedHebrewMonth, hebrewDateFormatter)
+                            },
+                        textAlign = TextAlign.Center,
+                        style = JewelTheme.defaultTextStyle.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                    )
+                }
+            }
+            IconButton(onClick = {
+                pickingYear = false
+                startDateSearch()
+            }) {
+                Icon(
+                    key = AllIconsKeys.Actions.Search,
+                    contentDescription = stringResource(Res.string.hebrewcalendar_search_date_placeholder),
                 )
             }
             IconButton(

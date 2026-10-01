@@ -33,8 +33,8 @@ private const val SEPARATOR_DESKTOP_NEW = 202
 private const val DESKTOP_ID_BASE = 1000
 private const val TAB_ID_BASE = 2000
 
-private const val QUICKLIST_OBJECT_PATH = "/com/zayitapp/Menu"
-private const val DESKTOP_FILE_ID = "zayit.desktop"
+private const val QUICKLIST_OBJECT_PATH = "/io/github/arieldaniely/zayita/Menu"
+private const val DESKTOP_FILE_ID = "zayita.desktop"
 
 @Composable
 fun AppLinuxQuicklist(

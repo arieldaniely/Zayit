@@ -1,10 +1,40 @@
 package io.github.kdroidfilter.seforimapp.framework.database
 
+import java.io.File
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DatabaseVersionManagerTest {
+    @Test
+    fun `reads and validates version beside an explicitly selected database`() {
+        val directory = createTempDirectory("zayita-database-version").toFile()
+        try {
+            val database = File(directory, BOOKS_DATABASE_FILE_NAME).apply { writeBytes(byteArrayOf(1)) }
+            File(directory, "release_info.txt").writeText(DatabaseVersionManager.getMinimumRequiredVersion())
+
+            assertEquals(
+                DatabaseVersionManager.getMinimumRequiredVersion(),
+                DatabaseVersionManager.getDatabaseVersion(database),
+            )
+            assertTrue(DatabaseVersionManager.isDatabaseVersionCompatible(database))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `selected database without version marker requires an update`() {
+        val directory = createTempDirectory("zayita-database-version-missing").toFile()
+        try {
+            val database = File(directory, BOOKS_DATABASE_FILE_NAME).apply { writeBytes(byteArrayOf(1)) }
+            assertTrue(!DatabaseVersionManager.isDatabaseVersionCompatible(database))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test
     fun `getMinimumRequiredVersion returns valid version string`() {
         val version = DatabaseVersionManager.getMinimumRequiredVersion()

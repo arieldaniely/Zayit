@@ -80,6 +80,15 @@ class SearchHomeModelsTest {
         val dto = BookSuggestionDto(book = testBook, path = path)
         assertEquals(testBook, dto.book)
         assertEquals(2, dto.path.size)
+        assertNull(dto.targetToc)
+    }
+
+    @Test
+    fun `BookSuggestionDto stores targetToc`() {
+        val path = listOf("Category", "SubCategory", "Daf 2b")
+        val dto = BookSuggestionDto(book = testBook, path = path, targetToc = testTocEntry)
+        assertEquals(testBook, dto.book)
+        assertEquals(testTocEntry, dto.targetToc)
     }
 
     // TocSuggestionDto tests

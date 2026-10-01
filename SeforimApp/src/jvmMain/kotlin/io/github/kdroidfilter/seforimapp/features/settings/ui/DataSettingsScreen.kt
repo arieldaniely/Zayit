@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.settings.ui
 
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,7 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
+import io.github.kdroidfilter.seforimapp.features.settings.data.SelectedDatabaseStatus
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
@@ -55,6 +61,36 @@ import seforimapp.seforimapp.generated.resources.data_import_success
 import seforimapp.seforimapp.generated.resources.data_import_title
 import seforimapp.seforimapp.generated.resources.data_importing
 import seforimapp.seforimapp.generated.resources.data_reset_description
+import seforimapp.seforimapp.generated.resources.database_location_action_choose
+import seforimapp.seforimapp.generated.resources.database_location_action_choose_again
+import seforimapp.seforimapp.generated.resources.database_location_action_install
+import seforimapp.seforimapp.generated.resources.database_location_action_update
+import seforimapp.seforimapp.generated.resources.database_location_action_use
+import seforimapp.seforimapp.generated.resources.database_location_current
+import seforimapp.seforimapp.generated.resources.database_location_description
+import seforimapp.seforimapp.generated.resources.database_location_invalid
+import seforimapp.seforimapp.generated.resources.database_location_missing
+import seforimapp.seforimapp.generated.resources.database_location_ready
+import seforimapp.seforimapp.generated.resources.database_location_selected
+import seforimapp.seforimapp.generated.resources.database_location_title
+import seforimapp.seforimapp.generated.resources.database_location_update_required
+import seforimapp.seforimapp.generated.resources.optional_install_failed
+import seforimapp.seforimapp.generated.resources.optional_vectors
+import seforimapp.seforimapp.generated.resources.optional_vectors_install
+import seforimapp.seforimapp.generated.resources.optional_vectors_ready
+import seforimapp.seforimapp.generated.resources.pdf_download_library
+import seforimapp.seforimapp.generated.resources.pdf_import_archive
+import seforimapp.seforimapp.generated.resources.pdf_install_failed
+import seforimapp.seforimapp.generated.resources.pdf_install_success
+import seforimapp.seforimapp.generated.resources.pdf_installing
+import seforimapp.seforimapp.generated.resources.pdf_remove_failed
+import seforimapp.seforimapp.generated.resources.pdf_remove_library
+import seforimapp.seforimapp.generated.resources.pdf_remove_success
+import seforimapp.seforimapp.generated.resources.pdf_removing_library
+import seforimapp.seforimapp.generated.resources.settings_cancel
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
+import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
 import seforimapp.seforimapp.generated.resources.settings_reset_app
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_no
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_yes
@@ -77,6 +113,18 @@ fun DataSettingsScreen() {
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            DatabaseLocationCard(
+                state = state,
+                onChoose = {
+                    scope.launch {
+                        val directory = withContext(Dispatchers.IO) { FileKit.openDirectoryPicker() }
+                        directory?.let { viewModel.inspectBooksDatabaseDirectory(File(it.path)) }
+                    }
+                },
+                onApply = viewModel::useSelectedBooksDatabaseDirectory,
+                onClearSelection = viewModel::clearSelectedBooksDatabaseDirectory,
+            )
+
             DataActionCard(
                 title = Res.string.data_export_title,
                 description = Res.string.data_export_description,
@@ -111,6 +159,9 @@ fun DataSettingsScreen() {
                 },
             )
 
+            PdfLibrarySettingsCard()
+            VectorLibrarySettingsCard()
+
             state.exportedFileName?.let {
                 InlineSuccessBanner(
                     text = stringResource(Res.string.data_export_success, it),
@@ -140,6 +191,94 @@ fun DataSettingsScreen() {
                 resetDone = state.resetDone,
                 onReset = { viewModel.resetApp() },
             )
+        }
+    }
+}
+
+@Composable
+private fun DatabaseLocationCard(
+    state: DataSettingsState,
+    onChoose: () -> Unit,
+    onApply: () -> Unit,
+    onClearSelection: () -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = stringResource(Res.string.database_location_title), fontSize = 15.sp)
+        Text(
+            text = stringResource(Res.string.database_location_description),
+            fontSize = 12.sp,
+            color = JewelTheme.globalColors.text.info,
+        )
+        Text(
+            text = stringResource(Res.string.database_location_current, state.databaseDirectory),
+            fontSize = 12.sp,
+        )
+        state.selectedDatabaseDirectory?.let { selectedDirectory ->
+            Text(
+                text = stringResource(Res.string.database_location_selected, selectedDirectory),
+                fontSize = 12.sp,
+            )
+        }
+
+        state.selectedDatabaseStatus?.let { status ->
+            val message =
+                when (status) {
+                    SelectedDatabaseStatus.READY -> Res.string.database_location_ready
+                    SelectedDatabaseStatus.UPDATE_REQUIRED -> Res.string.database_location_update_required
+                    SelectedDatabaseStatus.NOT_FOUND -> Res.string.database_location_missing
+                    SelectedDatabaseStatus.INVALID_DIRECTORY -> Res.string.database_location_invalid
+                }
+            if (status == SelectedDatabaseStatus.READY) {
+                InlineSuccessBanner(text = stringResource(message), modifier = Modifier.fillMaxWidth())
+            } else {
+                InlineErrorBanner(text = stringResource(message), modifier = Modifier.fillMaxWidth())
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onChoose) {
+                Text(
+                    text =
+                        stringResource(
+                            if (state.selectedDatabaseStatus == null) {
+                                Res.string.database_location_action_choose
+                            } else {
+                                Res.string.database_location_action_choose_again
+                            },
+                        ),
+                )
+            }
+            state.selectedDatabaseStatus?.let { status ->
+                if (status != SelectedDatabaseStatus.INVALID_DIRECTORY) {
+                    DefaultButton(onClick = onApply) {
+                        Text(
+                            text =
+                                stringResource(
+                                    when (status) {
+                                        SelectedDatabaseStatus.READY -> Res.string.database_location_action_use
+                                        SelectedDatabaseStatus.UPDATE_REQUIRED -> Res.string.database_location_action_update
+                                        SelectedDatabaseStatus.NOT_FOUND -> Res.string.database_location_action_install
+                                        SelectedDatabaseStatus.INVALID_DIRECTORY ->
+                                            Res.string.database_location_action_choose_again
+                                    },
+                                ),
+                        )
+                    }
+                    OutlinedButton(onClick = onClearSelection) {
+                        Text(text = stringResource(Res.string.settings_cancel))
+                    }
+                }
+            }
         }
     }
 }
@@ -178,6 +317,106 @@ private fun DataActionCard(
         }
         OutlinedButton(onClick = onClick, enabled = enabled) {
             Text(text = stringResource(actionLabel))
+        }
+    }
+}
+
+@Composable
+private fun PdfLibrarySettingsCard() {
+    val talmudPdfService = LocalAppGraph.current.talmudPdfService
+
+    val scope = rememberCoroutineScope()
+    val libraryVersion by talmudPdfService.libraryVersion.collectAsState()
+    val installed = remember(libraryVersion) { talmudPdfService.isInstalled() }
+    var working by remember { mutableStateOf(false) }
+    var successMessage by remember { mutableStateOf<StringResource?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf(Res.string.pdf_install_failed) }
+    val shape = RoundedCornerShape(8.dp)
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+                .background(JewelTheme.globalColors.panelBackground)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(text = stringResource(Res.string.settings_pdf_library_title), fontSize = 15.sp)
+                Text(
+                    text =
+                        stringResource(
+                            if (installed) {
+                                Res.string.settings_pdf_library_installed_description
+                            } else {
+                                Res.string.settings_pdf_library_description
+                            },
+                        ),
+                    fontSize = 12.sp,
+                    color = JewelTheme.globalColors.text.info,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (installed) {
+                    OutlinedButton(enabled = !working, onClick = {
+                        working = true
+                        successMessage = null
+                        error = null
+                        errorMessage = Res.string.pdf_remove_failed
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { talmudPdfService.removeInstalledLibrary() } }
+                                .onSuccess { successMessage = Res.string.pdf_remove_success }
+                                .onFailure { error = it.message }
+                            working = false
+                        }
+                    }) {
+                        Text(stringResource(if (working) Res.string.pdf_removing_library else Res.string.pdf_remove_library))
+                    }
+                } else {
+                    OutlinedButton(enabled = !working, onClick = {
+                        working = true
+                        successMessage = null
+                        error = null
+                        errorMessage = Res.string.pdf_install_failed
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { talmudPdfService.downloadAndInstall() } }
+                                .onSuccess { successMessage = Res.string.pdf_install_success }
+                                .onFailure { error = it.message }
+                            working = false
+                        }
+                    }) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.pdf_download_library)) }
+                    OutlinedButton(enabled = !working, onClick = {
+                        scope.launch {
+                            val file =
+                                withContext(Dispatchers.IO) {
+                                    FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("zst", "tar.zst")))
+                                }
+                            if (file != null) {
+                                working = true
+                                successMessage = null
+                                error = null
+                                errorMessage = Res.string.pdf_install_failed
+                                runCatching { withContext(Dispatchers.IO) { talmudPdfService.importArchive(File(file.path)) } }
+                                    .onSuccess { successMessage = Res.string.pdf_install_success }
+                                    .onFailure { error = it.message }
+                                working = false
+                            }
+                        }
+                    }) { Text(stringResource(Res.string.pdf_import_archive)) }
+                }
+            }
+        }
+        successMessage?.let { InlineSuccessBanner(text = stringResource(it), modifier = Modifier.fillMaxWidth()) }
+        error?.let {
+            InlineErrorBanner(text = stringResource(errorMessage).format(it), modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -252,5 +491,45 @@ private fun ResetCard(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+@Composable
+private fun VectorLibrarySettingsCard() {
+    val semanticAssetsManager = LocalAppGraph.current.semanticAssetsManager
+
+    val scope = rememberCoroutineScope()
+    var installed by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        installed = withContext(Dispatchers.IO) { semanticAssetsManager.validatedReady() }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(Res.string.optional_vectors))
+        if (installed) {
+            Text(stringResource(Res.string.optional_vectors_ready))
+        } else {
+            DefaultButton(
+                enabled = !working,
+                onClick = {
+                    working = true
+                    failed = false
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { semanticAssetsManager.downloadBundle() }
+                            installed = true
+                        } catch (failure: kotlinx.coroutines.CancellationException) {
+                            throw failure
+                        } catch (_: Exception) {
+                            failed = true
+                        } finally {
+                            working = false
+                        }
+                    }
+                },
+            ) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.optional_vectors_install)) }
+        }
+        if (failed) InlineErrorBanner(text = stringResource(Res.string.optional_install_failed))
     }
 }

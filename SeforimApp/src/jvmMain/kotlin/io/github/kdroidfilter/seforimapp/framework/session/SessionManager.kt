@@ -11,6 +11,7 @@ import io.github.kdroidfilter.seforimapp.core.e2e.E2e
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.vinceglb.filekit.FileKit
@@ -51,7 +52,7 @@ class SessionManager(
     val isRestoringSession: StateFlow<Boolean> = _isRestoringSession
 
     private fun sessionDir(): File {
-        val root = File(FileKit.databasesDir.path, "session").apply { mkdirs() }
+        val root = File(portableDatabasesDirPath(), "session").apply { mkdirs() }
         return root
     }
 
@@ -61,6 +62,31 @@ class SessionManager(
 
     private fun hasSavedSessionToRestore(): Boolean =
         appSettings.isPersistSessionEnabled() && (desktopsFile().exists() || legacySessionFile().exists())
+
+    @Volatile
+    private var cachedStateForRestore: DesktopsState? = null
+
+    /**
+     * Boot-time peek at the focused window's saved geometry, so the very first window is created
+     * directly with the right placement instead of flashing maximized before the async session
+     * restore applies the real geometry. Decodes the session file once and caches the result for
+     * [restoreIfEnabled].
+     */
+    fun peekInitialWindowGeometry(): SavedGeometry? {
+        if (!appSettings.isPersistSessionEnabled()) return null
+        val file = desktopsFile()
+        if (!file.exists()) return null
+        val state =
+            runCatching { proto.decodeFromByteArray(DesktopsState.serializer(), file.readBytes()) }
+                .getOrNull() ?: return null
+        cachedStateForRestore = state
+        val openIds = state.effectiveOpenDesktopIds()
+        val focusedId = state.focusedDesktopId.takeIf { it in openIds } ?: openIds.firstOrNull() ?: return null
+        return state.snapshots[focusedId]
+            ?.effectiveWindows()
+            ?.firstOrNull()
+            ?.geometry
+    }
 
     /** Saves the current session snapshot if the user enabled persistence in settings. */
     fun saveIfEnabled() {
@@ -153,6 +179,7 @@ class SessionManager(
                 saved.tabs.map { dest ->
                     when (dest) {
                         is TabsDestination.BookContent -> dest.copy(lineId = null)
+                        is TabsDestination.PdfContent -> dest.copy(lineId = null)
                         else -> dest
                     }
                 }
@@ -210,8 +237,20 @@ class SessionManager(
                 }
 
                 is TabsDestination.BookContent -> {
-                    val bookId = tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it > 0 } ?: dest.bookId
-                    if (bookId > 0) {
+                    val bookId =
+                        tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it != 0L && it != -1L }
+                            ?: dest.bookId
+                    if (bookId != 0L && bookId != -1L) {
+                        val book = withContext(Dispatchers.IO) { repository.getBookCore(bookId) }
+                        if (book != null) {
+                            titles[tabId] = book.title to TabType.BOOK
+                        }
+                    }
+                }
+
+                is TabsDestination.PdfContent -> {
+                    val bookId = dest.bookId
+                    if (bookId != 0L && bookId != -1L) {
                         val book = withContext(Dispatchers.IO) { repository.getBookCore(bookId) }
                         if (book != null) {
                             titles[tabId] = book.title to TabType.BOOK
@@ -247,6 +286,7 @@ class SessionManager(
                         val destinationsMissingTitles =
                             windowSnapshot.destinations.filter { destination ->
                                 destination !is TabsDestination.Home &&
+                                    destination !is TabsDestination.History &&
                                     windowSnapshot.titles[destination.tabId]?.title.isNullOrBlank()
                             }
                         if (destinationsMissingTitles.isEmpty()) {
@@ -270,3 +310,6 @@ class SessionManager(
         return state.copy(snapshots = enrichedSnapshots)
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

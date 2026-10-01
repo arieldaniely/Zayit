@@ -68,6 +68,7 @@ fun FavoritesMenuButton() {
             onClick = { visible = !visible },
             tooltipText = stringResource(Res.string.favorites_title),
             shortcutHint = shortcutHint,
+            isActive = visible,
         )
         if (visible) {
             Popup(

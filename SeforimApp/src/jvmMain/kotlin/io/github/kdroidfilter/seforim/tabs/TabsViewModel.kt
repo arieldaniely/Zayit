@@ -80,11 +80,20 @@ class TabsViewModel internal constructor(
 
     private fun currentId(): String? = session.group(groupId)?.selectedId
 
+    var onTabClosedListener: ((TabItem) -> Unit)? = null
+
+    private fun close(tabId: String) {
+        if (session.item(tabId)?.isPinned == true) return
+        session.workspace.close(tabId)
+    }
+
     fun onEvent(event: TabsEvents) {
         val ids = ids()
         when (event) {
-            is TabsEvents.OnClose -> ids.getOrNull(event.index)?.let(session.workspace::close)
+            is TabsEvents.OnClose -> ids.getOrNull(event.index)?.let(::close)
             is TabsEvents.OnSelect -> ids.getOrNull(event.index)?.let(session.workspace::select)
+            is TabsEvents.OnTogglePin -> ids.getOrNull(event.index)?.let(session::togglePin)
+            TabsEvents.ReopenLastClosedTab -> session.reopenLastClosedTab(groupId)
             TabsEvents.OnAdd -> openTab(freshHome())
             is TabsEvents.OnReorder -> ids.getOrNull(event.fromIndex)?.let { session.workspace.reorder(it, event.toIndex) }
             // Chrome-like: the window keeps one fresh Home tab, which replaces the others once it is in.
@@ -93,9 +102,9 @@ class TabsViewModel internal constructor(
                 session.addTab(home, groupId, index = 0)
                 closeWhenDeclared(home.tabId, ids)
             }
-            is TabsEvents.CloseOthers -> ids.filterIndexed { i, _ -> i != event.index }.forEach(session.workspace::close)
-            is TabsEvents.CloseLeft -> ids.take(event.index).forEach(session.workspace::close)
-            is TabsEvents.CloseRight -> ids.drop(event.index + 1).forEach(session.workspace::close)
+            is TabsEvents.CloseOthers -> ids.filterIndexed { i, _ -> i != event.index }.forEach(::close)
+            is TabsEvents.CloseLeft -> ids.take(event.index).forEach(::close)
+            is TabsEvents.CloseRight -> ids.drop(event.index + 1).forEach(::close)
         }
     }
 
@@ -106,12 +115,16 @@ class TabsViewModel internal constructor(
     ) {
         scope.launch {
             snapshotFlow { session.workspace.tab(tabId) != null }.first { it }
-            others.forEach(session.workspace::close)
+            others.forEach(::close)
         }
     }
 
     fun openTab(destination: TabsDestination) {
         session.addTab(destination, groupId, index = 0)
+    }
+
+    fun openBackgroundTab(destination: TabsDestination) {
+        session.addTab(destination, groupId, index = ids().size, select = false)
     }
 
     /** Navigates the selected tab to [destination], keeping the tab (and its ViewModels). */
@@ -124,7 +137,7 @@ class TabsViewModel internal constructor(
     fun replaceCurrentTabWithNewTabId(destination: TabsDestination) {
         val tabId = currentId() ?: return
         val index = ids().indexOf(tabId).coerceAtLeast(0)
-        session.addTab(destination.withTabId(UUID.randomUUID().toString()), groupId, index = index, replacing = tabId)
+        session.addTab(destination, groupId, index = index, replacing = tabId)
     }
 
     fun dispose() {
@@ -139,6 +152,7 @@ internal fun TabsDestination.withTabId(tabId: String): TabsDestination =
         is TabsDestination.Home -> TabsDestination.Home(tabId = tabId, version = System.currentTimeMillis())
         is TabsDestination.Search -> copy(tabId = tabId)
         is TabsDestination.BookContent -> copy(tabId = tabId)
+        is TabsDestination.PdfContent -> copy(tabId = tabId)
         is TabsDestination.History -> copy(tabId = tabId)
         is TabsDestination.Favorites -> copy(tabId = tabId)
     }

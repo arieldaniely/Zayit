@@ -20,7 +20,6 @@ plugins {
     alias(libs.plugins.kover)
     alias(libs.plugins.nucleus)
     alias(libs.plugins.structured.coroutines)
-    alias(libs.plugins.sentryJvmGradle)
 }
 
 structuredCoroutines {
@@ -29,12 +28,18 @@ structuredCoroutines {
 
 val version = Versioning.resolveVersion(project)
 
-sentry {
-    includeSourceContext = true
-    org = System.getenv("SENTRY_ORG") ?: "kdroidfilter"
-    projectName = System.getenv("SENTRY_PROJECT") ?: "zayit"
-    authToken = System.getenv("SENTRY_AUTH_TOKEN")
-}
+// jpackage requires the first macOS app-version component to be positive. Offset
+// the SemVer major so pre-1.0 releases remain valid and ordering stays monotonic
+// when the public version eventually moves from 0.x to 1.x.
+val macPackageVersion =
+    version.substringBefore('-').split('.').let { components ->
+        require(components.size in 1..3 && components.all { it.toIntOrNull() != null }) {
+            "macOS package version must contain one to three numeric components: $version"
+        }
+        components
+            .mapIndexed { index, component -> component.toInt() + if (index == 0) 1 else 0 }
+            .joinToString(".")
+    }
 
 kotlin {
 //    androidTarget {
@@ -109,6 +114,7 @@ kotlin {
             implementation(project(":pagination"))
             implementation(project(":texteffects"))
             implementation(project(":network"))
+            implementation(project(":sharedstudy"))
 
             // Paging (AndroidX Paging 3)
             implementation(libs.androidx.paging.common)
@@ -123,13 +129,19 @@ kotlin {
         }
 
         commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.compose.ui.test)
+            implementation("org.jetbrains.kotlin:kotlin-test:2.3.21")
         }
 
         jvmTest.dependencies {
             implementation(libs.mockk)
             implementation(libs.kotlinx.coroutines.test)
+            implementation("org.jetbrains.kotlin:kotlin-test-junit:2.3.21")
+            implementation(
+                files(
+                    "C:/Users/kobi/.gradle/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-test-desktop/1.10.3/92c98445f4ab3671e4f255cf35bd21d018b15b2/ui-test-desktop-1.10.3.jar",
+                    "C:/Users/kobi/.gradle/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-test-junit4-desktop/1.10.3/d79788278e7d36ad808b4148a5094c0b85ae9240/ui-test-junit4-desktop-1.10.3.jar",
+                ),
+            )
         }
 //
 //        androidMain.dependencies {
@@ -175,13 +187,17 @@ kotlin {
             implementation(libs.seforimlibrary.search)
 
             // SeforimLibrary CLI: lets the desktop binary run headless search commands
-            // (`zayit cli search ...`) by delegating to its runCli() entry point.
+            // (`zayita cli search ...`) by delegating to its runCli() entry point.
             implementation(libs.seforimlibrary.cli)
 
             // Delta-update client (download + apply patch.db onto local seforim.db)
             implementation(libs.seforimlibrary.delta.updater)
 
             implementation(libs.commons.compress)
+            implementation(libs.pdfbox)
+            implementation(libs.jbig2.imageio)
+            implementation(libs.jai.imageio.core)
+            implementation(libs.jai.imageio.jpeg2000)
 
             // HTML sanitization for search snippets
             implementation(libs.jsoup)
@@ -224,7 +240,7 @@ nucleus.application {
     nucleusOptimization = true
     graalvm {
         isEnabled = true
-        imageName = "zayit"
+        imageName = "zayita"
         optimization = NativeImageOptimization.LEVEL_3
         nativeImageConfigBaseDir.set(layout.projectDirectory.dir("src/graalvm"))
         // Jewel's build-time-initialized MacPlatformServices captures an SLF4J logger;
@@ -232,15 +248,15 @@ nucleus.application {
         buildArgs.add("--initialize-at-build-time=org.slf4j")
     }
     nativeDistributions {
-        appName = "זית"
-        packageName = "zayit"
+        appName = "זיתא"
+        packageName = "zayita"
         description = "ספריית הלימוד שמובילה ישר לטקסט"
         compressionLevel = CompressionLevel.Ultra
 
         publish {
             github {
                 enabled = true
-                owner = "kdroidFilter"
+                owner = "arieldaniely"
                 repo = "Zayit"
                 channel = ReleaseChannel.Latest
                 releaseType = ReleaseType.Release
@@ -250,7 +266,7 @@ nucleus.application {
         // Package-time resources root; include files under OS-specific subfolders (common, macos, windows, linux)
         appResourcesRootDir.set(layout.projectDirectory.dir("src/jvmMain/assets"))
         enableAotCache = true
-        homepage = "https://zayitapp.com"
+        homepage = "https://arieldaniely.github.io/Zayit/"
         licenseFile.set(File(project.rootDir, "LICENSE"))
         jvmArgs +=
             listOf(
@@ -281,17 +297,17 @@ nucleus.application {
             TargetFormat.Nsis,
             TargetFormat.Pacman,
         )
-        vendor = "KDroidFilter"
+        vendor = "Zayita Project"
         cleanupNativeLibs = true
 
-        // Register the custom URL scheme so shareable deep links (zayit://book/...,
-        // zayit://search/...) are routed to the app by the OS on macOS, Windows and Linux.
-        protocol("זית", "zayit")
+        // Register the custom URL scheme so shareable deep links (zayita://book/...,
+        // zayita://search/...) are routed to the app by the OS on macOS, Windows and Linux.
+        protocol("זיתא", "zayita")
 
         linux {
             iconFile.set(project.file("desktopAppIcons/LinuxIcon.png"))
             packageVersion = version
-            debMaintainer = "elyahou.hadass@gmail.com"
+            debMaintainer = "Zayita Project <arieldaniely@users.noreply.github.com>"
             menuGroup = "Education"
         }
         windows {
@@ -299,7 +315,7 @@ nucleus.application {
             packageVersion = version
             dirChooser = false
             shortcut = true
-            upgradeUuid = "d9f21975-4359-4818-a623-6e9a3f0a07ca"
+            upgradeUuid = "8e25f9ce-1d32-49d7-b867-c9b217135d71"
             msi { perMachine = false }
 
             nsis {
@@ -318,13 +334,23 @@ nucleus.application {
         }
         macOS {
             iconFile.set(project.file("desktopAppIcons/MacosIcon.icns"))
-            bundleID = "io.github.kdroidfilter.seforimapp.desktopApp"
-            packageVersion = version
-            packageName = "זית"
+            bundleID = "io.github.arieldaniely.zayita.desktopApp"
+            packageVersion = macPackageVersion
+            packageName = "זיתא"
+            infoPlist {
+                extraKeysRawXml =
+                    """
+                    <key>NSBluetoothAlwaysUsageDescription</key>
+                    <string>זיתא משתמשת ב-Bluetooth כדי לאפשר לימוד משותף בין מחשבים קרובים.</string>
+                    """.trimIndent()
+            }
         }
         buildTypes.release.proguard {
             version.set("7.9.0")
-            isEnabled = true
+            // The installed Windows build must retain the same complete JVM classpath as the
+            // portable build. PDFBox rendering depends on AWT/ImageIO service providers that
+            // cannot be safely reduced by the desktop shrinker.
+            isEnabled = false
             obfuscate.set(false)
             optimize.set(true)
             configurationFiles.from(project.file("proguard-rules.pro"))
@@ -369,4 +395,12 @@ kover {
             }
         }
     }
+}
+
+tasks.matching { it.name == "stabilityCheck" }.configureEach {
+    dependsOn(tasks.matching { task -> task.name == "compileTestKotlinJvm" })
+}
+
+tasks.matching { it.name == "createDistributable" }.configureEach {
+    dependsOn(tasks.matching { task -> task.name == "createRuntimeImage" })
 }

@@ -52,6 +52,18 @@ class DesktopSession internal constructor(
     private val owners = HashMap<String, SimpleTabViewModelOwner>()
 
     /** Tabs waiting for their first declaration: where they land, and the tab they replace. */
+    private val closedTabs = ArrayDeque<TabItem>()
+
+    fun reopenLastClosedTab(groupId: String) {
+        val item = closedTabs.removeLastOrNull() ?: return
+        addTab(item.destination, groupId, title = item.title, tabType = item.tabType)
+    }
+
+    fun togglePin(tabId: String) {
+        val index = tabs.indexOfFirst { it.destination.tabId == tabId }
+        if (index >= 0) tabs[index] = tabs[index].copy(isPinned = !tabs[index].isPinned)
+    }
+
     private val pending = HashMap<String, Placement>()
 
     private class Placement(
@@ -134,6 +146,10 @@ class DesktopSession internal constructor(
 
     /** Drops a tab the workspace closed, with its ViewModels. */
     fun forget(tabId: String) {
+        item(tabId)?.let {
+            closedTabs.addLast(it)
+            while (closedTabs.size > 20) closedTabs.removeFirst()
+        }
         tabs.removeAll { it.destination.tabId == tabId }
         pending.remove(tabId)
         owners.remove(tabId)?.clear()
@@ -180,6 +196,7 @@ class DesktopSession internal constructor(
                             title = saved?.title ?: titleFor(destination),
                             destination = destination,
                             tabType = saved?.tabType ?: tabTypeFor(destination),
+                            isPinned = destination.tabId in snapshot.pinnedTabIds,
                         )
                 }
                 restoredByGroup[groupId] = snapshot
@@ -212,6 +229,7 @@ class DesktopSession internal constructor(
         restoredByGroup.remove(groupId)
         val items = group.ids.mapNotNull(::item)
         return WindowSnapshot(
+            pinnedTabIds = items.filter { it.isPinned }.map { it.destination.tabId }.toSet(),
             destinations = items.map { stripEphemeral(it.destination) },
             selectedIndex = items.indexOfFirst { it.destination.tabId == group.selectedId }.coerceAtLeast(0),
             titles = items.associate { it.destination.tabId to SerializableTabTitle(it.title, it.tabType) },
@@ -234,6 +252,7 @@ class DesktopSession internal constructor(
         fun titleFor(destination: TabsDestination): String =
             when (destination) {
                 is TabsDestination.Search -> destination.searchQuery
+                is TabsDestination.PdfContent -> ""
                 is TabsDestination.BookContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
                 else -> ""
             }
@@ -241,6 +260,7 @@ class DesktopSession internal constructor(
         fun tabTypeFor(destination: TabsDestination): TabType =
             when (destination) {
                 is TabsDestination.Home, is TabsDestination.Search -> TabType.SEARCH
+                is TabsDestination.PdfContent -> TabType.BOOK
                 is TabsDestination.BookContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
                 is TabsDestination.History -> TabType.HISTORY
                 is TabsDestination.Favorites -> TabType.FAVORITES

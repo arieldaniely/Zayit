@@ -43,22 +43,7 @@ fun LicenceScreen(
     val appGraph = LocalAppGraph.current
     LicenceView(
         onNext = {
-            // Check if DB exists and has compatible version
-            val dbExists = runCatching { appGraph.databasePathProvider.get() }.isSuccess
-            val dbVersionCompatible =
-                if (dbExists) {
-                    appGraph.databaseVersionManager.isDatabaseVersionCompatible()
-                } else {
-                    false
-                }
-
-            if (dbExists && dbVersionCompatible) {
-                // DB exists and version is compatible - skip install flow and go to user info
-                navController.navigate(OnBoardingDestination.UserProfilScreen)
-            } else {
-                // DB doesn't exist or version is incompatible - continue with installation flow
-                navController.navigate(OnBoardingDestination.AvailableDiskSpaceScreen)
-            }
+            navController.navigate(OnBoardingDestination.TypeOfInstallationScreen)
         },
         onPrevious = { navController.navigateUp() },
     )

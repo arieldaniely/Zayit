@@ -131,7 +131,7 @@ class DbDeltaUpdateViewModelTest {
             advanceUntilIdle()
             val s = vm.state.value
             assertNotNull(s.errorMessage)
-            assertTrue("server is on fire" in s.errorMessage!!, s.errorMessage!!)
+            assertTrue("server is on fire" in s.errorMessage, s.errorMessage)
             assertNull(s.phase)
         }
 

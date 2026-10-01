@@ -55,6 +55,7 @@ fun TypeOfInstallationScreen(
     TypeOfInstallationView(
         onOnlineInstallation = { goOnline() },
         onOfflineInstallation = { goOffline() },
+        onChooseLocation = { navController.navigate(OnBoardingDestination.DatabaseLocationScreen) },
     )
 }
 
@@ -62,8 +63,17 @@ fun TypeOfInstallationScreen(
 private fun TypeOfInstallationView(
     onOnlineInstallation: () -> Unit = {},
     onOfflineInstallation: () -> Unit = {},
+    onChooseLocation: () -> Unit = {},
 ) {
-    OnBoardingScaffold(title = stringResource(Res.string.installation_title)) {
+    OnBoardingScaffold(
+        title = stringResource(Res.string.installation_title),
+        bottomAction = {
+            org.jetbrains.jewel.ui.component.Link(
+                text = stringResource(Res.string.installation_choose_root),
+                onClick = onChooseLocation,
+            )
+        },
+    ) {
         Row(modifier = Modifier.fillMaxSize()) {
             InstallationTypeColumn(
                 // Offline

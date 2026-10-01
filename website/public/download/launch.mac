@@ -2,13 +2,11 @@
 
 set -euo pipefail
 
-REPO="kdroidFilter/Zayit"
+REPO="arieldaniely/Zayit"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 # The released app bundle is named with the Hebrew app name.
-app_name="זית"
-# Previous releases shipped under this name; still removed on upgrade.
-legacy_app_names=("Zayit")
+app_name="זיתא"
 
 # Map the host architecture to electron-builder's asset suffix (arm64 / x64).
 arch="$(uname -m)"
@@ -21,7 +19,7 @@ case "$arch" in
     ;;
 esac
 
-# Resolve the versioned .zip asset (e.g. zayit-1.2.3-mac-arm64.zip) from the latest
+# Resolve the versioned .zip asset (e.g. zayita-1.2.3-mac-arm64.zip) from the latest
 # release. Assets are shipped under electron-builder's own names, so we discover the
 # URL via the API instead of relying on a fixed filename. The trailing `$` keeps us
 # from matching the companion `.zip.blockmap`.
@@ -51,21 +49,17 @@ trap cleanup EXIT
 echo "Downloading $app_name ..."
 curl -fL --output "$tmpfile" --progress-bar "$mac_zip_url"
 
-# Quit any running instance (current and legacy names) before replacing it.
+# Quit only Zayita before replacing it. The upstream Zayit installation is independent.
 echo "Quitting any running instance ..."
-for name in "$app_name" "${legacy_app_names[@]}"; do
-  osascript -e "quit app \"${name}\"" 2>/dev/null || true
-  pkill -x "${name}" 2>/dev/null || true
-done
+osascript -e "quit app \"${app_name}\"" 2>/dev/null || true
+pkill -x "${app_name}" 2>/dev/null || true
 
-# Remove any previous installation (current and legacy names) from both standard locations.
-for name in "$app_name" "${legacy_app_names[@]}"; do
-  for prev in "/Applications/${name}.app" "$HOME/Applications/${name}.app"; do
-    if [ -d "$prev" ]; then
-      echo "Removing previous version: $prev"
-      rm -rf "$prev"
-    fi
-  done
+# Remove only a previous Zayita installation from either standard location.
+for prev in "/Applications/${app_name}.app" "$HOME/Applications/${app_name}.app"; do
+  if [ -d "$prev" ]; then
+    echo "Removing previous version: $prev"
+    rm -rf "$prev"
+  fi
 done
 
 if [ -w /Applications ]; then
@@ -75,8 +69,8 @@ else
   install_dir="$HOME/Applications"
 fi
 
-# The .zip wraps the bundle under the GraalVM image name (zayit.app), while the
-# .dmg ships it as זית.app. Extract to a temp dir, then install under the
+# The .zip wraps the bundle under the GraalVM image name (zayita.app), while the
+# .dmg ships it as זיתא.app. Extract to a temp dir, then install under the
 # canonical Hebrew name so both install paths produce the same bundle.
 extract_dir="$tmpdir/extract"
 mkdir -p "$extract_dir"

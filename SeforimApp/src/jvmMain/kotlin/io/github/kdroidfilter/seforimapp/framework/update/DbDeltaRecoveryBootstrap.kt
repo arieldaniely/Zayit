@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.framework.update
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.deltaupdater.DeltaApplierClient
@@ -56,7 +57,10 @@ object DbDeltaRecoveryBootstrap {
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() && !it.endsWith("lexical.db", ignoreCase = true) }
         if (settings != null) return settings
-        return runCatching { File(FileKit.databasesDir.path, "seforim.db").absolutePath }
+        return runCatching { File(portableDatabasesDirPath(), "seforim.db").absolutePath }
             .getOrNull()
     }
 }
+
+private fun portableDatabasesDirPath(): String =
+    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

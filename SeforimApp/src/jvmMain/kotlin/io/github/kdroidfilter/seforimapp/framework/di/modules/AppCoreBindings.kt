@@ -1,5 +1,7 @@
 package io.github.kdroidfilter.seforimapp.framework.di.modules
 
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.russhwolf.settings.Settings
 import dev.zacsweers.metro.BindingContainer
@@ -14,18 +16,31 @@ import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
 import io.github.kdroidfilter.seforimapp.core.e2e.E2e
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
+import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.PacketizedBleTransport
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.createDesktopBlePlatformBridge
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
+import io.github.kdroidfilter.seforimapp.framework.portable.PortableSettings
 import io.github.kdroidfilter.seforimapp.framework.search.AcronymFrequencyCache
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourceProvider
@@ -34,6 +49,7 @@ import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStor
 import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
+import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.HybridSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LineHit
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
@@ -54,6 +70,28 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideCatalogAccess(catalogCache: CatalogCache): CatalogAccess = CatalogAccess { catalogCache.getCatalog() }
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideSharedStudyCoordinator(appSettings: AppSettings): SharedStudyCoordinator {
+        val profileName = "${appSettings.getUserFirstName().orEmpty()} ${appSettings.getUserLastName().orEmpty()}".trim()
+        val fallback = System.getProperty("user.name").orEmpty().ifBlank { "זית" }
+        val displayName = appSettings.getSharedStudyDisplayName() ?: profileName.ifBlank { fallback }
+        return SharedStudyCoordinator(
+            transport =
+                LazySharedStudyTransport(
+                    factory = {
+                        CompositeSharedStudyTransport(
+                            ble = PacketizedBleTransport(createDesktopBlePlatformBridge()),
+                            localNetwork = LocalNetworkTransport(instanceId = appSettings.getOrCreateSharedStudyDeviceId()),
+                            bluetoothClassic = BluetoothClassicTransport(),
+                        )
+                    },
+                ),
+            initialDisplayName = displayName,
+            localId = appSettings.getOrCreateSharedStudyDeviceId(),
+            onDisplayNameChanged = appSettings::setSharedStudyDisplayName,
+        )
+    }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -69,7 +107,7 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSettings(): Settings = Settings()
+    fun provideSettings(): Settings = if (PortablePaths.isPortable) PortableSettings() else Settings()
 
     @Provides
     @SingleIn(AppScope::class)
@@ -80,6 +118,7 @@ object AppCoreBindings {
         // existing users via CREATE TABLE IF NOT EXISTS in Schema.create().
         val driver = JdbcSqliteDriver("jdbc:sqlite:${getUserSettingsDatabasePath()}")
         UserSettingsDb.Schema.create(driver)
+        upgradeHistorySchema(driver)
         return UserSettingsDb(driver)
     }
 
@@ -105,14 +144,22 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideRepository(databasePathProvider: DatabasePathProvider): SeforimRepository {
+    fun provideRepository(personalLibrary: PersonalLibraryManager, databasePathProvider: DatabasePathProvider): SeforimRepository {
         val dbPath = databasePathProvider.get()
+        val personalArtifacts =
+            runCatching { personalLibrary.synchronize().second }
+                .onFailure { PersonalLibraryRuntime.startupError = it.message }
+                .getOrElse { personalLibrary.activeArtifacts() }
         // Persistent single-connection driver with prepared-statement cache +
         // read-tuning PRAGMAs. Replaces `JdbcSqliteDriver` whose ThreadedConnectionManager
         // closes the SQLite connection after every non-transactional query (confirmed by
         // JFR 2026-04-23: ~70 `NativeDB.prepare_utf8` + `NativeDB._close()` pairs / 20 s).
         val driver = PersistentSqliteDriver("jdbc:sqlite:$dbPath")
-        return SeforimRepository(dbPath, driver)
+        val repository = SeforimRepository(dbPath, driver)
+        val overlay = PersonalLibraryOverlay(driver)
+        overlay.attach(personalArtifacts?.databasePath)
+        PersonalLibraryRuntime.overlay = overlay
+        return repository
     }
 
     /**
@@ -127,43 +174,55 @@ object AppCoreBindings {
      */
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSearchEngine(
+    fun provideCompositeSearchEngine(
         repository: SeforimRepository,
+        personalLibrary: PersonalLibraryManager,
         databasePathProvider: DatabasePathProvider,
-    ): SearchEngine {
+    ): CompositeSearchEngine {
         val dbPath = databasePathProvider.get()
         val indexPath = Paths.get(if (dbPath.endsWith(".db")) "$dbPath.lucene" else "$dbPath.luceneindex")
         val dictionaryPath = indexPath.resolveSibling("lexical.db")
         val snippetProvider = RepositorySnippetSourceProvider(repository)
-        val lexical = LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
-        // Single fused index: dense vectors live in the SAME Lucene index as the text
-        // (seforim.db.lucene), so the dense searcher opens that same directory.
-        // The embedding model is bundled next to the DB (extracted from the .tar.zst),
-        // so the embedder looks in the database directory.
-        val modelDir = Paths.get(dbPath).parent
-        return HybridSearchEngine.create(lexical, indexDir = indexPath, modelDir = modelDir) { lineId, _, query ->
-            val line = repository.getLine(lineId)
-            if (line == null) {
-                null
-            } else {
-                val title = repository.getBook(line.bookId)?.title ?: ""
-                LineHit(
-                    bookId = line.bookId,
-                    bookTitle = title,
-                    lineId = lineId,
-                    lineIndex = line.lineIndex,
-                    snippet = lexical.buildSnippet(line.content, query, 5),
-                    score = 0f,
-                    rawText = line.content,
-                )
+        val base = LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
+        val personal =
+            personalLibrary.activeArtifacts()?.let {
+                LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
             }
-        }
+        val semantic =
+            HybridSearchEngine(
+                lexical = base,
+                modelDir = Paths.get("$dbPath.semantic/model"),
+                indexDir = Paths.get("$dbPath.semantic/index"),
+                dbPath = Paths.get(dbPath),
+                resolveLine = { lineId, bookId, query ->
+                    val line = repository.getLine(lineId)
+                    val book = repository.getBookCore(bookId)
+                    if (line == null || book == null || line.bookId != book.id) {
+                        null
+                    } else {
+                        LineHit(
+                            bookId = book.id,
+                            bookTitle = book.title,
+                            lineId = line.id,
+                            lineIndex = line.lineIndex,
+                            snippet = base.buildSnippet(line.content, query, 5),
+                            score = 0f,
+                            rawText = line.content,
+                            isBaseBook = book.isBaseBook,
+                        )
+                    }
+                },
+            )
+        return CompositeSearchEngine(semantic, personal)
     }
 
     @Provides
     @SingleIn(AppScope::class)
     fun provideAcronymFrequencyCache(databasePathProvider: DatabasePathProvider): AcronymFrequencyCache =
         AcronymFrequencyCache(databasePathProvider)
+
+    @Provides
+    fun provideSearchEngine(engine: CompositeSearchEngine): SearchEngine = engine
 
     @Provides
     @SingleIn(AppScope::class)
@@ -227,6 +286,8 @@ object AppCoreBindings {
         lookup: LuceneLookupSearchService,
         appSettings: AppSettings,
         sessionManager: SessionManager,
+        semanticAssetsManager: SemanticAssetsManager,
+        talmudPdfService: TalmudPdfService,
     ): DesktopManager =
         DesktopManager(
             tabPersistedStateStore = tabPersistedStateStore,
@@ -240,6 +301,8 @@ object AppCoreBindings {
                     repository = repository,
                     lookup = lookup,
                     appSettings = appSettings,
+                    semanticAssetsManager = semanticAssetsManager,
+                    talmudPdfService = talmudPdfService,
                 )
             },
             bootState = sessionManager.loadBootState(repository),

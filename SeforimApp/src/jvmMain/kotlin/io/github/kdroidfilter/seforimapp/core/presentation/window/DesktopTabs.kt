@@ -44,7 +44,6 @@ fun NucleusApplicationScope.DesktopTabs(session: DesktopSession) {
     for (item in session.tabs) {
         val tabId = item.destination.tabId
         key(tabId) {
-            // The body is drawn (and kept alive) by the window's TabsContent, not by the workspace.
             Tab(session.workspace, id = tabId, title = tabLabel(item, homeLabel), group = session.initialGroupOf(tabId)) {}
             // Keyed on the session too: a desktop restored in place is a new session under the same id.
             LaunchedEffect(session, tabId) {

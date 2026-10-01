@@ -241,6 +241,68 @@ class ContentUseCaseLineSelectionTest {
         }
 
     @Test
+    fun `toggleMentions preserves bottom pane visibility`() =
+        runTest {
+            stateManager.updateContent {
+                copy(
+                    showCommentaries = true,
+                    showSources = true,
+                    showMentions = false,
+                    showTargum = false,
+                )
+            }
+
+            val result = useCase.toggleMentions()
+
+            val state = stateManager.state.value
+            assertTrue(result)
+            assertTrue(state.content.showMentions)
+            assertFalse(state.content.showTargum)
+            assertTrue(state.content.showCommentaries)
+            assertTrue(state.content.showSources)
+        }
+
+    @Test
+    fun `toggleCommentaries preserves mentions visibility`() =
+        runTest {
+            stateManager.updateContent {
+                copy(
+                    showCommentaries = false,
+                    showSources = false,
+                    showMentions = true,
+                    showTargum = false,
+                )
+            }
+
+            val result = useCase.toggleCommentaries()
+
+            val state = stateManager.state.value
+            assertTrue(result)
+            assertTrue(state.content.showCommentaries)
+            assertTrue(state.content.showMentions)
+        }
+
+    @Test
+    fun `toggleSources preserves mentions visibility`() =
+        runTest {
+            stateManager.updateContent {
+                copy(
+                    showCommentaries = false,
+                    showSources = false,
+                    showMentions = true,
+                    showTargum = false,
+                )
+            }
+
+            val result = useCase.toggleSources()
+
+            val state = stateManager.state.value
+            assertTrue(result)
+            assertTrue(state.content.showSources)
+            assertTrue(state.content.showMentions)
+        }
+
+    @Test
     fun `selectLine updates TOC breadcrumb path`() =
         runTest {
             // Given: A line with a TOC entry

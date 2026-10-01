@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent
 
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
@@ -7,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
@@ -55,16 +58,18 @@ fun BookContentPanel(
             onTocQueryChanged = {},
             onFilterChange = {},
             onGlobalExtendedChange = {},
+            onModeChange = {},
             onSubmitTextSearch = {},
             onOpenReference = {},
             onPickCategory = {},
-            onPickBook = {},
+            onPickBook = { _, _ -> },
             onPickToc = {},
         ),
     isSelected: Boolean = true,
     bookCharCounts: IntArray? = null,
     noteDraft: NoteDraftAnchor? = null,
     tabUi: BookTabUi? = null,
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val isIslands = ThemeUtils.isIslandsStyle()
     val homeCardModifier =
@@ -111,6 +116,7 @@ fun BookContentPanel(
                     bookCharCounts = bookCharCounts,
                     noteDraft = noteDraft,
                     tabUi = tabUi ?: viewModel { BookTabUi() },
+                    mainContentOverride = mainContentOverride,
                 )
             }
         }
@@ -126,7 +132,9 @@ private fun BookContentPanelContent(
     bookCharCounts: IntArray?,
     noteDraft: NoteDraftAnchor?,
     tabUi: BookTabUi,
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
 ) {
+    val linkLoadLevel by LocalAppGraph.current.appSettings.linkLoadLevelFlow.collectAsState()
     val providers = uiState.providers ?: return
     val selectedBook = uiState.navigation.selectedBook ?: return
     // Latched: once laid out, the text stays composed whatever the panes do next.
@@ -162,7 +170,12 @@ private fun BookContentPanelContent(
     // tab (composed but not displayed) has its open commentaries ready and the on-demand pager load
     // is instant once the tab is shown. Gated on the pane actually being open.
     val openCommentatorIds = uiState.content.selectedCommentatorIds
-    LaunchedEffect(uiState.content.primarySelectedLineId, openCommentatorIds, uiState.content.showCommentaries) {
+    LaunchedEffect(
+        uiState.content.primarySelectedLineId,
+        openCommentatorIds,
+        uiState.content.showCommentaries,
+        linkLoadLevel,
+    ) {
         val lineId = uiState.content.primarySelectedLineId ?: return@LaunchedEffect
         if (!uiState.content.showCommentaries || openCommentatorIds.isEmpty()) return@LaunchedEffect
         providers.prefetchCommentaries(lineId, openCommentatorIds)
@@ -180,14 +193,15 @@ private fun BookContentPanelContent(
             }
         }
 
-    // Collect paging data here to keep BookContentView skippable
-    val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
-
     CompositionLocalProvider(LocalBookContentZoomInProgress provides isBookContentZoomInProgress) {
         // The links / commentaries / sources panes dock around this text and the breadcrumb sits
         // under them (see the window body), as the split panes had it.
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
+                if (mainContentOverride != null) {
+                    mainContentOverride(paneCardModifier)
+                } else {
+                val lazyPagingItems = providers.linesPagingData.collectAsLazyPagingItems()
                 BookContentView(
                     bookId = selectedBook.id,
                     lazyPagingItems = lazyPagingItems,
@@ -227,6 +241,7 @@ private fun BookContentPanelContent(
                     bookCharCounts = bookCharCounts,
                     onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
                 )
+                }
             }
         }
     }

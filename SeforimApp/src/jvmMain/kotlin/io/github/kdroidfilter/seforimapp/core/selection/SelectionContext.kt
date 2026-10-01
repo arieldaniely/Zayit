@@ -41,6 +41,7 @@ data class CommentaryLineRef(
  */
 interface SelectionContext {
     val selectedText: StateFlow<String>
+    val contextWord: StateFlow<String>
     val activeBook: StateFlow<ActiveBook?>
     val visibleLines: StateFlow<VisibleLines>
 
@@ -61,6 +62,9 @@ interface SelectionContext {
     fun setSelectedText(text: String)
 
     fun clearSelectedText()
+
+    /** Word directly under the most recent secondary click, or empty when none was resolved. */
+    fun setContextWord(word: String)
 
     fun setCurrentLineId(lineId: Long)
 
@@ -99,6 +103,9 @@ class DefaultSelectionContext : SelectionContext {
     private val _selectedText = MutableStateFlow("")
     override val selectedText: StateFlow<String> = _selectedText.asStateFlow()
 
+    private val _contextWord = MutableStateFlow("")
+    override val contextWord: StateFlow<String> = _contextWord.asStateFlow()
+
     private val _activeBook = MutableStateFlow<ActiveBook?>(null)
     override val activeBook: StateFlow<ActiveBook?> = _activeBook.asStateFlow()
 
@@ -121,6 +128,10 @@ class DefaultSelectionContext : SelectionContext {
 
     override fun clearSelectedText() {
         _selectedText.value = ""
+    }
+
+    override fun setContextWord(word: String) {
+        _contextWord.value = word
     }
 
     override fun setCurrentLineId(lineId: Long) {

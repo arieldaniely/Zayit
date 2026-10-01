@@ -7,6 +7,7 @@ data class DisplaySettingsState(
     val showHomeWallpaper: Boolean = true,
     val compactMode: Boolean = false,
     val maxCommentatorsPerPage: Int = 0,
+    val linkLoadLevel: Int = 2,
 ) {
     companion object {
         val preview =

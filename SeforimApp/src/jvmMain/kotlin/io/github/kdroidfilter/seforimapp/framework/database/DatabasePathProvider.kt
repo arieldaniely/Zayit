@@ -42,24 +42,11 @@ class DatabasePathProvider(
     }
 
     private fun resolve(): String {
-        // 1) Prefer an explicit environment variable override if provided
-        val envDbPath = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
-
-        // 2) Try AppSettings (but fix if it points to lexical.db which is wrong)
-        val rawSettingsPath = appSettings.getDatabasePath()
-        val settingsPath =
-            if (rawSettingsPath?.endsWith("lexical.db", ignoreCase = true) == true) {
-                // Fix incorrect path by clearing it
-                appSettings.setDatabasePath(null)
-                null
-            } else {
-                rawSettingsPath
-            }
-
-        // 3) Fallback to default location
-        val defaultDbPath = File(FileKit.databasesDir.path, DEFAULT_DB_NAME).absolutePath
-
-        val dbPath = envDbPath ?: settingsPath ?: defaultDbPath
+        // Repair the legacy setting before resolving the selected/portable install location.
+        if (appSettings.getDatabasePath()?.endsWith("lexical.db", ignoreCase = true) == true) {
+            appSettings.setDatabasePath(null)
+        }
+        val dbPath = requestedDatabaseFile(appSettings).absolutePath
 
         infoln { "[DatabaseUtils] Database path resolved: $dbPath (exists: ${File(dbPath).exists()})" }
 

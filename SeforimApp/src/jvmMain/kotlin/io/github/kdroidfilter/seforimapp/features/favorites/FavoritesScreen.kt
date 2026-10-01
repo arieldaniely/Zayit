@@ -130,7 +130,7 @@ private fun FavoritesPageContent(
     val unfiled = byFolder[null].orEmpty()
     val accent = JewelTheme.globalColors.outlines.focused
 
-    ListPageContainer {
+    ListPageContainer(scrollable = true) {
         PageHeader(
             title = stringResource(Res.string.favorites_title),
             actions = { NewFolderButton(onCreate = onCreateFolder) },

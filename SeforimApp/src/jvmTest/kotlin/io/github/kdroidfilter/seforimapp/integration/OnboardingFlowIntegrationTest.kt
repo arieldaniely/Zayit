@@ -7,6 +7,7 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.Progress
 import io.github.kdroidfilter.seforimapp.features.onboarding.region.RegionConfigState
 import io.github.kdroidfilter.seforimapp.features.onboarding.typeofinstall.TypeOfInstallationState
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.UserProfileState
+import io.github.kdroidfilter.seforimapp.testAppSettings
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -305,7 +306,7 @@ class OnboardingFlowIntegrationTest {
     @Test
     fun `disk space use case provides consistent calculations`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(testAppSettings()).getDiskSpaceInfo()
 
             // Total should be >= available
             assertTrue(info.totalBytes >= info.availableBytes)

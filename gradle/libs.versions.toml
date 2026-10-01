@@ -28,6 +28,7 @@ buildConfig = "6.1.2"
 materialKolor = "5.0.1"
 jewel = "0.41.0-262.10968.63"
 paging = "3.5.1"
+platformtools = "0.7.5"
 kotlinx-collections-immutable = "0.5.2"
 kotlinx-coroutines = "1.11.0"
 reorderable = "3.1.0"
@@ -50,6 +51,10 @@ sentrySdk = "8.58.0"
 graalHotspot = "22.0.0.2"
 intellijPlatformIcons = "262.10968.63"
 jbrApi = "1.10.1"
+pdfbox = "3.0.5"
+blueFalcon = "3.7.7"
+jbig2Imageio = "3.0.4"
+jaiImageioJpeg2000 = "1.4.0"
 
 [libraries]
 
@@ -117,6 +122,13 @@ intellij-platform-icons = { module = "com.jetbrains.intellij.platform:icons", ve
 intellij-platform-icons-api = { module = "com.jetbrains.intellij.platform:icons-api", version.ref = "intellijPlatformIcons" }
 intellij-platform-icons-impl = { module = "com.jetbrains.intellij.platform:icons-impl", version.ref = "intellijPlatformIcons" }
 jbr-api = { module = "org.jetbrains.runtime:jbr-api", version.ref = "jbrApi" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+blue-falcon-core = { module = "dev.bluefalcon:blue-falcon-core", version.ref = "blueFalcon" }
+blue-falcon-engine-windows = { module = "dev.bluefalcon:blue-falcon-engine-windows", version.ref = "blueFalcon" }
+blue-falcon-engine-macos-jvm = { module = "dev.bluefalcon:blue-falcon-engine-macos-jvm", version.ref = "blueFalcon" }
+jbig2-imageio = { module = "org.apache.pdfbox:jbig2-imageio", version.ref = "jbig2Imageio" }
+jai-imageio-core = { module = "com.github.jai-imageio:jai-imageio-core", version.ref = "jaiImageioJpeg2000" }
+jai-imageio-jpeg2000 = { module = "com.github.jai-imageio:jai-imageio-jpeg2000", version.ref = "jaiImageioJpeg2000" }
 androidx-paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
 androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
 nucleus-notification-common = { module = "dev.nucleusframework:nucleus.notification-common", version.ref = "nucleus" }
@@ -145,7 +157,7 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.re
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }
 compose-components-ui-tooling-preview = { module = "org.jetbrains.compose.components:components-ui-tooling-preview", version.ref = "compose" }
-compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test-junit4", version.ref = "compose" }
+compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test-junit4-desktop", version = "1.10.3" }
 
 # SeforimLibrary composite build
 seforimlibrary-core = { module = "io.github.kdroidfilter.seforimlibrary:core" }

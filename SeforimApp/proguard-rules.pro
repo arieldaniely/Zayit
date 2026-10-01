@@ -314,3 +314,22 @@
 -keep class io.sentry.** { *; }
 -dontwarn io.sentry.**
 
+# PDFBox and dependencies used by the installed release/GraalVM build.
+-keep class org.apache.pdfbox.** { *; }
+-dontwarn org.apache.pdfbox.**
+
+-keep class org.apache.commons.logging.** { *; }
+-dontwarn org.apache.commons.logging.**
+
+-keep class org.apache.fontbox.** { *; }
+-dontwarn org.apache.fontbox.**
+
+# JAI and ImageIO plugins used for JBIG2/JPEG2000 images embedded in PDFs.
+-keep class com.github.jaiimageio.** { *; }
+-dontwarn com.github.jaiimageio.**
+
+-keep class org.apache.pdfbox.jbig2.** { *; }
+-dontwarn org.apache.pdfbox.jbig2.**
+
+-keep class jj2000.** { *; }
+-dontwarn jj2000.**

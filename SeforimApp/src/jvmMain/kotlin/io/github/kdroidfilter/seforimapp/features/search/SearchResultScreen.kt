@@ -40,6 +40,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -88,6 +89,9 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.*
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.*
+
+// Temporary release switch. Set to true to restore the grouped book cards.
+private const val GROUPED_SEARCH_RESULTS_ENABLED = false
 
 @Stable
 data class SearchShellActions(
@@ -373,12 +377,24 @@ private fun SearchResultContentMvi(
     val listState = rememberLazyListState()
     // Group consecutive same-book results into Google-style cards. Cards are derived
     // purely from the loaded list, so an already-shown card never grows beyond its cap.
-    val groups = remember(visibleResults, bookCounts) { groupResultsByBook(visibleResults, bookCounts) }
+    val groups =
+        remember(visibleResults, bookCounts) {
+            if (GROUPED_SEARCH_RESULTS_ENABLED) groupResultsByBook(visibleResults, bookCounts) else emptyList()
+        }
+    val displayedResults =
+        remember(visibleResults, groups) {
+            if (GROUPED_SEARCH_RESULTS_ENABLED) groups.map { it.primary } else visibleResults
+        }
+    val currentDisplayedResults by rememberUpdatedState(displayedResults)
     val lineToGroupIndex =
-        remember(groups) {
+        remember(groups, visibleResults) {
             buildMap {
-                groups.forEachIndexed { groupIndex, group ->
-                    group.allLineIds.forEach { put(it, groupIndex) }
+                if (GROUPED_SEARCH_RESULTS_ENABLED) {
+                    groups.forEachIndexed { groupIndex, group ->
+                        group.allLineIds.forEach { put(it, groupIndex) }
+                    }
+                } else {
+                    visibleResults.forEachIndexed { index, result -> put(result.lineId, index) }
                 }
             }
         }
@@ -468,8 +484,7 @@ private fun SearchResultContentMvi(
             .distinctUntilChanged()
             .filter { !state.isLoading }
             .collect { (index, offset) ->
-                // index is a group index; anchor on the group's primary line
-                val anchorId = groups.getOrNull(index)?.primary?.lineId ?: -1L
+                val anchorId = currentDisplayedResults.getOrNull(index)?.lineId ?: -1L
                 actions.onScroll(anchorId, 0, index, offset)
             }
     }
@@ -477,8 +492,8 @@ private fun SearchResultContentMvi(
     // Restore scroll/anchor when a new anchor timestamp is emitted.
     // We restore exactly once per timestamp to handle new searches and filter changes.
     var lastRestoredTs by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(state.scrollToAnchorTimestamp, groups) {
-        if (groups.isNotEmpty() && lastRestoredTs != state.scrollToAnchorTimestamp) {
+    LaunchedEffect(state.scrollToAnchorTimestamp, displayedResults) {
+        if (displayedResults.isNotEmpty() && lastRestoredTs != state.scrollToAnchorTimestamp) {
             val anchorIdx = if (state.anchorId > 0) lineToGroupIndex[state.anchorId] else null
             val targetIndex = anchorIdx ?: state.scrollIndex
             val targetOffset = state.scrollOffset
@@ -514,6 +529,7 @@ private fun SearchResultContentMvi(
         }
     }
     var currentHitIndex by remember { mutableStateOf(-1) }
+    var currentMatchStart by remember { mutableStateOf(-1) }
 
     fun navigateTo(
         next: Boolean,
@@ -524,7 +540,13 @@ private fun SearchResultContentMvi(
         val vis = visibleResults
         if (vis.isEmpty()) return
         val size = vis.size
-        var i = (if (currentHitIndex in 0 until size) currentHitIndex else 0).coerceIn(0, size - 1)
+        val startingIndex =
+            when {
+                currentHitIndex in 0 until size -> currentHitIndex
+                GROUPED_SEARCH_RESULTS_ENABLED -> 0
+                else -> listState.firstVisibleItemIndex
+            }
+        var i = startingIndex.coerceIn(0, size - 1)
         val step = if (next) 1 else -1
         var guard = 0
         while (guard++ < size) {
@@ -537,6 +559,7 @@ private fun SearchResultContentMvi(
                     ?.first ?: -1
             if (start >= 0) {
                 currentHitIndex = i
+                currentMatchStart = start
                 val groupIndex = lineToGroupIndex[vis[i].lineId] ?: bookToGroupIndex[vis[i].bookId] ?: return
                 scope.launch { listState.scrollToItem(groupIndex, 24) }
                 break
@@ -666,67 +689,141 @@ private fun SearchResultContentMvi(
                             }
                         }
                     } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
+                        if (GROUPED_SEARCH_RESULTS_ENABLED) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .padding(start = 18.dp, end = 14.dp)
+                                            .verticalEdgeFade(
+                                                showTop = listState.canScrollBackward,
+                                                showBottom = listState.canScrollForward,
+                                            ),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    // One card per book group; primary line's id is unique per group
+                                    itemsIndexed(items = groups, key = { _, g -> g.primary.lineId }) { _, group ->
+                                        val windowInfo = LocalWindowInfo.current
+                                        val pdfBreadcrumbs = breadcrumbs[group.primary.lineId]
+                                        val hasPdfEdition by produceState(
+                                            initialValue = false,
+                                            key1 = group.bookTitle,
+                                            key2 = pdfBreadcrumbs,
+                                        ) {
+                                            value =
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    if (TalmudPdfService.isInstalled()) {
+                                                        TalmudPdfService.hasPdfForTitle(group.bookTitle)
+                                                    } else {
+                                                        TalmudPdfService.isTalmudBavliCategoryPath(pdfBreadcrumbs.orEmpty())
+                                                    }
+                                                }
+                                        }
+                                        BookResultCard(
+                                            group = group,
+                                            textSize = mainTextSize,
+                                            lineHeight = mainLineHeight,
+                                            fontFamily = hebrewFontFamily,
+                                            findQuery = activeFindQuery,
+                                            bookFontCode = bookFontCode,
+                                            breadcrumbs = breadcrumbs,
+                                            onRequestBreadcrumb = actions.onRequestBreadcrumb,
+                                            onOpenResult = { result ->
+                                                val mods = windowInfo.keyboardModifiers
+                                                val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
+                                                actions.onOpenResult(result, openInNewTab)
+                                            },
+                                            onOpenPdf =
+                                                if (hasPdfEdition) {
+                                                    {
+                                                        val mods = windowInfo.keyboardModifiers
+                                                        val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
+                                                        actions.onOpenPdfResult(group.primary, openInNewTab)
+                                                    }
+                                                } else {
+                                                    null
+                                                },
+                                            isExpanded = expandedBooks[group.bookId] == true,
+                                            expandedHits = expandedHits[group.bookId],
+                                            onToggleExpand = onToggleExpand,
+                                        )
+                                    }
+                                    // Loading indicator at the end of the list (only for lazy loading)
+                                    if (state.isLoadingMore) {
+                                        item {
+                                            Box(
+                                                Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                CircularProgressIndicator()
+                                            }
+                                        }
+                                    }
+                                }
+                                StableListScrollbar(
+                                    listState = listState,
+                                    loadedCount = groups.size,
+                                    totalCount = maxOf(bookCounts.size, groups.size),
+                                    modifier = Modifier.align(Alignment.CenterEnd),
+                                )
+                            }
+                        } else {
                             LazyColumn(
                                 state = listState,
                                 modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .padding(start = 18.dp, end = 14.dp)
-                                        .verticalEdgeFade(
-                                            showTop = listState.canScrollBackward,
-                                            showBottom = listState.canScrollForward,
-                                        ),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    Modifier.fillMaxSize().padding(horizontal = 32.dp).verticalEdgeFade(
+                                        showTop = listState.canScrollBackward,
+                                        showBottom = listState.canScrollForward,
+                                    ),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                // One card per book group; primary line's id is unique per group
-                                itemsIndexed(items = groups, key = { _, g -> g.primary.lineId }) { _, group ->
+                                itemsIndexed(
+                                    items = visibleResults,
+                                    key = { index, result -> Pair(result.bookId, Pair(result.lineId, index)) },
+                                ) { index, result ->
                                     val windowInfo = LocalWindowInfo.current
-                                    val pdfBreadcrumbs = breadcrumbs[group.primary.lineId]
+                                    val pdfBreadcrumbs = breadcrumbs[result.lineId]
                                     val hasPdfEdition by produceState(
                                         initialValue = false,
-                                        key1 = group.bookTitle,
+                                        key1 = result.bookTitle,
                                         key2 = pdfBreadcrumbs,
                                     ) {
                                         value =
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                                 if (TalmudPdfService.isInstalled()) {
-                                                    TalmudPdfService.hasPdfForTitle(group.bookTitle)
+                                                    TalmudPdfService.hasPdfForTitle(result.bookTitle)
                                                 } else {
                                                     TalmudPdfService.isTalmudBavliCategoryPath(pdfBreadcrumbs.orEmpty())
                                                 }
                                             }
                                     }
-                                    BookResultCard(
-                                        group = group,
+                                    LegacySearchResultItem(
+                                        result = result,
                                         textSize = mainTextSize,
                                         lineHeight = mainLineHeight,
                                         fontFamily = hebrewFontFamily,
                                         findQuery = activeFindQuery,
-                                        bookFontCode = bookFontCode,
+                                        currentMatchStart = if (index == currentHitIndex) currentMatchStart else null,
+                                        onClick = {
+                                            val mods = windowInfo.keyboardModifiers
+                                            actions.onOpenResult(result, !(mods.isCtrlPressed || mods.isMetaPressed))
+                                        },
                                         breadcrumbs = breadcrumbs,
                                         onRequestBreadcrumb = actions.onRequestBreadcrumb,
-                                        onOpenResult = { result ->
-                                            val mods = windowInfo.keyboardModifiers
-                                            val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
-                                            actions.onOpenResult(result, openInNewTab)
-                                        },
+                                        bookFontCode = bookFontCode,
                                         onOpenPdf =
                                             if (hasPdfEdition) {
                                                 {
                                                     val mods = windowInfo.keyboardModifiers
-                                                    val openInNewTab = !(mods.isCtrlPressed || mods.isMetaPressed)
-                                                    actions.onOpenPdfResult(group.primary, openInNewTab)
+                                                    actions.onOpenPdfResult(result, !(mods.isCtrlPressed || mods.isMetaPressed))
                                                 }
                                             } else {
                                                 null
                                             },
-                                        isExpanded = expandedBooks[group.bookId] == true,
-                                        expandedHits = expandedHits[group.bookId],
-                                        onToggleExpand = onToggleExpand,
                                     )
                                 }
-                                // Loading indicator at the end of the list (only for lazy loading)
                                 if (state.isLoadingMore) {
                                     item {
                                         Box(
@@ -738,12 +835,6 @@ private fun SearchResultContentMvi(
                                     }
                                 }
                             }
-                            StableListScrollbar(
-                                listState = listState,
-                                loadedCount = groups.size,
-                                totalCount = maxOf(bookCounts.size, groups.size),
-                                modifier = Modifier.align(Alignment.CenterEnd),
-                            )
                         }
                     }
 
@@ -1281,5 +1372,156 @@ private fun SecondaryResultRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LegacySearchResultItem(
+    result: SearchResult,
+    textSize: Float,
+    lineHeight: Float,
+    fontFamily: FontFamily,
+    findQuery: String?,
+    onClick: () -> Unit,
+    breadcrumbs: ImmutableMap<Long, List<String>>,
+    onRequestBreadcrumb: (SearchResult) -> Unit,
+    bookFontCode: String,
+    currentMatchStart: Int? = null,
+    onOpenPdf: (() -> Unit)? = null,
+) {
+    // Breadcrumb pieces come from state; request on-demand via callback
+    val pieces = breadcrumbs[result.lineId]
+    val currentOnRequestBreadcrumb by rememberUpdatedState(onRequestBreadcrumb)
+    LaunchedEffect(result.lineId) { if (pieces == null) currentOnRequestBreadcrumb(result) }
+
+    // Derive book title and TOC leaf for the header line
+    val bookTitle = result.bookTitle
+    val tocLeaf: String? =
+        remember(pieces, bookTitle) {
+            val list = pieces ?: emptyList()
+            val bookIndex = list.indexOfFirst { it == bookTitle }
+            if (bookIndex >= 0 && bookIndex < list.lastIndex) list.last() else null
+        }
+
+    // Full path string for the footer line
+    val sep = stringResource(Res.string.breadcrumb_separator)
+    val fullPath: String? = if (pieces.isNullOrEmpty()) null else pieces.joinToString(sep)
+
+    // Build annotated snippet with bold segments coming from HTML (<b> ... )
+    // On macOS, some Hebrew fonts in our catalog don't include bold faces.
+    // Apply a subtle boldScale to keep emphasis visible on those fonts.
+    val boldScaleForPlatform =
+        remember(bookFontCode) {
+            val lacksBold = bookFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
+            if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
+        }
+    val boldColor = JewelTheme.globalColors.outlines.focused
+    val footnoteMarkerColor = JewelTheme.globalColors.outlines.focused
+    val annotated: AnnotatedString =
+        remember(result.snippet, textSize, boldScaleForPlatform, boldColor, footnoteMarkerColor) {
+            // Keep keyword emphasis without oversized glyphs (slight scale on mac for non-bold fonts)
+            buildAnnotatedFromHtml(
+                result.snippet,
+                textSize,
+                boldScale = boldScaleForPlatform,
+                boldColor = boldColor,
+                footnoteMarkerColor = footnoteMarkerColor,
+            )
+        }
+    // Softer overlays for better legibility
+    val baseHl =
+        JewelTheme.globalColors.outlines.focused
+            .copy(alpha = 0.12f)
+    val currentHl =
+        JewelTheme.globalColors.outlines.focused
+            .copy(alpha = 0.28f)
+    val display =
+        remember(annotated, findQuery, currentMatchStart, baseHl, currentHl) {
+            highlightAnnotatedWithCurrent(
+                annotated = annotated,
+                query = findQuery,
+                currentStart = currentMatchStart?.takeIf { it >= 0 },
+                currentLength = findQuery?.length,
+                baseColor = baseHl,
+                currentColor = currentHl,
+            )
+        }
+
+    // Visual layout inspired by Google results, styled with Jewel
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClick = onClick)
+                .padding(vertical = 10.dp),
+    ) {
+        // Top: small book title – toc leaf
+        Row(
+            modifier = Modifier.fillMaxWidth().pointerHoverIcon(PointerIcon.Hand),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val header =
+                if (tocLeaf.isNullOrBlank()) {
+                    bookTitle
+                } else {
+                    buildString {
+                        append(bookTitle)
+                        append(stringResource(Res.string.breadcrumb_separator))
+                        append(tocLeaf)
+                    }
+                }
+            Text(
+                text = header,
+                color = JewelTheme.globalColors.text.selected,
+                fontSize = (textSize * 1.1f).sp,
+                fontFamily = fontFamily,
+                fontWeight = FontWeight.Medium,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (onOpenPdf != null) {
+                Spacer(Modifier.width(6.dp))
+                Tooltip({ Text(stringResource(Res.string.open_pdf_edition_tooltip)) }) {
+                    IconButton(
+                        onClick = onOpenPdf,
+                        modifier = Modifier.size(26.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) {
+                        Icon(
+                            imageVector = JournalText,
+                            contentDescription = stringResource(Res.string.open_pdf_search_result),
+                            modifier = Modifier.size(16.dp),
+                            tint = JewelTheme.globalColors.text.info,
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(2.dp))
+
+        // Middle: the snippet text with bold keywords
+        Text(
+            text = display,
+            color = JewelTheme.globalColors.text.normal,
+            fontFamily = fontFamily,
+            lineHeight = (textSize * lineHeight).sp,
+            fontSize = textSize.sp,
+            textAlign = TextAlign.Justify,
+        )
+
+        // Bottom: smaller full path of the book
+        if (!fullPath.isNullOrBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = fullPath,
+                color = JewelTheme.globalColors.text.disabledSelected,
+                fontFamily = fontFamily,
+                fontSize = (textSize * 0.8f).sp,
+                maxLines = 1,
+            )
+        }
     }
 }

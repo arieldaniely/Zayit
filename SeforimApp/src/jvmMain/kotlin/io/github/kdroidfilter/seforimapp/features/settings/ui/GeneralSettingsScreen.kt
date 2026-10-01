@@ -58,6 +58,8 @@ import seforimapp.seforimapp.generated.resources.settings_keep_screen_awake
 import seforimapp.seforimapp.generated.resources.settings_keep_screen_awake_description
 import seforimapp.seforimapp.generated.resources.settings_persist_session
 import seforimapp.seforimapp.generated.resources.settings_persist_session_description
+import seforimapp.seforimapp.generated.resources.settings_search_feedback
+import seforimapp.seforimapp.generated.resources.settings_search_feedback_description
 import seforimapp.seforimapp.generated.resources.update_available_banner
 import seforimapp.seforimapp.generated.resources.update_check_action
 import seforimapp.seforimapp.generated.resources.update_check_failed
@@ -132,6 +134,12 @@ private fun GeneralSettingsView(
                 description = Res.string.settings_keep_screen_awake_description,
                 checked = state.keepScreenAwakeOnBook,
                 onCheckedChange = { onEvent(GeneralSettingsEvents.SetKeepScreenAwakeOnBook(it)) },
+            )
+            SettingCard(
+                title = Res.string.settings_search_feedback,
+                description = Res.string.settings_search_feedback_description,
+                checked = state.searchFeedbackEnabled,
+                onCheckedChange = { onEvent(GeneralSettingsEvents.SetSearchFeedbackEnabled(it)) },
             )
         }
     }

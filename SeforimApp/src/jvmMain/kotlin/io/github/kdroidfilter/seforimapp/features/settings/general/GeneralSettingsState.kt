@@ -8,6 +8,7 @@ data class GeneralSettingsState(
     val closeTreeOnNewBook: Boolean = false,
     val persistSession: Boolean = true,
     val keepScreenAwakeOnBook: Boolean = true,
+    val searchFeedbackEnabled: Boolean = true,
 ) {
     companion object {
         val preview =

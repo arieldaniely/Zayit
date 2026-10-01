@@ -1,4 +1,8 @@
 <resources>
+    <string name="settings_search_feedback">שיתוף נתונים לשיפור החיפוש</string>
+    <string name="settings_search_feedback_description">שליחת שאילתות, הקטעים שנפתחו, דירוגי לייק ודיסלייק והגדרות החיפוש לשרת לשיפור המודל. ניתן לכבות בכל עת.</string>
+    <string name="search_feedback_like">התוצאה מועילה</string>
+    <string name="search_feedback_dislike">התוצאה אינה מועילה</string>
     <string name="app_name">זיתא</string>
     <!-- Window title pattern: AppName - CurrentTab -->
     <string name="window_title_with_tab">%1$s - %2$s</string>

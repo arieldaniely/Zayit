@@ -77,6 +77,7 @@ internal object SemanticAssetsManager {
 
     private const val MODEL_NAME = "seforim-embed-round2-int8.onnx"
     private const val MODEL_SHA = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
+    internal val feedbackModelVersion: String get() = "$MODEL_NAME:sha256:$MODEL_SHA"
     private const val TOKENIZER_SHA = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
     private const val RELEASE_API = "https://api.github.com/repos/arieldaniely/Zayit/releases?per_page=100"
     private val db: Path get() = Path.of(getDatabasePath())

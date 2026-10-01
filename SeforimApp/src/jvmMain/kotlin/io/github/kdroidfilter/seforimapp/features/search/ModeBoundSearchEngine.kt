@@ -44,7 +44,21 @@ internal class ModeBoundSearchEngine(
                 baseBookOnly,
                 effective,
             ) ?: return null
-        return object : SearchSession by session {
+        return object : FeedbackSearchSession, SearchSession by session {
+            override val feedbackContext =
+                FeedbackSearchContext(
+                    query = query,
+                    requestedMode = requested,
+                    near = near,
+                    bookFilter = bookFilter,
+                    categoryFilter = categoryFilter,
+                    bookIds = bookIds?.sorted(),
+                    lineIds = lineIds?.sorted(),
+                    baseBookOnly = baseBookOnly,
+                )
+
+            override val effectiveMode: SearchMode get() = session.effectiveMode ?: effective
+
             override suspend fun nextPage(limit: Int): SearchPage? {
                 val page = session.nextPage(limit)
                 if (effective == SearchMode.SMART &&

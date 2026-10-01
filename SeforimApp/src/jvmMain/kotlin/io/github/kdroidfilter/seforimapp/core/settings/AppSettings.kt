@@ -106,9 +106,20 @@ object AppSettings {
     @Volatile
     private var settings: Settings = Settings()
 
+    private val _searchFeedbackEnabledFlow = MutableStateFlow(isSearchFeedbackEnabled())
+    val searchFeedbackEnabledFlow: StateFlow<Boolean> = _searchFeedbackEnabledFlow.asStateFlow()
+
+    fun isSearchFeedbackEnabled(): Boolean = settings.getBoolean("search_feedback_enabled", true)
+
+    fun setSearchFeedbackEnabled(enabled: Boolean) {
+        settings.putBoolean("search_feedback_enabled", enabled)
+        _searchFeedbackEnabledFlow.value = enabled
+    }
+
     // Allow optional initialization with an externally provided Settings instance
     fun initialize(settings: Settings) {
         this.settings = settings
+        _searchFeedbackEnabledFlow.value = isSearchFeedbackEnabled()
         // Refresh flows with current values from provided settings
         _textSizeFlow.value = getTextSize()
         _lineHeightFlow.value = getLineHeight()

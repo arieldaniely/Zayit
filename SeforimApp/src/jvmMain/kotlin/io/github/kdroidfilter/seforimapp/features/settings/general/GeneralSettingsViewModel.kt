@@ -22,12 +22,13 @@ class GeneralSettingsViewModel : ViewModel() {
     private val keepAwake = MutableStateFlow(AppSettings.isKeepScreenAwakeOnBookEnabled())
 
     val state =
-        combine(dbPath, closeTree, persist, keepAwake) { path, c, p, k ->
+        combine(dbPath, closeTree, persist, keepAwake, AppSettings.searchFeedbackEnabledFlow) { path, c, p, k, feedback ->
             GeneralSettingsState(
                 databasePath = path,
                 closeTreeOnNewBook = c,
                 persistSession = p,
                 keepScreenAwakeOnBook = k,
+                searchFeedbackEnabled = feedback,
             )
         }.stateIn(
             viewModelScope,
@@ -37,11 +38,13 @@ class GeneralSettingsViewModel : ViewModel() {
                 closeTreeOnNewBook = closeTree.value,
                 persistSession = persist.value,
                 keepScreenAwakeOnBook = keepAwake.value,
+                searchFeedbackEnabled = AppSettings.isSearchFeedbackEnabled(),
             ),
         )
 
     fun onEvent(event: GeneralSettingsEvents) {
         when (event) {
+            is GeneralSettingsEvents.SetSearchFeedbackEnabled -> AppSettings.setSearchFeedbackEnabled(event.value)
             is GeneralSettingsEvents.SetCloseTreeOnNewBook -> {
                 AppSettings.setCloseBookTreeOnNewBookSelected(event.value)
                 closeTree.value = event.value

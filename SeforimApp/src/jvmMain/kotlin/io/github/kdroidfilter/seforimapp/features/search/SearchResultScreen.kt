@@ -11,6 +11,9 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -27,6 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -112,6 +119,7 @@ data class SearchShellActions(
     val onTocFilter: (io.github.kdroidfilter.seforimlibrary.core.models.TocEntry) -> Unit,
     val onCategoryFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Category) -> Unit,
     val onBookFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Book) -> Unit,
+    val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
 )
 
 @Composable
@@ -806,6 +814,15 @@ private fun SearchResultContentMvi(
                                         fontFamily = hebrewFontFamily,
                                         findQuery = activeFindQuery,
                                         currentMatchStart = if (index == currentHitIndex) currentMatchStart else null,
+                                        onFeedback =
+                                            if (state.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART &&
+                                                !state.isLoading
+                                            ) {
+                                                { type -> actions.onFeedback(result, type) }
+                                            } else {
+                                                null
+                                            },
+                                        feedbackKey = state.feedbackSearchId,
                                         onClick = {
                                             val mods = windowInfo.keyboardModifiers
                                             actions.onOpenResult(result, !(mods.isCtrlPressed || mods.isMetaPressed))
@@ -1377,7 +1394,7 @@ private fun SecondaryResultRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LegacySearchResultItem(
+internal fun LegacySearchResultItem(
     result: SearchResult,
     textSize: Float,
     lineHeight: Float,
@@ -1389,7 +1406,13 @@ private fun LegacySearchResultItem(
     bookFontCode: String,
     currentMatchStart: Int? = null,
     onOpenPdf: (() -> Unit)? = null,
+    onFeedback: ((SearchFeedbackType) -> Unit)? = null,
+    feedbackKey: String = "",
 ) {
+    val feedbackEnabled by AppSettings.searchFeedbackEnabledFlow.collectAsState()
+    val hoverSource = remember { MutableInteractionSource() }
+    val hovered by hoverSource.collectIsHoveredAsState()
+    var selectedFeedback by remember(result.lineId, feedbackKey) { mutableStateOf<SearchFeedbackType?>(null) }
     // Breadcrumb pieces come from state; request on-demand via callback
     val pieces = breadcrumbs[result.lineId]
     val currentOnRequestBreadcrumb by rememberUpdatedState(onRequestBreadcrumb)
@@ -1453,6 +1476,7 @@ private fun LegacySearchResultItem(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .hoverable(hoverSource)
                 .clip(RoundedCornerShape(6.dp))
                 .clickable(onClick = onClick)
                 .padding(vertical = 10.dp),
@@ -1483,6 +1507,18 @@ private fun LegacySearchResultItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (onFeedback != null && feedbackEnabled) {
+                Box(Modifier.width(64.dp).height(28.dp)) {
+                    if (hovered) {
+                        SearchFeedbackButtons(selectedFeedback) { type ->
+                            if (selectedFeedback != type) {
+                                selectedFeedback = type
+                                onFeedback(type)
+                            }
+                        }
+                    }
+                }
+            }
             if (onOpenPdf != null) {
                 Spacer(Modifier.width(6.dp))
                 Tooltip({ Text(stringResource(Res.string.open_pdf_edition_tooltip)) }) {
@@ -1522,6 +1558,66 @@ private fun LegacySearchResultItem(
                 fontSize = (textSize * 0.8f).sp,
                 maxLines = 1,
             )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun SearchFeedbackButtons(
+    selected: SearchFeedbackType?,
+    onFeedback: (SearchFeedbackType) -> Unit,
+) {
+    val thumb =
+        remember {
+            ImageVector
+                .Builder("SearchFeedbackThumb", 24.dp, 24.dp, 24f, 24f)
+                .apply {
+                    path(fill = SolidColor(Color.Black)) {
+                        moveTo(3f, 10f)
+                        lineTo(6f, 10f)
+                        lineTo(6f, 21f)
+                        lineTo(3f, 21f)
+                        close()
+                        moveTo(8f, 10f)
+                        lineTo(13f, 3f)
+                        lineTo(15f, 3f)
+                        lineTo(15f, 9f)
+                        lineTo(21f, 9f)
+                        lineTo(21f, 13f)
+                        lineTo(18f, 21f)
+                        lineTo(8f, 21f)
+                        close()
+                    }
+                }.build()
+        }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (type in listOf(SearchFeedbackType.LIKE, SearchFeedbackType.DISLIKE)) {
+            val label =
+                stringResource(
+                    if (type == SearchFeedbackType.LIKE) Res.string.search_feedback_like else Res.string.search_feedback_dislike,
+                )
+            Tooltip({ Text(label) }) {
+                IconButton(
+                    onClick = { onFeedback(type) },
+                    modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                ) {
+                    Icon(
+                        imageVector = thumb,
+                        contentDescription = label,
+                        modifier =
+                            Modifier.size(17.dp).graphicsLayer {
+                                rotationZ = if (type == SearchFeedbackType.DISLIKE) 180f else 0f
+                            },
+                        tint =
+                            if (selected == type) {
+                                JewelTheme.globalColors.outlines.focused
+                            } else {
+                                JewelTheme.globalColors.text.info
+                            },
+                    )
+                }
+            }
         }
     }
 }

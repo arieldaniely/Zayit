@@ -447,6 +447,7 @@ private fun SearchTabContent(
                 onOpenPdfResult = { r, newTab ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenPdfResult(r, newTab))
                 },
+                onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
                 onRequestBreadcrumb = { r ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))
                 },

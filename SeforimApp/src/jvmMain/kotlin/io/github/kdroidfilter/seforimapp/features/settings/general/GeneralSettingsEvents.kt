@@ -1,6 +1,10 @@
 package io.github.kdroidfilter.seforimapp.features.settings.general
 
 sealed interface GeneralSettingsEvents {
+    data class SetSearchFeedbackEnabled(
+        val value: Boolean,
+    ) : GeneralSettingsEvents
+
     data class SetCloseTreeOnNewBook(
         val value: Boolean,
     ) : GeneralSettingsEvents

@@ -11,6 +11,23 @@ import kotlin.test.assertEquals
 
 class ModeBoundSearchEngineTest {
     @Test
+    fun `feedback context snapshots executed query mode and filters`() {
+        var selected = SearchMode.SMART
+        val engine = ModeBoundSearchEngine(RecordingEngine(), { selected }, semanticReady = { true })
+        val books = mutableListOf(9L, 2L)
+        val session = engine.openSession("original query", near = 7, bookIds = books, baseBookOnly = false) as FeedbackSearchSession
+        selected = SearchMode.EXACT
+        books.clear()
+        assertEquals("original query", session.feedbackContext.query)
+        assertEquals(SearchMode.SMART, session.feedbackContext.requestedMode)
+        assertEquals(SearchMode.SMART, session.effectiveMode)
+        assertEquals(listOf(2L, 9L), session.feedbackContext.bookIds)
+        assertEquals(7, session.feedbackContext.near)
+        assertEquals(false, session.feedbackContext.baseBookOnly)
+        session.close()
+    }
+
+    @Test
     fun `successful semantic session keeps smart mode`() =
         runTest {
             val delegate = RecordingEngine(reportedMode = SearchMode.SMART)

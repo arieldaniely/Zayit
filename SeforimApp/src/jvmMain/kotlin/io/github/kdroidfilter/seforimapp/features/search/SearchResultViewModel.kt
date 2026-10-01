@@ -81,6 +81,7 @@ data class SearchUiState(
     val isLoadingMore: Boolean = false,
     val progressCurrent: Int = 0,
     val progressTotal: Long? = null,
+    val feedbackSearchId: String = "",
 )
 
 @AssistedInject
@@ -92,6 +93,7 @@ class SearchResultViewModel(
     private val titleUpdateManager: TabTitleUpdateManager,
     private val desktopManager: DesktopManager,
     private val historyStore: HistoryStore,
+    private val searchFeedbackService: SearchFeedbackService,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(SearchResultViewModel::class)
@@ -257,10 +259,12 @@ class SearchResultViewModel(
             }
 
             is SearchResultEvents.OpenResult -> {
+                recordFeedback(event.result, SearchFeedbackType.ENTRY, "text")
                 openResult(event.result, event.openInNewTab)
             }
 
             is SearchResultEvents.OpenPdfResult -> {
+                recordFeedback(event.result, SearchFeedbackType.ENTRY, "pdf")
                 openPdfResult(event.result, event.openInNewTab)
             }
 
@@ -298,7 +302,7 @@ class SearchResultViewModel(
         private const val DEFAULT_NEAR = 5
     }
 
-    private val _uiState = MutableStateFlow(SearchUiState())
+    private val _uiState = MutableStateFlow(SearchUiState(feedbackSearchId = UUID.randomUUID().toString()))
     private val lucene: SearchEngine =
         ModeBoundSearchEngine(
             searchEngine,
@@ -334,7 +338,15 @@ class SearchResultViewModel(
         })
 
     // Lazy loading: keep session open for on-demand pagination
+    private var feedbackSession: FeedbackSearchSession? = null
     private var currentSession: SearchSession? = null
+        set(value) {
+            field = value
+            if (value is FeedbackSearchSession) {
+                feedbackSession = value
+                _uiState.update { it.copy(feedbackSearchId = value.feedbackContext.searchId) }
+            }
+        }
     private var currentTocAllowedLineIds: Set<Long> = emptySet()
     private var currentSearchQuery: String = ""
     private val lazyLoadMutex = Mutex()
@@ -742,6 +754,7 @@ class SearchResultViewModel(
         // Try to restore a full snapshot for this tab without redoing the search.
         val cached = persisted.snapshot
         if (cached != null) {
+            currentSearchQuery = initialQuery
             // Adopt cached results and aggregates; keep filters and scroll from persisted state.
             _uiState.value =
                 _uiState.value.copy(
@@ -1901,6 +1914,49 @@ class SearchResultViewModel(
      * Returns a list of display strings in order. Uses lightweight caches to avoid repeated lookups.
      */
     suspend fun getBreadcrumbPiecesFor(result: SearchResult): List<String> = getBreadcrumbPieces(result)
+
+    fun recordFeedback(
+        result: SearchResult,
+        type: SearchFeedbackType,
+        destination: String? = null,
+    ) {
+        val state = _uiState.value
+        if (state.isLoading || !AppSettings.isSearchFeedbackEnabled()) return
+        val session = feedbackSession
+        val context =
+            session?.feedbackContext ?: FeedbackSearchContext(
+                searchId = state.feedbackSearchId,
+                query = currentSearchQuery.ifBlank { state.query },
+                requestedMode = state.mode,
+                near = DEFAULT_NEAR,
+                bookFilter = state.scopeBook?.id,
+                categoryFilter = state.scopeCategoryPath.lastOrNull()?.id,
+                baseBookOnly = !state.globalExtended,
+            )
+        val visible = visibleResultsFlow.value
+        val position = visible.indexOfFirst { it.bookId == result.bookId && it.lineId == result.lineId }
+        searchFeedbackService.record(
+            result = result,
+            type = type,
+            context = context,
+            effectiveMode = session?.effectiveMode ?: state.mode,
+            position = position.takeIf { it >= 0 }?.plus(1),
+            retrievalPosition =
+                state.results
+                    .indexOfFirst { it.bookId == result.bookId && it.lineId == result.lineId }
+                    .takeIf { it >= 0 }
+                    ?.plus(1),
+            loadedCount = visible.size,
+            totalCount = state.progressTotal,
+            selectedBooks = _selectedBookIds.value.sorted(),
+            selectedCategories = _selectedCategoryIds.value.sorted(),
+            selectedTocs = _selectedTocIds.value.sorted(),
+            viewBookId = state.scopeBook?.id,
+            viewCategoryId = state.scopeCategoryPath.lastOrNull()?.id,
+            viewTocId = state.scopeTocId,
+            destination = destination,
+        )
+    }
 
     fun openResult(result: SearchResult) {
         viewModelScope.launch {

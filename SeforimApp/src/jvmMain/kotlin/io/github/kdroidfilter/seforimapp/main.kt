@@ -358,6 +358,11 @@ fun main(args: Array<String>) {
                         }
                     }
 
+                    // Persist search feedback and retry pending events throughout the app lifetime.
+                    LaunchedEffect(appGraph) {
+                        appGraph.searchFeedbackService.run()
+                    }
+
                     // Check for updates once at startup. PATCH updates are pre-downloaded
                     // here; MINOR/MAJOR surface the title-bar icon + UpdateDialog.
                     LaunchedEffect(Unit) {

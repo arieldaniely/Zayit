@@ -1,14 +1,20 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -35,6 +41,7 @@ fun TitleBarActionButton(
     shortcutHint: String? = null,
     enabled: Boolean = true,
     isActive: Boolean = false,
+    indicatorColor: Color? = null,
 ) {
     val accent = JewelTheme.globalColors.outlines.focused
     val baseStyle = JewelTheme.iconButtonStyle
@@ -94,12 +101,7 @@ fun TitleBarActionButton(
             )
         }
 
-    val buttonModifier =
-        if (isIslands) {
-            Modifier.width(40.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
-        } else {
-            Modifier.width(40.dp).fillMaxHeight()
-        }
+    val buttonModifier = Modifier.width(36.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
 
     Tooltip(
         tooltip = {
@@ -113,13 +115,23 @@ fun TitleBarActionButton(
             }
         },
     ) {
-        IconActionButton(
-            key = key,
-            onClick = onClick,
-            enabled = enabled,
-            contentDescription = contentDescription,
-            modifier = buttonModifier,
-            style = style,
-        )
+        Box(modifier = buttonModifier) {
+            IconActionButton(
+                key = key,
+                onClick = onClick,
+                enabled = enabled,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                style = style,
+            )
+            indicatorColor?.let { color ->
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(8.dp)
+                        .background(color, CircleShape),
+                )
+            }
+        }
     }
 }

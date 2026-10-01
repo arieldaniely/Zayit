@@ -15,6 +15,7 @@ import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsSt
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseCleanupUseCase
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabasePreparationUseCase
 import io.github.kdroidfilter.seforimapp.features.onboarding.data.OnboardingProcessRepository
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.desktop.TabDockManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -44,6 +45,7 @@ abstract class AppGraph : ViewModelGraph {
     abstract val searchEngine: SearchEngine
     abstract val desktopManager: DesktopManager
     abstract val tabDockManager: TabDockManager
+    abstract val sharedStudyCoordinator: SharedStudyCoordinator
 
     abstract val onboardingProcessRepository: OnboardingProcessRepository
     abstract val databaseCleanupUseCase: DatabaseCleanupUseCase

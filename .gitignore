@@ -22,3 +22,13 @@ legacy-brand-assets/
 .codex-brand-*.txt
 website-preview*.log
 DATABASE_LICENSING_REVIEW_HE.md
+.semantic-local-output/
+.semantic-local-benchmark/
+.codex-local-build-init.gradle
+.codex-validation-build-init.gradle
+.codex-app-validation-init.gradle
+**/.codex-local-build/
+**/.codex-validation-build/
+**/.codex-app-validation-build/
+**/.codex-local-project-cache/
+__pycache__/

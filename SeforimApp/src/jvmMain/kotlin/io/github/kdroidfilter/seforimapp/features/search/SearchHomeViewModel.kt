@@ -106,6 +106,8 @@ data class TocSuggestionDto(
 @Immutable
 data class SearchHomeUiState(
     val selectedFilter: SearchFilter = SearchFilter.TEXT,
+    val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
+        io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
     val globalExtended: Boolean = false,
     val suggestionsVisible: Boolean = false,
     val isReferenceLoading: Boolean = false,
@@ -132,6 +134,7 @@ class SearchHomeViewModel(
     private val settings: Settings,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchHomeUiState())
+    private var modeChosen = false
     val uiState: StateFlow<SearchHomeUiState> = _uiState.asStateFlow()
 
     // Navigation events channel - UI collects and handles navigation
@@ -200,6 +203,12 @@ class SearchHomeViewModel(
     }
 
     init {
+        viewModelScope.launch {
+            val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+            if (ready && !modeChosen) {
+                _uiState.value = _uiState.value.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART)
+            }
+        }
         // Build display name from injected Settings
         runCatching {
             val firstName: String = settings["user_first_name", ""]
@@ -646,6 +655,11 @@ class SearchHomeViewModel(
         _uiState.value = _uiState.value.copy(globalExtended = extended)
     }
 
+    fun onModeChange(mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode) {
+        modeChosen = true
+        _uiState.value = _uiState.value.copy(mode = mode)
+    }
+
     /**
      * Dismisses all suggestion popups. Called by the UI layer when navigating away from Home.
      */
@@ -728,6 +742,7 @@ class SearchHomeViewModel(
             val nextSearch =
                 (current.search ?: SearchPersistedState()).copy(
                     query = query,
+                    mode = selected.mode.name,
                     globalExtended = selected.globalExtended,
                     datasetScope = datasetScope,
                     filterCategoryId = filterCategoryId,

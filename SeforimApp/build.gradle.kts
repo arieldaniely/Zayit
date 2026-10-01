@@ -109,6 +109,7 @@ kotlin {
             implementation(project(":pagination"))
             implementation(project(":texteffects"))
             implementation(project(":network"))
+            implementation(project(":sharedstudy"))
 
             // Paging (AndroidX Paging 3)
             implementation(libs.androidx.paging.common)
@@ -351,6 +352,13 @@ nucleus.application {
             bundleID = "io.github.arieldaniely.zayita.desktopApp"
             packageVersion = macPackageVersion
             packageName = "זיתא"
+            infoPlist {
+                extraKeysRawXml =
+                    """
+                    <key>NSBluetoothAlwaysUsageDescription</key>
+                    <string>זיתא משתמשת ב-Bluetooth כדי לאפשר לימוד משותף בין מחשבים קרובים.</string>
+                    """.trimIndent()
+            }
         }
         buildTypes.release.proguard {
             version.set("7.9.0")

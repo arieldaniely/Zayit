@@ -58,6 +58,7 @@ fun BookContentPanel(
             onTocQueryChanged = {},
             onFilterChange = {},
             onGlobalExtendedChange = {},
+            onModeChange = {},
             onSubmitTextSearch = {},
             onOpenReference = {},
             onPickCategory = {},

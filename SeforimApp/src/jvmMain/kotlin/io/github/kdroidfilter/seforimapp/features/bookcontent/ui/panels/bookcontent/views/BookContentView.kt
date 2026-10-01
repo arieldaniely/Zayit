@@ -5,6 +5,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -73,6 +74,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.extractLookupToken
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyNote
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.StudyLocation
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.logger.debugln
@@ -365,6 +368,75 @@ fun BookContentView(
             val d = draftNote ?: return@remember persisted
             val transient = UserNote(id = -1L, lineId = d.lineId, startOffset = d.startOffset, endOffset = d.endOffset, note = "")
             persisted + (d.lineId to (persisted[d.lineId].orEmpty() + transient))
+        }
+
+    val sharedStudyState by LocalAppGraph.current.sharedStudyCoordinator.state
+        .collectAsState()
+    val sharedStudyCoordinator = LocalAppGraph.current.sharedStudyCoordinator
+    LaunchedEffect(bookId, primarySelectedLineId, isTabSelected, sharedStudyState.sessionId) {
+        val lineId = primarySelectedLineId
+        if (isTabSelected && lineId != null && sharedStudyState.isConnected) {
+            sharedStudyCoordinator.publishLocation(StudyLocation(bookId = bookId, lineId = lineId))
+        }
+    }
+    val sharedParticipantColors =
+        remember(sharedStudyState.participants) {
+            sharedStudyState.participants.associate { it.id to Color(it.colorArgb.toULong()) }
+        }
+    val remoteLocations =
+        remember(sharedStudyState.locations, bookId) {
+            sharedStudyState.locations.filter { (participantId, location) ->
+                participantId != sharedStudyCoordinator.localParticipantId && location.bookId == bookId
+            }
+        }
+    val remotePresenceByLine =
+        remember(remoteLocations, sharedParticipantColors) {
+            remoteLocations
+                .mapNotNull { (participantId, location) ->
+                    sharedParticipantColors[participantId]?.let { location.lineId to it }
+                }.groupBy({ it.first }, { it.second })
+        }
+    val remoteNotesByLine =
+        remember(sharedStudyState.notes, sharedParticipantColors, bookId, sharedStudyCoordinator) {
+            sharedStudyState.notes.values
+                .filter {
+                    it.bookId == bookId && it.authorId != sharedStudyCoordinator.localParticipantId
+                }.mapNotNull { note ->
+                    sharedParticipantColors[note.authorId]?.let { note.lineId to (note to it) }
+                }.groupBy({ it.first }, { it.second })
+        }
+    val visibleLineRange by
+        remember(listState, lazyPagingItems) {
+            derivedStateOf {
+                listState.layoutInfo.visibleItemsInfo
+                    .mapNotNull { item ->
+                        item.index.takeIf { it in 0 until lazyPagingItems.itemCount }?.let { index ->
+                            lazyPagingItems.peek(index)?.id
+                        }
+                    }.let { ids -> ids.minOrNull()?.let { first -> first..(ids.maxOrNull() ?: first) } }
+            }
+        }
+    val remoteAboveColors =
+        visibleLineRange
+            ?.let { range ->
+                remoteLocations.mapNotNull { (participantId, location) ->
+                    sharedParticipantColors[participantId]?.takeIf { location.lineId < range.first }
+                }
+            }.orEmpty()
+    val remoteAboveTargetLineId =
+        visibleLineRange?.let { range ->
+            remoteLocations.values.filter { it.lineId < range.first }.maxOfOrNull { it.lineId }
+        }
+    val remoteBelowColors =
+        visibleLineRange
+            ?.let { range ->
+                remoteLocations.mapNotNull { (participantId, location) ->
+                    sharedParticipantColors[participantId]?.takeIf { location.lineId > range.last }
+                }
+            }.orEmpty()
+    val remoteBelowTargetLineId =
+        visibleLineRange?.let { range ->
+            remoteLocations.values.filter { it.lineId > range.last }.minOfOrNull { it.lineId }
         }
 
     // Prefetch connection data for visible lines to avoid per-line DB calls
@@ -995,6 +1067,7 @@ fun BookContentView(
                                 color = borderColor,
                                 isPrimary = useThickBar,
                             )
+                            RemotePresenceBars(remotePresenceByLine[line.id].orEmpty())
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(
                                 modifier = Modifier.weight(1f),
@@ -1030,6 +1103,7 @@ fun BookContentView(
                                         lineContent = line.content,
                                         userHighlights = lineHighlights,
                                         userNotes = lineNotes,
+                                        sharedNotes = remoteNotesByLine[line.id].orEmpty(),
                                         fontFamily = hebrewFontFamily,
                                         onClick = { isModifier -> onLineSelect(line, isModifier) },
                                         isSelected = isCurrentSelected,
@@ -1099,6 +1173,19 @@ fun BookContentView(
                     }
                 }
             }
+
+            RemoteDirectionIndicator(
+                colors = remoteAboveColors,
+                arrow = "↑",
+                onClick = remoteAboveTargetLineId?.let { lineId -> { onEvent(BookContentEvent.LoadAndSelectLine(lineId)) } },
+                modifier = Modifier.align(Alignment.TopCenter).zIndex(2f),
+            )
+            RemoteDirectionIndicator(
+                colors = remoteBelowColors,
+                arrow = "↓",
+                onClick = remoteBelowTargetLineId?.let { lineId -> { onEvent(BookContentEvent.LoadAndSelectLine(lineId)) } },
+                modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f),
+            )
 
             // Content-aware scrollbar overlay. Lives inside the same Box as the LazyColumn
             // so it floats over the 16dp end gutter reserved by the column padding.
@@ -1326,6 +1413,7 @@ private fun LineItem(
     showDiacritics: Boolean = true,
     userHighlights: List<UserHighlight> = emptyList(),
     userNotes: List<UserNote> = emptyList(),
+    sharedNotes: List<Pair<SharedStudyNote, Color>> = emptyList(),
     onLayoutWidthMeasure: (Int) -> Unit = {},
     onContextClick: (String) -> Unit = {},
 ) {
@@ -1481,6 +1569,15 @@ private fun LineItem(
             noteDisplayRanges(userNotes, originalPlainText, showDiacritics, displayText.length)
         }
     val noteUnderlineColor = JewelTheme.globalColors.text.info
+    val sharedNoteRanges =
+        remember(sharedNotes, originalPlainText, showDiacritics, displayText) {
+            sharedNotes.mapNotNull { (note, color) ->
+                val transient = UserNote(-1L, note.lineId, note.startOffset, note.endOffset, note.body, note.quote)
+                noteDisplayRanges(listOf(transient), originalPlainText, showDiacritics, displayText.length)
+                    .firstOrNull()
+                    ?.let { it to color }
+            }
+        }
     var noteLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     Text(
@@ -1506,6 +1603,9 @@ private fun LineItem(
                     }
                 }.drawBehind {
                     noteLayout?.let { drawNoteUnderlines(it, noteRanges, noteUnderlineColor) }
+                    noteLayout?.let { layout ->
+                        sharedNoteRanges.forEach { (range, color) -> drawNoteUnderlines(layout, listOf(range), color) }
+                    }
                 },
         inlineContent = inlineImageContent,
         onTextLayout = { result ->
@@ -1514,6 +1614,54 @@ private fun LineItem(
             if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
         },
     )
+}
+
+@Composable
+private fun RemotePresenceBars(colors: List<Color>) {
+    // Keep a stable gutter on every line. Adding/removing width only on the remote participant's
+    // current line made the text reflow during presence updates and could trap the lazy layout in
+    // repeated intrinsic measurement when both participants viewed the same tab.
+    Box(
+        modifier =
+            Modifier
+                .width(10.dp)
+                .fillMaxHeight()
+                .drawBehind {
+                    colors.take(3).forEachIndexed { index, color ->
+                        drawRect(
+                            color = color,
+                            topLeft = Offset(index * 3.dp.toPx(), 0f),
+                            size = Size(2.dp.toPx(), size.height),
+                        )
+                    }
+                },
+    )
+}
+
+@Composable
+private fun RemoteDirectionIndicator(
+    colors: List<Color>,
+    arrow: String,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    if (colors.isEmpty()) return
+    Row(
+        modifier =
+            modifier
+                .padding(vertical = 4.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(JewelTheme.globalColors.panelBackground)
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(arrow)
+        colors.take(3).forEach { color ->
+            Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(color))
+        }
+    }
 }
 
 /**

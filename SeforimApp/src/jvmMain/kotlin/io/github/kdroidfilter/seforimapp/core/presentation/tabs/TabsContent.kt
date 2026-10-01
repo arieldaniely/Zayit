@@ -146,6 +146,7 @@ fun TabsContent() {
                 onTocQueryChanged = searchHomeViewModel::onTocQueryChanged,
                 onFilterChange = searchHomeViewModel::onFilterChange,
                 onGlobalExtendedChange = searchHomeViewModel::onGlobalExtendedChange,
+                onModeChange = searchHomeViewModel::onModeChange,
                 onSubmitTextSearch = { query ->
                     val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
                     launchSubmitSearch(scope, query, tabId)
@@ -425,6 +426,9 @@ private fun SearchTabContent(
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)
                 },
                 onQueryChange = { q -> viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetQuery(q)) },
+                onModeChange = { mode ->
+                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetMode(mode))
+                },
                 onGlobalExtendedChange = { extended ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetGlobalExtended(extended))
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)

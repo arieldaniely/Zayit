@@ -28,6 +28,7 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = { submitCalled = true },
                 onQueryChange = { queryCalled = true },
+                onModeChange = {},
                 onGlobalExtendedChange = { globalExtendedCalled = true },
                 onScroll = { _, _, _, _ -> scrollCalled = true },
                 onCancelSearch = { cancelCalled = true },
@@ -87,6 +88,7 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = {},
                 onQueryChange = {},
+                onModeChange = {},
                 onGlobalExtendedChange = {},
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = noOp,
@@ -116,6 +118,7 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = {},
                 onQueryChange = {},
+                onModeChange = {},
                 onGlobalExtendedChange = {},
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = {},

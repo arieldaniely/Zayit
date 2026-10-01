@@ -20,7 +20,7 @@ import kotlin.io.path.createTempFile
 private const val TALMUD_BAVLI_DIR = "תלמוד בבלי"
 private const val TALMUD_ROOT_TITLE = "תלמוד"
 private const val BAVLI_CATEGORY_TITLE = "בבלי"
-private const val DOWNLOAD_URL = "https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst"
+private const val DOWNLOAD_URL = "https://github.com/arieldaniely/SeforimLibrary/releases/latest/download/talmud_bavli_latest.tar.zst"
 
 object TalmudPdfService {
     private val pdfTitleCache = AtomicReference<Set<String>?>(null)

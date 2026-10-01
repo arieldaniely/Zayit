@@ -2,7 +2,9 @@ package io.github.kdroidfilter.seforimapp.features.onboarding.extract
 
 import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
+import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -29,21 +31,11 @@ class ExtractUseCase {
                 withContext(Dispatchers.IO) {
                     val lower = source.name.lowercase()
                     when {
-                        lower.endsWith(".tar.zst.part01") || lower.endsWith(".tar.zst.part02") -> {
-                            val (p1, p2) = findSplitParts(source)
-                            val result =
-                                extractTarZstFromPartsStreaming(listOf(p1, p2), dbDir) { mapped ->
-                                    onProgress(mapped)
-                                }
-                            // Only cleanup if parts live in our databases directory (downloaded by the app)
-                            val canDelete =
-                                runCatching {
-                                    val base = dbDir.canonicalFile
-                                    (p1.parentFile?.canonicalFile == base) && (p2.parentFile?.canonicalFile == base)
-                                }.getOrDefault(false)
-                            if (canDelete) {
-                                runCatching { p1.delete() }
-                                runCatching { p2.delete() }
+                        Regex(".*\\.tar\\.zst\\.part\\d+").matches(lower) -> {
+                            val parts = findSplitParts(source)
+                            val result = extractTarZstFromPartsStreaming(parts, dbDir, onProgress)
+                            if (parts.all { it.parentFile?.canonicalFile == dbDir.canonicalFile }) {
+                                parts.forEach { it.delete() }
                             }
                             result
                         }
@@ -65,6 +57,8 @@ class ExtractUseCase {
                 }
             onProgress(1f)
             AppSettings.setDatabasePath(dbFile.absolutePath)
+            resetDatabasePathCache()
+            TalmudPdfService.refreshAvailablePdfTitles()
             runCatching { maybeCleanupSources(source, dbDir) }
             return@withContext dbFile.absolutePath
         }
@@ -154,7 +148,9 @@ class ExtractUseCase {
                         while (true) {
                             val entry = tar.nextEntry ?: break
                             val name = entry.name
-                            val outFile = File(destDir, name)
+                            require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                            val outFile = File(destDir, name).canonicalFile
+                            require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
                             if (entry.isDirectory) {
                                 outFile.mkdirs()
                             } else {
@@ -165,14 +161,14 @@ class ExtractUseCase {
                                     while (remaining > 0) {
                                         val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
                                         val read = tar.read(buffer, 0, toRead)
-                                        if (read <= 0) break
+                                        check(read > 0) { "Incomplete archive entry" }
                                         out.write(buffer, 0, read)
                                         remaining -= read
                                         onProgress(cis.count.toFloat() / totalCompressed.toFloat())
                                     }
                                     out.fd.sync()
                                 }
-                                if (name.endsWith(".db", ignoreCase = true)) {
+                                if (outFile.name.equals("seforim.db", ignoreCase = true)) {
                                     extractedDb = outFile
                                 }
                             }
@@ -240,7 +236,9 @@ class ExtractUseCase {
                     while (true) {
                         val entry = tar.nextEntry ?: break
                         val name = entry.name
-                        val outFile = File(destDir, name)
+                        require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                        val outFile = File(destDir, name).canonicalFile
+                        require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
                         if (entry.isDirectory) {
                             outFile.mkdirs()
                         } else {
@@ -251,14 +249,14 @@ class ExtractUseCase {
                                 while (remaining > 0) {
                                     val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
                                     val read = tar.read(buffer, 0, toRead)
-                                    if (read <= 0) break
+                                    check(read > 0) { "Incomplete archive entry" }
                                     out.write(buffer, 0, read)
                                     remaining -= read
                                     onUiProgress(mapProgress(cis.count))
                                 }
                                 out.fd.sync()
                             }
-                            if (name.endsWith(".db", ignoreCase = true)) {
+                            if (outFile.name.equals("seforim.db", ignoreCase = true)) {
                                 extractedDb = outFile
                             }
                         }
@@ -280,14 +278,21 @@ class ExtractUseCase {
             override fun nextElement(): T = this@toEnumeration[index++]
         }
 
-    private fun findSplitParts(anyPart: File): Pair<File, File> {
-        val dir = anyPart.parentFile ?: error("Invalid parts path")
+    private fun findSplitParts(anyPart: File): List<File> {
+        val directory = anyPart.parentFile ?: error("Invalid parts path")
         val base = anyPart.name.substringBeforeLast(".part")
-        val p1 = File(dir, "$base.part01")
-        val p2 = File(dir, "$base.part02")
-        require(p1.exists()) { "Missing part01" }
-        require(p2.exists()) { "Missing part02" }
-        return p1 to p2
+        val pattern = Regex(Regex.escape(base) + "\\.part(\\d+)")
+        val parts =
+            directory
+                .listFiles()
+                .orEmpty()
+                .filter { it.isFile && pattern.matches(it.name) }
+                .sortedBy { pattern.matchEntire(it.name)!!.groupValues[1].toInt() }
+        require(parts.size >= 2) { "Missing bundle parts" }
+        require(parts.map { pattern.matchEntire(it.name)!!.groupValues[1].toInt() } == (1..parts.size).toList()) {
+            "Missing bundle parts"
+        }
+        return parts
     }
 
     private fun maybeCleanupSources(
@@ -298,9 +303,7 @@ class ExtractUseCase {
             if (source.name.endsWith(".tar.zst", true)) {
                 runCatching { source.delete() }
             } else if (source.name.contains(".tar.zst.part")) {
-                val (p1, p2) = findSplitParts(source)
-                runCatching { p1.delete() }
-                runCatching { p2.delete() }
+                findSplitParts(source).forEach { part -> runCatching { part.delete() } }
             }
         }
     }

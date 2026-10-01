@@ -41,7 +41,7 @@ fun LicenceScreen(
     }
     LicenceView(
         onNext = {
-            navController.navigate(OnBoardingDestination.DatabaseLocationScreen)
+            navController.navigate(OnBoardingDestination.TypeOfInstallationScreen)
         },
         onPrevious = { navController.navigateUp() },
     )

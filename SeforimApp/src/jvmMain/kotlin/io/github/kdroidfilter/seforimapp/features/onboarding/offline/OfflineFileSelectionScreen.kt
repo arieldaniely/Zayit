@@ -82,7 +82,15 @@ fun OfflineFileSelectionScreen(
         }
     }
 
-    OnBoardingScaffold(title = stringResource(Res.string.onboarding_file_selection)) {
+    OnBoardingScaffold(
+        title = stringResource(Res.string.onboarding_file_selection),
+        bottomAction = {
+            Link(
+                text = stringResource(Res.string.installation_choose_root),
+                onClick = { navController.navigate(OnBoardingDestination.DatabaseLocationScreen) },
+            )
+        },
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),

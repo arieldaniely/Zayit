@@ -29,13 +29,14 @@ class DownloadUseCase(
                 withContext(Dispatchers.IO) { gitHubReleaseFetcher.getLatestRelease() }
                     ?: error("No release found")
 
-            // Prefer split parts if present, fallback to single .tar.zst
+            // Choose one complete distribution, never mix parts from optional bundles or variants.
             val allAssets = latestRelease.assets
+            val partPattern = Regex("seforim_bundle\\.tar\\.zst\\.part(\\d+)", RegexOption.IGNORE_CASE)
             val partAssets =
                 allAssets
-                    .filter { it.name.endsWith(".tar.zst.part01", true) || it.name.endsWith(".tar.zst.part02", true) }
-                    .sortedBy { it.name }
-            val singleAsset = allAssets.firstOrNull { it.name.endsWith(".tar.zst", true) && !it.name.contains(".part") }
+                    .filter { partPattern.matches(it.name) }
+                    .sortedBy { partPattern.matchEntire(it.name)!!.groupValues[1].toInt() }
+            val singleAsset = allAssets.firstOrNull { it.name.equals("seforim_bundle.tar.zst", ignoreCase = true) }
 
             val dbDir = databaseInstallDirectory().apply { mkdirs() }
 
@@ -75,38 +76,24 @@ class DownloadUseCase(
                 }
             }
 
-            if (partAssets.size >= 2) {
-                // Two-part flow
-                val part01 = partAssets.first { it.name.endsWith(".part01", true) }
-                val part02 = partAssets.first { it.name.endsWith(".part02", true) }
-                // Use asset sizes to initialize total from the start
-                val size1 = (runCatching { (part01.size as? Number)?.toLong() }.getOrNull() ?: 0L)
-                val size2 = (runCatching { (part02.size as? Number)?.toLong() }.getOrNull() ?: 0L)
-                val knownTotal = (size1 + size2).takeIf { it > 0L }
-
-                val file01 = File(dbDir, part01.name)
-                val file02 = File(dbDir, part02.name)
-
-                var readSoFar = 0L
-                var total1: Long? = null
-                var total2: Long? = null
-                downloadFile(part01.browser_download_url, file01) { r, t ->
-                    if (t != null) total1 = t
-                    readSoFar = r
-                    val dynamic = (total1 ?: 0L) + (total2 ?: 0L)
-                    report(readSoFar, knownTotal ?: dynamic.takeIf { it > 0L })
-                }
-                downloadFile(part02.browser_download_url, file02) { r, t ->
-                    if (t != null) total2 = t
-                    readSoFar = (file01.length()) + r
-                    val dynamic = (total1 ?: 0L) + (total2 ?: 0L)
-                    report(readSoFar, knownTotal ?: dynamic.takeIf { it > 0L })
-                }
-                // Finalize download progress
-                val finalTotal = knownTotal ?: ((total1 ?: file01.length()) + (total2 ?: file02.length()))
-                report(finalTotal, finalTotal)
-                // Return path to the first part; extraction step will handle parts
-                return@withContext file01.absolutePath
+            if (partAssets.isNotEmpty()) {
+                require(
+                    partAssets.size >= 2 &&
+                        partAssets.map {
+                            partPattern.matchEntire(it.name)!!.groupValues[1].toInt()
+                        } == (1..partAssets.size).toList(),
+                ) { "Missing bundle parts" }
+                val knownTotal = partAssets.sumOf { it.size.toLong() }.takeIf { it > 0L }
+                var downloaded = 0L
+                val files =
+                    partAssets.map { asset ->
+                        val file = File(dbDir, asset.name)
+                        downloadFile(asset.browser_download_url, file) { read, _ -> report(downloaded + read, knownTotal) }
+                        downloaded += file.length()
+                        file
+                    }
+                report(downloaded, downloaded)
+                return@withContext files.first().absolutePath
             } else if (singleAsset != null) {
                 // Backward-compatible: single .tar.zst
                 val tmp = File(dbDir, singleAsset.name)

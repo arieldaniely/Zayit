@@ -134,8 +134,8 @@
     <string name="data_export_error">ייצוא הנתונים נכשל</string>
     <string name="data_import_error">ייבוא הנתונים נכשל</string>
     <string name="data_reset_description">מחיקת ההגדרות והנתונים האישיים של זיתא. מסד שמנוהל בידי זיתא יימחק, אך מסד משותף בתיקייה חיצונית יישאר במקומו.</string>
-    <string name="database_location_title">תיקיית מסד הספרים</string>
-    <string name="database_location_description">אפשר להשתמש במסד שכבר הותקן בידי זית או זיתא, וכך לחסוך מקום ולהשתמש באותם ספרים בשתי התוכנות. לפני התקנה או עדכון של מסד משותף יש לסגור את התוכנה האחרת.</string>
+    <string name="database_location_title">מקום ההתקנה</string>
+    <string name="database_location_description">בחרו את תיקיית השורש של ההתקנה. מסד הספרים, קובצי ה־PDF והווקטורים יותקנו בתיקיית databases שבתוכה. לשימוש במסד קיים בחרו את תיקיית השורש שמכילה את databases. לפני עדכון מסד משותף יש לסגור את התוכנה האחרת.</string>
     <string name="database_location_current">התיקייה הנוכחית: %1$s</string>
     <string name="database_location_selected">התיקייה שנבחרה: %1$s</string>
     <string name="database_location_ready">נמצא מסד ספרים מתאים. זיתא תשתמש בו בלי להוריד עותק נוסף.</string>
@@ -860,4 +860,14 @@
     <string name="semantic_no_compatible_bundle">לא נמצאה חבילת חיפוש חכם התואמת למאגר המותקן.</string>
     <string name="semantic_invalid_bundle">המודל או האינדקס אינם תקינים או אינם תואמים למאגר המותקן. יש להתקין חבילה מתאימה.</string>
     <string name="semantic_download_progress">מוריד חלק %1$d מתוך %2$d…</string>
+    <string name="installation_choose_root">לבחירת מקום התקנה אחר</string>
+    <string name="optional_components_title">רכיבים נוספים</string>
+    <string name="optional_components_body">בחבילה חסרים הרכיבים הבאים. אפשר לבחור מה להתקין כעת, או לדלג. תמיד ניתן להתקין אותם דרך הגדרות התוכנה.</string>
+    <string name="optional_pdf">מהדורות PDF</string>
+    <string name="optional_vectors">ווקטורים לחיפוש חכם</string>
+    <string name="optional_install_selected">התקנת הרכיבים שנבחרו</string>
+    <string name="optional_skip">דילוג</string>
+    <string name="optional_vectors_install">התקנת ווקטורים לחיפוש חכם</string>
+    <string name="optional_vectors_ready">הווקטורים לחיפוש חכם מותקנים</string>
+    <string name="optional_install_failed">התקנת הרכיבים נכשלה. אפשר לנסות שוב או לדלג ולהתקין מאוחר יותר דרך ההגדרות.</string>
 </resources>

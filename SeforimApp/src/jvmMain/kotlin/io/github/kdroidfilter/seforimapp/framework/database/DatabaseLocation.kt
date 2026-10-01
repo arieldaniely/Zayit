@@ -32,3 +32,15 @@ fun selectDatabaseDirectory(directory: File): File {
 
 private fun defaultDatabasesDirectory(): File =
     if (PortablePaths.isPortable) PortablePaths.databasesDir else File(FileKit.databasesDir.path)
+
+/** Root selected during setup; all library data lives below its databases directory. */
+fun installationRootDirectory(): File = databaseInstallDirectory().parentFile
+
+fun databaseDirectoryInRoot(root: File): File = File(root, "databases")
+
+fun selectInstallationRoot(root: File): File {
+    require(root.isDirectory) { "Installation root must be an existing directory" }
+    val directory = databaseDirectoryInRoot(root)
+    check(directory.isDirectory || directory.mkdirs()) { "Could not create database directory" }
+    return selectDatabaseDirectory(directory)
+}

@@ -5,9 +5,8 @@ import io.github.kdroidfilter.seforimapp.releasefetcher.github.GitHubReleaseFetc
 
 val databaseFetcher =
     GitHubReleaseFetcher(
-        // Zayita distributes only the application. The books database continues to be
-        // downloaded from the upstream Zayit data release.
-        owner = "kdroidFilter",
+        // Install the distribution published by Zayita.
+        owner = "arieldaniely",
         repo = "SeforimLibrary",
         httpClient = KtorConfig.createHttpClient(),
     )

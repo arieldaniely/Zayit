@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
 import io.github.kdroidfilter.seforimapp.features.settings.data.SelectedDatabaseStatus
@@ -71,6 +73,10 @@ import seforimapp.seforimapp.generated.resources.database_location_ready
 import seforimapp.seforimapp.generated.resources.database_location_selected
 import seforimapp.seforimapp.generated.resources.database_location_title
 import seforimapp.seforimapp.generated.resources.database_location_update_required
+import seforimapp.seforimapp.generated.resources.optional_install_failed
+import seforimapp.seforimapp.generated.resources.optional_vectors
+import seforimapp.seforimapp.generated.resources.optional_vectors_install
+import seforimapp.seforimapp.generated.resources.optional_vectors_ready
 import seforimapp.seforimapp.generated.resources.pdf_download_library
 import seforimapp.seforimapp.generated.resources.pdf_import_archive
 import seforimapp.seforimapp.generated.resources.pdf_install_failed
@@ -153,6 +159,7 @@ fun DataSettingsScreen() {
             )
 
             PdfLibrarySettingsCard()
+            VectorLibrarySettingsCard()
 
             state.exportedFileName?.let {
                 InlineSuccessBanner(
@@ -481,5 +488,43 @@ private fun ResetCard(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+@Composable
+private fun VectorLibrarySettingsCard() {
+    val scope = rememberCoroutineScope()
+    var installed by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        installed = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(Res.string.optional_vectors))
+        if (installed) {
+            Text(stringResource(Res.string.optional_vectors_ready))
+        } else {
+            DefaultButton(
+                enabled = !working,
+                onClick = {
+                    working = true
+                    failed = false
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { SemanticAssetsManager.downloadBundle() }
+                            installed = true
+                        } catch (failure: kotlinx.coroutines.CancellationException) {
+                            throw failure
+                        } catch (_: Exception) {
+                            failed = true
+                        } finally {
+                            working = false
+                        }
+                    }
+                },
+            ) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.optional_vectors_install)) }
+        }
+        if (failed) InlineErrorBanner(text = stringResource(Res.string.optional_install_failed))
     }
 }

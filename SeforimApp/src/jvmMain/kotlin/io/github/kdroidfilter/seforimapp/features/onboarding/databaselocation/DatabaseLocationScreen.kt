@@ -23,9 +23,10 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardi
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
+import io.github.kdroidfilter.seforimapp.framework.database.databaseDirectoryInRoot
 import io.github.kdroidfilter.seforimapp.framework.database.databaseFileIn
-import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
-import io.github.kdroidfilter.seforimapp.framework.database.selectDatabaseDirectory
+import io.github.kdroidfilter.seforimapp.framework.database.installationRootDirectory
+import io.github.kdroidfilter.seforimapp.framework.database.selectInstallationRoot
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.openDirectoryPicker
 import io.github.vinceglb.filekit.path
@@ -64,18 +65,18 @@ fun DatabaseLocationScreen(
     progressBarState: ProgressBarState = ProgressBarState,
 ) {
     val scope = rememberCoroutineScope()
-    var directory by remember { mutableStateOf(databaseInstallDirectory()) }
+    var directory by remember { mutableStateOf(installationRootDirectory()) }
     val status = remember(directory) { inspectDirectory(directory) }
 
     LaunchedEffect(Unit) { progressBarState.setProgress(0.15f) }
 
     fun continueWithDirectory() {
-        selectDatabaseDirectory(directory)
+        selectInstallationRoot(directory)
         val destination =
             if (status == DatabaseLocationStatus.READY) {
                 OnBoardingDestination.PdfLibrarySetupScreen
             } else {
-                OnBoardingDestination.AvailableDiskSpaceScreen
+                OnBoardingDestination.TypeOfInstallationScreen
             }
         navController.navigate(destination)
     }
@@ -146,7 +147,7 @@ fun DatabaseLocationScreen(
 }
 
 private fun inspectDirectory(directory: File): DatabaseLocationStatus {
-    val databaseFile = databaseFileIn(directory)
+    val databaseFile = databaseFileIn(databaseDirectoryInRoot(directory))
     return when {
         !databaseFile.isFile -> DatabaseLocationStatus.NOT_FOUND
         DatabaseVersionManager.isDatabaseVersionCompatible(databaseFile) -> DatabaseLocationStatus.READY

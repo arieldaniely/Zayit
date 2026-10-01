@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforimapp.core.deeplink.bookShareLink
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteFolder
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
@@ -193,6 +194,7 @@ private fun FavoriteStarButton(
     title: String,
     tooltipPlacement: TooltipPlacement,
 ) {
+    if (!HISTORY_FAVORITES_ENABLED) return
     val favoritesStore = LocalAppGraph.current.favoritesStore
     val scope = rememberCoroutineScope()
     val revision by favoritesStore.revision.collectAsState()

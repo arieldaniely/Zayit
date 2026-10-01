@@ -13,6 +13,7 @@ import dev.nucleusframework.menu.macos.NsMenuItemImage
 import dev.nucleusframework.sfsymbols.SFSymbolGeneral
 import dev.nucleusframework.sfsymbols.SFSymbolStatus
 import dev.nucleusframework.sfsymbols.SFSymbolTextFormatting
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
@@ -328,67 +329,69 @@ fun AppNativeMenuBar(
             }
         }
 
-        // History menu (Chrome-like): native search field filtering the entries, full
-        // history page, and recent visits
-        Menu(menuHistory) {
-            SearchField(placeholder = menuSearchPlaceholder)
-            Item(
-                text = menuShowFullHistory,
-                shortcut = NativeKeyShortcut("y"),
-                icon = NsMenuItemImage.SystemSymbol("clock.arrow.circlepath"),
-            ) {
-                openFullHistory()
-            }
-            if (recentVisits.isNotEmpty()) {
-                Separator()
-                SectionHeader(menuRecentlyVisited)
-                recentVisits.forEach { entry ->
-                    Item(
-                        text = entry.title.take(MENU_TITLE_MAX_LENGTH),
-                        icon =
-                            NsMenuItemImage.SystemSymbol(
-                                if (entry.kind == VisitKind.BOOK) "book.closed" else "magnifyingglass",
-                            ),
-                    ) {
-                        openVisit(entry)
+        if (HISTORY_FAVORITES_ENABLED) {
+            // History menu (Chrome-like): native search field filtering the entries, full
+            // history page, and recent visits
+            Menu(menuHistory) {
+                SearchField(placeholder = menuSearchPlaceholder)
+                Item(
+                    text = menuShowFullHistory,
+                    shortcut = NativeKeyShortcut("y"),
+                    icon = NsMenuItemImage.SystemSymbol("clock.arrow.circlepath"),
+                ) {
+                    openFullHistory()
+                }
+                if (recentVisits.isNotEmpty()) {
+                    Separator()
+                    SectionHeader(menuRecentlyVisited)
+                    recentVisits.forEach { entry ->
+                        Item(
+                            text = entry.title.take(MENU_TITLE_MAX_LENGTH),
+                            icon =
+                                NsMenuItemImage.SystemSymbol(
+                                    if (entry.kind == VisitKind.BOOK) "book.closed" else "magnifyingglass",
+                                ),
+                        ) {
+                            openVisit(entry)
+                        }
                     }
                 }
             }
-        }
 
-        // Favorites menu (Chrome bookmarks-like): native search field, full favorites page,
-        // then root favorites and folders as submenus
-        Menu(menuFavorites) {
-            SearchField(placeholder = menuSearchPlaceholder)
-            Item(
-                text = menuShowAllFavorites,
-                shortcut = NativeKeyShortcut("b", option = true),
-                icon = NsMenuItemImage.SystemSymbol("star"),
-            ) {
-                openFavoritesTab()
-            }
-            if (favoriteEntries.isNotEmpty()) {
-                Separator()
-                favoriteEntries.filter { it.folderId == null }.forEach { entry ->
-                    Item(
-                        text = entry.title.take(MENU_TITLE_MAX_LENGTH),
-                        icon = NsMenuItemImage.SystemSymbol("book.closed"),
-                    ) {
-                        openFavorite(entry)
-                    }
+            // Favorites menu (Chrome bookmarks-like): native search field, full favorites page,
+            // then root favorites and folders as submenus
+            Menu(menuFavorites) {
+                SearchField(placeholder = menuSearchPlaceholder)
+                Item(
+                    text = menuShowAllFavorites,
+                    shortcut = NativeKeyShortcut("b", option = true),
+                    icon = NsMenuItemImage.SystemSymbol("star"),
+                ) {
+                    openFavoritesTab()
                 }
-                favoriteFolders.forEach { folder ->
-                    val folderEntries = favoriteEntries.filter { it.folderId == folder.id }
-                    Menu(
-                        text = folder.name.take(MENU_TITLE_MAX_LENGTH),
-                        icon = NsMenuItemImage.SystemSymbol("folder"),
-                    ) {
-                        folderEntries.forEach { entry ->
-                            Item(
-                                text = entry.title.take(MENU_TITLE_MAX_LENGTH),
-                                icon = NsMenuItemImage.SystemSymbol("book.closed"),
-                            ) {
-                                openFavorite(entry)
+                if (favoriteEntries.isNotEmpty()) {
+                    Separator()
+                    favoriteEntries.filter { it.folderId == null }.forEach { entry ->
+                        Item(
+                            text = entry.title.take(MENU_TITLE_MAX_LENGTH),
+                            icon = NsMenuItemImage.SystemSymbol("book.closed"),
+                        ) {
+                            openFavorite(entry)
+                        }
+                    }
+                    favoriteFolders.forEach { folder ->
+                        val folderEntries = favoriteEntries.filter { it.folderId == folder.id }
+                        Menu(
+                            text = folder.name.take(MENU_TITLE_MAX_LENGTH),
+                            icon = NsMenuItemImage.SystemSymbol("folder"),
+                        ) {
+                            folderEntries.forEach { entry ->
+                                Item(
+                                    text = entry.title.take(MENU_TITLE_MAX_LENGTH),
+                                    icon = NsMenuItemImage.SystemSymbol("book.closed"),
+                                ) {
+                                    openFavorite(entry)
+                                }
                             }
                         }
                     }

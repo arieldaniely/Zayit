@@ -12,6 +12,7 @@ import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.launcher.windows.JumpListCategory
 import dev.nucleusframework.launcher.windows.JumpListItem
 import dev.nucleusframework.launcher.windows.WindowsJumpListManager
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
@@ -172,8 +173,12 @@ fun AppJumpList(
 
         val categories =
             buildList {
-                if (favoriteItems.isNotEmpty()) add(JumpListCategory(name = favoritesLabel, items = favoriteItems))
-                if (recentlyClosedItems.isNotEmpty()) {
+                if (HISTORY_FAVORITES_ENABLED &&
+                    favoriteItems.isNotEmpty()
+                ) {
+                    add(JumpListCategory(name = favoritesLabel, items = favoriteItems))
+                }
+                if (HISTORY_FAVORITES_ENABLED && recentlyClosedItems.isNotEmpty()) {
                     add(JumpListCategory(name = recentlyClosedLabel, items = recentlyClosedItems))
                 }
                 if (tabItems.isNotEmpty()) add(JumpListCategory(name = openTabsLabel, items = tabItems))

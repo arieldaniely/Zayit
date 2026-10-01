@@ -71,8 +71,8 @@ class TabsViewModel(
                     listOf(
                         TabItem(
                             id = 1,
-                            title = getTabTitle(startDestination),
-                            destination = startDestination,
+                            title = getTabTitle(startDestination.availableDestination()),
+                            destination = startDestination.availableDestination(),
                         ),
                     ),
                 selectedTabIndex = 0,
@@ -228,6 +228,7 @@ class TabsViewModel(
     }
 
     private fun addTabWithDestination(destination: TabsDestination) {
+        val destination = destination.availableDestination()
         val newDestination =
             when (destination) {
                 is TabsDestination.Home -> TabsDestination.Home(destination.tabId, destination.version)
@@ -341,6 +342,7 @@ class TabsViewModel(
 
     /** Adds a tab without stealing focus from the tab the user is currently reading. */
     fun openBackgroundTab(destination: TabsDestination) {
+        val destination = destination.availableDestination()
         val newTab =
             TabItem(
                 id = _nextTabId++,
@@ -352,6 +354,7 @@ class TabsViewModel(
     }
 
     fun replaceCurrentTabDestination(destination: TabsDestination) {
+        val destination = destination.availableDestination()
         val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
         if (currentTab != null) {
             onTabDestinationReplacedListener?.invoke(currentTab, destination)
@@ -424,6 +427,7 @@ class TabsViewModel(
         destination: TabsDestination,
         newTabId: String = UUID.randomUUID().toString(),
     ) {
+        val destination = destination.availableDestination()
         val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
         if (currentTab != null) {
             onTabDestinationReplacedListener?.invoke(currentTab, destination)
@@ -546,9 +550,10 @@ class TabsViewModel(
         if (destinations.isEmpty()) return
 
         val restoredTabs =
-            destinations.mapIndexed { index, destination ->
+            destinations.mapIndexed { index, originalDestination ->
+                val destination = originalDestination.availableDestination()
                 val (title, tabType) =
-                    titles[destination.tabId]
+                    titles[destination.tabId]?.takeIf { destination == originalDestination }
                         ?: (getTabTitle(destination) to tabTypeFor(destination))
                 TabItem(
                     id = index + 1,

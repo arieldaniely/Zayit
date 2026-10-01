@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
@@ -58,6 +59,7 @@ private val FavoritesStar = PathIconKey("icons/favorites.svg", FavoritesIconAnch
  */
 @Composable
 fun FavoritesMenuButton() {
+    if (!HISTORY_FAVORITES_ENABLED) return
     var visible by remember { mutableStateOf(false) }
     val shortcutHint = if (PlatformInfo.isMacOS) "⌘⌥B" else "Ctrl+Shift+O"
 

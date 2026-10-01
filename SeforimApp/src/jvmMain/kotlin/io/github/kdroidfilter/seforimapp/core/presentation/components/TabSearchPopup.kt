@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabItem
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
@@ -156,7 +157,8 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
     val revision by historyStore.revision.collectAsState()
     var historyEntries by remember { mutableStateOf<List<VisitEntry>>(emptyList()) }
     LaunchedEffect(query, revision) {
-        historyEntries = historyStore.query(query, POPUP_HISTORY_LIMIT)
+        historyEntries =
+            if (HISTORY_FAVORITES_ENABLED) historyStore.query(query, POPUP_HISTORY_LIMIT) else emptyList()
     }
 
     val homeLabel = stringResource(Res.string.home)
@@ -256,15 +258,17 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
             }
         }
 
-        // Footer: full history page (chrome://history equivalent)
-        PopupFooterRow(
-            label = stringResource(Res.string.tab_search_show_all_history),
-            shortcutHint = if (PlatformInfo.isMacOS) "⌘Y" else "Ctrl+H",
-            onClick = {
-                currentWindow.tabsViewModel.openTab(TabsDestination.History(tabId = UUID.randomUUID().toString()))
-                onDismiss()
-            },
-        )
+        if (HISTORY_FAVORITES_ENABLED) {
+            // Footer: full history page (chrome://history equivalent)
+            PopupFooterRow(
+                label = stringResource(Res.string.tab_search_show_all_history),
+                shortcutHint = if (PlatformInfo.isMacOS) "⌘Y" else "Ctrl+H",
+                onClick = {
+                    currentWindow.tabsViewModel.openTab(TabsDestination.History(tabId = UUID.randomUUID().toString()))
+                    onDismiss()
+                },
+            )
+        }
     }
 }
 

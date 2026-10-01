@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.integration
 
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
@@ -75,6 +76,80 @@ class TabsViewModelIntegrationTest {
         }
 
     // ==================== Tab Addition Tests ====================
+
+    @Test
+    fun `hidden history and favorites cannot be opened through navigation`() =
+        runTest {
+            if (HISTORY_FAVORITES_ENABLED) return@runTest
+
+            listOf(TabsDestination.History("history"), TabsDestination.Favorites("favorites")).forEach { destination ->
+                viewModel.openTab(destination)
+                assertTrue(
+                    viewModel.state.value.tabs
+                        .first()
+                        .destination is TabsDestination.Home,
+                )
+                viewModel.replaceCurrentTabDestination(destination)
+                assertTrue(
+                    viewModel.state.value.tabs
+                        .first()
+                        .destination is TabsDestination.Home,
+                )
+                viewModel.replaceCurrentTabWithNewTabId(destination)
+                assertTrue(
+                    viewModel.state.value.tabs
+                        .first()
+                        .destination is TabsDestination.Home,
+                )
+                viewModel.openBackgroundTab(destination)
+                assertTrue(
+                    viewModel.state.value.tabs
+                        .last()
+                        .destination is TabsDestination.Home,
+                )
+            }
+        }
+
+    @Test
+    fun `restored hidden tabs discard their titles and retain selected book`() =
+        runTest {
+            if (HISTORY_FAVORITES_ENABLED) return@runTest
+
+            val book = TabsDestination.BookContent(bookId = 42, tabId = "book")
+            viewModel.restoreTabs(
+                destinations = listOf(TabsDestination.History("history"), book, TabsDestination.Favorites("favorites")),
+                selectedIndex = 1,
+                titles = mapOf("history" to ("History" to TabType.HISTORY), "favorites" to ("Favorites" to TabType.FAVORITES)),
+            )
+
+            val state = viewModel.state.value
+            assertEquals(book, state.tabs[state.selectedTabIndex].destination)
+            listOf(0, 2).forEach { index ->
+                assertTrue(state.tabs[index].destination is TabsDestination.Home)
+                assertEquals(TabType.SEARCH, state.tabs[index].tabType)
+                assertEquals("", state.tabs[index].title)
+            }
+        }
+
+    @Test
+    fun `initial hidden destination becomes a home tab`() =
+        runTest {
+            if (HISTORY_FAVORITES_ENABLED) return@runTest
+
+            listOf(TabsDestination.History("history"), TabsDestination.Favorites("favorites")).forEach { destination ->
+                val model = TabsViewModel(titleUpdateManager, destination)
+                try {
+                    assertEquals(
+                        TabsDestination.Home(tabId = destination.tabId),
+                        model.state.value.tabs
+                            .first()
+                            .destination,
+                    )
+                } finally {
+                    model.dispose()
+                }
+            }
+        }
 
     @Test
     fun `OnAdd event creates new tab at beginning`() =

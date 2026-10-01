@@ -36,6 +36,7 @@ import dev.nucleusframework.taskbarprogress.tao.hideTaskbarProgress
 import dev.nucleusframework.taskbarprogress.tao.showTaskbarIndeterminate
 import dev.nucleusframework.taskbarprogress.tao.showTaskbarProgress
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
+import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
@@ -168,14 +169,20 @@ fun NucleusApplicationScope.MainAppWindow(
                     openWindow.tabSearchVisible.value = !openWindow.tabSearchVisible.value
                     true
                 } else if (
-                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
-                    (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.H)
+                    HISTORY_FAVORITES_ENABLED &&
+                    (
+                        (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
+                            (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.H)
+                    )
                 ) {
                     openHistoryTab()
                     true
                 } else if (
-                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
-                    (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.O)
+                    HISTORY_FAVORITES_ENABLED &&
+                    (
+                        (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
+                            (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.O)
+                    )
                 ) {
                     openFavoritesTab()
                     true
@@ -470,26 +477,40 @@ fun NucleusApplicationScope.MainAppWindow(
                                         true
                                     }
                                     // Cmd+Y (macOS) / Ctrl+H (others) => history page (Chrome-like)
-                                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
+                                    HISTORY_FAVORITES_ENABLED &&
                                         (
-                                            !PlatformInfo.isMacOS &&
-                                                keyEvent.isCtrlPressed &&
-                                                !keyEvent.isShiftPressed &&
-                                                keyEvent.key == Key.H
-                                        )
-                                    -> {
+                                            (
+                                                PlatformInfo.isMacOS &&
+                                                    keyEvent.isMetaPressed &&
+                                                    !keyEvent.isShiftPressed &&
+                                                    keyEvent.key == Key.Y
+                                            ) ||
+                                                (
+                                                    !PlatformInfo.isMacOS &&
+                                                        keyEvent.isCtrlPressed &&
+                                                        !keyEvent.isShiftPressed &&
+                                                        keyEvent.key == Key.H
+                                                )
+                                        ) -> {
                                         openHistoryTab()
                                         true
                                     }
                                     // Cmd+Alt+B (macOS) / Ctrl+Shift+O (others) => favorites page (Chrome-like)
-                                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
+                                    HISTORY_FAVORITES_ENABLED &&
                                         (
-                                            !PlatformInfo.isMacOS &&
-                                                keyEvent.isCtrlPressed &&
-                                                keyEvent.isShiftPressed &&
-                                                keyEvent.key == Key.O
-                                        )
-                                    -> {
+                                            (
+                                                PlatformInfo.isMacOS &&
+                                                    keyEvent.isMetaPressed &&
+                                                    keyEvent.isAltPressed &&
+                                                    keyEvent.key == Key.B
+                                            ) ||
+                                                (
+                                                    !PlatformInfo.isMacOS &&
+                                                        keyEvent.isCtrlPressed &&
+                                                        keyEvent.isShiftPressed &&
+                                                        keyEvent.key == Key.O
+                                                )
+                                        ) -> {
                                         openFavoritesTab()
                                         true
                                     }

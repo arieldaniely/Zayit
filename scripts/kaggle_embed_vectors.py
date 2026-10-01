@@ -35,7 +35,21 @@ BLOCK_TAGS = {
     "address", "article", "aside", "blockquote", "br", "div", "footer", "h1", "h2",
     "h3", "h4", "h5", "h6", "header", "li", "p", "section", "table", "td", "th", "tr",
 }
-RECORD_BYTES = 8 + 8 + 4 + 256 * 4
+VECTOR_DIMENSION = 256
+VECTOR_ENCODING = "int8-maxabs-v1"
+FILE_HEADER = b"ZYVECI8\n" + struct.pack("<I", VECTOR_DIMENSION)
+RECORD_BYTES = 8 + 8 + 4 + VECTOR_DIMENSION
+
+
+def quantize_vectors(vectors: np.ndarray) -> np.ndarray:
+    """Match Int8Vectors.quantize; discard per-vector scale for cosine search."""
+    vectors = np.asarray(vectors, dtype=np.float32)
+    if vectors.ndim != 2 or vectors.shape[1] != VECTOR_DIMENSION or not np.isfinite(vectors).all():
+        raise ValueError("Invalid semantic vectors")
+    maximum = np.max(np.abs(vectors), axis=1, keepdims=True)
+    if np.any(maximum == 0):
+        raise ValueError("Zero semantic vector")
+    return np.clip(np.floor(vectors / maximum * np.float32(127) + np.float32(0.5)), -127, 127).astype(np.int8)
 
 
 class VisibleText(HTMLParser):
@@ -125,6 +139,8 @@ def run(args: argparse.Namespace) -> None:
     counts = {shard: 0 for shard in range(args.gpu, args.shards, args.gpus)}
     outputs = {shard: (args.output / f"shard-{shard:02d}.bin").open("wb", buffering=1 << 20)
                for shard in counts}
+    for output in outputs.values():
+        output.write(FILE_HEADER)
     connection = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
     started = time.monotonic()
     validated = False
@@ -155,7 +171,7 @@ def run(args: argparse.Namespace) -> None:
             print(f"GPU/ONNX minimum cosine: {min(cosine_values):.6f}", flush=True)
             assert min(cosine_values) >= 0.985, "GPU vectors do not match the bundled ONNX model"
             validated = True
-        for (line_id, book_id, is_base, _), vector in zip(batch, vectors):
+        for (line_id, book_id, is_base, _), vector in zip(batch, quantize_vectors(vectors)):
             shard = line_id % args.shards
             outputs[shard].write(struct.pack("<qqi", line_id, book_id, is_base))
             outputs[shard].write(vector.tobytes())
@@ -187,9 +203,9 @@ def run(args: argparse.Namespace) -> None:
         for output in outputs.values():
             output.close()
     for shard, count in counts.items():
-        assert (args.output / f"shard-{shard:02d}.bin").stat().st_size == count * RECORD_BYTES
+        assert (args.output / f"shard-{shard:02d}.bin").stat().st_size == len(FILE_HEADER) + count * RECORD_BYTES
     (args.output / f"worker-{args.gpu}.json").write_text(
-        json.dumps({"scanned": scanned, "counts": counts}, indent=2) + "\n", encoding="utf-8",
+        json.dumps({"scanned": scanned, "counts": counts, "vectorEncoding": VECTOR_ENCODING}, indent=2) + "\n", encoding="utf-8",
     )
     print(f"worker {args.gpu}: completed {sum(counts.values())} vectors", flush=True)
 

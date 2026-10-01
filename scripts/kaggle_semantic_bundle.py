@@ -202,7 +202,8 @@ def main(args: argparse.Namespace) -> None:
     worker_files = [vectors_dir / f"worker-{gpu}.json" for gpu in range(2)]
     vector_files = [vectors_dir / f"shard-{shard:02d}.bin" for shard in range(8)]
     index = args.work / "index"
-    has_workers = all(f.is_file() for f in worker_files)
+    has_workers = all(f.is_file() and json.loads(f.read_text()).get("vectorEncoding") == "int8-maxabs-v1"
+                      for f in worker_files)
     has_vectors = any(f.is_file() for f in vector_files)
     has_indexed = any((index / f"shard-{shard:02d}" / "semantic.properties").is_file() for shard in range(8))
 
@@ -228,6 +229,8 @@ def main(args: argparse.Namespace) -> None:
         print("GPU workers:", counts, flush=True)
 
     library = args.repo / "SeforimLibrary"
+    if any(worker.get("vectorEncoding") != "int8-maxabs-v1" for worker in counts):
+        raise RuntimeError("GPU workers must produce int8 vectors")
     gradle = library / "gradlew"
     gradle.chmod(gradle.stat().st_mode | 0o111)
     index.mkdir(exist_ok=True)
@@ -237,7 +240,17 @@ def main(args: argparse.Namespace) -> None:
         vector_file = vectors_dir / f"shard-{shard:02d}.bin"
         if manifest.is_file():
             content = manifest.read_text(encoding="utf-8", errors="ignore")
-            if f"shardIndex={shard}" in content and "indexed=" in content:
+            properties = dict(line.split("=", 1) for line in content.splitlines()
+                              if "=" in line and not line.startswith("#"))
+            if (properties.get("shardIndex") == str(shard)
+                    and properties.get("vectorEncoding") == "int8-maxabs-v1"
+                    and properties.get("databaseSha256") == database_sha
+                    and properties.get("modelSha256") == MODEL_SHA
+                    and properties.get("tokenizerSha256") == TOKENIZER_SHA
+                    and properties.get("dimension") == "256"
+                    and properties.get("shardCount") == "8"
+                    and int(properties.get("indexed", "0")) > 0
+                    and properties.get("indexed") == properties.get("eligible")):
                 print(f"Skipping already indexed shard {shard}/8", flush=True)
                 vector_file.unlink(missing_ok=True)
                 continue

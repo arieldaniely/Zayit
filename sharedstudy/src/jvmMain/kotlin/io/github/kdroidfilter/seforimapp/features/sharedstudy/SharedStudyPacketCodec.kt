@@ -36,7 +36,7 @@ class SharedStudyPacketCodec(
         val payload = json.encodeToString<StudyMessage>(message).encodeToByteArray()
         val contentSize = maxPacketSize - HEADER_SIZE
         val packetCount = ceil(payload.size.toDouble() / contentSize).toInt().coerceAtLeast(1)
-        require(packetCount <= UShort.MAX_VALUE.toInt()) { "Message is too large" }
+        require(packetCount <= MAX_PACKET_COUNT) { "Message is too large" }
         val messageId = CRC32().also { it.update(payload) }.value.toInt()
         return List(packetCount) { index ->
             val start = index * contentSize

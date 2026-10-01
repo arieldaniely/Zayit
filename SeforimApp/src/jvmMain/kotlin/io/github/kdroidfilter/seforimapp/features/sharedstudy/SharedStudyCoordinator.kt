@@ -213,9 +213,11 @@ class SharedStudyCoordinator(
             if (!rememberReliableMessage(message.messageId)) return
         }
 
-        deviceIdByParticipantId[message.senderId] = incoming.deviceId
-        participantIdByDeviceId[incoming.deviceId] = message.senderId
-        lastSeenByParticipantId[message.senderId] = now()
+        // Forwarded messages retain their original sender, but arrive over the host's connection.
+        // Only invitation handshakes establish direct peer mappings.
+        if (participantIdByDeviceId[incoming.deviceId] == message.senderId) {
+            lastSeenByParticipantId[message.senderId] = now()
+        }
         if (message is StudyMessage.LocationChanged && !acceptLocationSequence(message)) return
 
         when (message) {
@@ -269,7 +271,10 @@ class SharedStudyCoordinator(
                     )
                 }
             is StudyMessage.Pong -> Unit
-            is StudyMessage.Leave -> removeParticipant(message.senderId, incoming.deviceId)
+            is StudyMessage.Leave ->
+                if (deviceIdByParticipantId[message.senderId] == incoming.deviceId) {
+                    removeParticipant(message.senderId, incoming.deviceId)
+                }
             is StudyMessage.Hello -> Unit
             is StudyMessage.Acknowledgement -> Unit
         }
@@ -430,8 +435,19 @@ class SharedStudyCoordinator(
     ) {
         val delivery = PendingDelivery(deviceId, message, attempts = 1, lastAttemptAt = now())
         pendingDeliveries[deviceId to message.messageId] = delivery
-        runCatching { transport.send(deviceId, message) }
-            .onFailure { failure -> reportError(failure, SharedStudyError.MESSAGE_SEND_FAILED) }
+        attemptDelivery(delivery)
+    }
+
+    private suspend fun attemptDelivery(delivery: PendingDelivery) {
+        runCatching { transport.send(delivery.deviceId, delivery.message) }
+            .onFailure { failure ->
+                // Invalid payloads (including oversized BLE messages) cannot succeed on retry.
+                // Report the local send failure without treating the peer as unresponsive.
+                if (failure is IllegalArgumentException) {
+                    pendingDeliveries.remove(delivery.deviceId to delivery.message.messageId)
+                }
+                reportError(failure, SharedStudyError.MESSAGE_SEND_FAILED)
+            }
     }
 
     private suspend fun acknowledge(
@@ -454,7 +470,7 @@ class SharedStudyCoordinator(
             }
             delivery.attempts += 1
             delivery.lastAttemptAt = now()
-            runCatching { transport.send(delivery.deviceId, delivery.message) }
+            attemptDelivery(delivery)
         }
     }
 
@@ -542,7 +558,7 @@ class SharedStudyCoordinator(
         _state.update { it.copy(error = error) }
     }
 
-    private fun clearSessionState(timedOutParticipantName: String? = null) {
+    private suspend fun clearSessionState(timedOutParticipantName: String? = null) {
         lastLocationSequenceBySender.clear()
         seenReliableMessageIds.clear()
         _state.update {
@@ -555,6 +571,7 @@ class SharedStudyCoordinator(
                 timedOutParticipantName = timedOutParticipantName,
             )
         }
+        if (!_state.value.hasStartedDiscovery) runCatching { transport.stopAdvertising() }
     }
 
     private fun rememberReliableMessage(messageId: String): Boolean {

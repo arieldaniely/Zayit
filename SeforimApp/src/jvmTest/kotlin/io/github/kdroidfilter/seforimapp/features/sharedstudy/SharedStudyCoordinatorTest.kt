@@ -16,6 +16,159 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SharedStudyCoordinatorTest {
     @Test
+    fun `oversized outgoing note reports a send failure without disconnecting the host`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            transport.packetCodec = SharedStudyPacketCodec(maxPacketSize = 20)
+            coordinator.publishNote(SharedStudyNote("large", "local", 9, 42, 0, 1, "a".repeat(45_000), updatedAt = 1))
+            runCurrent()
+            assertEquals(SharedStudyError.MESSAGE_SEND_FAILED, coordinator.state.value.error)
+
+            advanceTimeBy(5_000L)
+            runCurrent()
+
+            assertEquals("session", coordinator.state.value.sessionId)
+            assertTrue(transport.disconnected.isEmpty())
+        }
+
+    @Test
+    fun `forwarded group updates do not expire or replace the host connection`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            val note = SharedStudyNote("note", "peer", 9, 42, 0, 1, "body", updatedAt = 1)
+            transport.receive("host-device", StudyMessage.LocationChanged("peer", 3, "session", StudyLocation(9, 42)))
+            transport.receive("host-device", StudyMessage.NoteChanged("peer", 4, "session", note))
+            runCurrent()
+
+            repeat(4) { index ->
+                advanceTimeBy(5_000L)
+                transport.receive("host-device", StudyMessage.Pong("host", index + 10L, "session", 1))
+                runCurrent()
+            }
+
+            assertEquals("session", coordinator.state.value.sessionId)
+            assertEquals(note, coordinator.state.value.notes["note"])
+            assertTrue(transport.disconnected.isEmpty())
+            coordinator.publishLocation(StudyLocation(7, 70))
+            runCurrent()
+            assertEquals("host-device", transport.sent.last { it.second is StudyMessage.LocationChanged }.first)
+
+            // A routed sender must also never disconnect the socket carrying its Leave.
+            transport.receive("host-device", StudyMessage.Leave("peer", 20, "session"))
+            runCurrent()
+            assertTrue(transport.disconnected.isEmpty())
+            transport.receive("host-device", StudyMessage.Leave("host", 21, "session"))
+            runCurrent()
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertTrue("host-device" in transport.disconnected)
+        }
+
+    @Test
+    fun `local leave stops advertising when availability was disabled during a session`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = coordinator(transport)
+            coordinator.startDiscovery()
+            coordinator.invite(NearbyStudyDevice("peer-device", "peer"))
+            runCurrent()
+            coordinator.stopDiscovery()
+            runCurrent()
+            assertEquals(0, transport.stopAdvertisingCount)
+
+            coordinator.leave()
+            runCurrent()
+
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertEquals(1, transport.stopAdvertisingCount)
+        }
+
+    @Test
+    fun `remote host leave stops advertising when availability is off`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            coordinator.stopDiscovery()
+            runCurrent()
+            transport.receive("host-device", StudyMessage.Leave("host", 3, "session"))
+            runCurrent()
+
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertEquals(1, transport.stopAdvertisingCount)
+        }
+
+    @Test
+    fun `host heartbeat timeout stops advertising when availability is off`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            advanceTimeBy(15_000L)
+            runCurrent()
+
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertEquals(1, transport.stopAdvertisingCount)
+        }
+
+    @Test
+    fun `host reliable delivery timeout stops advertising when availability is off`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            coordinator.publishNote(SharedStudyNote("note", "local", 9, 42, 0, 1, "body", updatedAt = 1))
+            runCurrent()
+            advanceTimeBy(4_500L)
+            runCurrent()
+
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertEquals(1, transport.stopAdvertisingCount)
+        }
+
+    @Test
+    fun `leaving preserves advertising while availability is enabled`() =
+        runTest {
+            val transport = FakeTransport()
+            val coordinator = joinGroup(transport)
+            coordinator.startDiscovery()
+            runCurrent()
+            coordinator.leave()
+            runCurrent()
+
+            assertEquals(null, coordinator.state.value.sessionId)
+            assertEquals(0, transport.stopAdvertisingCount)
+        }
+
+    private suspend fun TestScope.joinGroup(transport: FakeTransport): SharedStudyCoordinator {
+        val coordinator = coordinator(transport)
+        runCurrent()
+        transport.receive("host-device", StudyMessage.Invitation("host", 1, "host", "session", StudyMode.GROUP))
+        runCurrent()
+        coordinator.respondToInvitation(true)
+        runCurrent()
+        val response =
+            transport.sent
+                .map { it.second }
+                .filterIsInstance<StudyMessage.InvitationResponse>()
+                .single()
+        transport.receive("host-device", StudyMessage.Acknowledgement("host", 2, response.messageId))
+        transport.receive(
+            "host-device",
+            StudyMessage.Roster(
+                "host",
+                2,
+                "session",
+                listOf(
+                    Participant("host", "host", 1, ParticipantRole.HOST),
+                    Participant("local", "local", 2, ParticipantRole.PARTICIPANT),
+                    Participant("peer", "peer", 3, ParticipantRole.PARTICIPANT),
+                ),
+            ),
+        )
+        runCurrent()
+        return coordinator
+    }
+
+    @Test
     fun `construction does not activate discovery until the user requests it`() =
         runTest {
             val transport = FakeTransport()
@@ -390,8 +543,10 @@ class SharedStudyCoordinatorTest {
         val sent = mutableListOf<Pair<String, StudyMessage>>()
         var refreshCount = 0
         var discoveryCount = 0
+        var stopAdvertisingCount = 0
         val disconnected = mutableListOf<String>()
         var responseSendGate: CompletableDeferred<Unit>? = null
+        var packetCodec: SharedStudyPacketCodec? = null
 
         override val bluetoothState = state
         override val nearbyDevices = devices
@@ -416,7 +571,9 @@ class SharedStudyCoordinatorTest {
 
         override suspend fun advertise(localName: String) = Unit
 
-        override suspend fun stopAdvertising() = Unit
+        override suspend fun stopAdvertising() {
+            stopAdvertisingCount += 1
+        }
 
         override suspend fun connect(deviceId: String) = Unit
 
@@ -428,6 +585,7 @@ class SharedStudyCoordinatorTest {
             deviceId: String,
             message: StudyMessage,
         ) {
+            packetCodec?.encode(message)
             sent += deviceId to message
             if (message is StudyMessage.InvitationResponse && message.accepted) responseSendGate?.await()
         }

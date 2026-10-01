@@ -56,4 +56,6 @@ npm run build
 שבקובץ [LICENSE](LICENSE). לכל ספר או מאגר עשויים להיות תנאים נפרדים; ראו
 [CONDITIONS.md](SeforimApp/src/commonMain/composeResources/files/CONDITIONS.md).
 
+חל איסור מוחלט להפיץ מחדש את מודל הבינה המלאכותית (AI) ואת הווקטורים המופצים עם התוכנה או בחבילות ההשלמה שלה, כולם או חלקם, בכל דרך, לרבות כחלק מחבילה אחרת או כשהם משולבים במוצר אחר, ללא קבלת אישור מראש ובכתב מ־arieldaniely@gmail.com. רישיון קוד התוכנה אינו מעניק רשות להפיץ מחדש רכיבים אלה.
+
 > Powered by the technologies that drive Zayit — https://zayitapp.com/

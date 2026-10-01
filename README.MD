@@ -58,4 +58,6 @@ The application code is distributed under GNU AGPL v3 with the additional
 Section 7(b) attribution term in [LICENSE](LICENSE). Each book or corpus may have
 separate terms; see [CONDITIONS.md](SeforimApp/src/commonMain/composeResources/files/CONDITIONS.md).
 
+Redistribution of the AI model and vectors distributed with the application or its supplemental packages, in whole or in part, by any means, including in another package or embedded in another product, is strictly prohibited without prior written permission from arieldaniely@gmail.com. The application source code license does not grant permission to redistribute these assets.
+
 > Powered by the technologies that drive Zayit — https://zayitapp.com/

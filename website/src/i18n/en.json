@@ -103,7 +103,7 @@
     "createdByName": "Zayita Project",
     "sourceCode": "Source Code",
     "support": "Support the Project",
-    "license": "Free and open source under AGPL v3"
+    "license": "Free and open source under AGPL v3. Redistribution of the AI model and vectors distributed with the application or its supplemental packages, in whole or in part, by any means, including in another package or embedded in another product, is strictly prohibited without prior written permission from arieldaniely@gmail.com. The application source code license does not grant permission to redistribute these assets."
   },
   "comparison": {
     "light": "Light",

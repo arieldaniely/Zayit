@@ -6,12 +6,12 @@
   },
   "seo": {
     "title": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
-    "description": "Zayita - The study library that goes straight to the text. A free desktop app to read, search, and explore Jewish study texts including Torah, Talmud, Midrash, and more.",
+    "description": "Zayita — a free Jewish study library with smart search powered by a lightweight, local AI model built from scratch for its texts. Works offline.",
     "keywords": "Jewish texts, Torah study, Talmud, Seforim, Hebrew books, religious texts, Jewish library, Torah reader, Tanakh, Midrash, Halacha, free Jewish app",
     "ogTitle": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
-    "ogDescription": "A free desktop app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations. Download for Windows, macOS, or Linux.",
+    "ogDescription": "Zayita — a free Jewish study library with smart search powered by a lightweight, local AI model built from scratch for its texts. Works offline.",
     "twitterTitle": "Zayita - Jewish Study Library | Free Torah & Talmud Reader",
-    "twitterDescription": "A free desktop app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations.",
+    "twitterDescription": "Zayita — a free Jewish study library with smart search powered by a lightweight, local AI model built from scratch for its texts. Works offline.",
     "imageAlt": "Zayita - Jewish Study Library Application"
   },
   "nav": {
@@ -23,7 +23,7 @@
   "hero": {
     "title": "Zayita",
     "subtitle": "The study library that goes straight to the text",
-    "description": "A free app to read, search, and explore Jewish study texts. Built for study: fast search, smooth navigation, clean citations.",
+    "description": "A free study library with local AI search that leads you straight to the sources. All the intelligence on your computer, even offline.",
     "cta": "Download Now",
     "ctaSecondary": "Learn More",
     "tagline": "Free. Clear. Efficient."
@@ -54,8 +54,8 @@
     "sourcesDesc": "Instantly access source references and citations"
   },
   "search": {
-    "title": "An exceptional search engine",
-    "description": "A powerful engine designed to understand texts, not just find them. The database was rebuilt to make search and navigation precise.",
+    "title": "Smart search, built for Jewish study",
+    "description": "At the heart of Zayita’s search engine is a lightweight, local AI model, built from scratch specifically for the library’s texts. Search by meaning to discover sources even when the wording differs, and get straight back to studying.",
     "feature1": "Find a passage even from a partial word or approximate spelling",
     "feature2": "Even without vocalization or cantillation marks, search stays clear and reliable",
     "feature3": "A partial phrase is often enough to reach the right place",
@@ -64,11 +64,11 @@
     "simpleTitle": "Database Search",
     "simpleDesc": "Simple mode for core texts, advanced mode for the entire library.",
     "advanced": "Advanced to go far",
-    "powered": "Powered by Lucene and enhanced by AI for precision"
+    "powered": "Built for this library. Runs on your computer. Even offline."
   },
   "features": {
     "title": "What Zayita lets you do",
-    "find": "Find a passage in seconds with simple or advanced search",
+    "find": "Find sources by words or meaning with local AI search",
     "explore": "Explore a library by book and table of contents",
     "inbook": "Search inside a book to prepare a lesson or review",
     "compare": "Show commentaries and translations side by side",

@@ -391,6 +391,21 @@ function App() {
             {t('hero.subtitle')}
           </motion.p>
 
+          <motion.p
+            className="text-base md:text-lg max-w-2xl leading-relaxed mb-4 md:mb-6"
+            style={{ color: 'var(--text-muted)' }}
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              visible: {
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.8, ease: 'easeOut' }
+              },
+            }}
+          >
+            {t('hero.description')}
+          </motion.p>
+
           {/* Tagline */}
           <motion.p
             className="text-base md:text-xl tracking-[0.2em] md:tracking-[0.3em] uppercase mb-6 md:mb-12"
@@ -586,13 +601,14 @@ function App() {
               {t('search.description')}
             </motion.p>
             <motion.p
-              className="text-sm font-medium"
-              style={{ color: 'var(--gold-soft)' }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+              style={{ color: 'var(--gold-soft)', background: 'rgba(230, 210, 140, 0.1)' }}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 1.2, delay: 2 }}
             >
+              <Sparkles size={16} className="shrink-0" aria-hidden="true" />
               {t('search.powered')}
             </motion.p>
           </motion.div>

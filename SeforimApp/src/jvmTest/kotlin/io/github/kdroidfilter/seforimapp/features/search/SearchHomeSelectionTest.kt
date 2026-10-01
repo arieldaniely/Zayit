@@ -4,7 +4,10 @@ import androidx.lifecycle.viewModelScope
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -29,6 +32,8 @@ class SearchHomeSelectionTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
+        mockkObject(SemanticAssetsManager)
+        every { SemanticAssetsManager.validatedReady() } returns false
         store = TabPersistedStateStore()
         viewModel = SearchHomeViewModel(store, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
     }
@@ -36,6 +41,7 @@ class SearchHomeSelectionTest {
     @AfterTest
     fun tearDown() {
         viewModel.viewModelScope.cancel()
+        unmockkObject(SemanticAssetsManager)
         Dispatchers.resetMain()
     }
 

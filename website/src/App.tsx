@@ -19,6 +19,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { Navigation } from './components/Navigation';
+import { ImageComparison } from './components/ImageComparison';
 import { CrystalParticlesGL } from './components/CrystalParticlesGL';
 import { useSEO } from './hooks/useSEO';
 import './i18n';
@@ -28,32 +29,29 @@ const panelsData = [
   {
     titleKey: 'panels.commentaries',
     descKey: 'panels.commentariesDesc',
+    image: 'PIRUSHIM',
   },
   {
     titleKey: 'panels.translations',
     descKey: 'panels.translationsDesc',
+    image: 'PIRUSHIM-TARGUMIM',
   },
   {
     titleKey: 'panels.sources',
     descKey: 'panels.sourcesDesc',
+    image: 'MEKOR',
   },
 ];
 
 const SLIDE_DURATION = 10000; // 10 seconds
 
-function BrandingPreviewPlaceholder({ label }: { label: string }) {
+function ScreenshotPreview({ image, alt }: { image: string; alt: string }) {
   return (
-    <div
-      className="aspect-video rounded-2xl flex flex-col items-center justify-center gap-4 p-8 text-center"
-      style={{
-        background: 'var(--section-alt-bg)',
-        border: '1px solid var(--card-border)',
-        color: 'var(--text-muted)',
-      }}
-    >
-      <BookOpen size={48} style={{ color: 'var(--gold)' }} />
-      <p>{label}</p>
-    </div>
+    <ImageComparison
+      lightImage={`${import.meta.env.BASE_URL}art/${image}-LIGHT.png`}
+      darkImage={`${import.meta.env.BASE_URL}art/${image}-DARK.png`}
+      alt={alt}
+    />
   );
 }
 
@@ -161,7 +159,7 @@ function PanelsSlider({
                     {t(panel.descKey)}
                   </p>
                 </div>
-                <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
+                <ScreenshotPreview image={panel.image} alt={t(panel.titleKey)} />
               </div>
             ))}
           </motion.div>
@@ -421,7 +419,7 @@ function App() {
             y: imageY,
           }}
         >
-          <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
+          <ScreenshotPreview image="HOME" alt={t('hero.title')} />
         </motion.div>
       </section>
 
@@ -551,7 +549,7 @@ function App() {
                 {t('interface.bookSearchDesc')}
               </p>
             </div>
-            <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
+            <ScreenshotPreview image="BOOK-SEARCH" alt={t('interface.bookSearch')} />
           </motion.div>
         </div>
       </section>
@@ -661,7 +659,7 @@ function App() {
                 {t('search.simpleDesc')}
               </p>
             </div>
-            <BrandingPreviewPlaceholder label={t('branding.previewPending')} />
+            <ScreenshotPreview image="DB-SEARCH-SIMPLE" alt={t('search.simpleTitle')} />
           </motion.div>
         </div>
       </section>

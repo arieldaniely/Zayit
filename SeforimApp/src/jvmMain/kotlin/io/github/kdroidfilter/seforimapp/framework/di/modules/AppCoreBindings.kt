@@ -13,6 +13,7 @@ import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
+import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -111,6 +112,7 @@ object AppCoreBindings {
         // existing users via CREATE TABLE IF NOT EXISTS in Schema.create().
         val driver = JdbcSqliteDriver("jdbc:sqlite:${getUserSettingsDatabasePath()}")
         UserSettingsDb.Schema.create(driver)
+        upgradeHistorySchema(driver)
         return UserSettingsDb(driver)
     }
 

@@ -489,6 +489,21 @@ class TabsViewModelIntegrationTest {
             assertNotEquals(originalTabId, updatedTab.destination.tabId)
         }
 
+    @Test
+    fun `history replacement retains the id of the tab seeded with search settings`() =
+        runTest {
+            val destination = TabsDestination.Search(searchQuery = "Torah", tabId = "history-search")
+
+            viewModel.replaceCurrentTabWithNewTabId(destination, newTabId = destination.tabId)
+
+            assertEquals(
+                destination,
+                viewModel.state.value.tabs
+                    .first()
+                    .destination,
+            )
+        }
+
     // ==================== Session Restore Tests ====================
 
     @Test

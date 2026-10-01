@@ -759,6 +759,13 @@
     <string name="history_this_week">השבוע</string>
     <string name="history_older">מוקדם יותר</string>
     <string name="history_scope_all">כל הספרים</string>
+    <string name="history_search_all">כל המאגר</string>
+    <string name="history_search_base">ספרי יסוד</string>
+    <string name="history_search_category">קטגוריה: %1$s</string>
+    <string name="history_search_book">ספר: %1$s</string>
+    <string name="history_search_section">מקטע בספר: %1$s</string>
+    <string name="history_search_details">%1$s · %2$s</string>
+    <string name="history_search_details_unavailable">פרטי החיפוש לא נשמרו</string>
     <string name="history_in_desktop">במרחב: %1$s</string>
     <string name="to_full_history">להסטוריה המלאה</string>
     <string name="filter_by_workspace">מרחב:</string>

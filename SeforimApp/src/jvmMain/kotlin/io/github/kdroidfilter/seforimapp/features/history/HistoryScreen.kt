@@ -25,6 +25,8 @@ import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.history.VisitEntry
 import io.github.kdroidfilter.seforimapp.core.history.VisitKind
+import io.github.kdroidfilter.seforimapp.core.history.searchDescription
+import io.github.kdroidfilter.seforimapp.core.history.searchDestination
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CardSurface
 import io.github.kdroidfilter.seforimapp.core.presentation.components.ConfirmPopup
 import io.github.kdroidfilter.seforimapp.core.presentation.components.EmptyState
@@ -123,13 +125,11 @@ fun HistoryTabContent(tabId: String) {
                         TabsDestination.BookContent(bookId = it, tabId = UUID.randomUUID().toString(), lineId = entry.lineId)
                     }
                 VisitKind.SEARCH ->
-                    entry.searchQuery?.let {
-                        TabsDestination.Search(searchQuery = it, tabId = UUID.randomUUID().toString())
-                    }
+                    entry.searchDestination(UUID.randomUUID().toString(), appGraph.tabPersistedStateStore)
             } ?: return
         debugln { "[History] open ${entry.key}" }
         // Chrome-like: clicking a history entry navigates in the current tab
-        tabsViewModel.replaceCurrentTabWithNewTabId(destination)
+        tabsViewModel.replaceCurrentTabWithNewTabId(destination, newTabId = destination.tabId)
     }
 
     HistoryPageContent(
@@ -270,6 +270,7 @@ private fun HistoryPageContent(
                                             }
                                         ListRow(
                                             title = entry.title,
+                                            subtitle = entry.searchDescription(),
                                             onOpen = { onOpen(entry) },
                                             onDelete = { onDelete(entry) },
                                             leadingContent = {

@@ -420,7 +420,10 @@ class TabsViewModel(
         }
     }
 
-    fun replaceCurrentTabWithNewTabId(destination: TabsDestination) {
+    fun replaceCurrentTabWithNewTabId(
+        destination: TabsDestination,
+        newTabId: String = UUID.randomUUID().toString(),
+    ) {
         val currentTab = _state.value.tabs.getOrNull(_state.value.selectedTabIndex)
         if (currentTab != null) {
             onTabDestinationReplacedListener?.invoke(currentTab, destination)
@@ -429,7 +432,6 @@ class TabsViewModel(
             val index = current.selectedTabIndex
             if (index !in 0..current.tabs.lastIndex) return@update current
 
-            val newTabId = UUID.randomUUID().toString()
             val newDestination =
                 when (destination) {
                     is TabsDestination.Home ->

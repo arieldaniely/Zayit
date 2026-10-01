@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /** One deduplicated history entry (Chrome-like: last visit wins, count accumulates). */
 @Stable
@@ -22,6 +24,7 @@ data class VisitEntry(
     val visitCount: Long,
     val tocEntryId: Long? = null,
     val lineId: Long? = null,
+    val searchContext: SearchVisitContext? = null,
 )
 
 enum class VisitKind { BOOK, SEARCH }
@@ -64,6 +67,7 @@ class HistoryStore(
                 visitedAt = timestamp,
                 tocEntryId = tocEntryId,
                 lineId = lineId,
+                searchContext = null,
             )
             _revision.update { it + 1 }
         }
@@ -71,12 +75,18 @@ class HistoryStore(
     suspend fun recordSearchVisit(
         query: String,
         timestamp: Long,
+        context: SearchVisitContext? = null,
     ): Unit =
         withContext(Dispatchers.IO) {
             val q = query.trim()
             if (q.isBlank()) return@withContext
             queries.upsertVisit(
-                key = "search:$q",
+                key =
+                    if (context == null) {
+                        "search:$q"
+                    } else {
+                        "search:${Json.encodeToString(listOf(q, Json.encodeToString(context.copy(scopeTitle = ""))))}"
+                    },
                 kind = KIND_SEARCH,
                 bookId = null,
                 searchQuery = q,
@@ -84,6 +94,7 @@ class HistoryStore(
                 visitedAt = timestamp,
                 tocEntryId = null,
                 lineId = null,
+                searchContext = context?.let { Json.encodeToString(it) },
             )
             _revision.update { it + 1 }
         }
@@ -127,6 +138,7 @@ class HistoryStore(
             visitCount = visitCount,
             tocEntryId = tocEntryId,
             lineId = lineId,
+            searchContext = searchContext?.let { runCatching { Json.decodeFromString<SearchVisitContext>(it) }.getOrNull() },
         )
 
     private companion object {

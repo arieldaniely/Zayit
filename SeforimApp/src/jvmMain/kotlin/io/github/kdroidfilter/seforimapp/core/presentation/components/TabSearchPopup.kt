@@ -55,6 +55,8 @@ import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforimapp.core.history.VisitEntry
 import io.github.kdroidfilter.seforimapp.core.history.VisitKind
+import io.github.kdroidfilter.seforimapp.core.history.searchDescription
+import io.github.kdroidfilter.seforimapp.core.history.searchDestination
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -216,6 +218,7 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
                 items(historyEntries, key = { "hist-" + it.key }) { entry ->
                     PopupRow(
                         label = entry.title,
+                        subtitle = entry.searchDescription(),
                         tabType = if (entry.kind == VisitKind.BOOK) TabType.BOOK else TabType.SEARCH,
                         onClick = {
                             val destination =
@@ -229,9 +232,7 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
                                             )
                                         }
                                     VisitKind.SEARCH ->
-                                        entry.searchQuery?.let {
-                                            TabsDestination.Search(searchQuery = it, tabId = UUID.randomUUID().toString())
-                                        }
+                                        entry.searchDestination(UUID.randomUUID().toString(), appGraph.tabPersistedStateStore)
                                 }
                             if (destination != null) {
                                 currentWindow.tabsViewModel.openTab(destination)
@@ -330,6 +331,7 @@ internal fun PopupRow(
     tabType: TabType?,
     onClick: () -> Unit,
     onClose: (() -> Unit)?,
+    subtitle: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -383,14 +385,24 @@ internal fun PopupRow(
                     colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
                 )
         }
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            color = JewelTheme.globalColors.text.normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = JewelTheme.globalColors.text.normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    fontSize = 11.sp,
+                    color = JewelTheme.globalColors.text.info,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         if (onClose != null) {
             Box(
                 modifier =

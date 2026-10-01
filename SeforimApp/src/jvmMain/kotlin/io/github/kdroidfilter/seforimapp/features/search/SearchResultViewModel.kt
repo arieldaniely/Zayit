@@ -17,6 +17,7 @@ import dev.zacsweers.metrox.viewmodel.ViewModelAssistedFactoryKey
 import io.github.kdroidfilter.seforim.tabs.*
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
+import io.github.kdroidfilter.seforimapp.core.history.SearchVisitContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.search.domain.BuildSearchTreeUseCase
@@ -897,8 +898,7 @@ class SearchResultViewModel(
     fun executeSearch() {
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
-        // Record the executed search into the visit history (deduplicated by query)
-        viewModelScope.launch { historyStore.recordSearchVisit(q, System.currentTimeMillis()) }
+        recordSearchVisit(q)
         // New search: clear any previous streaming job and reset scroll/anchor state
         currentJob?.cancel()
         highlighter.cancel()
@@ -1480,11 +1480,37 @@ class SearchResultViewModel(
         }
     }
 
-    /**
-     * Execute a Lucene search with a direct filter (category, book, or TOC).
-     * Used by filterByXxx functions for instant filtering.
-     * NOTE: Does NOT rebuild the tree - keeps the original tree structure for navigation.
-     */
+    private fun recordSearchVisit(query: String) {
+        val state = persistedSearchState()
+        val mode = _uiState.value.mode.name
+        val extended = _uiState.value.globalExtended
+        val timestamp = System.currentTimeMillis()
+        val categoryId = state.fetchCategoryId.takeIf { it != 0L } ?: state.filterCategoryId
+        val bookId = state.fetchBookId.takeIf { it != 0L } ?: state.filterBookId
+        val tocId = state.fetchTocId.takeIf { it != 0L } ?: state.filterTocId
+        viewModelScope.launch {
+            val title =
+                runSuspendCatching {
+                    when {
+                        tocId != 0L -> {
+                            val toc = repository.getTocEntry(tocId)
+                            val book = repository.getBookCore(toc?.bookId ?: bookId)
+                            listOfNotNull(book?.title, toc?.text).joinToString(" › ")
+                        }
+                        bookId != 0L -> repository.getBookCore(bookId)?.title.orEmpty()
+                        categoryId != 0L -> buildCategoryPath(categoryId).joinToString(" › ") { it.title }
+                        else -> ""
+                    }
+                }.getOrDefault("")
+            historyStore.recordSearchVisit(
+                query,
+                timestamp,
+                SearchVisitContext(mode, extended, categoryId, bookId, tocId, title),
+            )
+        }
+    }
+
+    /** Executes a scoped search while keeping the existing navigation tree. */
     private fun executeDirectFilterSearch(
         categoryId: Long? = null,
         bookId: Long? = null,
@@ -1493,6 +1519,7 @@ class SearchResultViewModel(
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
 
+        recordSearchVisit(q)
         currentJob?.cancel()
         highlighter.cancel()
         currentJob =

@@ -597,6 +597,8 @@ private fun PdfContentTabContent(
             PdfZoomController(
                 zoomIn = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomIn) },
                 zoomOut = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomOut) },
+                canZoomIn = { pdfZoom < PDF_ZOOM_MAX },
+                canZoomOut = { pdfZoom > PDF_ZOOM_MIN },
             )
         PdfZoomControllerRegistry.register(destination.tabId, controller)
         onDispose { PdfZoomControllerRegistry.unregister(destination.tabId, controller) }
@@ -737,7 +739,11 @@ class SimpleTabViewModelOwner(
                 when (destination) {
                     is TabsDestination.Search -> putString("searchQuery", destination.searchQuery)
                     is TabsDestination.BookContent -> {
-                        if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+                        if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
+                        destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+                    }
+                    is TabsDestination.PdfContent -> {
+                        putLong(StateKeys.BOOK_ID, destination.bookId)
                         destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
                     }
                     else -> Unit

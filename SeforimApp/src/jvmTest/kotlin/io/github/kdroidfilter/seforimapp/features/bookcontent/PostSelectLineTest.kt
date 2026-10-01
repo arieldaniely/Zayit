@@ -83,6 +83,9 @@ class PostSelectLineTest {
         repository = mockk(relaxed = true)
         titleUpdateManager = TabTitleUpdateManager()
         tabsViewModel = mockk(relaxed = true)
+        every { tabsViewModel.state } returns MutableStateFlow(
+            io.github.kdroidfilter.seforim.tabs.TabsState(emptyList(), 0),
+        )
         desktopManager = mockk(relaxed = true)
         historyStore = mockk(relaxed = true)
         every { desktopManager.tabsViewModelFor(testTabId) } returns tabsViewModel

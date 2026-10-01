@@ -7,6 +7,7 @@ import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,11 +28,12 @@ class PersonalLibraryService(
 
     fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
 
+    // Closing the settings view must not interrupt publication after the generation has been saved.
     suspend fun requestSynchronize(
         configuration: PersonalLibraryConfiguration,
         force: Boolean = false,
-    ) {
-        if (_state.value.isWorking) return
+    ) = withContext(NonCancellable) {
+        if (_state.value.isWorking) return@withContext
         _state.update { it.copy(isWorking = true, error = null, success = false, progress = 0f) }
         val result =
             runCatching {
@@ -61,6 +63,7 @@ class PersonalLibraryService(
             }.onFailure { error ->
                 _state.update {
                     it.copy(
+                        configuration = manager.store.load(),
                         isWorking = false,
                         error = error.message ?: error::class.simpleName,
                         progress = 0f,

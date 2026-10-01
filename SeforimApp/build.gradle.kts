@@ -129,19 +129,14 @@ kotlin {
         }
 
         commonTest.dependencies {
-            implementation("org.jetbrains.kotlin:kotlin-test:2.3.21")
+            implementation(kotlin("test"))
         }
 
         jvmTest.dependencies {
             implementation(libs.mockk)
             implementation(libs.kotlinx.coroutines.test)
-            implementation("org.jetbrains.kotlin:kotlin-test-junit:2.3.21")
-            implementation(
-                files(
-                    "C:/Users/kobi/.gradle/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-test-desktop/1.10.3/92c98445f4ab3671e4f255cf35bd21d018b15b2/ui-test-desktop-1.10.3.jar",
-                    "C:/Users/kobi/.gradle/caches/modules-2/files-2.1/org.jetbrains.compose.ui/ui-test-junit4-desktop/1.10.3/d79788278e7d36ad808b4148a5094c0b85ae9240/ui-test-junit4-desktop-1.10.3.jar",
-                ),
-            )
+            implementation(kotlin("test-junit"))
+            implementation(libs.compose.ui.test)
         }
 //
 //        androidMain.dependencies {

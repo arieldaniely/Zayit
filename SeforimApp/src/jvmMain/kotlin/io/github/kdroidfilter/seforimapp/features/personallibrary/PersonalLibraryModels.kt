@@ -34,4 +34,5 @@ data class PersonalLibraryArtifacts(
 data class PersonalImportSummary(
     val books: Int,
     val links: Int,
+    val failedFiles: List<String> = emptyList(),
 )

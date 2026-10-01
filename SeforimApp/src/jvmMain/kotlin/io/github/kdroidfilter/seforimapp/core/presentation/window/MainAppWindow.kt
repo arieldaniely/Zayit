@@ -33,6 +33,9 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.energymanager.EnergyManager
+import dev.nucleusframework.taskbarprogress.tao.hideTaskbarProgress
+import dev.nucleusframework.taskbarprogress.tao.showTaskbarIndeterminate
+import dev.nucleusframework.taskbarprogress.tao.showTaskbarProgress
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
 import dev.nucleusframework.window.tao.BindTabGroupWindow
 import dev.nucleusframework.window.tao.JoinSatelliteWorkspace
@@ -47,12 +50,13 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMod
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
-import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
-import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
-import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
 import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
+import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
+import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
+import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyTabPlanner
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
@@ -257,6 +261,20 @@ fun NucleusApplicationScope.MainAppWindow(
         // Hook up the native window: focus tracking feeds DesktopManager (dock menu, deep links
         // and desktop actions target the focused window), and toFront() needs the handle.
         val nucleusWin = nucleusWindow
+        val semanticProgress by appGraph.semanticAssetsManager.installationProgress.collectAsState()
+        val semanticAvailability by appGraph.semanticAssetsManager.availability.collectAsState()
+        LaunchedEffect(nucleusWin, semanticProgress, semanticAvailability) {
+            val fraction = semanticProgress?.fraction
+            when {
+                fraction != null -> nucleusWin.showTaskbarProgress(fraction.toDouble())
+                semanticProgress != null || semanticAvailability == SemanticAssetsManager.Availability.VALIDATING ->
+                    nucleusWin.showTaskbarIndeterminate()
+                else -> nucleusWin.hideTaskbarProgress()
+            }
+        }
+        DisposableEffect(nucleusWin) {
+            onDispose { nucleusWin.hideTaskbarProgress() }
+        }
         DisposableEffect(nucleusWin) {
             openWindow.nucleusWindow = nucleusWin
             onDispose {

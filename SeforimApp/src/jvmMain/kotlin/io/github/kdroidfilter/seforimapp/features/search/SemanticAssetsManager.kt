@@ -1,11 +1,11 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
-import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
-import io.github.kdroidfilter.seforimapp.framework.di.AppScope
-import dev.zacsweers.metro.SingleIn
-import dev.zacsweers.metro.Inject
 import com.github.luben.zstd.ZstdIOException
 import com.github.luben.zstd.ZstdInputStream
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
+import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder
 import io.github.kdroidfilter.seforimlibrary.search.VectorSearcher
@@ -17,7 +17,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.EOFException
+import java.io.FilterInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.SequenceInputStream
 import java.net.URI
 import java.net.http.HttpClient
@@ -44,6 +46,16 @@ private const val RELEASE_API = "https://api.github.com/repos/arieldaniely/Zayit
 class SemanticAssetsManager(
     private val databasePathProvider: DatabasePathProvider,
 ) {
+    enum class InstallationPhase { DOWNLOADING, EXTRACTING, VALIDATING }
+
+    data class InstallationProgress(
+        val phase: InstallationPhase,
+        val fraction: Float? = null,
+    )
+
+    private val _installationProgress = MutableStateFlow<InstallationProgress?>(null)
+    val installationProgress = _installationProgress.asStateFlow()
+
     enum class Availability { UNAVAILABLE, VALIDATING, READY, INVALID }
 
     private val _availability = MutableStateFlow(Availability.UNAVAILABLE)
@@ -113,10 +125,23 @@ class SemanticAssetsManager(
         require(isZip || isSingleZstd || isSplitZstd) { "בחרו קובץ tar.zst אחד או את כל חלקיו לפי הסדר" }
         val stage = Files.createTempDirectory(db.parent, "semantic-bundle-")
         val backup = stage.resolveSibling("${stage.fileName}-backup")
+        val totalBytes = archives.sumOf(Files::size).coerceAtLeast(1L)
+        var processedBytes = 0L
+        var lastProgress = -1f
+
+        fun reportBytes(count: Long) {
+            processedBytes += count
+            val fraction = (processedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+            if (fraction - lastProgress >= 0.001f) {
+                lastProgress = fraction
+                _installationProgress.value = InstallationProgress(InstallationPhase.EXTRACTING, fraction)
+            }
+        }
+        _installationProgress.value = InstallationProgress(InstallationPhase.EXTRACTING, 0f)
         try {
             if (isZip) {
                 var extracted = 0L
-                archives.forEach { extracted = extractZip(it, stage, extracted) }
+                archives.forEach { extracted = extractZip(it, stage, extracted, ::reportBytes) }
             } else {
                 extractTarZstd(
                     if (isSingleZstd) {
@@ -127,8 +152,10 @@ class SemanticAssetsManager(
                         }
                     },
                     stage,
+                    ::reportBytes,
                 )
             }
+            _installationProgress.value = InstallationProgress(InstallationPhase.VALIDATING)
             try {
                 verify(stage)
             } catch (failure: Exception) {
@@ -143,18 +170,22 @@ class SemanticAssetsManager(
             }
             validatedStamp = null
         } finally {
+            _installationProgress.value = null
             if (Files.exists(stage)) deleteTree(stage)
             if (Files.exists(backup) && Files.exists(assetRoot)) deleteTree(backup)
         }
     }
 
     fun downloadBundle(onProgress: (Int, Int) -> Unit = { _, _ -> }) {
+        _installationProgress.value = InstallationProgress(InstallationPhase.DOWNLOADING)
         try {
             downloadAndInstallBundle(onProgress)
         } catch (failure: SemanticBundleImportException) {
             throw failure
         } catch (failure: IOException) {
             throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED, cause = failure)
+        } finally {
+            _installationProgress.value = null
         }
     }
 
@@ -266,7 +297,7 @@ class SemanticAssetsManager(
             try {
                 // Check the central directory too: ZipInputStream alone accepts missing ZIP footers.
                 ZipFile(archive.toFile()).use { }
-                ZipInputStream(Files.newInputStream(archive)).use { zip ->
+                ZipInputStream(SemanticProgressInputStream(Files.newInputStream(archive), onBytesRead)).use { zip ->
                     while (true) {
                         val entry = zip.nextEntry ?: break
                         val name = entry.name.replace('\\', '/')
@@ -305,7 +336,7 @@ class SemanticAssetsManager(
             val inputs = archives.map { Files.newInputStream(it) }
             try {
                 SequenceInputStream(Collections.enumeration(inputs)).use { joined ->
-                    ZstdInputStream(joined).use { zstd ->
+                    ZstdInputStream(SemanticProgressInputStream(joined, onBytesRead)).use { zstd ->
                         TarArchiveInputStream(zstd).use { tar ->
                             var total = 0L
                             while (true) {
@@ -350,26 +381,27 @@ class SemanticAssetsManager(
                 require(path.startsWith(stage)) { "נתיב לא תקין בחבילה" }
             }
         }
-    }
 
-    private fun hash(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            val buffer = ByteArray(1024 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
+        private fun hash(path: Path): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            Files.newInputStream(path).use { input ->
+                val buffer = ByteArray(1024 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
+
+        private fun deleteTree(path: Path) {
+            Files.walk(path).use { paths ->
+                paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun deleteTree(path: Path) {
-        Files.walk(path).use { paths ->
-            paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
-        }
-    }
 }
 
 /** Path is Iterable<Path>; wrap the database to append the file, rather than its path components. */
@@ -382,3 +414,19 @@ internal fun semanticBundleStamp(
             "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
         }
     }
+
+/** Counts compressed input bytes, including bulk reads, without counting a byte twice. */
+internal class SemanticProgressInputStream(
+    input: InputStream,
+    private val onBytesRead: (Long) -> Unit,
+) : FilterInputStream(input) {
+    override fun read(): Int = `in`.read().also { if (it >= 0) onBytesRead(1L) }
+
+    override fun read(
+        buffer: ByteArray,
+        offset: Int,
+        length: Int,
+    ): Int = `in`.read(buffer, offset, length).also { if (it > 0) onBytesRead(it.toLong()) }
+
+    override fun skip(count: Long): Long = `in`.skip(count).also { if (it > 0) onBytesRead(it) }
+}

@@ -27,6 +27,7 @@ import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+import io.github.kdroidfilter.seforimapp.features.search.SemanticInstallationProgressView
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.data.DataSettingsViewModel
 import io.github.kdroidfilter.seforimapp.features.settings.data.SelectedDatabaseStatus
@@ -530,6 +531,7 @@ private fun VectorLibrarySettingsCard() {
                 },
             ) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.optional_vectors_install)) }
         }
+        if (working) SemanticInstallationProgressView()
         if (failed) InlineErrorBanner(text = stringResource(Res.string.optional_install_failed))
     }
 }

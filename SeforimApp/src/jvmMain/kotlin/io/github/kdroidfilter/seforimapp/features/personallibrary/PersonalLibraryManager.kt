@@ -45,7 +45,7 @@ class PersonalLibraryManager(
                             lastBookCount = summary.books,
                             lastLinkCount = summary.links,
                             lastImportedAt = now,
-                            lastError = null,
+                            lastError = summary.failedFiles.takeIf { it.isNotEmpty() }?.joinToString("\n"),
                         )
                     } ?: folder.copy(lastImportedAt = folder.lastImportedAt ?: now, lastError = null)
                 }

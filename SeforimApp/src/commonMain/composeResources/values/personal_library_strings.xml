@@ -1,7 +1,7 @@
 <resources>
     <string name="settings_category_personal_library">ספרים אישיים</string>
     <string name="personal_library_title">ספרים אישיים</string>
-    <string name="personal_library_description">הוסיפו תיקיות בפורמט אוצריא. כל תיקייה נשמרת ומאונדקסת בנפרד מספריית הבסיס.</string>
+    <string name="personal_library_description">הוסיפו תיקיות עם ספרים בפורמט TXT או DOCX, או תיקיות בפורמט אוצריא. כל תיקייה נשמרת ומאונדקסת בנפרד מספריית הבסיס.</string>
     <string name="personal_library_add_folder">הוספת תיקייה</string>
     <string name="personal_library_reindex">אינדוקס מחדש</string>
     <string name="personal_library_working">מייבא ומאנדקס ספרים…</string>

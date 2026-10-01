@@ -157,7 +157,7 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.re
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }
 compose-components-ui-tooling-preview = { module = "org.jetbrains.compose.components:components-ui-tooling-preview", version.ref = "compose" }
-compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test-junit4-desktop", version = "1.10.3" }
+compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test-junit4-desktop", version.ref = "compose" }
 
 # SeforimLibrary composite build
 seforimlibrary-core = { module = "io.github.kdroidfilter.seforimlibrary:core" }

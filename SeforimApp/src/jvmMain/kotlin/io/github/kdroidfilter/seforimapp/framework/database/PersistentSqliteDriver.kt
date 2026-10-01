@@ -72,6 +72,14 @@ class PersistentSqliteDriver(
 
     override fun getConnection(): Connection = connection
 
+    /** Close cached cursors before replacing the attached schema, under the query connection lock. */
+    fun clearStatementCache() {
+        synchronized(connection) {
+            statementCache.values.forEach { it.close() }
+            statementCache.clear()
+        }
+    }
+
     /** Enables direct partition routing while the personal-library database is attached. */
     fun setPersonalOverlayAttached(
         attached: Boolean,

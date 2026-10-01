@@ -598,8 +598,8 @@ class AppSettings(
         private const val KEY_SHARED_STUDY_DEVICE_ID = "shared_study_device_id"
         private const val KEY_SHARED_STUDY_DISPLAY_NAME = "shared_study_display_name"
 
-        const val DEFAULT_LINK_LOAD_LEVEL = 1
-        const val MIN_LINK_LOAD_LEVEL = 0
-        const val MAX_LINK_LOAD_LEVEL = 3
+        const val DEFAULT_LINK_LOAD_LEVEL = 2
+        const val MIN_LINK_LOAD_LEVEL = 1
+        const val MAX_LINK_LOAD_LEVEL = 4
     }
 }

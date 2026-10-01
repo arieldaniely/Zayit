@@ -13,8 +13,28 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class SemanticBundleArchivesTest {
+    @Test
+    fun `zip extraction reports compressed bytes throughout large entries`() =
+        withDirectory { directory ->
+            val content = Random(42).nextBytes(256 * 1024)
+            val archive = directory.resolve("semantic-bundle-part-01.zip")
+            ZipOutputStream(Files.newOutputStream(archive)).use { zip ->
+                zip.putNextEntry(ZipEntry("model/tokenizer.json"))
+                zip.write(content)
+                zip.closeEntry()
+            }
+            val stage = Files.createDirectory(directory.resolve("stage"))
+            val byteCounts = mutableListOf<Long>()
+            SemanticAssetsManager.extractZip(archive, stage, 0, byteCounts::add)
+            assertTrue(byteCounts.size > 1)
+            assertTrue(byteCounts.all { it > 0 })
+            assertTrue(byteCounts.sum() in content.size.toLong()..Files.size(archive))
+            assertContentEquals(content, Files.readAllBytes(stage.resolve("model/tokenizer.json")))
+        }
+
     @Test
     fun `zip without its central directory produces a damaged archive error`() =
         withDirectory { directory ->
@@ -60,7 +80,10 @@ class SemanticBundleArchivesTest {
             assertEquals(parts, resolved)
 
             val stage = Files.createDirectory(directory.resolve("stage"))
-            SemanticAssetsManager.extractTarZstd(resolved, stage)
+            val byteCounts = mutableListOf<Long>()
+            SemanticAssetsManager.extractTarZstd(resolved, stage, byteCounts::add)
+            assertTrue(byteCounts.size > 1)
+            assertEquals(resolved.sumOf(Files::size), byteCounts.sum())
             assertContentEquals(content, Files.readAllBytes(stage.resolve("model/tokenizer.json")))
         }
 

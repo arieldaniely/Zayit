@@ -31,6 +31,8 @@ import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.tabBookViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.features.bookcontent.handleBookShortcut
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomCommand
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookBreadcrumb
@@ -59,7 +61,7 @@ fun WindowBody(openWindow: OpenWindow) {
     val destination = selected?.destination
     // Home, a book or a search: the tabs with the reader's bars and panes (not History / Favorites).
     val readerDestination =
-        destination?.takeIf { it is TabsDestination.Home || it is TabsDestination.BookContent || it is TabsDestination.Search }
+        destination?.takeIf { it is TabsDestination.Home || it is TabsDestination.BookContent || it is TabsDestination.PdfContent || it is TabsDestination.Search }
     val lineWorkspace = session.panesOf(openWindow.groupId, navigation = false)
     // The book view's shortcuts (Ctrl/Cmd+B, K, J) act on the selected reader tab, as they did
     // over the whole book screen.
@@ -149,7 +151,17 @@ private fun ReaderBar(
         if (start) {
             StartVerticalBar(uiState = uiState, onEvent = viewModel::onEvent)
         } else if (uiState.navigation.selectedBook != null || destination is TabsDestination.Search) {
-            EndVerticalBar(uiState = uiState, onEvent = viewModel::onEvent, showDiacritics = showDiacritics)
+            val zoom = PdfZoomControllerRegistry.controllerFor(destination.tabId)
+            EndVerticalBar(
+                uiState = uiState,
+                onEvent = viewModel::onEvent,
+                showDiacritics = showDiacritics,
+                isPdfEdition = destination is TabsDestination.PdfContent,
+                pdfCanZoomIn = zoom?.canZoomIn?.invoke() == true,
+                pdfCanZoomOut = zoom?.canZoomOut?.invoke() == true,
+                onPdfZoomIn = { PdfZoomControllerRegistry.dispatch(destination.tabId, PdfZoomCommand.ZoomIn) },
+                onPdfZoomOut = { PdfZoomControllerRegistry.dispatch(destination.tabId, PdfZoomCommand.ZoomOut) },
+            )
         }
     }
 }

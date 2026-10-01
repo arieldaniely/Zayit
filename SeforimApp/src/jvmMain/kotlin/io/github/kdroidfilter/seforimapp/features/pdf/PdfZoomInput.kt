@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.pdf
 
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -81,11 +82,15 @@ internal fun pdfPageWidthFraction(zoom: Float): Float = (zoom / pdfContentWidthS
 internal data class PdfZoomController(
     val zoomIn: () -> Unit,
     val zoomOut: () -> Unit,
+    val canZoomIn: () -> Boolean = { true },
+    val canZoomOut: () -> Boolean = { true },
 )
 
 /** Routes window-level shortcuts to the saveable zoom state owned by each composed PDF tab. */
 internal object PdfZoomControllerRegistry {
-    private val controllers = mutableMapOf<String, PdfZoomController>()
+    private val controllers = mutableStateMapOf<String, PdfZoomController>()
+
+    fun controllerFor(tabId: String): PdfZoomController? = controllers[tabId]
 
     fun register(
         tabId: String,

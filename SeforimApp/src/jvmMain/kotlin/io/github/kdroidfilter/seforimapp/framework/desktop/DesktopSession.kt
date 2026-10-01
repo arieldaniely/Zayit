@@ -253,7 +253,7 @@ class DesktopSession internal constructor(
             when (destination) {
                 is TabsDestination.Search -> destination.searchQuery
                 is TabsDestination.PdfContent -> ""
-                is TabsDestination.BookContent -> if (destination.bookId > 0) "${destination.bookId}" else ""
+                is TabsDestination.BookContent -> if (destination.bookId != 0L && destination.bookId != -1L) "${destination.bookId}" else ""
                 else -> ""
             }
 
@@ -261,7 +261,7 @@ class DesktopSession internal constructor(
             when (destination) {
                 is TabsDestination.Home, is TabsDestination.Search -> TabType.SEARCH
                 is TabsDestination.PdfContent -> TabType.BOOK
-                is TabsDestination.BookContent -> if (destination.bookId > 0) TabType.BOOK else TabType.SEARCH
+                is TabsDestination.BookContent -> if (destination.bookId != 0L && destination.bookId != -1L) TabType.BOOK else TabType.SEARCH
                 is TabsDestination.History -> TabType.HISTORY
                 is TabsDestination.Favorites -> TabType.FAVORITES
             }

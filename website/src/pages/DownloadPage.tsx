@@ -1446,25 +1446,30 @@ export function DatabaseSection({
       <div className="download-section-header">
         <h2 className="download-section-title"><Database size={20} /><span>{t('dl.database.title')}</span></h2>
       </div>
-      <p className="download-distribution-description">{t('dl.database.offlineInfo')}</p>
-      <a className="download-library-source" href={libraryReleasesUrl} target="_blank" rel="noopener noreferrer">
-        <Github size={16} />{t('dl.database.ourReleases')}
-      </a>
-      {dbLoading ? <p className="download-small-text">{t('dl.database.loading')}</p>
-        : dbError ? <div className="download-error"><p className="download-error-text">{dbError}</p></div>
-          : <>
-            {full ? card(full, true) : <div className="download-info-banner"><p>{t('dl.database.fullUnavailable')}</p></div>}
-            {alternatives.length > 0 && <div className="download-distribution-alternatives">
-              <h3 className="download-distribution-section-title">{t('dl.database.alternatives')}</h3>
-              <p className="download-small-text">{t('dl.database.alternativesInfo')}</p>
-              {alternatives.map((group) => card(group))}
-            </div>}
-            {supplements.length > 0 && <div className="download-distribution-supplements">
-              <h3 className="download-distribution-section-title">{t('dl.database.supplements')}</h3>
-              <p className="download-small-text">{t('dl.database.supplementsInfo')}</p>
-              {supplements.map((group) => card(group))}
-            </div>}
-          </>}
+      <details className="download-database-details">
+        <summary>{t('dl.database.showFiles')}</summary>
+        <div className="download-database-content">
+          <p className="download-distribution-description">{t('dl.database.offlineInfo')}</p>
+          <a className="download-library-source" href={libraryReleasesUrl} target="_blank" rel="noopener noreferrer">
+            <Github size={16} />{t('dl.database.ourReleases')}
+          </a>
+          {dbLoading ? <p className="download-small-text">{t('dl.database.loading')}</p>
+            : dbError ? <div className="download-error"><p className="download-error-text">{dbError}</p></div>
+              : <>
+                {full ? card(full, true) : <div className="download-info-banner"><p>{t('dl.database.fullUnavailable')}</p></div>}
+                {alternatives.length > 0 && <div className="download-distribution-alternatives">
+                  <h3 className="download-distribution-section-title">{t('dl.database.alternatives')}</h3>
+                  <p className="download-small-text">{t('dl.database.alternativesInfo')}</p>
+                  {alternatives.map((group) => card(group))}
+                </div>}
+                {supplements.length > 0 && <div className="download-distribution-supplements">
+                  <h3 className="download-distribution-section-title">{t('dl.database.supplements')}</h3>
+                  <p className="download-small-text">{t('dl.database.supplementsInfo')}</p>
+                  {supplements.map((group) => card(group))}
+                </div>}
+              </>}
+        </div>
+      </details>
     </section>
   );
 }

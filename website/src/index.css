@@ -247,6 +247,25 @@ body {
   margin-bottom: 1rem;
 }
 
+.download-database-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--gold-soft);
+  border-radius: 10px;
+  color: var(--gold-soft);
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.download-database-details > summary::-webkit-details-marker { display: none; }
+.download-database-details > summary::after { content: '+'; font-size: 1.25rem; }
+.download-database-details[open] > summary::after { content: '−'; }
+.download-database-content { padding-top: 1rem; }
+
 .download-distribution {
   margin-top: 0.75rem;
   padding: 1rem;

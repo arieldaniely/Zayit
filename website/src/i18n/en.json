@@ -200,7 +200,7 @@
     "database": {
       "title": "Database Files",
       "loading": "Loading database files...",
-      "showFiles": "Show download files",
+      "showFiles": "Show database files",
       "hideFiles": "Hide database files",
       "offlineInfo": "Offline library packages are available from Zayita releases. For a complete installation, choose the recommended package and download every part.",
       "totalSize": "Package size",

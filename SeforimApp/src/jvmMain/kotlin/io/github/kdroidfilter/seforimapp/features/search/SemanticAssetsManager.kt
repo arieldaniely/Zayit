@@ -14,7 +14,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.EOFException
+import java.io.FilterInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.SequenceInputStream
 import java.net.URI
 import java.net.http.HttpClient
@@ -32,6 +34,16 @@ import java.util.zip.ZipInputStream
 
 /** Installs a complete, versioned index and model bundle beside the database. */
 internal object SemanticAssetsManager {
+    enum class InstallationPhase { DOWNLOADING, EXTRACTING, VALIDATING }
+
+    data class InstallationProgress(
+        val phase: InstallationPhase,
+        val fraction: Float? = null,
+    )
+
+    private val _installationProgress = MutableStateFlow<InstallationProgress?>(null)
+    val installationProgress = _installationProgress.asStateFlow()
+
     enum class Availability { UNAVAILABLE, VALIDATING, READY, INVALID }
 
     private val _availability = MutableStateFlow(Availability.UNAVAILABLE)
@@ -105,10 +117,23 @@ internal object SemanticAssetsManager {
         require(isZip || isSingleZstd || isSplitZstd) { "בחרו קובץ tar.zst אחד או את כל חלקיו לפי הסדר" }
         val stage = Files.createTempDirectory(db.parent, "semantic-bundle-")
         val backup = stage.resolveSibling("${stage.fileName}-backup")
+        val totalBytes = archives.sumOf(Files::size).coerceAtLeast(1L)
+        var processedBytes = 0L
+        var lastProgress = -1f
+
+        fun reportBytes(count: Long) {
+            processedBytes += count
+            val fraction = (processedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+            if (fraction - lastProgress >= 0.001f) {
+                lastProgress = fraction
+                _installationProgress.value = InstallationProgress(InstallationPhase.EXTRACTING, fraction)
+            }
+        }
+        _installationProgress.value = InstallationProgress(InstallationPhase.EXTRACTING, 0f)
         try {
             if (isZip) {
                 var extracted = 0L
-                archives.forEach { extracted = extractZip(it, stage, extracted) }
+                archives.forEach { extracted = extractZip(it, stage, extracted, ::reportBytes) }
             } else {
                 extractTarZstd(
                     if (isSingleZstd) {
@@ -119,8 +144,10 @@ internal object SemanticAssetsManager {
                         }
                     },
                     stage,
+                    ::reportBytes,
                 )
             }
+            _installationProgress.value = InstallationProgress(InstallationPhase.VALIDATING)
             try {
                 verify(stage)
             } catch (failure: Exception) {
@@ -135,18 +162,22 @@ internal object SemanticAssetsManager {
             }
             validatedStamp = null
         } finally {
+            _installationProgress.value = null
             if (Files.exists(stage)) deleteTree(stage)
             if (Files.exists(backup) && Files.exists(assetRoot)) deleteTree(backup)
         }
     }
 
     fun downloadBundle(onProgress: (Int, Int) -> Unit = { _, _ -> }) {
+        _installationProgress.value = InstallationProgress(InstallationPhase.DOWNLOADING)
         try {
             downloadAndInstallBundle(onProgress)
         } catch (failure: SemanticBundleImportException) {
             throw failure
         } catch (failure: IOException) {
             throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED, cause = failure)
+        } finally {
+            _installationProgress.value = null
         }
     }
 
@@ -251,12 +282,13 @@ internal object SemanticAssetsManager {
         archive: Path,
         stage: Path,
         previousBytes: Long,
+        onBytesRead: (Long) -> Unit = {},
     ): Long {
         var total = previousBytes
         try {
             // Check the central directory too: ZipInputStream alone accepts missing ZIP footers.
             ZipFile(archive.toFile()).use { }
-            ZipInputStream(Files.newInputStream(archive)).use { zip ->
+            ZipInputStream(SemanticProgressInputStream(Files.newInputStream(archive), onBytesRead)).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     val name = entry.name.replace('\\', '/')
@@ -290,11 +322,12 @@ internal object SemanticAssetsManager {
     internal fun extractTarZstd(
         archives: List<Path>,
         stage: Path,
+        onBytesRead: (Long) -> Unit = {},
     ) {
         val inputs = archives.map { Files.newInputStream(it) }
         try {
             SequenceInputStream(Collections.enumeration(inputs)).use { joined ->
-                ZstdInputStream(joined).use { zstd ->
+                ZstdInputStream(SemanticProgressInputStream(joined, onBytesRead)).use { zstd ->
                     TarArchiveInputStream(zstd).use { tar ->
                         var total = 0L
                         while (true) {
@@ -370,3 +403,19 @@ internal fun semanticBundleStamp(
             "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
         }
     }
+
+/** Counts compressed input bytes, including bulk reads, without counting a byte twice. */
+internal class SemanticProgressInputStream(
+    input: InputStream,
+    private val onBytesRead: (Long) -> Unit,
+) : FilterInputStream(input) {
+    override fun read(): Int = `in`.read().also { if (it >= 0) onBytesRead(1L) }
+
+    override fun read(
+        buffer: ByteArray,
+        offset: Int,
+        length: Int,
+    ): Int = `in`.read(buffer, offset, length).also { if (it > 0) onBytesRead(it.toLong()) }
+
+    override fun skip(count: Long): Long = `in`.skip(count).also { if (it > 0) onBytesRead(it) }
+}

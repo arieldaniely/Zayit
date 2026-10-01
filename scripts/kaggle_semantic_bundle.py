@@ -7,6 +7,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -20,12 +21,6 @@ import zstandard
 from huggingface_hub import hf_hub_download, snapshot_download
 
 
-RELEASE_TAG = "v2-20260814115718"
-RELEASE_BASE = f"https://github.com/arieldaniely/SeforimLibrary/releases/download/{RELEASE_TAG}"
-DB_PARTS = {
-    "seforim_bundle.tar.zst.part01": "6bf7fdcbef5ce531f98e29fb7c5b2bc4bc6c7aeaa0ef2e4001efc90e2a5e6749",
-    "seforim_bundle.tar.zst.part02": "73085109dee96e2134cb9662807b5afcda0d693543423f931aaf109248a75a13",
-}
 SOURCE_REPO = "ArieLLL123/judaic-semantic-teacher-8x512-retrieval-v5-round2"
 SOURCE_REVISION = "8d7016cf472fb436dbd3ac843ef4d407c28d08f4"
 ONNX_REPO = "ArieLLL123/judaic-semantic-round2-onnx-zayit"
@@ -41,13 +36,15 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download(url: str, target: Path, expected_sha: str) -> None:
+def download(url: str, target: Path, expected_sha: str, *, token: str | None = None) -> None:
     if target.is_file() and sha256(target) == expected_sha:
         print(f"Verified existing {target.name}", flush=True)
         return
     partial = target.with_name(target.name + ".download")
     offset = partial.stat().st_size if partial.exists() else 0
     headers = {"Range": f"bytes={offset}-"} if offset else {}
+    if token:
+        headers.update(Authorization=f"Bearer {token}", Accept="application/octet-stream")
     with requests.get(url, headers=headers, stream=True, timeout=(30, 120)) as response:
         response.raise_for_status()
         if offset and response.status_code != 206:
@@ -61,6 +58,36 @@ def download(url: str, target: Path, expected_sha: str) -> None:
         raise ValueError(f"SHA-256 mismatch for {target.name}: {actual}")
     partial.replace(target)
     print(f"Downloaded and verified {target.name}", flush=True)
+
+
+def release_assets(repository: str, tag: str, token: str | None) -> list[dict]:
+    from urllib.parse import quote
+
+    headers = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    response = requests.get(
+        f"https://api.github.com/repos/{repository}/releases/tags/{quote(tag, safe='')}",
+        headers=headers, timeout=(30, 120),
+    )
+    response.raise_for_status()
+    assets = response.json()["assets"]
+    for prefix in ("seforim_bundle-database-only.tar.zst", "seforim_bundle.tar.zst"):
+        single = [asset for asset in assets if asset["name"] == prefix]
+        parts = sorted(
+            (asset for asset in assets if re.fullmatch(re.escape(prefix) + r"\.part\d+", asset["name"])),
+            key=lambda asset: int(asset["name"].rsplit("part", 1)[1]),
+        )
+        selected = parts or single
+        if not selected:
+            continue
+        if parts and [int(asset["name"].rsplit("part", 1)[1]) for asset in parts] != list(range(1, len(parts) + 1)):
+            raise ValueError("Database archive parts are not consecutive")
+        for asset in selected:
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", asset.get("digest") or ""):
+                raise ValueError(f"Release asset has no SHA-256 digest: {asset['name']}")
+        return selected
+    raise FileNotFoundError(f"No database bundle in {repository}@{tag}")
 
 
 class MultipartStream:
@@ -175,15 +202,51 @@ def main(args: argparse.Namespace) -> None:
         raise RuntimeError("Select Kaggle GPU T4 x2 in Notebook Settings")
     args.work.mkdir(parents=True, exist_ok=True)
     args.output.mkdir(parents=True, exist_ok=True)
+    token = os.getenv("GH_TOKEN")
+    if args.all_distributions and not token:
+        from kaggle_secrets import UserSecretsClient
+
+        token = UserSecretsClient().get_secret("GH_TOKEN")
+    if args.all_distributions:
+        from kaggle_publish_distributions import Publisher
+
+        final_tag = args.publish_tag or args.db_release_tag + '-full'
+        if final_tag == args.db_release_tag:
+            raise ValueError('Final release must use a new tag')
+        publisher = Publisher(token)
+        publisher.draft(args.db_repository, final_tag, f'Distributions for {args.db_release_tag}')
+        publisher.draft(args.app_repository, 'semantic-round2-' + final_tag, f'Semantic index for {args.db_release_tag}')
+    assets = release_assets(args.db_repository, args.db_release_tag, token)
+    identity = {"repository": args.db_repository, "tag": args.db_release_tag,
+                "allDistributions": args.all_distributions,
+                "assets": [{"name": asset["name"], "digest": asset["digest"]} for asset in assets]}
+    marker = args.work / "database-source.json"
+    if marker.exists():
+        if json.loads(marker.read_text()) != identity:
+            raise RuntimeError("This work directory belongs to another database; select a new --work directory")
+    else:
+        if (args.work / "seforim.db").exists() or (args.work / "index-single").exists():
+            raise RuntimeError("Untracked previous build; select a new --work directory")
+        marker.write_text(json.dumps(identity), encoding="utf-8")
     download_dir = args.work / "release"
     download_dir.mkdir(exist_ok=True)
     parts = []
-    for name, digest in DB_PARTS.items():
+    for asset in assets:
+        name, digest = asset["name"], asset["digest"].removeprefix("sha256:")
         path = download_dir / name
-        download(f"{RELEASE_BASE}/{name}", path, digest)
+        download(asset["url"] if token else asset["browser_download_url"], path, digest, token=token)
         parts.append(path)
     database = args.work / "seforim.db"
-    extract_database(parts, database)
+    if args.all_distributions:
+        from kaggle_publish_distributions import extract_complete
+
+        extract_complete(parts, args.work, MultipartStream)
+        for name in ('seforim.db', 'seforim.db.lucene', 'seforim.db.lookup.lucene',
+                     'catalog.pb', 'lexical.db', 'release_info.txt'):
+            if not (args.work / name).exists():
+                raise FileNotFoundError(f'Missing base artifact: {name}')
+    else:
+        extract_database(parts, database)
     database_sha = sha256(database)
     print("Database SHA-256:", database_sha, flush=True)
     with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
@@ -196,16 +259,16 @@ def main(args: argparse.Namespace) -> None:
     checkpoint, model_dir = fetch_models(args.work)
     java_home = install_java25(args.work)
     env = dict(os.environ, JAVA_HOME=str(java_home), RAYON_NUM_THREADS="2", OMP_NUM_THREADS="2")
-    vectors_dir = args.work / "vectors"
+    vectors_dir = args.work / "vectors-single"
     vectors_dir.mkdir(exist_ok=True)
     embed_script = args.repo / "scripts/kaggle_embed_vectors.py"
     worker_files = [vectors_dir / f"worker-{gpu}.json" for gpu in range(2)]
-    vector_files = [vectors_dir / f"shard-{shard:02d}.bin" for shard in range(8)]
-    index = args.work / "index"
+    vector_files = [vectors_dir / f"shard-{shard:02d}.bin" for shard in range(2)]
+    index = args.work / "index-single"
     has_workers = all(f.is_file() and json.loads(f.read_text()).get("vectorEncoding") == "int8-maxabs-v1"
                       for f in worker_files)
-    has_vectors = any(f.is_file() for f in vector_files)
-    has_indexed = any((index / f"shard-{shard:02d}" / "semantic.properties").is_file() for shard in range(8))
+    has_vectors = all(f.is_file() for f in vector_files)
+    has_indexed = (index / "shard-00" / "semantic.properties").is_file()
 
     if has_workers and (has_vectors or has_indexed):
         print("GPU encoding already completed; skipping vector generation", flush=True)
@@ -216,7 +279,7 @@ def main(args: argparse.Namespace) -> None:
         for gpu in range(2):
             command = [
                 sys.executable, str(embed_script), "--db", str(database), "--checkpoint", str(checkpoint),
-                "--output", str(vectors_dir), "--gpu", str(gpu), "--gpus", "2", "--shards", "8",
+                "--output", str(vectors_dir), "--gpu", str(gpu), "--gpus", "2", "--shards", "2",
                 "--batch", str(args.batch), "--onnx", str(model_dir / "seforim-embed-round2-int8.onnx"),
             ]
             if args.amp:
@@ -234,36 +297,50 @@ def main(args: argparse.Namespace) -> None:
     gradle = library / "gradlew"
     gradle.chmod(gradle.stat().st_mode | 0o111)
     index.mkdir(exist_ok=True)
-    for shard in range(8):
-        shard_dir = index / f"shard-{shard:02d}"
-        manifest = shard_dir / "semantic.properties"
-        vector_file = vectors_dir / f"shard-{shard:02d}.bin"
-        if manifest.is_file():
-            content = manifest.read_text(encoding="utf-8", errors="ignore")
-            properties = dict(line.split("=", 1) for line in content.splitlines()
-                              if "=" in line and not line.startswith("#"))
-            if (properties.get("shardIndex") == str(shard)
-                    and properties.get("vectorEncoding") == "int8-maxabs-v1"
-                    and properties.get("databaseSha256") == database_sha
-                    and properties.get("modelSha256") == MODEL_SHA
-                    and properties.get("tokenizerSha256") == TOKENIZER_SHA
-                    and properties.get("dimension") == "256"
-                    and properties.get("shardCount") == "8"
-                    and int(properties.get("indexed", "0")) > 0
-                    and properties.get("indexed") == properties.get("eligible")):
-                print(f"Skipping already indexed shard {shard}/8", flush=True)
-                vector_file.unlink(missing_ok=True)
-                continue
-        if not vector_file.is_file():
-            raise FileNotFoundError(f"Missing vector file for shard {shard}: {vector_file}")
+    # Both GPUs write temporary vector streams; one writer builds the final index.
+    manifest = index / "shard-00" / "semantic.properties"
+    expected_vectors = sum(sum(worker["counts"].values()) for worker in counts)
+    properties = {}
+    if manifest.is_file():
+        content = manifest.read_text(encoding="utf-8", errors="ignore")
+        properties = dict(line.split("=", 1) for line in content.splitlines()
+                          if "=" in line and not line.startswith("#"))
+    complete = (
+        properties.get("format") == "zayit-round2-1"
+        and properties.get("shardIndex") == "0"
+        and properties.get("shardCount") == "1"
+        and properties.get("vectorEncoding") == "int8-maxabs-v1"
+        and properties.get("databaseSha256") == database_sha
+        and properties.get("modelSha256") == MODEL_SHA
+        and properties.get("tokenizerSha256") == TOKENIZER_SHA
+        and properties.get("dimension") == "256"
+        and expected_vectors > 0
+        and properties.get("indexed") == str(expected_vectors)
+        and properties.get("eligible") == str(expected_vectors)
+    )
+    if complete:
+        print("Skipping completed unified index", flush=True)
+    else:
+        for gpu, path in enumerate(vector_files):
+            expected_bytes = 12 + sum(counts[gpu]["counts"].values()) * (20 + 256)
+            if not path.is_file() or path.stat().st_size != expected_bytes:
+                raise ValueError(f"Missing or incomplete GPU vector file: {path}")
         run_command([
             str(gradle), ":search:buildSemanticIndexFromVectors",
             f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
-            f"-PsemanticVectors={vector_file}", f"-PsemanticIndexDir={index}",
-            f"-PshardIndex={shard}", "-PshardCount=8",
+            f"-PsemanticVectors={vectors_dir}", f"-PsemanticIndexDir={index}",
+            "-PshardIndex=0", "-PshardCount=1",
             "--no-daemon", "--no-configuration-cache", "--max-workers=4",
         ], cwd=library, env=env)
-        vector_file.unlink()
+    for path in vector_files:
+        path.unlink(missing_ok=True)
+
+    if args.all_distributions:
+        from kaggle_publish_distributions import build_distributions
+
+        build_distributions(args, database, model_dir, index, env, token, sha256, download,
+                            run_command, MultipartStream)
+        return
 
     archive = args.output / "semantic-bundle.tar.zst"
     run_command([
@@ -283,6 +360,12 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument("--db-release-tag", required=True)
+    parser.add_argument("--db-repository", default="arieldaniely/SeforimLibrary")
+    parser.add_argument("--all-distributions", action="store_true")
+    parser.add_argument("--publish-tag")
+    parser.add_argument("--pdf-release-tag")
+    parser.add_argument("--app-repository", default="arieldaniely/Zayit")
     parser.add_argument("--work", type=Path, default=Path("/kaggle/temp/zayit-semantic"))
     parser.add_argument("--output", type=Path, default=Path("/kaggle/working"))
     parser.add_argument("--batch", type=int, default=128)

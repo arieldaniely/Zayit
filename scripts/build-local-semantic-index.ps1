@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Database,
     [Parameter(Mandatory = $true)][string]$ModelDirectory,
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
-    [int]$ShardCount = 8,
+    [int]$ShardCount = 1,
     [int]$Workers = 8,
     [int]$OnnxThreads = 1
 )

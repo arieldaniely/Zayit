@@ -217,7 +217,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpu", type=int, required=True)
     parser.add_argument("--gpus", type=int, default=2)
-    parser.add_argument("--shards", type=int, default=8)
+    # Temporary GPU streams are combined into one Lucene index by the bundle builder.
+    parser.add_argument("--shards", type=int, default=2)
     parser.add_argument("--batch", type=int, default=128)
     parser.add_argument("--amp", action="store_true")
     parser.add_argument("--onnx", type=Path)

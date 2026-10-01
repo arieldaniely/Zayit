@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { distributionName, distributionOrder, isDistributionArchive } from './src/distributions.ts';
+import { distributionName, distributionOrder, isDistributionArchive, isOwnDistributionUrl } from './src/distributions.ts';
 
 test('all six distributions include every numbered part', () => {
   for (const name of distributionOrder) {
@@ -23,4 +23,14 @@ test('numeric ordering puts part100 after part10', () => {
   const names = ['part100', 'part03', 'part10', 'part02'];
   assert.deepEqual(names.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     ['part02', 'part03', 'part10', 'part100']);
+});
+
+test('download links are restricted to our library fork', () => {
+  assert.equal(isOwnDistributionUrl('https://github.com/arieldaniely/SeforimLibrary/releases/download/full/seforim_bundle.tar.zst.part04'), true);
+  for (const url of [
+    'https://github.com/kdroidFilter/SeforimLibrary/releases/download/full/seforim_bundle.tar.zst',
+    'https://example.com/arieldaniely/SeforimLibrary/releases/download/full/file',
+    'https://github.com/arieldaniely/SeforimLibrary-other/releases/download/full/file',
+    'invalid-url',
+  ]) assert.equal(isOwnDistributionUrl(url), false);
 });

@@ -1,4 +1,4 @@
-import { distributionName, distributionOrder, isDistributionArchive } from '../distributions';
+import { distributionName, distributionOrder, isDistributionArchive, isOwnDistributionUrl, libraryReleasesUrl } from '../distributions';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -35,7 +35,6 @@ interface Asset {
   url: string;
   size: string;
   rawSize: number;
-  sha256?: string;
 }
 
 interface Release {
@@ -232,7 +231,6 @@ export function DownloadModal() {
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbAssets, setDbAssets] = useState<Asset[]>([]);
   const [showAllAssets, setShowAllAssets] = useState(false);
-  const [includeDb, setIncludeDb] = useState(false);
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [showCrossPlatform, setShowCrossPlatform] = useState(false);
   const [selectedOS, setSelectedOS] = useState<'windows' | 'mac' | 'linux'>('windows');
@@ -294,14 +292,14 @@ export function DownloadModal() {
         if (!dbResp.ok) throw new Error(t('dl.errors.githubError', { status: dbResp.status }));
         const dbData = await dbResp.json();
         const parts = (dbData.assets || [])
-          .filter((a: { name: string }) => isDistributionArchive(a.name) || a.name === 'semantic-bundle.json')
-          .map((a: { id: number; name: string; browser_download_url: string; size: number; label?: string; digest?: string }) => ({
+          .filter((a: { name: string; browser_download_url: string }) =>
+            isDistributionArchive(a.name) && isOwnDistributionUrl(a.browser_download_url))
+          .map((a: { id: number; name: string; browser_download_url: string; size: number }) => ({
             id: a.id,
             name: a.name,
             url: a.browser_download_url,
             size: formatFileSize(a.size),
             rawSize: a.size,
-            sha256: (a.digest || '').replace(/^sha256:/, '') || a.label || '',
           }))
           .sort((x: Asset, y: Asset) => x.name.localeCompare(y.name, undefined, { numeric: true }));
         setDbAssets(parts);
@@ -515,8 +513,6 @@ export function DownloadModal() {
           dbLoading={dbLoading}
           dbError={dbError}
           dbAssets={dbAssets}
-          includeDb={includeDb}
-          setIncludeDb={setIncludeDb}
           t={t}
         />
       </>
@@ -1390,103 +1386,86 @@ function PlatformAssets({
   );
 }
 
-function DatabaseSection({
+export function DatabaseSection({
   dbLoading,
   dbError,
   dbAssets,
-  includeDb,
-  setIncludeDb,
   t,
 }: {
   dbLoading: boolean;
   dbError: string | null;
   dbAssets: Asset[];
-  includeDb: boolean;
-  setIncludeDb: (v: boolean) => void;
   t: (key: string) => string;
 }) {
   const groups = distributionOrder.map((name) => ({
     name,
-    assets: dbAssets.filter((asset) => distributionName(asset.name) === name),
+    assets: dbAssets.filter((asset) => isDistributionArchive(asset.name) && distributionName(asset.name) === name && isOwnDistributionUrl(asset.url)),
   })).filter((group) => group.assets.length > 0);
-  const [selectedDistribution, setSelectedDistribution] = useState('seforim_bundle');
-  const selected = groups.find((group) => group.name === selectedDistribution) || groups[0];
-  const selectedAssets = selected?.assets || [];
-  const totalDbSize = selectedAssets.reduce((acc, a) => acc + (a.rawSize || 0), 0);
+  const full = groups.find((group) => group.name === 'seforim_bundle');
+  const alternatives = groups.filter((group) => group.name.startsWith('seforim_bundle-'));
+  const supplements = groups.filter((group) => ['talmud_bavli_latest', 'semantic-bundle'].includes(group.name));
+
+  const files = (assets: Asset[], primary: boolean) => (
+    <div className="download-assets-list compact">
+      {assets.map((asset) => (
+        <div key={asset.id} className="download-db-item">
+          <div className="download-asset-line">
+            <div className="download-asset-meta">
+              <p className="download-asset-name">{asset.name}</p>
+              <p className="download-asset-size">{t('dl.common.size')}: {asset.size}</p>
+            </div>
+            <a href={asset.url} className={`download-btn ${primary ? 'download-btn-primary' : 'download-btn-secondary'}`}>
+              <Download size={18} />
+              <span>{t('dl.common.download')}</span>
+            </a>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const card = (group: { name: string; assets: Asset[] }, primary = false) => (
+    <article key={group.name} className={`download-distribution ${primary ? 'download-distribution-recommended' : ''}`}>
+      {primary && <span className="download-recommended-badge"><Check size={16} />{t('dl.database.recommended')}</span>}
+      <h3>{t(`dl.database.variants.${group.name}`)}</h3>
+      <p className="download-distribution-description">{t(`dl.database.descriptions.${group.name}`)}</p>
+      <p className="download-asset-size">{t('dl.database.totalSize')}: {formatFileSize(group.assets.reduce((sum, asset) => sum + asset.rawSize, 0))}</p>
+      {primary ? <>
+        <p className="download-parts-notice"><Info size={16} />{t('dl.database.allParts')}</p>
+        {files(group.assets, true)}
+      </> : <details className="download-distribution-files">
+        <summary>{t('dl.database.showFiles')} ({group.assets.length})</summary>
+        <p className="download-small-text">{t('dl.database.allParts')}</p>
+        {files(group.assets, false)}
+      </details>}
+    </article>
+  );
 
   return (
-    <div className="download-section download-section-db">
+    <section className="download-section download-section-db" aria-label={t('dl.database.title')}>
       <div className="download-section-header">
-        <h2 className="download-section-title">
-          <Database size={20} />
-          <span>{t('dl.database.title')}</span>
-        </h2>
+        <h2 className="download-section-title"><Database size={20} /><span>{t('dl.database.title')}</span></h2>
       </div>
-
-      {dbLoading ? (
-        <p style={{ color: 'var(--gold-soft)', fontSize: '0.9rem' }}>{t('dl.database.loading')}</p>
-      ) : dbError ? (
-        <div className="download-error" style={{ margin: 0 }}>
-          <p className="download-error-text" style={{ margin: 0 }}>{dbError}</p>
-        </div>
-      ) : dbAssets.length > 0 ? (
-        <>
-          <div className="download-info-banner">
-            <p style={{ margin: 0, color: 'var(--text-main)', fontSize: '0.9rem' }}>
-              {t('dl.database.offlineInfo')}
-            </p>
-          </div>
-          <label className="download-toggle-row">
-            <span>{t('dl.database.distribution')}</span>
-            <select value={selected?.name || ''} onChange={(event) => {
-              setSelectedDistribution(event.target.value);
-              setIncludeDb(true);
-            }} style={{ background: 'var(--bg-main)', color: 'var(--text-main)', padding: '0.5rem' }}>
-              {groups.map((group) => (
-                <option key={group.name} value={group.name}>{t(`dl.database.variants.${group.name}`)}</option>
-              ))}
-            </select>
-          </label>
-          <p className="download-small-text">{t('dl.database.allParts')}</p>
-          <div className="download-toggle-row">
-            <button className="download-toggle-button inline" onClick={() => setIncludeDb(!includeDb)}>
-              {includeDb ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              <span>{includeDb ? t('dl.database.hideFiles') : t('dl.database.showFiles')}</span>
-            </button>
-          </div>
-          {includeDb && (
-            <>
-              <p style={{ color: 'var(--gold-muted)', fontSize: '0.83rem', margin: '0 0 0.5rem' }}>
-                {t('dl.database.totalSize')}: {formatFileSize(totalDbSize)}
-              </p>
-              <div className="download-assets-list compact">
-                {selectedAssets.map((asset) => (
-                  <div key={asset.id} className="download-db-item">
-                    <div className="download-asset-line">
-                      <div className="download-asset-meta">
-                        <p className="download-asset-name">{asset.name}</p>
-                        <p className="download-asset-size">{t('dl.common.size')}: {asset.size}</p>
-                        {asset.sha256 && (
-                          <p className="download-small-text" style={{ marginTop: '0.2rem' }}>SHA-256: {asset.sha256}</p>
-                        )}
-                      </div>
-                      <a href={asset.url} target="_blank" rel="noopener noreferrer" className="download-btn download-btn-secondary">
-                        <Download size={18} />
-                        <span>{t('dl.common.download')}</span>
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-        <p style={{ color: 'var(--gold-soft)', textAlign: 'center', margin: 0, fontSize: '0.85rem' }}>
-          {t('dl.database.noFilesAvailable')}
-        </p>
-      )}
-    </div>
+      <p className="download-distribution-description">{t('dl.database.offlineInfo')}</p>
+      <a className="download-library-source" href={libraryReleasesUrl} target="_blank" rel="noopener noreferrer">
+        <Github size={16} />{t('dl.database.ourReleases')}
+      </a>
+      {dbLoading ? <p className="download-small-text">{t('dl.database.loading')}</p>
+        : dbError ? <div className="download-error"><p className="download-error-text">{dbError}</p></div>
+          : <>
+            {full ? card(full, true) : <div className="download-info-banner"><p>{t('dl.database.fullUnavailable')}</p></div>}
+            {alternatives.length > 0 && <div className="download-distribution-alternatives">
+              <h3 className="download-distribution-section-title">{t('dl.database.alternatives')}</h3>
+              <p className="download-small-text">{t('dl.database.alternativesInfo')}</p>
+              {alternatives.map((group) => card(group))}
+            </div>}
+            {supplements.length > 0 && <div className="download-distribution-supplements">
+              <h3 className="download-distribution-section-title">{t('dl.database.supplements')}</h3>
+              <p className="download-small-text">{t('dl.database.supplementsInfo')}</p>
+              {supplements.map((group) => card(group))}
+            </div>}
+          </>}
+    </section>
   );
 }
 

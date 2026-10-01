@@ -200,20 +200,35 @@
     "database": {
       "title": "Database Files",
       "loading": "Loading database files...",
-      "showFiles": "Show database files",
+      "showFiles": "Show download files",
       "hideFiles": "Hide database files",
-      "offlineInfo": "If you plan to install Zayita without an internet connection, also download the database from the original Zayit release (separate download). The database is not distributed by the Zayita project.",
-      "totalSize": "Total database files size",
+      "offlineInfo": "Offline library packages are available from Zayita releases. For a complete installation, choose the recommended package and download every part.",
+      "totalSize": "Package size",
       "noFilesAvailable": "No database files available.",
       "distribution": "Choose a download package",
       "allParts": "For a split package, download every part to the same folder.",
       "variants": {
-        "seforim_bundle": "Full package — database, PDF and semantic search (recommended)",
+        "seforim_bundle": "Full installation package",
         "seforim_bundle-no-pdf": "Database and semantic search, without PDF",
         "seforim_bundle-no-vectors": "Database and PDF, without semantic search",
         "seforim_bundle-database-only": "Database and text indexes only",
         "talmud_bavli_latest": "PDF supplement only",
         "semantic-bundle": "Model and vectors supplement only"
+      },
+      "ourReleases": "All our releases on GitHub",
+      "recommended": "Default · recommended for most users",
+      "fullUnavailable": "The full package is not yet available in our latest release. Choose a partial package only if it meets your needs.",
+      "alternatives": "Partial packages — choose according to your needs",
+      "alternativesInfo": "These packages omit components. Check what is included before downloading.",
+      "supplements": "Supplements for an existing installation",
+      "supplementsInfo": "These add components only and do not replace a database package.",
+      "descriptions": {
+        "seforim_bundle": "Includes the books database, text indexes, PDF files, and the model and vectors for semantic search. Choose this for a new installation with all components.",
+        "seforim_bundle-no-pdf": "Includes the books database, text indexes and semantic search. Does not include PDF files.",
+        "seforim_bundle-no-vectors": "Includes the books database, text indexes and PDF files. Does not include the semantic search model or vectors.",
+        "seforim_bundle-database-only": "Books database and text indexes only. No PDF files or semantic search model and vectors.",
+        "talmud_bavli_latest": "Adds Talmud Bavli PDF files to an existing installation. Does not include the books database.",
+        "semantic-bundle": "Adds a model, tokenizer and vector index for semantic search. Requires a compatible books database already installed."
       }
     },
     "fileSize": {

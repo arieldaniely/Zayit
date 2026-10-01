@@ -15,3 +15,14 @@ export function distributionName(name: string): string {
 export function isDistributionArchive(name: string): boolean {
   return /\.tar\.zst(?:\.part\d+)?$/.test(name) && distributionOrder.includes(distributionName(name));
 }
+
+export const libraryReleasesUrl = 'https://github.com/arieldaniely/SeforimLibrary/releases';
+
+export function isOwnDistributionUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === 'https://github.com' && parsed.pathname.startsWith('/arieldaniely/SeforimLibrary/releases/download/');
+  } catch {
+    return false;
+  }
+}

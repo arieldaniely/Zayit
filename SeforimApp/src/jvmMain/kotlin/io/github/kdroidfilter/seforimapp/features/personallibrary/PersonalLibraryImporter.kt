@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.core.models.BookMetadata
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
@@ -185,74 +186,85 @@ class PersonalLibraryImporter(
                         .sorted()
                         .toList()
                 }
+            val failedFiles = mutableListOf<String>()
             var bookCount = 0
             files.forEach { file ->
                 val relative = root.relativize(file)
                 val parentSegments = (0 until relative.nameCount - 1).map { relative.getName(it).toString() }
                 val categoryId = resolveBookCategory(folder, folderRoot, parentSegments)
-                val rawTitle = file.nameWithoutExtension
-                val title = normalizeLabel(rawTitle)
-                val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
-                val meta = metadata[rawTitle] ?: metadata[title]
-                val lines = Files.readAllLines(file, Charsets.UTF_8)
                 val fileBytes = Files.size(file).coerceAtLeast(1L)
-                val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
                 var reportedBytes = 0L
-                val notes =
-                    listOf(title, rawTitle)
-                        .distinct()
-                        .asSequence()
-                        .map { file.parent.resolve("הערות על $it.txt") }
-                        .firstOrNull { it.isRegularFile() }
-                        ?.readText(Charsets.UTF_8)
-                execute(
-                    """
-                    INSERT INTO book(id,categoryId,sourceId,title,heRef,heShortDesc,notesContent,orderIndex,totalLines)
-                    VALUES(?,?,?,?,?,?,?,?,?)
-                    """.trimIndent(),
-                    bookId,
-                    categoryId,
-                    sourceId,
-                    title,
-                    title,
-                    meta?.heShortDesc,
-                    notes,
-                    meta?.order?.toLong() ?: 999L,
-                    lines.size,
-                )
-                meta?.author?.takeIf { it.isNotBlank() }?.let { author ->
-                    val authorId = ids.id("author:$author")
-                    execute("INSERT OR IGNORE INTO author(id,name) VALUES(?,?)", authorId, author)
-                    execute("INSERT INTO book_author(bookId,authorId) VALUES(?,?)", bookId, authorId)
-                }
-                meta?.pubPlace?.takeIf { it.isNotBlank() }?.let { place ->
-                    val id = ids.id("place:$place")
-                    execute("INSERT OR IGNORE INTO pub_place(id,name) VALUES(?,?)", id, place)
-                    execute("INSERT INTO book_pub_place(bookId,pubPlaceId) VALUES(?,?)", bookId, id)
-                }
-                meta?.pubDate?.takeIf { it.isNotBlank() }?.let { date ->
-                    val id = ids.id("date:$date")
-                    execute("INSERT OR IGNORE INTO pub_date(id,date) VALUES(?,?)", id, date)
-                    execute("INSERT INTO book_pub_date(bookId,pubDateId) VALUES(?,?)", bookId, id)
-                }
-                meta?.extraTitles.orEmpty().filter { it.isNotBlank() }.forEach { term ->
-                    execute("INSERT OR IGNORE INTO book_acronym(bookId,term) VALUES(?,?)", bookId, term)
-                }
-                val lineIds =
-                    insertLinesAndToc(bookId, title, lines) { completedLines ->
-                        val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
-                        if (expected > reportedBytes) {
-                            onBytesProcessed(expected - reportedBytes)
-                            reportedBytes = expected
-                        }
+                val savepoint = connection.setSavepoint()
+                try {
+                    val rawTitle = file.nameWithoutExtension
+                    val title = normalizeLabel(rawTitle)
+                    val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
+                    val meta = metadata[rawTitle] ?: metadata[title]
+                    val lines = Files.readAllLines(file, Charsets.UTF_8)
+                    val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
+                    val notes =
+                        listOf(title, rawTitle)
+                            .distinct()
+                            .asSequence()
+                            .map { file.parent.resolve("הערות על $it.txt") }
+                            .firstOrNull { it.isRegularFile() }
+                            ?.readText(Charsets.UTF_8)
+                    execute(
+                        """
+                        INSERT INTO book(id,categoryId,sourceId,title,heRef,heShortDesc,notesContent,orderIndex,totalLines)
+                        VALUES(?,?,?,?,?,?,?,?,?)
+                        """.trimIndent(),
+                        bookId,
+                        categoryId,
+                        sourceId,
+                        title,
+                        title,
+                        meta?.heShortDesc,
+                        notes,
+                        meta?.order?.toLong() ?: 999L,
+                        lines.size,
+                    )
+                    meta?.author?.takeIf { it.isNotBlank() }?.let { author ->
+                        val authorId = ids.id("author:$author")
+                        execute("INSERT OR IGNORE INTO author(id,name) VALUES(?,?)", authorId, author)
+                        execute("INSERT INTO book_author(bookId,authorId) VALUES(?,?)", bookId, authorId)
                     }
-                if (reportedBytes < fileBytes) onBytesProcessed(fileBytes - reportedBytes)
-                val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
-                booksByTitle[comparable(title)] = ref
-                personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
-                bookCount++
+                    meta?.pubPlace?.takeIf { it.isNotBlank() }?.let { place ->
+                        val id = ids.id("place:$place")
+                        execute("INSERT OR IGNORE INTO pub_place(id,name) VALUES(?,?)", id, place)
+                        execute("INSERT INTO book_pub_place(bookId,pubPlaceId) VALUES(?,?)", bookId, id)
+                    }
+                    meta?.pubDate?.takeIf { it.isNotBlank() }?.let { date ->
+                        val id = ids.id("date:$date")
+                        execute("INSERT OR IGNORE INTO pub_date(id,date) VALUES(?,?)", id, date)
+                        execute("INSERT INTO book_pub_date(bookId,pubDateId) VALUES(?,?)", bookId, id)
+                    }
+                    meta?.extraTitles.orEmpty().filter { it.isNotBlank() }.forEach { term ->
+                        execute("INSERT OR IGNORE INTO book_acronym(bookId,term) VALUES(?,?)", bookId, term)
+                    }
+                    val lineIds =
+                        insertLinesAndToc(bookId, title, lines) { completedLines ->
+                            val expected = (bytesPerLine * completedLines).toLong().coerceAtMost(fileBytes)
+                            if (expected > reportedBytes) {
+                                onBytesProcessed(expected - reportedBytes)
+                                reportedBytes = expected
+                            }
+                        }
+                    val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
+                    booksByTitle[comparable(title)] = ref
+                    personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
+                    bookCount++
+                    connection.releaseSavepoint(savepoint)
+                } catch (failure: Exception) {
+                    connection.rollback(savepoint)
+                    connection.releaseSavepoint(savepoint)
+                    failedFiles += relative.toString()
+                    warnln(failure) { "Skipping personal book: $relative" }
+                } finally {
+                    if (reportedBytes < fileBytes) onBytesProcessed(fileBytes - reportedBytes)
+                }
             }
-            return PersonalImportSummary(bookCount, 0)
+            return PersonalImportSummary(bookCount, 0, failedFiles)
         }
 
         private fun resolveBookCategory(
@@ -682,7 +694,7 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v2-ordered-toc"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v3-skip-errors"
         val SUPPORTED_EXTENSIONS = setOf("txt", "json")
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 

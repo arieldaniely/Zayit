@@ -877,4 +877,6 @@
     <string name="optional_vectors_install">התקנת ווקטורים לחיפוש חכם</string>
     <string name="optional_vectors_ready">הווקטורים לחיפוש חכם מותקנים</string>
     <string name="optional_install_failed">התקנת הרכיבים נכשלה. אפשר לנסות שוב או לדלג ולהתקין מאוחר יותר דרך ההגדרות.</string>
+    <string name="personal_library_skipped_files">הייבוא הושלם. הקבצים הבאים לא יובאו:
+%1$s</string>
 </resources>

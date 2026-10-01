@@ -11,6 +11,46 @@ import kotlin.test.assertTrue
 
 class PersonalLibraryImporterTest {
     @Test
+    fun skipsDamagedBooksAndImportsRemainingTxt() {
+        val temp = Files.createTempDirectory("personal-library-mixed")
+        try {
+            val baseDatabase = temp.resolve("base.db")
+            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            val books = Files.createDirectory(temp.resolve("books"))
+            books.resolve("01-valid.txt").writeText("טקסט ראשון")
+            Files.write(books.resolve("02-broken.txt"), byteArrayOf(0xC3.toByte(), 0x28))
+            books.resolve("03-valid.txt").writeText("<h1>פרק א</h1>\nטקסט שני")
+            val importer = PersonalLibraryImporter(baseDatabase, temp.resolve("generations"))
+            val folder = PersonalBookFolder("mixed", books.toString(), "Mixed")
+            val progress = mutableListOf<Float>()
+            val (artifacts, summaries) = importer.build(listOf(folder), "mixed", progress::add)
+            val summary = summaries.getValue(folder.id)
+            assertEquals(2, summary.books)
+            assertEquals(listOf("02-broken.txt"), summary.failedFiles)
+            assertEquals(1f, progress.last())
+            assertEquals(progress.sorted(), progress)
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT title,totalLines FROM book ORDER BY title").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("01-valid", rows.getString(1))
+                        assertTrue(rows.next())
+                        assertEquals("03-valid", rows.getString(1))
+                        assertEquals(2, rows.getInt(2))
+                        assertTrue(!rows.next())
+                    }
+                    statement.executeQuery("SELECT text FROM tocText").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("פרק א", rows.getString(1))
+                    }
+                }
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun importsPlainFolderWithoutOtzariaSubdirectory() {
         val temp = Files.createTempDirectory("personal-library-import")
         try {

@@ -48,6 +48,7 @@ import seforimapp.seforimapp.generated.resources.personal_library_merge_mode
 import seforimapp.seforimapp.generated.resources.personal_library_personal_mode
 import seforimapp.seforimapp.generated.resources.personal_library_reindex
 import seforimapp.seforimapp.generated.resources.personal_library_remove
+import seforimapp.seforimapp.generated.resources.personal_library_skipped_files
 import seforimapp.seforimapp.generated.resources.personal_library_stats
 import seforimapp.seforimapp.generated.resources.personal_library_success
 import seforimapp.seforimapp.generated.resources.personal_library_title
@@ -128,6 +129,9 @@ fun PersonalLibrarySettingsScreen() {
                         fontSize = 11.sp,
                         color = JewelTheme.globalColors.text.info,
                     )
+                    folder.lastError?.let { files ->
+                        InlineErrorBanner(stringResource(Res.string.personal_library_skipped_files, files), Modifier.fillMaxWidth())
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),

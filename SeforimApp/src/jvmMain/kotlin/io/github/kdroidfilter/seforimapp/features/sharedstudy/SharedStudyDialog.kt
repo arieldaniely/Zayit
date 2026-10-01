@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -819,10 +820,7 @@ private fun DeviceRow(
     }
 }
 
-/**
- * Parallel troubleshooting suggestions with expandable details for Bluetooth and Wi-Fi.
- * Presented simultaneously as requested by the user, with simple icons and concise expandable explanations.
- */
+/** Bluetooth and Wi-Fi connection suggestions with independently expandable details. */
 @Composable
 private fun ParallelTroubleshootingSection(
     discoveryStage: DiscoveryStage,
@@ -896,69 +894,71 @@ private fun TroubleshootingCard(
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val accent = JewelTheme.globalColors.outlines.focused
+    val borderColor by animateColorAsState(
+        targetValue = if (isExpanded) accent.copy(alpha = 0.45f) else JewelTheme.globalColors.borders.normal,
+    )
 
     Column(
         modifier =
             modifier
-                .clip(shape)
-                .background(JewelTheme.globalColors.toolwindowBackground.copy(alpha = 0.25f), shape)
-                .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
-                .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+                .clip(CardShape)
+                .background(JewelTheme.globalColors.panelBackground, CardShape)
+                .border(1.dp, borderColor, CardShape),
     ) {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onToggleExpand() }
-                    .pointerHoverIcon(PointerIcon.Hand),
+                    .clickable(role = Role.Button, onClickLabel = title, onClick = onToggleExpand)
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .heightIn(min = 64.dp)
+                    .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Box(
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .background(accent.copy(alpha = 0.10f), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = JewelTheme.globalColors.outlines.focused,
-                )
-                Text(
-                    text = title,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.size(20.dp),
+                    tint = accent,
                 )
             }
-
-            IconButton(
-                onClick = onToggleExpand,
-                modifier = Modifier.size(20.dp),
-            ) {
-                ExpandCollapseIcon(
-                    expanded = isExpanded,
-                    size = 14.dp,
-                )
-            }
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ExpandCollapseIcon(
+                expanded = isExpanded,
+                size = 14.dp,
+            )
         }
 
         AnimatedVisibility(visible = isExpanded) {
             Column(
-                modifier = Modifier.padding(top = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                HorizontalDivider()
                 Text(
                     text = description,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     color = JewelTheme.globalColors.text.info,
-                    lineHeight = 15.sp,
+                    lineHeight = 18.sp,
                 )
-                OutlinedButton(onClick = onAction) {
+                OutlinedButton(onClick = onAction, modifier = Modifier.fillMaxWidth()) {
                     Text(text = actionText, fontSize = 11.sp)
                 }
             }

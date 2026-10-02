@@ -57,6 +57,7 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.CellSpan
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HOME_GRID_COLUMNS
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsState
+import io.github.kdroidfilter.seforimapp.features.home.widgets.shownDateHere
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberAccentColor
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberOffMain
 import io.github.kdroidfilter.seforimapp.features.zmanim.data.ITIM_LABINA_ABROAD_CANDLES
@@ -233,7 +234,7 @@ internal object ZmanimWidget : HomeWidget {
     ) {
         val location = state.location
         val timeZone = location.timeZone
-        val selectedDate = state.shownDate
+        val selectedDate = state.shownDateHere()
         val opinion = state.zmanimOpinion
         val inIsrael = state.inIsrael
         val cityLabel = state.cityLabel

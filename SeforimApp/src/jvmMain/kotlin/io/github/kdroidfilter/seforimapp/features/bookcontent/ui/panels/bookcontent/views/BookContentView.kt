@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
@@ -45,6 +44,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
@@ -61,19 +61,18 @@ import io.github.kdroidfilter.seforimapp.core.annotations.UserNote
 import io.github.kdroidfilter.seforimapp.core.coroutines.EfficiencyCoreDispatcher
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
+import io.github.kdroidfilter.seforimapp.core.presentation.components.rememberAppTextZoom
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.text.applyUserHighlights
 import io.github.kdroidfilter.seforimapp.core.presentation.text.drawNoteUnderlines
 import io.github.kdroidfilter.seforimapp.core.presentation.text.findAllMatchesOriginal
 import io.github.kdroidfilter.seforimapp.core.presentation.text.noteDisplayRanges
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
-import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.AltTocEntry
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
@@ -83,7 +82,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.*
@@ -93,8 +91,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Text
-import kotlin.math.abs
-import kotlin.math.exp
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class, ExperimentalComposeUiApi::class)
@@ -115,6 +111,10 @@ fun BookContentView(
     modifier: Modifier = Modifier,
     draftNote: NoteDraftAnchor? = null,
     isTocEntrySelection: Boolean = false,
+    // Lines by index, tinted, with an end mark after the last: a passage to read, such as the day's limud
+    markedLines: IntRange? = null,
+    // Each verse twice, then its targum: shnayim mikra
+    shnayimMikra: Boolean = false,
     preservedListState: LazyListState? = null,
     scrollIndex: Int = 0,
     scrollOffset: Int = 0,
@@ -131,6 +131,7 @@ fun BookContentView(
     bookCharCounts: IntArray? = null,
     onPointerZoomInProgressChange: (Boolean) -> Unit = {},
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     // Don't use the saved scroll position initially if we have an anchor
     // The restoration will be handled after pagination loads
     val listState =
@@ -147,135 +148,13 @@ fun BookContentView(
     var textLayoutWidthPx by remember(bookId) { mutableIntStateOf(0) }
 
     // Collect text size from settings
-    val rawTextSize by AppSettings.textSizeFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
-    val currentOnPointerZoomInProgressChange by rememberUpdatedState(onPointerZoomInProgressChange)
-    val pointerZoomScope = rememberCoroutineScope()
-    var pointerZoomRenderJob by remember { mutableStateOf<Job?>(null) }
-    var pointerZoomCommitJob by remember { mutableStateOf<Job?>(null) }
-    var pointerZoomEndJob by remember { mutableStateOf<Job?>(null) }
-    var isPointerZooming by remember { mutableStateOf(false) }
-    var pointerZoomRenderedTextSize by remember { mutableFloatStateOf(rawTextSize) }
-    val pointerZoomAccumulator = remember { PointerZoomAccumulator(rawTextSize) }
-
-    fun setPointerZooming(value: Boolean) {
-        if (isPointerZooming != value) {
-            isPointerZooming = value
-            currentOnPointerZoomInProgressChange(value)
-        }
-    }
-
-    fun beginPointerZoom() {
-        if (!isPointerZooming) {
-            val currentTextSize = AppSettings.textSizeFlow.value
-            pointerZoomAccumulator.targetTextSize = currentTextSize
-            pointerZoomRenderedTextSize = currentTextSize
-            setPointerZooming(true)
-        }
-        pointerZoomEndJob?.cancel()
-        pointerZoomEndJob = null
-    }
-
-    fun applyPointerZoomTargetToMainContent() {
-        val targetTextSize =
-            pointerZoomAccumulator.targetTextSize.coerceIn(AppSettings.MIN_TEXT_SIZE, AppSettings.MAX_TEXT_SIZE)
-        if (abs(targetTextSize - pointerZoomRenderedTextSize) >= 0.01f) {
-            pointerZoomRenderedTextSize = targetTextSize
-        }
-    }
-
-    fun schedulePointerZoomRenderUpdate() {
-        if (pointerZoomRenderJob?.isActive == true) return
-
-        pointerZoomRenderJob =
-            pointerZoomScope.launch {
-                withFrameNanos { }
-                applyPointerZoomTargetToMainContent()
-                pointerZoomRenderJob = null
-            }
-    }
-
-    fun finishPointerZoom() {
-        pointerZoomEndJob?.cancel()
-        pointerZoomEndJob =
-            pointerZoomScope.launch {
-                delay(50.milliseconds)
-                setPointerZooming(false)
-            }
-    }
-
-    fun commitPointerZoom(cancelPendingJob: Boolean = true) {
-        if (!isPointerZooming) return
-        if (cancelPendingJob) {
-            pointerZoomCommitJob?.cancel()
-        }
-        pointerZoomCommitJob = null
-        pointerZoomRenderJob?.cancel()
-        pointerZoomRenderJob = null
-
-        val targetTextSize =
-            pointerZoomAccumulator.targetTextSize.coerceIn(AppSettings.MIN_TEXT_SIZE, AppSettings.MAX_TEXT_SIZE)
-        if (abs(targetTextSize - pointerZoomRenderedTextSize) >= 0.01f) {
-            pointerZoomRenderedTextSize = targetTextSize
-        }
-        if (abs(targetTextSize - AppSettings.textSizeFlow.value) >= 0.01f) {
-            AppSettings.setTextSize(targetTextSize)
-        }
-        pointerZoomAccumulator.targetTextSize = targetTextSize
-        finishPointerZoom()
-    }
-
-    fun schedulePointerZoomCommit() {
-        pointerZoomCommitJob?.cancel()
-        pointerZoomCommitJob =
-            pointerZoomScope.launch {
-                delay(120.milliseconds)
-                commitPointerZoom(cancelPendingJob = false)
-            }
-    }
-
-    fun applyPointerZoomFactor(factor: Float) {
-        if (!factor.isFinite() || factor <= 0f) return
-
-        beginPointerZoom()
-        val currentTextSize = pointerZoomAccumulator.targetTextSize
-        val newTextSize =
-            (currentTextSize * factor)
-                .coerceIn(AppSettings.MIN_TEXT_SIZE, AppSettings.MAX_TEXT_SIZE)
-
-        if (abs(newTextSize - currentTextSize) >= 0.01f) {
-            pointerZoomAccumulator.targetTextSize = newTextSize
-            schedulePointerZoomRenderUpdate()
-        }
-    }
-
-    val applyPointerZoomFactorState = rememberUpdatedState<(Float) -> Unit> { factor -> applyPointerZoomFactor(factor) }
-
-    LaunchedEffect(rawTextSize, isPointerZooming) {
-        if (!isPointerZooming) {
-            pointerZoomAccumulator.targetTextSize = rawTextSize
-            pointerZoomRenderedTextSize = rawTextSize
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            pointerZoomRenderJob?.cancel()
-            pointerZoomCommitJob?.cancel()
-            pointerZoomEndJob?.cancel()
-            currentOnPointerZoomInProgressChange(false)
-        }
-    }
-
-    // Animate text size changes only for the active tab; background tabs snap instantly
-    val textSize by animateFloatAsState(
-        targetValue = if (isPointerZooming) pointerZoomRenderedTextSize else rawTextSize,
-        animationSpec = if (isTabSelected && !isPointerZooming) tween(durationMillis = 300) else snap(),
-        label = "textSizeAnimation",
-    )
+    // Ctrl/Cmd + wheel, a trackpad pinch or two fingers zoom the text
+    val zoom = rememberAppTextZoom(onPointerZoomInProgressChange)
+    val textSize = zoom.textSize
 
     // Collect line height from settings
-    val rawLineHeight by AppSettings.lineHeightFlow.collectAsState()
+    val rawLineHeight by appSettings.lineHeightFlow.collectAsState()
 
     // Animate line height changes only for the active tab
     val lineHeight by animateFloatAsState(
@@ -285,14 +164,13 @@ fun BookContentView(
     )
 
     // Selected font for main book content
-    val bookFontCode by AppSettings.bookFontCodeFlow.collectAsState()
+    val bookFontCode by appSettings.bookFontCodeFlow.collectAsState()
     val hebrewFontFamily = FontCatalog.familyFor(bookFontCode)
+    val targumFontCode by appSettings.targumFontCodeFlow.collectAsState()
+    val targumFontFamily = FontCatalog.familyFor(targumFontCode)
+    val shnayimMikraTargum = rememberShnayimMikraTargum(bookId, shnayimMikra)
     // macOS fallback: some Hebrew fonts have no Bold face; slightly scale bold text for visibility
-    val boldScaleForPlatform =
-        remember(bookFontCode) {
-            val lacksBold = bookFontCode in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")
-            if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
-        }
+    val boldScaleForPlatform = FontCatalog.boldScaleFor(bookFontCode)
 
     // Track restoration state per book. Plain remember: a tab is kept alive across switches and is
     // never rebuilt on a switch, so this only resets when the composition is actually torn down
@@ -633,9 +511,9 @@ fun BookContentView(
     }
 
     // Find-in-page UI state (scoped per tab)
-    val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
-    val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")
-    val smartModeEnabled by AppSettings.findSmartModeFlow(tabId).collectAsState()
+    val showFind by appSettings.findBarOpenFlow(tabId).collectAsState()
+    val persistedFindQuery by appSettings.findQueryFlow(tabId).collectAsState("")
+    val smartModeEnabled by appSettings.findSmartModeFlow(tabId).collectAsState()
     val findState = remember(tabId) { TextFieldState() }
     LaunchedEffect(persistedFindQuery) {
         val current = findState.text.toString()
@@ -849,7 +727,7 @@ fun BookContentView(
 
                         Key.Escape -> {
                             if (showFind) {
-                                AppSettings.closeFindBar(tabId)
+                                appSettings.closeFindBar(tabId)
                                 true
                             } else {
                                 false
@@ -886,56 +764,8 @@ fun BookContentView(
             modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = contentAlpha } // Hide until positioned to prevent glitch
-                .onPointerEvent(PointerEventType.Scroll) { event ->
-                    val isZoomScroll = event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed
-                    if (!isZoomScroll) return@onPointerEvent
-
-                    val scrollDelta = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
-                    val zoomDelta =
-                        if (abs(scrollDelta.y) >= abs(scrollDelta.x)) {
-                            scrollDelta.y
-                        } else {
-                            scrollDelta.x
-                        }
-                    if (zoomDelta == 0f) return@onPointerEvent
-
-                    val exponent = (-zoomDelta * 0.08f).coerceIn(-0.25f, 0.25f)
-                    applyPointerZoomFactorState.value(exp(exponent.toDouble()).toFloat())
-                    schedulePointerZoomCommit()
-                    event.changes.forEach { it.consume() }
-                }.pointerInput(Unit) {
-                    awaitEachGesture {
-                        var previousDistance = 0f
-                        var hasZoomed = false
-
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            val pressedChanges = event.changes.filter { it.pressed }
-
-                            if (pressedChanges.size >= 2) {
-                                val distance = averageDistanceToCentroid(pressedChanges)
-                                if (previousDistance > 0f && distance > 0f) {
-                                    val zoomFactor = (distance / previousDistance).coerceIn(0.85f, 1.18f)
-                                    if (abs(zoomFactor - 1f) > 0.002f) {
-                                        applyPointerZoomFactorState.value(zoomFactor)
-                                        hasZoomed = true
-                                    }
-                                }
-                                previousDistance = distance
-
-                                if (hasZoomed) {
-                                    event.changes.forEach { it.consume() }
-                                }
-                            } else {
-                                previousDistance = 0f
-                            }
-                        } while (event.changes.any { it.pressed })
-
-                        if (hasZoomed) {
-                            commitPointerZoom()
-                        }
-                    }
-                }.focusRequester(focusRequester)
+                .then(zoom.modifier)
+                .focusRequester(focusRequester)
                 .onPreviewKeyEvent(previewKeyHandler)
                 .focusable(),
     ) {
@@ -1019,10 +849,12 @@ fun BookContentView(
                             }
                         }
 
+                        val isMarked = markedLines?.contains(line.lineIndex) == true
                         Row(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
+                                    .then(if (isMarked) Modifier.background(markedTint()) else Modifier)
                                     .padding(horizontal = 8.dp)
                                     .height(IntrinsicSize.Min),
                         ) {
@@ -1093,6 +925,35 @@ fun BookContentView(
                                         },
                                     )
                                 }
+                                // The verse read again, then its targum (headings have no reference)
+                                if (shnayimMikra && !line.heRef.isNullOrBlank()) {
+                                    Box(modifier = Modifier.padding(vertical = LineItemVerticalPaddingPerSide)) {
+                                        LineItem(
+                                            lineId = line.id,
+                                            lineContent = line.content,
+                                            userHighlights = highlightsByLine[line.id] ?: emptyList(),
+                                            userNotes = notesByLine[line.id] ?: emptyList(),
+                                            fontFamily = hebrewFontFamily,
+                                            onClick = { isModifier -> onLineSelect(line, isModifier) },
+                                            isSelected = isCurrentSelected,
+                                            isPrimary = useThickBar,
+                                            baseTextSize = textSize,
+                                            lineHeight = lineHeight,
+                                            boldScale = boldScaleForPlatform,
+                                            annotatedCache = stableAnnotatedCache,
+                                            showDiacritics = showDiacritics,
+                                            // The context menu acts on this verse, as from its first reading
+                                            onContextClick = {
+                                                selectionContext.setCurrentLineId(line.id)
+                                                selectionContext.setActiveCommentaryColumn(emptyList())
+                                            },
+                                        )
+                                    }
+                                    shnayimMikraTargum.targumOf(line.heRef)?.let {
+                                        ShnayimMikraTargum(it, targumFontFamily, textSize, lineHeight, showDiacritics)
+                                    }
+                                }
+                                if (markedLines?.last == line.lineIndex) MarkedEnd(if (shnayimMikra) "סוף הקריאה" else "סוף הלימוד")
                             }
                         }
                     } else {
@@ -1239,13 +1100,13 @@ fun BookContentView(
                     state = findState,
                     onEnterNext = { navigateToMatch(true, scope) },
                     onEnterPrev = { navigateToMatch(false, scope) },
-                    onClose = { AppSettings.closeFindBar(tabId) },
+                    onClose = { appSettings.closeFindBar(tabId) },
                     smartModeEnabled = smartModeEnabled,
-                    onToggleSmartMode = { AppSettings.toggleFindSmartMode(tabId) },
+                    onToggleSmartMode = { appSettings.toggleFindSmartMode(tabId) },
                 )
                 LaunchedEffect(findState.text, showFind) {
                     val q = findState.text.toString()
-                    AppSettings.setFindQuery(tabId, if (q.length >= 2) q else "")
+                    appSettings.setFindQuery(tabId, if (q.length >= 2) q else "")
                 }
             }
         }
@@ -1274,28 +1135,6 @@ private data class AnchorData(
     val scrollIndex: Int,
     val scrollOffset: Int,
 )
-
-private fun averageDistanceToCentroid(changes: List<PointerInputChange>): Float {
-    if (changes.isEmpty()) return 0f
-
-    var centroid = Offset.Zero
-    changes.forEach { change ->
-        centroid += change.position
-    }
-    centroid /= changes.size.toFloat()
-
-    var totalDistance = 0f
-    changes.forEach { change ->
-        totalDistance += (change.position - centroid).getDistance()
-    }
-    return totalDistance / changes.size.toFloat()
-}
-
-private class PointerZoomAccumulator(
-    initialTextSize: Float,
-) {
-    var targetTextSize: Float = initialTextSize
-}
 
 /**
  * Stable wrapper for alt headings map to avoid unnecessary recompositions.
@@ -1621,5 +1460,25 @@ private fun ErrorIndicator(message: String) {
             text = message,
             color = Color.Red,
         )
+    }
+}
+
+@Composable
+private fun markedTint() =
+    JewelTheme.globalColors.outlines.focused
+        .copy(alpha = 0.07f)
+
+/** Where a marked passage ends: [label] between two rules, "סוף הלימוד" or, for an aliya read, "סוף הקריאה". */
+@Composable
+private fun MarkedEnd(label: String) {
+    val color = JewelTheme.globalColors.outlines.focused
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.weight(1f).height(1.dp).background(color.copy(alpha = 0.5f)))
+        Text(label, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.weight(1f).height(1.dp).background(color.copy(alpha = 0.5f)))
     }
 }

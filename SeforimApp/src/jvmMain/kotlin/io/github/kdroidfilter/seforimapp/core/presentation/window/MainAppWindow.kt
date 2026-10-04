@@ -8,9 +8,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -21,10 +23,9 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.window.WindowPlacement
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -32,16 +33,19 @@ import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.energymanager.EnergyManager
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
+import dev.nucleusframework.window.tao.BindTabGroupWindow
+import dev.nucleusframework.window.tao.JoinSatelliteWorkspace
+import dev.nucleusframework.window.tao.TabGroupWindowPlacement
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
+import io.github.kdroidfilter.seforimapp.core.e2e.E2e
+import io.github.kdroidfilter.seforimapp.core.e2e.e2eCapture
 import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
-import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
@@ -49,7 +53,6 @@ import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
-import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.AppIcon
@@ -72,6 +75,7 @@ fun NucleusApplicationScope.MainAppWindow(
     windowViewModelOwner: ViewModelStoreOwner,
     onQuit: () -> Unit,
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     val appGraph = LocalAppGraph.current
     val desktopMgr = appGraph.desktopManager
     val tabsVm = openWindow.tabsViewModel
@@ -142,7 +146,7 @@ fun NucleusApplicationScope.MainAppWindow(
                 onQuit()
             } else {
                 desktopMgr.closeWindow(openWindow.id)
-                SessionManager.saveIfEnabled(appGraph)
+                appGraph.sessionManager.saveIfEnabled()
             }
         },
         title = windowTitle,
@@ -185,7 +189,7 @@ fun NucleusApplicationScope.MainAppWindow(
                         tabsVm.onEvent(TabsEvents.OnSelect(newIndex))
                     }
                     true
-                } else if ((keyEvent.isAltPressed && keyEvent.key == Key.Home) ||
+                } else if ((keyEvent.isAltPressed && keyEvent.key == Key.SystemHome) ||
                     (keyEvent.isMetaPressed && keyEvent.isShiftPressed && keyEvent.key == Key.H)
                 ) {
                     val currentTabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId
@@ -215,6 +219,7 @@ fun NucleusApplicationScope.MainAppWindow(
                 } else {
                     processKeyShortcuts(
                         keyEvent = keyEvent,
+                        appSettings = appSettings,
                         onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
                         tabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId ?: "",
                     )
@@ -239,6 +244,26 @@ fun NucleusApplicationScope.MainAppWindow(
             }
         }
 
+        // Remember the floating size: while maximized the native window reports the screen frame.
+        LaunchedEffect(windowState) {
+            snapshotFlow { windowState.placement to windowState.size }.collect { (placement, size) ->
+                if (placement == WindowPlacement.Floating && size.isSpecified) openWindow.floatingSize = size
+            }
+        }
+
+        // The window shows one group of its desktop's tab workspace: binding it is what lets tabs
+        // be dropped here, torn off from here, and moved by the workspace. Its pane docks join it.
+        val session = openWindow.session
+        val groupId = openWindow.groupId
+        key(session, groupId) {
+            openWindow.group()?.let { group ->
+                BindTabGroupWindow(session.workspace, group, nucleusWin.unsafe.taoWindow)
+                TabGroupWindowPlacement(group, windowState)
+            }
+            JoinSatelliteWorkspace(session.panesOf(groupId, navigation = true), nucleusWin.unsafe.taoWindow)
+            JoinSatelliteWorkspace(session.panesOf(groupId, navigation = false), nucleusWin.unsafe.taoWindow)
+        }
+
         // Settings dialog, composed inside the window it was opened from so it
         // picks up this window's modal counter and native transient-for
         // relationship — modal to this window only, the others stay usable.
@@ -255,20 +280,20 @@ fun NucleusApplicationScope.MainAppWindow(
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,
         ) {
-            MainTitleBar()
+            MainTitleBar(Modifier.e2eCapture(openWindow.id + E2e.TITLE_BAR))
 
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).
-            val keepAwakeEnabled by AppSettings.keepScreenAwakeOnBookFlow.collectAsState()
+            val keepAwakeEnabled by appSettings.keepScreenAwakeOnBookFlow.collectAsState()
             val shouldKeepScreenAwake =
                 keepAwakeEnabled &&
                     state.isActive &&
                     selectedTab?.destination is TabsDestination.BookContent
             LaunchedEffect(shouldKeepScreenAwake) {
                 if (shouldKeepScreenAwake) {
-                    EnergyManager.keepScreenAwake()
+                    EnergyManager.keepAwake()
                 } else {
-                    EnergyManager.releaseScreenAwake()
+                    EnergyManager.releaseAwake()
                 }
             }
 
@@ -282,25 +307,9 @@ fun NucleusApplicationScope.MainAppWindow(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .e2eCapture(openWindow.id)
                         .detectTouchMode { isTouchMode = it }
-                        // Wayland pending-drop resolution: while a cross-window tab drop is
-                        // awaiting its target, the first pointer sample this window receives
-                        // (the compositor's post-release pointer-enter) identifies it as the
-                        // window under the cursor. Non-consuming, no-op otherwise.
-                        .pointerInput(openWindow.id) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val e = awaitPointerEvent(PointerEventPass.Initial)
-                                    val dock = appGraph.tabDockManager
-                                    if (dock.hasPendingDrop()) {
-                                        dock.onWindowPointerSample(
-                                            openWindow.id,
-                                            e.changes.first().position,
-                                        )
-                                    }
-                                }
-                            }
-                        }.onPreviewKeyEvent { keyEvent ->
+                        .onPreviewKeyEvent { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown) {
                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                 when {
@@ -362,7 +371,7 @@ fun NucleusApplicationScope.MainAppWindow(
                                         true
                                     }
                                     // Alt + Home (Windows) or Cmd + Shift + H (macOS) => go Home on current tab
-                                    (keyEvent.isAltPressed && keyEvent.key == Key.Home) ||
+                                    (keyEvent.isAltPressed && keyEvent.key == Key.SystemHome) ||
                                         (
                                             keyEvent.isMetaPressed &&
                                                 keyEvent.isShiftPressed &&
@@ -425,7 +434,7 @@ fun NucleusApplicationScope.MainAppWindow(
                         },
             ) {
                 CompositionLocalProvider(LocalIsTouchMode provides isTouchMode) {
-                    TabsContent()
+                    WindowBody(openWindow)
                 }
             }
         }

@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.nucleusframework.core.runtime.Platform
@@ -25,10 +24,10 @@ import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.update.showTitleBarIcon
 
 @Composable
-fun DecoratedWindowScope.MainTitleBar() {
+fun DecoratedWindowScope.MainTitleBar(modifier: Modifier = Modifier) {
     JewelTitleBar(
-        modifier = Modifier.newFullscreenControls().macOSLargeCornerRadius(),
-        gradientStartColor = if (ThemeUtils.isIslandsStyle()) ThemeUtils.titleBarGradientColor() else Color.Unspecified,
+        modifier = modifier.newFullscreenControls().macOSLargeCornerRadius(),
+        gradientStartColor = ThemeUtils.titleBarGradientColor(),
         controlButtonsDirection = ControlButtonsDirection.SystemNative,
     ) {
         // Window control buttons (close/maximize/minimize) are Compose-based on Linux and
@@ -48,9 +47,9 @@ fun DecoratedWindowScope.MainTitleBar() {
                 .value.showTitleBarIcon
         BoxWithConstraints(modifier = Modifier.align(Alignment.Start)) {
             val windowWidth = maxWidth
-            // Non-macOS gets the extra Tab Search and Favorites buttons (macOS uses the
-            // native History/Favorites menus)
-            val actionButtonCount = (if (PlatformInfo.isMacOS) 2 else 6) + if (updateIconVisible) 1 else 0
+            // Non-macOS gets the extra Tab Search, Favorites and Tools buttons (macOS uses the
+            // native History/Favorites/Tools menus)
+            val actionButtonCount = (if (PlatformInfo.isMacOS) 2 else 7) + if (updateIconVisible) 1 else 0
             val iconWidth: Dp = 40.dp
             val desktopSwitcherWidth: Dp = DESKTOP_SWITCHER_WIDTH
             val actionButtonsWidth = iconWidth * actionButtonCount + desktopSwitcherWidth

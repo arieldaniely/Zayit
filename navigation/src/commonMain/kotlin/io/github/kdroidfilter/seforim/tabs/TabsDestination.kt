@@ -28,6 +28,12 @@ sealed interface TabsDestination {
         val bookId: Long,
         override val tabId: String,
         val lineId: Long? = null,
+        /** Opens the notes pane on [lineId]: the book is opened to read a note there. */
+        val openNotes: Boolean = false,
+        /** Marks the lines from [lineId] to this one: a passage to read, such as the day's limud. */
+        val endLineId: Long? = null,
+        /** Opens it in shnayim mikra: each verse twice, then its targum. */
+        val shnayimMikra: Boolean = false,
     ) : TabsDestination
 
     /** Full visit-history page (the chrome://history equivalent). */
@@ -42,5 +48,25 @@ sealed interface TabsDestination {
     @Immutable
     data class Favorites(
         override val tabId: String,
+    ) : TabsDestination
+
+    /** The user's notes, of every book. */
+    @Serializable
+    @Immutable
+    data class Notes(
+        override val tabId: String,
+    ) : TabsDestination
+
+    /**
+     * The smart siddur, opened on [part] (a SiddurPart name) of the Jewish day [epochDay], or on the tefila of the
+     * hour; scrolled to the first [heading] that has these words.
+     */
+    @Serializable
+    @Immutable
+    data class Siddur(
+        override val tabId: String,
+        val part: String? = null,
+        val epochDay: Long? = null,
+        val heading: String? = null,
     ) : TabsDestination
 }

@@ -125,6 +125,14 @@ data class NotesState(
     val scrollOffset: Int = 0,
 )
 
+/** Lines [first] to [last] of the book [bookId], by their index: a passage marked to be read. */
+@Immutable
+data class MarkedRange(
+    val bookId: Long,
+    val first: Int,
+    val last: Int,
+)
+
 @Immutable
 data class ContentState(
     // Data
@@ -138,6 +146,8 @@ data class ContentState(
     val showCommentaries: Boolean = false,
     val showTargum: Boolean = false,
     val showSources: Boolean = false,
+    // Each verse twice, then its targum
+    val shnayimMikra: Boolean = false,
     // Scroll positions
     val paragraphScrollPosition: Int = 0,
     val chapterScrollPosition: Int = 0,
@@ -177,6 +187,8 @@ data class ContentState(
     // One-shot request to top-anchor a specific line (e.g., from TOC)
     val topAnchorLineId: Long = -1L,
     val topAnchorRequestTimestamp: Long = 0L,
+    // A passage marked in the text, as the day's limud opened from the Home: not a selection, its commentaries unloaded
+    val markedRange: MarkedRange? = null,
 ) {
     /** The primary selected line (for TOC highlight, breadcrumb, etc.) */
     val primaryLine: Line?

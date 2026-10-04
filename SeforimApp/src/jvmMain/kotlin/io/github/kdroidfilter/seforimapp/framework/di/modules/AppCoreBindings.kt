@@ -11,31 +11,38 @@ import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
+import io.github.kdroidfilter.seforimapp.core.e2e.E2e
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
+import io.github.kdroidfilter.seforimapp.core.shnayimmikra.ShnayimMikraStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
-import io.github.kdroidfilter.seforimapp.framework.desktop.TabDockManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.search.AcronymFrequencyCache
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourceProvider
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
+import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.HybridSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LineHit
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.databasesDir
+import io.github.vinceglb.filekit.path
+import java.io.File
 import java.nio.file.Paths
 
 @ContributesTo(AppScope::class)
@@ -43,11 +50,11 @@ import java.nio.file.Paths
 object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
-    fun provideMainAppState(): MainAppState = MainAppState()
+    fun provideMainAppState(appSettings: AppSettings): MainAppState = MainAppState(appSettings)
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideCatalogAccess(): CatalogAccess = CatalogAccess { CatalogCache.getCatalog() }
+    fun provideCatalogAccess(catalogCache: CatalogCache): CatalogAccess = CatalogAccess { catalogCache.getCatalog() }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -99,8 +106,12 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideRepository(): SeforimRepository {
-        val dbPath = getDatabasePath()
+    fun provideShnayimMikraStore(database: UserSettingsDb): ShnayimMikraStore = ShnayimMikraStore(database)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideRepository(databasePathProvider: DatabasePathProvider): SeforimRepository {
+        val dbPath = databasePathProvider.get()
         // Persistent single-connection driver with prepared-statement cache +
         // read-tuning PRAGMAs. Replaces `JdbcSqliteDriver` whose ThreadedConnectionManager
         // closes the SQLite connection after every non-transactional query (confirmed by
@@ -121,8 +132,11 @@ object AppCoreBindings {
      */
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSearchEngine(repository: SeforimRepository): SearchEngine {
-        val dbPath = getDatabasePath()
+    fun provideSearchEngine(
+        repository: SeforimRepository,
+        databasePathProvider: DatabasePathProvider,
+    ): SearchEngine {
+        val dbPath = databasePathProvider.get()
         val indexPath = Paths.get(if (dbPath.endsWith(".db")) "$dbPath.lucene" else "$dbPath.luceneindex")
         val dictionaryPath = indexPath.resolveSibling("lexical.db")
         val snippetProvider = RepositorySnippetSourceProvider(repository)
@@ -153,20 +167,26 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideAcronymFrequencyCache(): AcronymFrequencyCache = AcronymFrequencyCache()
+    fun provideAcronymFrequencyCache(databasePathProvider: DatabasePathProvider): AcronymFrequencyCache =
+        AcronymFrequencyCache(databasePathProvider)
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideLuceneLookupSearchService(acronymCache: AcronymFrequencyCache): LuceneLookupSearchService {
-        val dbPath = getDatabasePath()
+    fun provideLuceneLookupSearchService(
+        acronymCache: AcronymFrequencyCache,
+        databasePathProvider: DatabasePathProvider,
+    ): LuceneLookupSearchService {
+        val dbPath = databasePathProvider.get()
         val indexPath = if (dbPath.endsWith(".db")) "$dbPath.lookup.lucene" else "$dbPath.lookupindex"
         return LuceneLookupSearchService(Paths.get(indexPath), acronymCache = acronymCache)
     }
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideDbDeltaUpdateService(): io.github.kdroidfilter.seforimapp.framework.update.DbDeltaUpdateService {
-        val dbPath = getDatabasePath()
+    fun provideDbDeltaUpdateService(
+        databasePathProvider: DatabasePathProvider,
+    ): io.github.kdroidfilter.seforimapp.framework.update.DbDeltaUpdateService {
+        val dbPath = databasePathProvider.get()
         val seforimDb = Paths.get(dbPath)
         val catalogPb = Paths.get(seforimDb.parent.toString(), "catalog.pb")
         val workDir = Paths.get(seforimDb.parent.toString(), "delta-cache")
@@ -194,19 +214,28 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
+    fun provideTabThumbnailStore(): TabThumbnailStore =
+        // The end-to-end harness keeps its pictures in its own output, never in the user's session.
+        TabThumbnailStore(E2e.outDir?.let { File(it, "thumbnails") } ?: File(FileKit.databasesDir.path, "session/thumbnails"))
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun provideAppUpdateService(): AppUpdateService = AppUpdateService.create()
 
     @Provides
     @SingleIn(AppScope::class)
     fun provideDesktopManager(
         tabPersistedStateStore: TabPersistedStateStore,
+        thumbnails: TabThumbnailStore,
         titleUpdateManager: TabTitleUpdateManager,
         repository: SeforimRepository,
         lookup: LuceneLookupSearchService,
-        settings: Settings,
+        appSettings: AppSettings,
+        sessionManager: SessionManager,
     ): DesktopManager =
         DesktopManager(
             tabPersistedStateStore = tabPersistedStateStore,
+            thumbnails = thumbnails,
             titleUpdateManager = titleUpdateManager,
             // TabsViewModel + SearchHomeViewModel are window-scoped: one pair per open window,
             // created and disposed by DesktopManager.
@@ -215,14 +244,10 @@ object AppCoreBindings {
                     persistedStore = tabPersistedStateStore,
                     repository = repository,
                     lookup = lookup,
-                    settings = settings,
+                    appSettings = appSettings,
                 )
             },
-            initialWindowGeometry = SessionManager.peekInitialWindowGeometry(),
+            bootState = sessionManager.loadBootState(repository),
             defaultDesktopName = "\u05DE\u05E8\u05D7\u05D1 \u05D0׳",
         )
-
-    @Provides
-    @SingleIn(AppScope::class)
-    fun provideTabDockManager(desktopManager: DesktopManager): TabDockManager = TabDockManager(desktopManager)
 }

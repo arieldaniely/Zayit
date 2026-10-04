@@ -19,6 +19,7 @@ import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.MarkedRange
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.Providers
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
@@ -48,6 +49,8 @@ class BookContentViewModel(
     private val titleUpdateManager: TabTitleUpdateManager,
     private val desktopManager: DesktopManager,
     private val historyStore: HistoryStore,
+    sessionManager: SessionManager,
+    private val appSettings: AppSettings,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(BookContentViewModel::class)
@@ -64,7 +67,7 @@ class BookContentViewModel(
 
     // True when this ViewModel was created by the boot session restore: its book was already
     // recorded when originally opened, so the first load must not re-enter the history.
-    private val createdDuringSessionRestore = SessionManager.isRestoringSession.value
+    private val createdDuringSessionRestore = sessionManager.isRestoringSession.value
 
     // Pre-set loading before uiState is initialized to avoid a single-frame Home flash.
     private val hasBookToLoad: Boolean =
@@ -274,6 +277,15 @@ class BookContentViewModel(
                 // Explicit line navigation wins (e.g., search result / deep link)
                 if (requestedLineId != null) {
                     loadBookById(bookIdToOpen, requestedLineId, triggerScroll = true)
+                    markRange(bookIdToOpen, requestedLineId, savedStateHandle.get<Long>(StateKeys.MARK_END_LINE_ID))
+                    // An aliya opened from the Shnayim Mikra widget
+                    if (savedStateHandle.get<Boolean>(StateKeys.SHNAYIM_MIKRA) == true) {
+                        stateManager.updateContent { copy(shnayimMikra = true) }
+                    }
+                    // A note opened from the notes page or widget: its pane, on its line
+                    if (savedStateHandle.get<Boolean>(StateKeys.OPEN_NOTES) == true && !stateManager.state.value.notes.isVisible) {
+                        notesUseCase.toggleNotes()
+                    }
                 } else {
                     // Restore from persisted state: build the pager around the persisted anchor/selection.
                     // This provides a stable starting window for Paging3 so scroll restoration can be exact.
@@ -463,6 +475,7 @@ class BookContentViewModel(
                     loadAndSelectLine(event.lineId)
 
                 is BookContentEvent.OpenBookAtLine -> {
+                    markRange(event.bookId, event.lineId, event.endLineId)
                     // If already on the target book, just jump to the line
                     val currentBookId =
                         stateManager.state.value.navigation.selectedBook
@@ -534,6 +547,9 @@ class BookContentViewModel(
 
                 BookContentEvent.ToggleTargum ->
                     contentUseCase.toggleTargum()
+
+                BookContentEvent.ToggleShnayimMikra ->
+                    stateManager.updateContent { copy(shnayimMikra = !shnayimMikra) }
 
                 BookContentEvent.ToggleSources ->
                     contentUseCase.toggleSources()
@@ -745,7 +761,7 @@ class BookContentViewModel(
      * Called when opening a book from search results, toolbar, or links.
      */
     private fun closeBookTreeIfEnabled() {
-        if (AppSettings.getCloseBookTreeOnNewBookSelected()) {
+        if (appSettings.getCloseBookTreeOnNewBookSelected()) {
             val isTreeVisible = stateManager.state.value.navigation.isVisible
             if (isTreeVisible) {
                 navigationUseCase.toggleBookTree()
@@ -959,6 +975,21 @@ class BookContentViewModel(
             }
             _linesPagingData.value = contentUseCase.buildLinesPager(book.id, line.id)
         }
+    }
+
+    /** Marks the lines from [startLineId] to [endLineId] of [bookId], or nothing without an end. */
+    private suspend fun markRange(
+        bookId: Long,
+        startLineId: Long,
+        endLineId: Long?,
+    ) {
+        val range =
+            endLineId?.let {
+                val first = repository.getLine(startLineId)?.lineIndex
+                val last = repository.getLine(it)?.lineIndex
+                if (first != null && last != null && last >= first) MarkedRange(bookId, first, last) else null
+            }
+        stateManager.updateContent { copy(markedRange = range) }
     }
 
     /** Loads and selects a line */

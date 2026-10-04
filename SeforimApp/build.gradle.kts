@@ -1,3 +1,5 @@
+import dev.nucleusframework.desktop.application.dsl.CompressionLevel
+import dev.nucleusframework.desktop.application.dsl.NativeImageOptimization
 import dev.nucleusframework.desktop.application.dsl.ReleaseChannel
 import dev.nucleusframework.desktop.application.dsl.ReleaseType
 import dev.nucleusframework.desktop.application.dsl.TargetFormat
@@ -19,6 +21,7 @@ plugins {
     alias(libs.plugins.nucleus)
     alias(libs.plugins.structured.coroutines)
     alias(libs.plugins.sentryJvmGradle)
+    alias(libs.plugins.ksp)
 }
 
 structuredCoroutines {
@@ -34,6 +37,10 @@ sentry {
     authToken = System.getenv("SENTRY_AUTH_TOKEN")
 }
 
+// The smart siddur is in the official builds only (open core): with its package's token or its sources beside
+// (settings.gradle.kts); a community build has none and src/jvmNoSiddur says so
+val withSiddur = gradle.extensions.extraProperties["siddurEnabled"] == true
+
 kotlin {
 //    androidTarget {
 //        // https://www.jetbrains.com/help/kotlin-multiplatform-dev/compose-test.html
@@ -41,6 +48,10 @@ kotlin {
 //    }
 
     jvm()
+    compilerOptions {
+        // Satellites, dock and tab windows (Nucleus 2.6) are experimental.
+        optIn.add("dev.nucleusframework.window.ExperimentalNucleusApi")
+    }
     jvmToolchain(
         libs.versions.jvmToolchain
             .get()
@@ -84,7 +95,6 @@ kotlin {
             implementation(libs.nucleus.application)
             implementation(libs.nucleus.aot.runtime)
             implementation(libs.nucleus.darkmode.detector)
-            implementation(libs.platformtools.appmanager)
             implementation(project(":releasefetcher"))
 
             // FileKit
@@ -121,6 +131,12 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.compose.ui.test)
         }
+
+        jvmMain {
+            kotlin.srcDir(if (withSiddur) "src/jvmSiddur/kotlin" else "src/jvmNoSiddur/kotlin")
+            if (withSiddur) dependencies { implementation(libs.seforim.siddur) }
+        }
+        if (withSiddur) jvmTest { kotlin.srcDir("src/jvmSiddurTest/kotlin") }
 
         jvmTest.dependencies {
             implementation(libs.mockk)
@@ -181,7 +197,7 @@ kotlin {
             // HTML sanitization for search snippets
             implementation(libs.jsoup)
 
-            implementation(libs.zmanim)
+            implementation(libs.kosherkotlin)
 
             implementation(libs.nucleus.notification.common)
 
@@ -216,47 +232,21 @@ kotlin {
 nucleus.application {
 
     mainClass = "io.github.kdroidfilter.seforimapp.MainKt"
-
+    nucleusOptimization = true
     graalvm {
         isEnabled = true
-        javaLanguageVersion = 25
-        jvmVendor = JvmVendorSpec.BELLSOFT
         imageName = "zayit"
-        buildArgs.addAll(
-            // Enable native access for classpath (unnamed-module) code at IMAGE BUILD TIME so the
-            // generated binary never emits the JDK "restricted method ... System::load" warnings
-            // (triggered by sqlite-jdbc loading its JNI lib). The runtime `--enable-native-access`
-            // jvmArg below does NOT reach the GraalVM native binary, so it must be baked in here.
-            "--enable-native-access=ALL-UNNAMED",
-            "-H:+AddAllCharsets",
-            "-Djava.awt.headless=false",
-            "-Os",
-            "-H:+UnlockExperimentalVMOptions",
-            "-H:-IncludeMethodData",
-            // Enable shared arenas for Lucene's memory-mapped I/O (MemorySegmentIndexInput)
-            "-H:+SharedArenaSupport",
-            // Parallel GC for better throughput with large heaps
-            "--gc=parallel",
-            // Default max heap 2 GB
-            "-R:MaxHeapSize=2147483648",
-            // Exclude sqlite-jdbc's native-image.properties which references
-            // SqliteJdbcFeature (lives in META-INF/versions/9/ of the multi-release
-            // JAR, stripped by ProGuard shrinking). Equivalent metadata is already
-            // in the project's reachability-metadata.json.
-            "--exclude-config",
-            ".*\\.jar",
-            "META-INF/native-image/org\\.xerial/.*",
-            // Lucene classes initialize at runtime (GraalVM default).
-            // MethodHandle-based code paths are handled by substitution classes
-            // in io.github.kdroidfilter.seforimapp.graalvm.
-        )
-        march = providers.gradleProperty("nativeMarch").getOrElse("compatibility")
+        optimization = NativeImageOptimization.LEVEL_3
         nativeImageConfigBaseDir.set(layout.projectDirectory.dir("src/graalvm"))
+        // Jewel's build-time-initialized MacPlatformServices captures an SLF4J logger;
+        // Nucleus 2.6 no longer forces org.slf4j to build time, so opt back in.
+        buildArgs.add("--initialize-at-build-time=org.slf4j")
     }
     nativeDistributions {
         appName = "זית"
         packageName = "zayit"
         description = "ספריית הלימוד שמובילה ישר לטקסט"
+        compressionLevel = CompressionLevel.Ultra
 
         publish {
             github {
@@ -321,7 +311,7 @@ nucleus.application {
             dirChooser = false
             shortcut = true
             upgradeUuid = "d9f21975-4359-4818-a623-6e9a3f0a07ca"
-            perUserInstall = true
+            msi { perMachine = false }
 
             nsis {
                 oneClick = true // Default: true
@@ -390,4 +380,9 @@ kover {
             }
         }
     }
+}
+
+dependencies {
+    // Generates availableHomeWidgets from every HomeWidget object (see :widgetprocessor).
+    add("kspJvm", project(":widgetprocessor"))
 }

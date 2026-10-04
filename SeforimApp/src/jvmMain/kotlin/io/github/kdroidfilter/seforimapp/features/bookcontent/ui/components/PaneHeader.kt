@@ -17,14 +17,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.nucleusframework.window.ExperimentalNucleusApi
+import dev.nucleusframework.window.tao.SatelliteScope
+import dev.nucleusframework.window.tao.satelliteDragHandle
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
-import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import org.jetbrains.compose.resources.stringResource
@@ -35,6 +38,14 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.commentaries
 
+/**
+ * The dock satellite hosting the current pane, or null outside one. [PaneHeader] is then also the
+ * pane's grip: dragging it moves the pane between the dock and a window of its own.
+ */
+@OptIn(ExperimentalNucleusApi::class)
+val LocalPaneSatellite = staticCompositionLocalOf<SatelliteScope?> { null }
+
+@OptIn(ExperimentalNucleusApi::class)
 @Composable
 fun PaneHeader(
     label: String,
@@ -47,20 +58,16 @@ fun PaneHeader(
     // Touch has no persistent hover, so reveal the actions whenever the user is
     // interacting by touch (see [LocalIsTouchMode]).
     val isTouchMode = LocalIsTouchMode.current
-    val isIslands = ThemeUtils.isIslandsStyle()
-    val headerBackground =
-        if (isIslands) {
-            JewelTheme.globalColors.toolwindowBackground.copy(alpha = 0.15f)
-        } else {
-            JewelTheme.globalColors.panelBackground
-        }
+    val headerBackground = JewelTheme.globalColors.toolwindowBackground.copy(alpha = 0.15f)
 
+    val satellite = LocalPaneSatellite.current
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .background(headerBackground)
-                .hoverable(headerHoverSource),
+                .hoverable(headerHoverSource)
+                .then(if (satellite?.isDocked == true) Modifier.satelliteDragHandle(satellite) else Modifier),
     ) {
         Row(
             modifier =

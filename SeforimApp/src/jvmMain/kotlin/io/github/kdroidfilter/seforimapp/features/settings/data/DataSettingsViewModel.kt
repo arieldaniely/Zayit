@@ -2,10 +2,10 @@ package io.github.kdroidfilter.seforimapp.features.settings.data
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.nucleusframework.core.runtime.AppRestarter.restartApplication
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
-import io.github.kdroidfilter.platformtools.appmanager.restartApplication
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
@@ -28,7 +28,9 @@ import java.util.Locale
 @ContributesIntoMap(AppScope::class)
 @ViewModelKey
 @Inject
-class DataSettingsViewModel : ViewModel() {
+class DataSettingsViewModel(
+    private val appSettings: AppSettings,
+) : ViewModel() {
     private val _state = MutableStateFlow(DataSettingsState())
     val state: StateFlow<DataSettingsState> = _state.asStateFlow()
 
@@ -102,9 +104,9 @@ class DataSettingsViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             val dbDir = File(FileKit.databasesDir.path)
             // Read the custom DB path before clearing settings (clearAll() drops it).
-            val customDbPath = runCatching { AppSettings.getDatabasePath() }.getOrNull()
+            val customDbPath = runCatching { appSettings.getDatabasePath() }.getOrNull()
 
-            AppSettings.clearAll()
+            appSettings.clearAll()
 
             // Delete every file/directory in the managed databases directory (this also holds the
             // user settings DB with notes and highlights).

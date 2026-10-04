@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    # The official builds include the smart siddur (open core): its private Maven package is readable only with the
+    # access of its own repository, so a classic token with read:packages (GITHUB_TOKEN cannot reach it)
+    env:
+      SEFORIM_SIDDUR_TOKEN: ${{ secrets.SEFORIM_SIDDUR_TOKEN }}
     strategy:
       fail-fast: false
       matrix:

@@ -2,14 +2,17 @@
 
 package io.github.kdroidfilter.seforimapp.framework.session
 
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import io.github.kdroidfilter.seforim.desktop.VirtualDesktop
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
+import io.github.kdroidfilter.seforimapp.core.e2e.E2e
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
-import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
+import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.logger.debugln
+import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
 import io.github.vinceglb.filekit.path
@@ -20,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -30,11 +34,20 @@ import java.io.File
  *
  * Now supports multiple virtual desktops via [DesktopsState].
  * Migrates transparently from the legacy single-desktop [SavedSessionV2] format.
+ *
+ * [desktopManager] is lazy: [DesktopManager] itself is built from [loadBootState].
  */
-object SessionManager {
+@Inject
+@SingleIn(AppScope::class)
+class SessionManager(
+    private val desktopManager: Lazy<DesktopManager>,
+    private val tabThumbnailStore: TabThumbnailStore,
+    private val appSettings: AppSettings,
+) {
     private val proto = ProtoBuf
 
-    private val _isRestoringSession = MutableStateFlow(hasSavedSessionToRestore())
+    // Guarded: outside the app (unit tests) FileKit and the settings are not initialized.
+    private val _isRestoringSession = MutableStateFlow(runCatching { hasSavedSessionToRestore() }.getOrDefault(false))
     val isRestoringSession: StateFlow<Boolean> = _isRestoringSession
 
     private fun sessionDir(): File {
@@ -47,39 +60,20 @@ object SessionManager {
     private fun desktopsFile(): File = File(sessionDir(), "desktops_v1.pb")
 
     private fun hasSavedSessionToRestore(): Boolean =
-        AppSettings.isPersistSessionEnabled() && (desktopsFile().exists() || legacySessionFile().exists())
-
-    @Volatile
-    private var cachedStateForRestore: DesktopsState? = null
-
-    /**
-     * Boot-time peek at the focused window's saved geometry, so the very first window is created
-     * directly with the right placement instead of flashing maximized before the async session
-     * restore applies the real geometry. Decodes the session file once and caches the result for
-     * [restoreIfEnabled].
-     */
-    fun peekInitialWindowGeometry(): SavedGeometry? {
-        if (!AppSettings.isPersistSessionEnabled()) return null
-        val file = desktopsFile()
-        if (!file.exists()) return null
-        val state =
-            runCatching { proto.decodeFromByteArray(DesktopsState.serializer(), file.readBytes()) }
-                .getOrNull() ?: return null
-        cachedStateForRestore = state
-        val openIds = state.effectiveOpenDesktopIds()
-        val focusedId = state.focusedDesktopId.takeIf { it in openIds } ?: openIds.firstOrNull() ?: return null
-        return state.snapshots[focusedId]
-            ?.effectiveWindows()
-            ?.firstOrNull()
-            ?.geometry
-    }
+        appSettings.isPersistSessionEnabled() && (desktopsFile().exists() || legacySessionFile().exists())
 
     /** Saves the current session snapshot if the user enabled persistence in settings. */
-    fun saveIfEnabled(appGraph: AppGraph) {
-        if (!AppSettings.isPersistSessionEnabled()) return
+    fun saveIfEnabled() {
+        // The end-to-end harness must never overwrite the user's session.
+        if (E2e.enabled || !appSettings.isPersistSessionEnabled()) return
 
-        val desktopManager: DesktopManager = appGraph.desktopManager
-        val desktopsState = desktopManager.buildDesktopsState()
+        val desktopsState = desktopManager.value.buildDesktopsState()
+        // The hover-card pictures of tabs no desktop holds any more.
+        tabThumbnailStore.prune(
+            desktopsState.snapshots.values
+                .flatMap { snapshot -> snapshot.effectiveWindows().flatMap { it.destinations } }
+                .mapTo(HashSet()) { it.tabId },
+        )
 
         debugln {
             buildString {
@@ -100,30 +94,23 @@ object SessionManager {
         }
     }
 
-    /** Restores a saved session snapshot if the user enabled persistence in settings. */
-    suspend fun restoreIfEnabled(appGraph: AppGraph) {
-        if (!AppSettings.isPersistSessionEnabled()) return
+    /**
+     * The saved session, decoded synchronously at boot so the first frame already has its windows:
+     * an application composing no window at all is closed at once. Null when disabled or absent.
+     */
+    fun loadBootState(repository: SeforimRepository): DesktopsState? {
+        if (E2e.enabled || !appSettings.isPersistSessionEnabled()) return null
+        val state = loadDesktopsState()?.takeIf { it.desktops.isNotEmpty() } ?: return null
+        // Tabs saved without a title (book names come from the DB) are named before they are shown.
+        return runCatching { runBlocking { enrichMissingTabTitles(state, repository) } }.getOrDefault(state)
+    }
 
-        _isRestoringSession.value = true
+    /** Clears the restoring flag once the restored tabs' ViewModels have been created. */
+    suspend fun restoreIfEnabled() {
         try {
-            val desktopsState = loadDesktopsState() ?: return
-            if (desktopsState.desktops.isEmpty()) return
-
-            val enrichedState = enrichMissingTabTitles(desktopsState, appGraph)
-
-            debugln {
-                buildString {
-                    append("[SessionManager] Restoring desktops session: ${enrichedState.desktops.size} desktops, ")
-                    append("active=${enrichedState.activeDesktopId}\n")
-                }
-            }
-
-            appGraph.desktopManager.restoreFromDesktopsState(enrichedState)
-
-            // Give Compose one recomposition cycle to process the restored tabs
-            // and create ViewModels (whose initial state has isLoading=true).
-            // Without this, the flag clears before ViewModels exist, causing
-            // a brief Home page flash.
+            if (!appSettings.isPersistSessionEnabled()) return
+            // Give Compose one recomposition cycle to create the restored tabs' ViewModels (whose
+            // initial state has isLoading=true); clearing the flag earlier flashes the Home page.
             withContext(NonCancellable) { delay(150) }
         } finally {
             _isRestoringSession.value = false
@@ -133,20 +120,14 @@ object SessionManager {
     /**
      * Loads [DesktopsState], migrating from legacy [SavedSessionV2] if needed.
      */
-    private suspend fun loadDesktopsState(): DesktopsState? {
-        // Already decoded at boot by peekInitialWindowGeometry — don't re-read the file.
-        cachedStateForRestore?.let {
-            cachedStateForRestore = null
-            return it
-        }
-
+    private fun loadDesktopsState(): DesktopsState? {
         val desktopsF = desktopsFile()
         val legacyF = legacySessionFile()
 
         // Try new format first
         if (desktopsF.exists()) {
-            val bytes = withContext(Dispatchers.IO) { desktopsF.readBytes() }
-            return runSuspendCatching {
+            val bytes = desktopsF.readBytes()
+            return runCatching {
                 proto.decodeFromByteArray(DesktopsState.serializer(), bytes)
             }.getOrElse {
                 runCatching { desktopsF.delete() }
@@ -156,9 +137,9 @@ object SessionManager {
 
         // Migrate from legacy format
         if (legacyF.exists()) {
-            val bytes = withContext(Dispatchers.IO) { legacyF.readBytes() }
+            val bytes = legacyF.readBytes()
             val saved =
-                runSuspendCatching {
+                runCatching {
                     proto.decodeFromByteArray(SavedSessionV2.serializer(), bytes)
                 }.getOrElse {
                     runCatching { legacyF.delete() }
@@ -214,7 +195,7 @@ object SessionManager {
     private suspend fun computeTabTitles(
         destinations: List<TabsDestination>,
         tabStates: Map<String, TabPersistedState>,
-        appGraph: AppGraph,
+        repository: SeforimRepository,
     ): Map<String, Pair<String, TabType>> {
         val titles = mutableMapOf<String, Pair<String, TabType>>()
         for (dest in destinations) {
@@ -231,7 +212,7 @@ object SessionManager {
                 is TabsDestination.BookContent -> {
                     val bookId = tabStates[tabId]?.bookContent?.selectedBookId?.takeIf { it > 0 } ?: dest.bookId
                     if (bookId > 0) {
-                        val book = withContext(Dispatchers.IO) { appGraph.repository.getBookCore(bookId) }
+                        val book = withContext(Dispatchers.IO) { repository.getBookCore(bookId) }
                         if (book != null) {
                             titles[tabId] = book.title to TabType.BOOK
                         }
@@ -249,6 +230,14 @@ object SessionManager {
                 is TabsDestination.Favorites -> {
                     // No-op: the Favorites screen localizes its own title.
                 }
+
+                is TabsDestination.Notes -> {
+                    // No-op: the Notes screen localizes its own title.
+                }
+
+                is TabsDestination.Siddur -> {
+                    // No-op: the Siddur screen localizes its own title.
+                }
             }
         }
         return titles
@@ -256,7 +245,7 @@ object SessionManager {
 
     private suspend fun enrichMissingTabTitles(
         state: DesktopsState,
-        appGraph: AppGraph,
+        repository: SeforimRepository,
     ): DesktopsState {
         val enrichedSnapshots =
             state.snapshots.mapValues { (_, snapshot) ->
@@ -271,7 +260,7 @@ object SessionManager {
                         if (destinationsMissingTitles.isEmpty()) {
                             windowSnapshot
                         } else {
-                            val computedTitles = computeTabTitles(destinationsMissingTitles, snapshot.tabStates, appGraph)
+                            val computedTitles = computeTabTitles(destinationsMissingTitles, snapshot.tabStates, repository)
                             if (computedTitles.isEmpty()) {
                                 windowSnapshot
                             } else {

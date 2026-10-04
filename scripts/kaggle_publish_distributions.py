@@ -14,18 +14,23 @@ from urllib.parse import quote
 import requests
 
 
-def extract_complete(parts, destination, stream_class):
+def extract_complete(parts, destination, stream_class, *, base_only=False):
     """A completion marker prevents reuse of a partially extracted bundle."""
     import zstandard
 
     destination = destination.resolve()
+    supplemental = {'תלמוד בבלי', 'seforim.db.semantic', 'model', 'index'}
+    if base_only and any((destination / name).exists() for name in ('תלמוד בבלי', 'seforim.db.semantic')):
+        raise ValueError('Source must be a base bundle without PDF or semantic vectors')
     marker = destination / '.base-extracted'
     if marker.exists():
         return
     with contextlib.closing(stream_class(parts)) as source:
         with zstandard.ZstdDecompressor().stream_reader(source) as reader:
-            with tarfile.open(fileobj=reader, mode='r|') as archive:
+            with tarfile.open(fileobj=reader, mode='r|', ignore_zeros=True) as archive:
                 for member in archive:
+                    if base_only and member.name.removeprefix('./').split('/', 1)[0] in supplemental:
+                        raise ValueError('Source must be a base bundle without PDF or semantic vectors')
                     target = (destination / member.name).resolve()
                     if not target.is_relative_to(destination):
                         raise ValueError('Archive entry escapes destination')
@@ -128,7 +133,48 @@ class Publisher:
                         json={'draft': False, 'prerelease': False, 'make_latest': str(latest).lower()})
 
 
-def build_distributions(args, database, model_dir, index, env, token, sha256, download, run_command, stream_class):
+def concatenate_archives(sources, target, split_bytes=int(1.9 * 1024**3)):
+    """Copy existing zstd frames verbatim, splitting the combined stream for GitHub."""
+    if split_bytes <= 0:
+        raise ValueError('split_bytes must be positive')
+    paths = []
+    output = None
+    try:
+        size = 0
+        for source in sources:
+            with source.open('rb') as content:
+                while chunk := content.read(1 << 20):
+                    offset = 0
+                    while offset < len(chunk):
+                        if output is None or size == split_bytes:
+                            if output is not None:
+                                output.close()
+                            path = target.with_name(target.name + f'.part{len(paths) + 1:02d}')
+                            output = path.open('xb')
+                            paths.append(path)
+                            size = 0
+                        count = min(len(chunk) - offset, split_bytes - size)
+                        output.write(chunk[offset:offset + count])
+                        offset += count
+                        size += count
+        if output is not None:
+            output.close()
+            output = None
+        if not paths:
+            raise ValueError('No compressed archive data')
+        if len(paths) == 1:
+            paths[0].replace(target)
+            paths = [target]
+        return paths
+    except BaseException:
+        if output is not None:
+            output.close()
+        for path in paths:
+            path.unlink(missing_ok=True)
+        raise
+
+
+def build_distributions(args, database, model_dir, index, env, token, sha256, download, run_command, database_parts):
     publisher = Publisher(token)
     tag = args.publish_tag or args.db_release_tag + '-full'
     if tag == args.db_release_tag:
@@ -156,25 +202,23 @@ def build_distributions(args, database, model_dir, index, env, token, sha256, do
     pdf_source.write_text(json.dumps(identity), encoding='utf-8')
     pdf_archive = work / pdf_asset['name']
     download(pdf_asset['browser_download_url'], pdf_archive, digest.removeprefix('sha256:'))
-    pdf_root = work / 'pdf'
-    pdf_root.mkdir(exist_ok=True)
-    extract_complete([pdf_archive], pdf_root, stream_class)
-    pdf_dir = pdf_root / 'תלמוד בבלי'
-    if not any(pdf_dir.rglob('*.pdf')):
-        raise ValueError('PDF archive does not contain the expected תלמוד בבלי directory')
-    pdf_archive.unlink()
     for name in ('seforim.db.lucene', 'seforim.db.lookup.lucene', 'catalog.pb', 'lexical.db', 'release_info.txt'):
         if not (database.parent / name).exists():
             raise FileNotFoundError(f'Missing base artifact: {name}')
-    semantic_dir = work / 'semantic-single'
-    semantic_dir.mkdir(exist_ok=True)
-    # Links avoid copying large indexes; the existing JVM packager traverses their contents.
-    for name, target in (('model', model_dir), ('index', index)):
-        link = semantic_dir / name
-        if not link.exists():
-            link.symlink_to(target.resolve(), target_is_directory=True)
     library = args.repo / 'SeforimLibrary'
     gradle = str(library / 'gradlew')
+    semantic_stage = work / 'semantic-source'
+    semantic_stage.mkdir(exist_ok=True)
+    semantic_archive = semantic_stage / 'semantic-bundle.tar.zst'
+    for old in semantic_stage.glob('semantic-bundle*'):
+        if old.is_file():
+            old.unlink()
+    # Validate and compress the index/model once; every vector distribution reuses these bytes.
+    run_command([gradle, ':packaging:packageSemanticBundle', f'-PseforimDb={database}',
+                 f'-PsemanticModelDir={model_dir}', f'-PsemanticIndexDir={index}',
+                 f'-PsemanticBundleOutput={semantic_archive}', '-PzstdLevel=22',
+                 '--no-daemon', '--no-configuration-cache', '--max-workers=4'], cwd=library, env=env)
+    semantic_parts = sorted(semantic_stage.glob(semantic_archive.name + '.part*')) or [semantic_archive]
     entries = []
     variants = [
         ('seforim_bundle-database-only', False, False, False),
@@ -192,22 +236,23 @@ def build_distributions(args, database, model_dir, index, env, token, sha256, do
         for old in stage.glob(archive.name + '*'):
             if old.is_file():
                 old.unlink()
-        common = ['--no-daemon', '--no-configuration-cache', '--max-workers=4']
         if name == 'semantic-bundle':
-            command = [gradle, ':packaging:packageSemanticBundle', f'-PseforimDb={database}',
-                       f'-PsemanticModelDir={model_dir}', f'-PsemanticIndexDir={index}',
-                       f'-PsemanticBundleOutput={archive}', '-PzstdLevel=22']
+            sources = semantic_parts
+        elif pdf_only:
+            sources = [pdf_archive]
         else:
-            command = [gradle, ':packaging:packageArtifacts', f'-PseforimDb={database}',
-                       f'-PpdfLibraryDir={pdf_dir}', f'-PsemanticBundleDir={semantic_dir}',
-                       f'-PincludePdf={str(pdf).lower()}', f'-PincludeVectors={str(vectors).lower()}',
-                       f'-PpdfOnly={str(pdf_only).lower()}', f'-PbundleOutput={archive}', '-PzstdLevel=22',
-                       '-x', ':packaging:writeReleaseInfo', '-x', ':packaging:downloadLexicalDb']
-        run_command(command + common, cwd=library, env=env)
-        parts = sorted(stage.glob(archive.name + '.part*'))
-        files = parts or [archive]
+            sources = list(database_parts)
+            if pdf:
+                sources.append(pdf_archive)
+            if vectors:
+                sources.extend(semantic_parts)
+        files = concatenate_archives(sources, archive)
         if name == 'semantic-bundle':
-            files.append(stage / 'semantic-bundle.json')
+            semantic_manifest = stage / 'semantic-bundle.json'
+            metadata = json.loads((semantic_stage / 'semantic-bundle.json').read_text(encoding='utf-8'))
+            metadata['parts'] = len(files)
+            semantic_manifest.write_text(json.dumps(metadata) + '\n', encoding='utf-8')
+            files.append(semantic_manifest)
         for file in files:
             if not file.is_file() or file.stat().st_size >= 2**31:
                 raise ValueError(f'Asset missing or exceeds GitHub 2 GiB limit: {file.name}')
@@ -218,11 +263,9 @@ def build_distributions(args, database, model_dir, index, env, token, sha256, do
             if name == 'semantic-bundle':
                 publisher.upload(args.app_repository, semantic_release, file, digest)
             file.unlink()
-        # The JVM base packager retains the unsplit archive alongside its parts.
-        archive.unlink(missing_ok=True)
     manifest = args.output / 'distributions.json'
     manifest.write_text(json.dumps({'databaseSha256': sha256(database), 'databaseRelease': args.db_release_tag,
-                                   'compressionLevel': 22, 'vectorEncoding': 'int8-maxabs-v1', 'shardCount': 1,
+                                   'compressionLevel': 22, 'archiveLayout': 'concatenated-tar-zstd', 'vectorEncoding': 'int8-maxabs-v1', 'shardCount': 1,
                                    'releaseTag': tag, 'pdfSource': identity, 'defaultBundle': 'seforim_bundle', 'assets': entries},
                                   indent=2), encoding='utf-8')
     checksums = args.output / 'checksums.sha256'

@@ -43,9 +43,12 @@ def extract(first, destination):
     destination.mkdir(parents=True, exist_ok=True)
     with contextlib.closing(PartsReader(paths)) as source:
         with zstandard.ZstdDecompressor().stream_reader(source) as reader:
-            with tarfile.open(fileobj=reader, mode='r|') as archive:
+            with tarfile.open(fileobj=reader, mode='r|', ignore_zeros=True) as archive:
                 for member in archive:
-                    target = (destination / member.name).resolve()
+                    name = member.name.removeprefix('./')
+                    if (destination / 'seforim.db').is_file() and name.split('/', 1)[0] in ('model', 'index'):
+                        name = 'seforim.db.semantic/' + name
+                    target = (destination / name).resolve()
                     if not target.is_relative_to(destination):
                         raise ValueError('Archive path escapes destination')
                     if member.isdir():

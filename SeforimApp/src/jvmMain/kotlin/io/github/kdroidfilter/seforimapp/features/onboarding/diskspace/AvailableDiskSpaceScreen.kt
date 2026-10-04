@@ -42,7 +42,10 @@ fun AvailableDiskSpaceScreen(
         metroViewModel(viewModelStoreOwner = LocalWindowViewModelStoreOwner.current)
     val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(Unit) { progressBarState.setProgress(0.2f) }
+    LaunchedEffect(Unit) {
+        progressBarState.setProgress(0.2f)
+        viewModel.onEvent(AvailableDiskSpaceEvents.Refresh)
+    }
 
     AvailableDiskSpaceView(
         state = state,
@@ -59,7 +62,7 @@ fun AvailableDiskSpaceView(
     onNext: () -> Unit = {},
 ) {
     val requiredBytes = AvailableDiskSpaceUseCase.REQUIRED_SPACE_BYTES
-    // Space breakdown: permanent (8.5 GB) + temporary (2.5 GB) = total required (11 GB)
+    // Include both the installed library and temporary download space.
     val permanentSpaceBytes = (AvailableDiskSpaceUseCase.FINAL_SPACE_GB * 1024 * 1024 * 1024).toLong()
     val temporarySpaceBytes = (AvailableDiskSpaceUseCase.TEMPORARY_SPACE_GB * 1024 * 1024 * 1024).toLong()
 
@@ -75,6 +78,7 @@ fun AvailableDiskSpaceView(
             return@OnBoardingScaffold
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(Res.string.onboarding_disk_space_required, formatBytes(requiredBytes)))
             // Pie chart: Used, Permanent Space, Temporary Space, Free After Installation
             val total = state.totalDiskSpace
             val used = (total - state.availableDiskSpace).coerceAtLeast(0)
@@ -88,10 +92,10 @@ fun AvailableDiskSpaceView(
                 )
             val colors = generateHueColorPalette(slices.size)
 
-            Row(Modifier.weight(0.9f)) {
+            Row(Modifier.height(200.dp).fillMaxWidth()) {
                 PieChart(
                     values = slices,
-                    modifier = Modifier.size(240.dp).weight(1f),
+                    modifier = Modifier.size(180.dp).weight(1f),
                     slice = { i: Int ->
                         val labelText =
                             when (i) {
@@ -122,7 +126,7 @@ fun AvailableDiskSpaceView(
                 }
             }
 
-            Row(modifier = Modifier.weight(0.2f)) {
+            Row(modifier = Modifier.padding(top = 12.dp)) {
                 val recheckLabel = stringResource(Res.string.recheck_button)
 
                 if (state.hasEnoughSpace) {

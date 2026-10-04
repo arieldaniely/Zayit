@@ -7,7 +7,6 @@ import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirec
 import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
@@ -144,10 +143,10 @@ class ExtractUseCase {
         FileInputStream(zstFile).use { fis ->
             CountingInputStream(BufferedInputStream(fis, 1 shl 20)).use { cis ->
                 ZstdInputStream(cis).use { zIn ->
-                    TarArchiveInputStream(zIn).use { tar ->
+                    ConcatenatedTarInputStream(zIn).use { tar ->
                         while (true) {
                             val entry = tar.nextEntry ?: break
-                            val name = entry.name
+                            val name = installationEntryName(entry.name)
                             require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
                             val outFile = File(destDir, name).canonicalFile
                             require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
@@ -232,10 +231,10 @@ class ExtractUseCase {
         var extractedDb: File? = null
         CountingInputStream(seq).use { cis ->
             ZstdInputStream(cis).use { zIn ->
-                TarArchiveInputStream(zIn).use { tar ->
+                ConcatenatedTarInputStream(zIn).use { tar ->
                     while (true) {
                         val entry = tar.nextEntry ?: break
-                        val name = entry.name
+                        val name = installationEntryName(entry.name)
                         require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
                         val outFile = File(destDir, name).canonicalFile
                         require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
@@ -267,6 +266,16 @@ class ExtractUseCase {
         }
         onUiProgress(1f)
         return extractedDb ?: error("No .db file found in archive")
+    }
+
+    // Reuse the standalone semantic bundle unchanged inside full distributions.
+    private fun installationEntryName(name: String): String {
+        val normalized = name.removePrefix("./")
+        return if (normalized.substringBefore('/') in setOf("model", "index")) {
+            "seforim.db.semantic/$normalized"
+        } else {
+            normalized
+        }
     }
 
     private fun <T> List<T>.toEnumeration(): java.util.Enumeration<T> =

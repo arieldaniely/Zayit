@@ -239,7 +239,7 @@ def main(args: argparse.Namespace) -> None:
     if args.all_distributions:
         from kaggle_publish_distributions import extract_complete
 
-        extract_complete(parts, args.work, MultipartStream)
+        extract_complete(parts, args.work, MultipartStream, base_only=True)
         if not database.is_file():
             raise FileNotFoundError('The source release does not contain seforim.db')
     else:
@@ -250,30 +250,17 @@ def main(args: argparse.Namespace) -> None:
         print("Database rows:", connection.execute("SELECT COUNT(*) FROM line").fetchone()[0], flush=True)
         if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("The extracted database failed SQLite quick_check")
-    for part in parts:
-        part.unlink()
+    if not args.all_distributions:
+        for part in parts:
+            part.unlink()
 
+    if args.all_distributions:
+        for name in ('seforim.db.lucene', 'seforim.db.lookup.lucene', 'catalog.pb', 'lexical.db', 'release_info.txt'):
+            if not (database.parent / name).exists():
+                raise FileNotFoundError(f'The source bundle is missing {name}; publish a complete base bundle')
     checkpoint, model_dir = fetch_models(args.work)
     java_home = install_java25(args.work)
     env = dict(os.environ, JAVA_HOME=str(java_home), RAYON_NUM_THREADS="2", OMP_NUM_THREADS="2")
-    if args.all_distributions:
-        library = args.repo / "SeforimLibrary"
-        gradle = library / "gradlew"
-        gradle.chmod(gradle.stat().st_mode | 0o111)
-        tasks = []
-        if not all((database.parent / name).is_dir() and any((database.parent / name).iterdir())
-                   for name in ('seforim.db.lucene', 'seforim.db.lookup.lucene')):
-            tasks.append(':searchindex:buildLuceneIndexDefault')
-        if not (database.parent / 'catalog.pb').is_file():
-            tasks.append(':catalog:buildCatalog')
-        if not (database.parent / 'lexical.db').is_file():
-            tasks.append(':packaging:downloadLexicalDb')
-        if not (database.parent / 'release_info.txt').is_file():
-            tasks.append(':packaging:writeReleaseInfo')
-        if tasks:
-            run_command([str(gradle), *tasks, f'-PseforimDb={database}',
-                         f'-PreleaseName={args.db_release_tag}', '-PinMemoryDb=false',
-                         '--no-daemon', '--no-configuration-cache', '--max-workers=4'], cwd=library, env=env)
     vectors_dir = args.work / "vectors-single"
     vectors_dir.mkdir(exist_ok=True)
     embed_script = args.repo / "scripts/kaggle_embed_vectors.py"
@@ -354,7 +341,7 @@ def main(args: argparse.Namespace) -> None:
         from kaggle_publish_distributions import build_distributions
 
         build_distributions(args, database, model_dir, index, env, token, sha256, download,
-                            run_command, MultipartStream)
+                            run_command, parts)
         return
 
     archive = args.output / "semantic-bundle.tar.zst"

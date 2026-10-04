@@ -62,6 +62,37 @@ class ExtractUseCaseTest {
         }
 
     @Test
+    fun `imports concatenated database pdf and semantic frames including split boundaries`() =
+        runBlocking {
+            withInstallRoot { root, source ->
+                val base = File(source, "base.tar.zst")
+                val pdf = File(source, "pdf.tar.zst")
+                val semantic = File(source, "semantic.tar.zst")
+                writeBundle(base, mapOf("seforim.db" to "books", "lexical.db" to "dictionary"))
+                writeBundle(pdf, mapOf("תלמוד בבלי/ברכות.pdf" to "pdf"))
+                writeBundle(semantic, mapOf("model/tokenizer.json" to "tokenizer", "index/shard-00/segments" to "vectors"))
+                val bytes = base.readBytes() + pdf.readBytes() + semantic.readBytes()
+                val combined = File(source, "combined.tar.zst").apply { writeBytes(bytes) }
+                val parts =
+                    bytes.toList().chunked(37).mapIndexed { index, chunk ->
+                        File(source, "combined.tar.zst.part%02d".format(index + 1)).apply {
+                            writeBytes(chunk.toByteArray())
+                        }
+                    }
+                for ((index, archive) in listOf(combined, parts.first()).withIndex()) {
+                    val install = File(root, "concatenated-$index").apply { mkdirs() }
+                    selectInstallationRoot(install)
+                    val installed = ExtractUseCase().extractToDatabase(archive.path) {}
+                    assertEquals("books", File(installed).readText())
+                    val directory = File(installed).parentFile
+                    assertEquals("pdf", File(directory, "תלמוד בבלי/ברכות.pdf").readText())
+                    assertEquals("tokenizer", File(directory, "seforim.db.semantic/model/tokenizer.json").readText())
+                    assertEquals("vectors", File(directory, "seforim.db.semantic/index/shard-00/segments").readText())
+                }
+            }
+        }
+
+    @Test
     fun `rejects archive entries outside the installation root`() =
         runBlocking {
             withInstallRoot { root, source ->

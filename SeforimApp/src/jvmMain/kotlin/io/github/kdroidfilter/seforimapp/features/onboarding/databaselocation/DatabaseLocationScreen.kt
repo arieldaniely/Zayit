@@ -76,7 +76,7 @@ fun DatabaseLocationScreen(
             if (status == DatabaseLocationStatus.READY) {
                 OnBoardingDestination.PdfLibrarySetupScreen
             } else {
-                OnBoardingDestination.TypeOfInstallationScreen
+                OnBoardingDestination.AvailableDiskSpaceScreen
             }
         navController.navigate(destination)
     }

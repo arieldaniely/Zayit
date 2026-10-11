@@ -13,7 +13,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AnimatedHorizontalProgressBar
 import io.github.kdroidfilter.seforimapp.core.presentation.navigation.noAnimatedComposable
-import io.github.kdroidfilter.seforimapp.features.onboarding.databaselocation.DatabaseLocationScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.diskspace.AvailableDiskSpaceScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.download.DownloadScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.extract.ExtractScreen
@@ -21,16 +20,16 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.finish.FinishScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.init.InitScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.licence.LicenceScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.offline.OfflineFileSelectionScreen
-import io.github.kdroidfilter.seforimapp.features.onboarding.pdf.PdfLibrarySetupScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.region.RegionConfigScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.typeofinstall.TypeOfInstallationScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.UserProfileScreen
 import io.github.kdroidfilter.seforimapp.features.onboarding.version.VersionVerificationScreen
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 
 @Composable
 fun OnBoardingNavHost(navController: NavHostController) {
     Column(modifier = Modifier.fillMaxSize()) {
-        val progressBarState = ProgressBarState
+        val progressBarState = LocalAppGraph.current.onboardingProgressBarState
         val progress by progressBarState.progress.collectAsState()
         AnimatedHorizontalProgressBar(progress, Modifier.fillMaxWidth())
         NavHost(
@@ -43,9 +42,6 @@ fun OnBoardingNavHost(navController: NavHostController) {
             }
             noAnimatedComposable<OnBoardingDestination.LicenceScreen> {
                 LicenceScreen(navController)
-            }
-            noAnimatedComposable<OnBoardingDestination.DatabaseLocationScreen> {
-                DatabaseLocationScreen(navController)
             }
             noAnimatedComposable<OnBoardingDestination.AvailableDiskSpaceScreen> {
                 AvailableDiskSpaceScreen(navController)
@@ -64,9 +60,6 @@ fun OnBoardingNavHost(navController: NavHostController) {
             }
             noAnimatedComposable<OnBoardingDestination.VersionVerificationScreen> {
                 VersionVerificationScreen(navController)
-            }
-            noAnimatedComposable<OnBoardingDestination.PdfLibrarySetupScreen> {
-                PdfLibrarySetupScreen(navController)
             }
             noAnimatedComposable<OnBoardingDestination.FinishScreen> {
                 FinishScreen()

@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,19 +49,20 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabItem
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforimapp.core.history.VisitEntry
 import io.github.kdroidfilter.seforimapp.core.history.VisitKind
-import io.github.kdroidfilter.seforimapp.core.history.searchDescription
-import io.github.kdroidfilter.seforimapp.core.history.searchDestination
+import io.github.kdroidfilter.seforimapp.core.history.destination
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
+import io.github.kdroidfilter.seforimapp.icons.JournalBookmark
+import io.github.kdroidfilter.seforimapp.icons.NotebookPen
+import io.github.kdroidfilter.seforimapp.icons.WritingHand
 import io.github.kdroidfilter.seforimapp.icons.bookOpenTabs
 import io.github.kdroidfilter.seforimapp.icons.homeTabs
 import kotlinx.coroutines.flow.combine
@@ -73,7 +74,6 @@ import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
-import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.history_title
 import seforimapp.seforimapp.generated.resources.home
@@ -102,17 +102,14 @@ fun TabSearchButton() {
     val visible by openWindow.tabSearchVisible.collectAsState()
     val shortcutHint = if (PlatformInfo.isMacOS) "⌘⇧A" else "Ctrl+Shift+A"
 
-    Box(
-        modifier = Modifier.height(JewelTheme.defaultTabStyle.metrics.tabHeight),
-        contentAlignment = Alignment.CenterStart,
-    ) {
+    Box(modifier = Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
         TitleBarActionButton(
-            key = AllIconsKeys.General.ChevronDown,
+            // Vcs.History (clock): visually distinct from the find-in-page magnifier
+            key = AllIconsKeys.Vcs.History,
             contentDescription = stringResource(Res.string.tab_search_tooltip),
             onClick = { openWindow.tabSearchVisible.value = !visible },
             tooltipText = stringResource(Res.string.tab_search_tooltip),
             shortcutHint = shortcutHint,
-            isActive = visible,
         )
         if (visible) {
             Popup(
@@ -157,8 +154,7 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
     val revision by historyStore.revision.collectAsState()
     var historyEntries by remember { mutableStateOf<List<VisitEntry>>(emptyList()) }
     LaunchedEffect(query, revision) {
-        historyEntries =
-            if (HISTORY_FAVORITES_ENABLED) historyStore.query(query, POPUP_HISTORY_LIMIT) else emptyList()
+        historyEntries = historyStore.query(query, POPUP_HISTORY_LIMIT)
     }
 
     val homeLabel = stringResource(Res.string.home)
@@ -220,25 +216,9 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
                 items(historyEntries, key = { "hist-" + it.key }) { entry ->
                     PopupRow(
                         label = entry.title,
-                        subtitle = entry.searchDescription(),
                         tabType = if (entry.kind == VisitKind.BOOK) TabType.BOOK else TabType.SEARCH,
                         onClick = {
-                            val destination =
-                                when (entry.kind) {
-                                    VisitKind.BOOK ->
-                                        entry.bookId?.let {
-                                            TabsDestination.BookContent(
-                                                bookId = it,
-                                                tabId = UUID.randomUUID().toString(),
-                                                lineId = entry.lineId,
-                                            )
-                                        }
-                                    VisitKind.SEARCH ->
-                                        entry.searchDestination(UUID.randomUUID().toString(), appGraph.tabPersistedStateStore)
-                                }
-                            if (destination != null) {
-                                currentWindow.tabsViewModel.openTab(destination)
-                            }
+                            entry.destination()?.let(currentWindow.tabsViewModel::openTab)
                             onDismiss()
                         },
                         onClose = null,
@@ -258,17 +238,15 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
             }
         }
 
-        if (HISTORY_FAVORITES_ENABLED) {
-            // Footer: full history page (chrome://history equivalent)
-            PopupFooterRow(
-                label = stringResource(Res.string.tab_search_show_all_history),
-                shortcutHint = if (PlatformInfo.isMacOS) "⌘Y" else "Ctrl+H",
-                onClick = {
-                    currentWindow.tabsViewModel.openTab(TabsDestination.History(tabId = UUID.randomUUID().toString()))
-                    onDismiss()
-                },
-            )
-        }
+        // Footer: full history page (chrome://history equivalent)
+        PopupFooterRow(
+            label = stringResource(Res.string.tab_search_show_all_history),
+            shortcutHint = if (PlatformInfo.isMacOS) "⌘Y" else "Ctrl+H",
+            onClick = {
+                currentWindow.tabsViewModel.openTab(TabsDestination.History(tabId = UUID.randomUUID().toString()))
+                onDismiss()
+            },
+        )
     }
 }
 
@@ -279,12 +257,35 @@ internal fun PopupSearchField(
     placeholder: String,
     focusRequester: FocusRequester,
 ) {
+    BasicTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        textStyle = searchFieldTextStyle(),
+        cursorBrush = SolidColor(JewelTheme.globalColors.outlines.focused),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+        decorationBox = { innerTextField ->
+            SearchFieldDecoration(placeholder = placeholder, showPlaceholder = query.isEmpty(), innerTextField = innerTextField)
+        },
+    )
+}
+
+@Composable
+internal fun searchFieldTextStyle(): TextStyle = TextStyle(fontSize = 13.sp, color = JewelTheme.globalColors.text.normal)
+
+/** The frame of the app's search fields: rounded border, magnifier, discreet placeholder. */
+@Composable
+internal fun SearchFieldDecoration(
+    placeholder: String,
+    showPlaceholder: Boolean,
+    innerTextField: @Composable () -> Unit,
+) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(6.dp))
-                .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(6.dp))
+                .background(JewelTheme.globalColors.panelBackground, SearchFieldShape)
+                .border(1.dp, JewelTheme.globalColors.borders.normal, SearchFieldShape)
                 .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -295,28 +296,21 @@ internal fun PopupSearchField(
             modifier = Modifier.size(14.dp),
             tint = JewelTheme.globalColors.text.info,
         )
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = TextStyle(fontSize = 13.sp, color = JewelTheme.globalColors.text.normal),
-            cursorBrush = SolidColor(JewelTheme.globalColors.outlines.focused),
-            modifier = Modifier.weight(1f).focusRequester(focusRequester),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            fontSize = 13.sp,
-                            color = JewelTheme.globalColors.text.info,
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-        )
+        Box(modifier = Modifier.weight(1f)) {
+            if (showPlaceholder) {
+                Text(
+                    text = placeholder,
+                    fontSize = 13.sp,
+                    color = JewelTheme.globalColors.text.info,
+                    maxLines = 1,
+                )
+            }
+            innerTextField()
+        }
     }
 }
+
+private val SearchFieldShape = RoundedCornerShape(6.dp)
 
 @Composable
 internal fun PopupSectionHeader(label: String) {
@@ -335,7 +329,6 @@ internal fun PopupRow(
     tabType: TabType?,
     onClick: () -> Unit,
     onClose: (() -> Unit)?,
-    subtitle: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -374,6 +367,27 @@ internal fun PopupRow(
                     modifier = Modifier.size(15.dp),
                     tint = JewelTheme.globalColors.text.normal,
                 )
+            TabType.NOTES ->
+                Image(
+                    painter = rememberVectorPainter(NotebookPen),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
+            TabType.SIDDUR ->
+                Image(
+                    painter = rememberVectorPainter(JournalBookmark),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
+            TabType.AUTHOR ->
+                Image(
+                    painter = rememberVectorPainter(WritingHand),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
             TabType.SEARCH ->
                 Icon(
                     key = AllIconsKeys.Actions.Find,
@@ -389,24 +403,14 @@ internal fun PopupRow(
                     colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
                 )
         }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                color = JewelTheme.globalColors.text.normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            subtitle?.let {
-                Text(
-                    text = it,
-                    fontSize = 11.sp,
-                    color = JewelTheme.globalColors.text.info,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = JewelTheme.globalColors.text.normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         if (onClose != null) {
             Box(
                 modifier =

@@ -3,15 +3,14 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcon
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -19,26 +18,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.paging.LoadState
@@ -47,21 +37,16 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforim.htmlparser.SkiaHtmlImageBuilder
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
-import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
-import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
-import io.github.kdroidfilter.seforimapp.icons.Filter
-import io.github.kdroidfilter.seforimapp.icons.FilterFilled
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
-import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -73,54 +58,46 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.*
+import org.jetbrains.jewel.ui.component.CircularProgressIndicator
+import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.hide_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.links
-import seforimapp.seforimapp.generated.resources.mentions
 import seforimapp.seforimapp.generated.resources.no_links_for_line
-import seforimapp.seforimapp.generated.resources.no_mentions_for_line
 import seforimapp.seforimapp.generated.resources.no_sources_for_line
-import seforimapp.seforimapp.generated.resources.paging_error_loading_more
 import seforimapp.seforimapp.generated.resources.select_line_for_links
-import seforimapp.seforimapp.generated.resources.select_line_for_mentions
 import seforimapp.seforimapp.generated.resources.select_line_for_sources
-import seforimapp.seforimapp.generated.resources.show_links_filter_sidebar
 import seforimapp.seforimapp.generated.resources.sources
 
 // Per-side vertical padding applied by `LinkItem`'s Column. Exposed so the scrollbar
 // can derive the exact per-item padding contribution as `2 × LinkItemVerticalPaddingPerSide`.
 private val LinkItemVerticalPaddingPerSide = 8.dp
-private const val MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT = 1200
-private const val MAX_COLLAPSED_LINK_ITEM_LINES = 6
 
 @OptIn(ExperimentalSplitPaneApi::class)
 @Composable
 private fun SingleLineTargumView(
     selectedLine: Line?,
-    onEvent: (BookContentEvent) -> Unit,
     buildLinksPagerFor: (Long, Long?) -> Flow<PagingData<CommentaryWithText>>,
     getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     getLinkCharCountsForLine: suspend (Long, Long, ConnectionType) -> List<Int>,
-    getLinePath: suspend (Long) -> String,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     commentariesScrollIndex: Int = 0,
     commentariesScrollOffset: Int = 0,
     initiallySelectedSourceIds: Set<Long> = emptySet(),
     onSelectedSourcesChange: (Set<Long>) -> Unit = {},
     onLinkClick: (CommentaryWithText) -> Unit = {},
+    onOpenBook: (BookContentEvent) -> Unit = {},
     onScroll: (Int, Int) -> Unit = { _, _ -> },
     onHide: () -> Unit = {},
     highlightQuery: String = "",
     lineConnections: Map<Long, LineConnectionsSnapshot> = emptyMap(),
     availabilityType: ConnectionType = ConnectionType.TARGUM,
-    fontCodeFlow: StateFlow<String> = AppSettings.targumFontCodeFlow,
+    fontCodeFlow: StateFlow<String> = LocalAppGraph.current.appSettings.targumFontCodeFlow,
     titleRes: StringResource = Res.string.links,
     selectLineRes: StringResource = Res.string.select_line_for_links,
     emptyRes: StringResource = Res.string.no_links_for_line,
 ) {
-    val rawTextSize by AppSettings.textSizeFlow.collectAsState()
-    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
+    val appSettings = LocalAppGraph.current.appSettings
+    val rawTextSize by appSettings.textSizeFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -129,7 +106,7 @@ private fun SingleLineTargumView(
         animationSpec = zoomAnimSpec,
         label = "linkTextSizeAnim",
     )
-    val rawLineHeight by AppSettings.lineHeightFlow.collectAsState()
+    val rawLineHeight by appSettings.lineHeightFlow.collectAsState()
     val lineHeight by animateFloatAsState(
         targetValue = rawLineHeight,
         animationSpec = zoomAnimSpec,
@@ -137,24 +114,15 @@ private fun SingleLineTargumView(
     )
 
     val currentGetAvailableLinksForLine by rememberUpdatedState(getAvailableLinksForLine)
-    val currentGetLinePath by rememberUpdatedState(getLinePath)
     val currentOnSelectedSourcesChange by rememberUpdatedState(onSelectedSourcesChange)
     val currentOnScroll by rememberUpdatedState(onScroll)
 
     // Selected font for targumim
     val targumFontCode by fontCodeFlow.collectAsState()
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
-    val boldScaleForPlatform =
-        remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
-            if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
-        }
+    val boldScaleForPlatform = FontCatalog.boldScaleFor(targumFontCode)
 
     val paneInteractionSource = remember { MutableInteractionSource() }
-    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
-    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
-    var selectedFilterCategoryIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
-    var selectedFilterBookIds by remember(selectedLine?.id, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     Column(
         modifier =
@@ -166,17 +134,6 @@ private fun SingleLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
-            actions =
-                if (supportsBookFilter) {
-                    {
-                        LinkFilterSidebarToggleButton(
-                            isVisible = isFilterSidebarVisible,
-                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
-                        )
-                    }
-                } else {
-                    null
-                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -189,31 +146,29 @@ private fun SingleLineTargumView(
 
                 else -> {
                     val cachedSources =
-                        remember(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
+                        remember(selectedLine.id, lineConnections, availabilityType) {
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
-                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }
                         }
 
-                    var titleToIdMap by remember(selectedLine.id, cachedSources, linkLoadLevel) {
+                    var titleToIdMap by remember(selectedLine.id, cachedSources) {
                         mutableStateOf<Map<String, Long>>(cachedSources ?: emptyMap())
                     }
 
-                    LaunchedEffect(selectedLine.id, lineConnections, availabilityType, linkLoadLevel) {
+                    LaunchedEffect(selectedLine.id, lineConnections) {
                         val cached =
                             lineConnections[selectedLine.id]?.let { snapshot ->
                                 when (availabilityType) {
                                     ConnectionType.SOURCE -> snapshot.sources
-                                    ConnectionType.MENTION -> snapshot.mentions
                                     else -> snapshot.targumSources
                                 }
                             }
-                        if (cached != null) titleToIdMap = cached
-                        if (cached != null && !supportsBookFilter) {
+                        if (cached != null) {
+                            titleToIdMap = cached
                             return@LaunchedEffect
                         }
 
@@ -238,18 +193,6 @@ private fun SingleLineTargumView(
                             remember(titleToIdMap) {
                                 titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                             }
-                        val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
-                        val filteredBookIds =
-                            if (supportsBookFilter) {
-                                resolveLinkFilterBookIds(
-                                    availableBookIds,
-                                    selectedFilterCategoryIds,
-                                    selectedFilterBookIds,
-                                )
-                            } else {
-                                availableBookIds
-                            }
-                        val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                         val selectedSources =
                             remember(titleToIdMap, initiallySelectedSourceIds) {
@@ -263,9 +206,9 @@ private fun SingleLineTargumView(
                         }
 
                         val sourceSections =
-                            displayedSources.mapNotNull { meta ->
+                            availableSources.mapNotNull { meta ->
                                 val pagerFlow =
-                                    remember(selectedLine.id, meta.bookId, availabilityType, linkLoadLevel) {
+                                    remember(selectedLine.id, meta.bookId) {
                                         buildLinksPagerFor(selectedLine.id, meta.bookId).distinctUntilChanged()
                                     }
                                 val lazyPagingItems = pagerFlow.collectAsLazyPagingItems()
@@ -277,7 +220,7 @@ private fun SingleLineTargumView(
                             }
                         val annotationCache =
                             remember(selectedLine.id, availabilityType) {
-                                StableAnnotatedCache(mutableStateMapOf())
+                                StableAnnotatedCache()
                             }
 
                         val listState =
@@ -310,7 +253,6 @@ private fun SingleLineTargumView(
                             selectedLine.id,
                             sectionBookIds,
                             availabilityType,
-                            linkLoadLevel,
                         ) {
                             value =
                                 runSuspendCatching {
@@ -329,8 +271,6 @@ private fun SingleLineTargumView(
                                 }.getOrElse { sectionBookIds.map { emptyList() } }
                                     .flatMap { listOf(0) + it }
                         }
-
-                        var expandedItemIds by remember(selectedLine.id) { mutableStateOf(setOf<Long>()) }
 
                         val density = LocalDensity.current
                         val textMeasurer = rememberTextMeasurer()
@@ -360,170 +300,82 @@ private fun SingleLineTargumView(
                             }
                         }
 
-                        val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
-                            derivedStateOf {
-                                computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
-                            }
-                        }
+                        SelectionContainer(modifier = Modifier.fillMaxSize()) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                                    state = listState,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    sourceSections.forEach { section ->
+                                        item(key = "header-${section.bookId}") {
+                                            CommentatorHeader(
+                                                commentator = section.title,
+                                                commentTextSize = commentTextSize,
+                                                onClick = { onOpenBook(section.openBookEvent()) },
+                                            )
+                                        }
 
-                        LinkFilterScaffold(
-                            isVisible = isFilterSidebarVisible && supportsBookFilter,
-                            sidebarOnLeft = availabilityType == ConnectionType.MENTION,
-                            availableBookIds = availableBookIds,
-                            selectedCategoryIds = selectedFilterCategoryIds,
-                            selectedBookIds = selectedFilterBookIds,
-                            onCategoryCheckedChange = { id, checked ->
-                                selectedFilterCategoryIds =
-                                    if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
-                            },
-                            onBookCheckedChange = { id, checked ->
-                                selectedFilterBookIds =
-                                    if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
-                            },
-                        ) {
-                            SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                                        state = listState,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        sourceSections.forEach { section ->
-                                            item(key = "header-${section.bookId}") {
-                                                SourceSectionHeader(
-                                                    title = section.title,
-                                                    textSize = commentTextSize,
-                                                    onClick =
-                                                        when (availabilityType) {
-                                                            ConnectionType.SOURCE -> {
-                                                                {
-                                                                    onEvent(
-                                                                        BookContentEvent.OpenSourceBookInNewTab(
-                                                                            bookId = section.bookId,
-                                                                            baseLineIds = listOf(selectedLine.id),
-                                                                        ),
-                                                                    )
-                                                                }
-                                                            }
-                                                            ConnectionType.MENTION -> {
-                                                                {
-                                                                    onEvent(
-                                                                        BookContentEvent.OpenBookByIdInNewTab(
-                                                                            bookId = section.bookId,
-                                                                            baseLineIds = listOf(selectedLine.id),
-                                                                        ),
-                                                                    )
-                                                                }
-                                                            }
-                                                            else -> {
-                                                                {
-                                                                    onEvent(
-                                                                        BookContentEvent.OpenBookByIdInNewTab(
-                                                                            bookId = section.bookId,
-                                                                            baseLineIds = listOf(selectedLine.id),
-                                                                        ),
-                                                                    )
-                                                                }
-                                                            }
-                                                        },
+                                        items(
+                                            count = section.items.itemCount,
+                                            key = { index ->
+                                                section.items
+                                                    .peek(index)
+                                                    ?.link
+                                                    ?.id ?: "source-${section.bookId}-$index"
+                                            },
+                                        ) { index ->
+                                            section.items[index]?.let { item ->
+                                                LinkItem(
+                                                    linkId = item.link.id,
+                                                    targetText = item.targetText,
+                                                    commentTextSize = commentTextSize,
+                                                    lineHeight = lineHeight,
+                                                    fontFamily = targumFontFamily,
+                                                    boldScale = boldScaleForPlatform,
+                                                    highlightQuery = highlightQuery,
+                                                    onClick = { onLinkClick(item) },
+                                                    diacritics = diacritics,
+                                                    annotationCache = annotationCache,
+                                                    onLayoutWidthMeasure = { width ->
+                                                        if (textLayoutWidthPx == 0 && width > 0) {
+                                                            textLayoutWidthPx = width
+                                                        }
+                                                    },
                                                 )
                                             }
+                                        }
 
-                                            items(
-                                                count = section.items.itemCount,
-                                                key = { index ->
-                                                    section.items
-                                                        .peek(index)
-                                                        ?.link
-                                                        ?.id ?: "source-${section.bookId}-$index"
-                                                },
-                                            ) { index ->
-                                                section.items[index]?.let { item ->
-                                                    val targetPath by produceState("", item.link.targetLineId, availabilityType) {
-                                                        val tocPath =
-                                                            if (supportsBookFilter) {
-                                                                currentGetLinePath(
-                                                                    item.link.targetLineId,
-                                                                )
-                                                            } else {
-                                                                ""
-                                                            }
-                                                        value = buildLinkTargetPath(item.targetBookTitle, tocPath)
+                                        when (val state = section.items.loadState.append) {
+                                            is LoadState.Error ->
+                                                item(key = "append-error-${section.bookId}") {
+                                                    Box(
+                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        Text(text = state.error.message ?: "Error loading more")
                                                     }
-                                                    LinkItem(
-                                                        linkId = item.link.id,
-                                                        targetText = item.targetText,
-                                                        targetPath = if (supportsBookFilter) targetPath else "",
-                                                        onPathClick = {
-                                                            onEvent(
-                                                                BookContentEvent.OpenCommentaryTarget(
-                                                                    bookId = item.link.targetBookId,
-                                                                    lineId = item.link.targetLineId,
-                                                                ),
-                                                            )
-                                                        },
-                                                        commentTextSize = commentTextSize,
-                                                        lineHeight = lineHeight,
-                                                        fontFamily = targumFontFamily,
-                                                        boldScale = boldScaleForPlatform,
-                                                        highlightQuery = highlightQuery,
-                                                        onClick = { onLinkClick(item) },
-                                                        isExpanded = item.link.id in expandedItemIds,
-                                                        onToggleExpand = {
-                                                            val id = item.link.id
-                                                            expandedItemIds =
-                                                                if (id in expandedItemIds) {
-                                                                    expandedItemIds - id
-                                                                } else {
-                                                                    expandedItemIds + id
-                                                                }
-                                                        },
-                                                        showDiacritics = showDiacritics,
-                                                        annotationCache = annotationCache,
-                                                        onLayoutWidthMeasure = { width ->
-                                                            if (textLayoutWidthPx == 0 && width > 0) {
-                                                                textLayoutWidthPx = width
-                                                            }
-                                                        },
-                                                    )
                                                 }
-                                            }
 
-                                            when (val state = section.items.loadState.append) {
-                                                is LoadState.Error ->
-                                                    item(key = "append-error-${section.bookId}") {
-                                                        Box(
-                                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                            contentAlignment = Alignment.Center,
-                                                        ) {
-                                                            Text(
-                                                                text =
-                                                                    state.error.message
-                                                                        ?: stringResource(Res.string.paging_error_loading_more),
-                                                            )
-                                                        }
+                                            is LoadState.Loading ->
+                                                item(key = "append-loading-${section.bookId}") {
+                                                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                        CircularProgressIndicator()
                                                     }
+                                                }
 
-                                                is LoadState.Loading ->
-                                                    item(key = "append-loading-${section.bookId}") {
-                                                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                            CircularProgressIndicator()
-                                                        }
-                                                    }
-
-                                                else -> {}
-                                            }
+                                            else -> {}
                                         }
                                     }
-                                    TargumScrollbar(
-                                        listState = listState,
-                                        allCharCounts = effectiveCharCounts,
-                                        capacity = capacity,
-                                        lineHeightPx = lineHeightPx,
-                                        paddingPerItemPx = paddingPerItemPx,
-                                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                                    )
                                 }
+                                TargumScrollbar(
+                                    listState = listState,
+                                    allCharCounts = allCharCounts,
+                                    capacity = capacity,
+                                    lineHeightPx = lineHeightPx,
+                                    paddingPerItemPx = paddingPerItemPx,
+                                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                                )
                             }
                         }
                     }
@@ -538,10 +390,11 @@ private fun SingleLineTargumView(
 fun LineTargumView(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     lineConnections: Map<Long, LineConnectionsSnapshot> = emptyMap(),
     availabilityType: ConnectionType = ConnectionType.TARGUM,
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     val providers = uiState.providers ?: return
     val contentState = uiState.content
     val selectedLineIds = contentState.selectedLineIds.toList()
@@ -549,41 +402,28 @@ fun LineTargumView(
     // TOC entry selection = afficher targum/sources seulement de la ligne primaire
     val isManualMultiSelection = selectedLineIds.size > 1 && !contentState.isTocEntrySelection
     val windowInfo = LocalWindowInfo.current
-    val findQuery by AppSettings.findQueryFlow(uiState.tabId).collectAsState("")
-    val showFind by AppSettings.findBarOpenFlow(uiState.tabId).collectAsState()
+    val findQuery by appSettings.findQueryFlow(uiState.tabId).collectAsState("")
+    val showFind by appSettings.findBarOpenFlow(uiState.tabId).collectAsState()
     val activeQuery = if (showFind) findQuery else ""
 
     // Sélectionner les bons providers et callbacks selon le type
     val isSourceType = availabilityType == ConnectionType.SOURCE
-    val isMentionType = availabilityType == ConnectionType.MENTION
 
     val buildPagerFor =
-        when {
-            isSourceType -> providers.buildSourcesPagerFor
-            isMentionType -> providers.buildMentionsPagerFor
-            else -> providers.buildLinksPagerFor
-        }
+        if (isSourceType) providers.buildSourcesPagerFor else providers.buildLinksPagerFor
     val getAvailableForLine =
-        when {
-            isSourceType -> providers.getAvailableSourcesForLine
-            isMentionType -> providers.getAvailableMentionsForLine
-            else -> providers.getAvailableLinksForLine
-        }
+        if (isSourceType) providers.getAvailableSourcesForLine else providers.getAvailableLinksForLine
     val initiallySelectedIds =
-        when {
-            isSourceType -> contentState.selectedSourceIds
-            isMentionType -> emptySet()
-            else -> contentState.selectedTargumSourceIds
-        }
+        if (isSourceType) contentState.selectedSourceIds else contentState.selectedTargumSourceIds
 
     val onSelectedSourcesChange =
-        remember(contentState.primaryLine, isSourceType, isMentionType) {
+        remember(contentState.primaryLine, isSourceType) {
             { ids: Set<Long> ->
                 contentState.primaryLine?.let { line ->
-                    when {
-                        isSourceType -> onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
-                        isMentionType -> Unit
-                        else -> onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
+                    if (isSourceType) {
+                        onEvent(BookContentEvent.SelectedSourcesChanged(line.id, ids))
+                    } else {
+                        onEvent(BookContentEvent.SelectedTargumSourcesChanged(line.id, ids))
                     }
                 }
                 Unit
@@ -613,43 +453,29 @@ fun LineTargumView(
         }
 
     val onHide =
-        remember(isSourceType, isMentionType) {
+        remember(isSourceType) {
             {
-                when {
-                    isSourceType -> onEvent(BookContentEvent.ToggleSources)
-                    isMentionType -> onEvent(BookContentEvent.ToggleMentions)
-                    else -> onEvent(BookContentEvent.ToggleTargum)
+                if (isSourceType) {
+                    onEvent(BookContentEvent.ToggleSources)
+                } else {
+                    onEvent(BookContentEvent.ToggleTargum)
                 }
             }
         }
 
     // Titres et messages selon le type
-    val titleRes =
-        when {
-            isSourceType -> Res.string.sources
-            isMentionType -> Res.string.mentions
-            else -> Res.string.links
-        }
+    val titleRes = if (isSourceType) Res.string.sources else Res.string.links
     val selectLineRes =
-        when {
-            isSourceType -> Res.string.select_line_for_sources
-            isMentionType -> Res.string.select_line_for_mentions
-            else -> Res.string.select_line_for_links
-        }
-    val emptyRes =
-        when {
-            isSourceType -> Res.string.no_sources_for_line
-            isMentionType -> Res.string.no_mentions_for_line
-            else -> Res.string.no_links_for_line
-        }
-    val fontCodeFlow = if (isSourceType || isMentionType) AppSettings.sourceFontCodeFlow else AppSettings.targumFontCodeFlow
+        if (isSourceType) Res.string.select_line_for_sources else Res.string.select_line_for_links
+    val emptyRes = if (isSourceType) Res.string.no_sources_for_line else Res.string.no_links_for_line
+    val fontCodeFlow = if (isSourceType) appSettings.sourceFontCodeFlow else appSettings.targumFontCodeFlow
 
     if (isManualMultiSelection) {
         MultiLineTargumView(
             selectedLineIds = selectedLineIds,
             uiState = uiState,
             onEvent = onEvent,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
             availabilityType = availabilityType,
             highlightQuery = activeQuery,
             onHide = onHide,
@@ -657,16 +483,15 @@ fun LineTargumView(
     } else {
         SingleLineTargumView(
             selectedLine = contentState.primaryLine,
-            onEvent = onEvent,
             buildLinksPagerFor = buildPagerFor,
             getAvailableLinksForLine = getAvailableForLine,
             getLinkCharCountsForLine = providers.getLinkCharCountsForLine,
-            getLinePath = providers.getLinePath,
             commentariesScrollIndex = contentState.commentariesScrollIndex,
             commentariesScrollOffset = contentState.commentariesScrollOffset,
             initiallySelectedSourceIds = initiallySelectedIds,
             onSelectedSourcesChange = onSelectedSourcesChange,
             onLinkClick = onLinkClick,
+            onOpenBook = onEvent,
             onScroll = onScroll,
             onHide = onHide,
             highlightQuery = activeQuery,
@@ -676,7 +501,7 @@ fun LineTargumView(
             titleRes = titleRes,
             selectLineRes = selectLineRes,
             emptyRes = emptyRes,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -690,18 +515,18 @@ private fun MultiLineTargumView(
     selectedLineIds: List<Long>,
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     availabilityType: ConnectionType,
     highlightQuery: String,
     onHide: () -> Unit,
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     val providers = uiState.providers ?: return
     val contentState = uiState.content
     val windowInfo = LocalWindowInfo.current
     val currentOnEvent by rememberUpdatedState(onEvent)
 
-    val rawTextSize by AppSettings.textSizeFlow.collectAsState()
-    val linkLoadLevel by AppSettings.linkLoadLevelFlow.collectAsState()
+    val rawTextSize by appSettings.textSizeFlow.collectAsState()
     val isTabSelected = LocalTabSelected.current
     val isBookContentZoomInProgress = LocalBookContentZoomInProgress.current
     val zoomAnimSpec = if (isTabSelected && !isBookContentZoomInProgress) tween<Float>(durationMillis = 300) else snap()
@@ -710,7 +535,7 @@ private fun MultiLineTargumView(
         animationSpec = zoomAnimSpec,
         label = "multiLineLinkTextSizeAnim",
     )
-    val rawLineHeight by AppSettings.lineHeightFlow.collectAsState()
+    val rawLineHeight by appSettings.lineHeightFlow.collectAsState()
     val lineHeight by animateFloatAsState(
         targetValue = rawLineHeight,
         animationSpec = zoomAnimSpec,
@@ -718,31 +543,17 @@ private fun MultiLineTargumView(
     )
 
     // Selected font for targumim
-    val targumFontCode by AppSettings.targumFontCodeFlow.collectAsState()
+    val targumFontCode by appSettings.targumFontCodeFlow.collectAsState()
     val targumFontFamily = FontCatalog.familyFor(targumFontCode)
-    val boldScaleForPlatform =
-        remember(targumFontCode) {
-            val lacksBold = targumFontCode in setOf("notoserifhebrew", "frankruhllibre", "mekorotrashi")
-            if (PlatformInfo.isMacOS && lacksBold) 1.08f else 1.0f
-        }
+    val boldScaleForPlatform = FontCatalog.boldScaleFor(targumFontCode)
 
     val paneInteractionSource = remember { MutableInteractionSource() }
-    val supportsBookFilter = availabilityType == ConnectionType.SOURCE || availabilityType == ConnectionType.MENTION
-    var isFilterSidebarVisible by rememberSaveable(availabilityType) { mutableStateOf(false) }
-    var selectedFilterCategoryIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
-    var selectedFilterBookIds by remember(selectedLineIds, availabilityType) { mutableStateOf(emptySet<Long>()) }
 
     // Use multi-line provider to get aggregated available links
-    val titleToIdMap by produceState<Map<String, Long>>(
-        emptyMap(),
-        selectedLineIds,
-        availabilityType,
-        linkLoadLevel,
-    ) {
+    val titleToIdMap by produceState<Map<String, Long>>(emptyMap(), selectedLineIds, availabilityType) {
         value =
             when (availabilityType) {
                 ConnectionType.SOURCE -> providers.getAvailableSourcesForLines(selectedLineIds)
-                ConnectionType.MENTION -> providers.getAvailableMentionsForLines(selectedLineIds)
                 else -> providers.getAvailableLinksForLines(selectedLineIds)
             }
     }
@@ -750,13 +561,11 @@ private fun MultiLineTargumView(
     val titleRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.sources
-            ConnectionType.MENTION -> Res.string.mentions
             else -> Res.string.links
         }
     val emptyRes =
         when (availabilityType) {
             ConnectionType.SOURCE -> Res.string.no_sources_for_line
-            ConnectionType.MENTION -> Res.string.no_mentions_for_line
             else -> Res.string.no_links_for_line
         }
 
@@ -770,17 +579,6 @@ private fun MultiLineTargumView(
             label = stringResource(titleRes),
             interactionSource = paneInteractionSource,
             onHide = onHide,
-            actions =
-                if (supportsBookFilter) {
-                    {
-                        LinkFilterSidebarToggleButton(
-                            isVisible = isFilterSidebarVisible,
-                            onToggle = { isFilterSidebarVisible = !isFilterSidebarVisible },
-                        )
-                    }
-                } else {
-                    null
-                },
         )
 
         Column(modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -798,30 +596,15 @@ private fun MultiLineTargumView(
                     remember(titleToIdMap) {
                         titleToIdMap.entries.map { SourceMeta(it.key, it.value) }
                     }
-                val availableBookIds = availableSources.mapTo(mutableSetOf()) { it.bookId }
-                val filteredBookIds =
-                    if (supportsBookFilter) {
-                        resolveLinkFilterBookIds(
-                            availableBookIds,
-                            selectedFilterCategoryIds,
-                            selectedFilterBookIds,
-                        )
-                    } else {
-                        availableBookIds
-                    }
-                val displayedSources = availableSources.filter { it.bookId in filteredBookIds }
 
                 // Build pagers for each source using multi-line provider
                 val sourceSections =
-                    displayedSources.mapNotNull { meta ->
+                    availableSources.mapNotNull { meta ->
                         val pagerFlow =
-                            remember(selectedLineIds, meta.bookId, availabilityType, linkLoadLevel) {
+                            remember(selectedLineIds, meta.bookId, availabilityType) {
                                 when (availabilityType) {
                                     ConnectionType.SOURCE ->
                                         providers.buildSourcesPagerForLines(selectedLineIds, meta.bookId)
-
-                                    ConnectionType.MENTION ->
-                                        providers.buildMentionsPagerForLines(selectedLineIds, meta.bookId)
 
                                     else ->
                                         providers.buildLinksPagerForLines(selectedLineIds, meta.bookId)
@@ -836,7 +619,7 @@ private fun MultiLineTargumView(
                     }
                 val annotationCache =
                     remember(selectedLineIds, availabilityType) {
-                        StableAnnotatedCache(mutableStateMapOf())
+                        StableAnnotatedCache()
                     }
 
                 val listState =
@@ -866,7 +649,6 @@ private fun MultiLineTargumView(
                     selectedLineIds,
                     sectionBookIds,
                     availabilityType,
-                    linkLoadLevel,
                 ) {
                     value =
                         runSuspendCatching {
@@ -885,8 +667,6 @@ private fun MultiLineTargumView(
                         }.getOrElse { sectionBookIds.map { emptyList() } }
                             .flatMap { listOf(0) + it }
                 }
-
-                var expandedItemIds by remember(selectedLineIds) { mutableStateOf(setOf<Long>()) }
 
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
@@ -916,166 +696,92 @@ private fun MultiLineTargumView(
                     }
                 }
 
-                val effectiveCharCounts by remember(allCharCounts, expandedItemIds, capacity, sourceSections) {
-                    derivedStateOf {
-                        computeEffectiveCharCounts(sourceSections, allCharCounts, expandedItemIds, capacity)
-                    }
-                }
+                SelectionContainer(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                            state = listState,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            sourceSections.forEach { section ->
+                                item(key = "header-${section.bookId}") {
+                                    CommentatorHeader(
+                                        commentator = section.title,
+                                        commentTextSize = commentTextSize,
+                                        onClick = { onEvent(section.openBookEvent()) },
+                                    )
+                                }
 
-                LinkFilterScaffold(
-                    isVisible = isFilterSidebarVisible && supportsBookFilter,
-                    sidebarOnLeft = availabilityType == ConnectionType.MENTION,
-                    availableBookIds = availableBookIds,
-                    selectedCategoryIds = selectedFilterCategoryIds,
-                    selectedBookIds = selectedFilterBookIds,
-                    onCategoryCheckedChange = { id, checked ->
-                        selectedFilterCategoryIds =
-                            if (checked) selectedFilterCategoryIds + id else selectedFilterCategoryIds - id
-                    },
-                    onBookCheckedChange = { id, checked ->
-                        selectedFilterBookIds =
-                            if (checked) selectedFilterBookIds + id else selectedFilterBookIds - id
-                    },
-                ) {
-                    SafeSelectionContainer(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                                state = listState,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                sourceSections.forEach { section ->
-                                    item(key = "header-${section.bookId}") {
-                                        SourceSectionHeader(
-                                            title = section.title,
-                                            textSize = commentTextSize,
-                                            onClick =
-                                                when (availabilityType) {
-                                                    ConnectionType.SOURCE -> {
-                                                        {
-                                                            onEvent(
-                                                                BookContentEvent.OpenSourceBookInNewTab(
-                                                                    bookId = section.bookId,
-                                                                    baseLineIds = selectedLineIds,
-                                                                ),
-                                                            )
-                                                        }
-                                                    }
-                                                    ConnectionType.MENTION -> {
-                                                        {
-                                                            onEvent(
-                                                                BookContentEvent.OpenBookByIdInNewTab(
-                                                                    bookId = section.bookId,
-                                                                    baseLineIds = selectedLineIds,
-                                                                ),
-                                                            )
-                                                        }
-                                                    }
-                                                    else -> {
-                                                        {
-                                                            onEvent(
-                                                                BookContentEvent.OpenBookByIdInNewTab(
-                                                                    bookId = section.bookId,
-                                                                    baseLineIds = selectedLineIds,
-                                                                ),
-                                                            )
-                                                        }
-                                                    }
-                                                },
+                                items(
+                                    count = section.items.itemCount,
+                                    key = { index ->
+                                        section.items
+                                            .peek(index)
+                                            ?.link
+                                            ?.id ?: "multi-source-${section.bookId}-$index"
+                                    },
+                                ) { index ->
+                                    section.items[index]?.let { item ->
+                                        LinkItem(
+                                            linkId = item.link.id,
+                                            targetText = item.targetText,
+                                            commentTextSize = commentTextSize,
+                                            lineHeight = lineHeight,
+                                            fontFamily = targumFontFamily,
+                                            boldScale = boldScaleForPlatform,
+                                            highlightQuery = highlightQuery,
+                                            onClick = {
+                                                val mods = windowInfo.keyboardModifiers
+                                                if (mods.isCtrlPressed || mods.isMetaPressed) {
+                                                    onEvent(
+                                                        BookContentEvent.OpenCommentaryTarget(
+                                                            bookId = item.link.targetBookId,
+                                                            lineId = item.link.targetLineId,
+                                                        ),
+                                                    )
+                                                }
+                                            },
+                                            diacritics = diacritics,
+                                            annotationCache = annotationCache,
+                                            onLayoutWidthMeasure = { width ->
+                                                if (textLayoutWidthPx == 0 && width > 0) {
+                                                    textLayoutWidthPx = width
+                                                }
+                                            },
                                         )
                                     }
+                                }
 
-                                    items(
-                                        count = section.items.itemCount,
-                                        key = { index ->
-                                            section.items
-                                                .peek(index)
-                                                ?.link
-                                                ?.id ?: "multi-source-${section.bookId}-$index"
-                                        },
-                                    ) { index ->
-                                        section.items[index]?.let { item ->
-                                            val targetPath by produceState("", item.link.targetLineId, availabilityType) {
-                                                val tocPath = if (supportsBookFilter) providers.getLinePath(item.link.targetLineId) else ""
-                                                value = buildLinkTargetPath(item.targetBookTitle, tocPath)
+                                when (val state = section.items.loadState.append) {
+                                    is LoadState.Error ->
+                                        item(key = "append-error-${section.bookId}") {
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(text = state.error.message ?: "Error loading more")
                                             }
-                                            LinkItem(
-                                                linkId = item.link.id,
-                                                targetText = item.targetText,
-                                                targetPath = if (supportsBookFilter) targetPath else "",
-                                                onPathClick = {
-                                                    onEvent(
-                                                        BookContentEvent.OpenCommentaryTarget(
-                                                            bookId = item.link.targetBookId,
-                                                            lineId = item.link.targetLineId,
-                                                        ),
-                                                    )
-                                                },
-                                                commentTextSize = commentTextSize,
-                                                lineHeight = lineHeight,
-                                                fontFamily = targumFontFamily,
-                                                boldScale = boldScaleForPlatform,
-                                                highlightQuery = highlightQuery,
-                                                onClick = {
-                                                    onEvent(
-                                                        BookContentEvent.OpenCommentaryTarget(
-                                                            bookId = item.link.targetBookId,
-                                                            lineId = item.link.targetLineId,
-                                                        ),
-                                                    )
-                                                },
-                                                isExpanded = item.link.id in expandedItemIds,
-                                                onToggleExpand = {
-                                                    val id = item.link.id
-                                                    expandedItemIds =
-                                                        if (id in expandedItemIds) {
-                                                            expandedItemIds - id
-                                                        } else {
-                                                            expandedItemIds + id
-                                                        }
-                                                },
-                                                showDiacritics = showDiacritics,
-                                                annotationCache = annotationCache,
-                                                onLayoutWidthMeasure = { width ->
-                                                    if (textLayoutWidthPx == 0 && width > 0) {
-                                                        textLayoutWidthPx = width
-                                                    }
-                                                },
-                                            )
                                         }
-                                    }
 
-                                    when (val state = section.items.loadState.append) {
-                                        is LoadState.Error ->
-                                            item(key = "append-error-${section.bookId}") {
-                                                Box(
-                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                                    contentAlignment = Alignment.Center,
-                                                ) {
-                                                    Text(text = state.error.message ?: stringResource(Res.string.paging_error_loading_more))
-                                                }
+                                    is LoadState.Loading ->
+                                        item(key = "append-loading-${section.bookId}") {
+                                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator()
                                             }
+                                        }
 
-                                        is LoadState.Loading ->
-                                            item(key = "append-loading-${section.bookId}") {
-                                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                                    CircularProgressIndicator()
-                                                }
-                                            }
-
-                                        else -> {}
-                                    }
+                                    else -> {}
                                 }
                             }
-                            TargumScrollbar(
-                                listState = listState,
-                                allCharCounts = effectiveCharCounts,
-                                capacity = capacity,
-                                lineHeightPx = lineHeightPx,
-                                paddingPerItemPx = paddingPerItemPx,
-                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
-                            )
                         }
+                        TargumScrollbar(
+                            listState = listState,
+                            allCharCounts = allCharCounts,
+                            capacity = capacity,
+                            lineHeightPx = lineHeightPx,
+                            paddingPerItemPx = paddingPerItemPx,
+                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                        )
                     }
                 }
             }
@@ -1083,27 +789,23 @@ private fun MultiLineTargumView(
     }
 }
 
-private fun buildLinkTargetPath(
-    bookTitle: String,
-    tocPath: String,
-): String {
-    val normalizedBookTitle = bookTitle.trim()
-    val normalizedTocPath = tocPath.trim().replace(" ← ", " > ")
-    val sectionPath =
-        when {
-            normalizedTocPath == normalizedBookTitle -> ""
-            normalizedTocPath.startsWith("$normalizedBookTitle > ") ->
-                normalizedTocPath.removePrefix("$normalizedBookTitle > ").trim()
-            else -> normalizedTocPath
-        }
-    return listOf(normalizedBookTitle, sectionPath).filter { it.isNotBlank() }.joinToString(" > ")
-}
-
 private data class SourceSection(
     val title: String,
     val bookId: Long,
     val items: LazyPagingItems<CommentaryWithText>,
 )
+
+/**
+ * Opens this section's book in a new tab, like a commentator title: at the line it links to
+ * for the displayed base line(s), or at the book's start when no link is loaded yet.
+ */
+private fun SourceSection.openBookEvent(): BookContentEvent =
+    items.itemSnapshotList.items
+        .firstOrNull()
+        ?.link
+        ?.targetLineId
+        ?.let { BookContentEvent.OpenCommentaryTarget(bookId = bookId, lineId = it) }
+        ?: BookContentEvent.OpenBookByIdInNewTab(bookId)
 
 private data class SourceMeta(
     val title: String,
@@ -1114,48 +816,29 @@ private data class SourceMeta(
 private fun LinkItem(
     linkId: Long,
     targetText: String,
-    targetPath: String,
-    onPathClick: () -> Unit,
     commentTextSize: Float,
     lineHeight: Float,
     fontFamily: FontFamily,
     highlightQuery: String,
     onClick: () -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     annotationCache: StableAnnotatedCache,
     boldScale: Float = 1.0f,
-    isExpanded: Boolean = false,
-    onToggleExpand: () -> Unit = {},
     onLayoutWidthMeasure: (Int) -> Unit = {},
 ) {
-    val windowInfo = LocalWindowInfo.current
-
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = LinkItemVerticalPaddingPerSide, horizontal = 16.dp)
                 .pointerInput(linkId) {
-                    detectTapGestures(onTap = {
-                        val mods = windowInfo.keyboardModifiers
-                        if (mods.isCtrlPressed || mods.isMetaPressed) {
-                            onClick()
-                        } else {
-                            onToggleExpand()
-                        }
-                    })
+                    detectTapGestures(onTap = { onClick() })
                 },
     ) {
         val processedText =
-            remember(linkId, targetText, showDiacritics) {
-                if (showDiacritics) targetText else HebrewTextUtils.removeAllDiacritics(targetText)
+            remember(linkId, targetText, diacritics) {
+                diacritics.apply(targetText)
             }
-        val shouldCollapse =
-            remember(processedText) {
-                processedText.length > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT
-            }
-        val maxLines = if (shouldCollapse && !isExpanded) MAX_COLLAPSED_LINK_ITEM_LINES else Int.MAX_VALUE
-        val overflow = if (shouldCollapse && !isExpanded) TextOverflow.Ellipsis else TextOverflow.Clip
 
         // Footnote marker color from theme
         val footnoteMarkerColor = JewelTheme.globalColors.outlines.focused
@@ -1196,8 +879,6 @@ private fun LinkItem(
                 fontSize = commentTextSize.sp,
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
-                maxLines = maxLines,
-                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
@@ -1220,194 +901,11 @@ private fun LinkItem(
                 fontFamily = fontFamily,
                 lineHeight = (commentTextSize * lineHeight).sp,
                 inlineContent = inlineImageContent,
-                maxLines = maxLines,
-                overflow = overflow,
                 onTextLayout = { result ->
                     val cw = result.layoutInput.constraints.maxWidth
                     if (cw > 0 && cw != Int.MAX_VALUE) onLayoutWidthMeasure(cw)
                 },
             )
         }
-
-        if (targetPath.isNotBlank()) {
-            val pathInteractionSource = remember { MutableInteractionSource() }
-            val isPathHovered by pathInteractionSource.collectIsHoveredAsState()
-            Text(
-                text = targetPath,
-                color = JewelTheme.globalColors.text.info,
-                fontSize = 11.sp,
-                textAlign = TextAlign.Left,
-                textDecoration = if (isPathHovered) TextDecoration.Underline else TextDecoration.None,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .hoverable(pathInteractionSource)
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        .pointerInput(targetPath) { detectTapGestures(onTap = { onPathClick() }) },
-            )
-        }
     }
-}
-
-@Composable
-private fun SourceSectionHeader(
-    title: String,
-    textSize: Float,
-    onClick: (() -> Unit)?,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Text(
-        text = title,
-        fontWeight = FontWeight.Bold,
-        fontSize = (textSize * 1.1f).sp,
-        textAlign = TextAlign.Center,
-        textDecoration =
-            if (onClick != null && isHovered) {
-                TextDecoration.Underline
-            } else {
-                TextDecoration.None
-            },
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .hoverable(interactionSource)
-                            .pointerHoverIcon(PointerIcon.Hand)
-                            .pointerInput(title) { detectTapGestures(onTap = { onClick() }) }
-                    } else {
-                        Modifier
-                    },
-                ),
-    )
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun LinkFilterSidebarToggleButton(
-    isVisible: Boolean,
-    onToggle: () -> Unit,
-) {
-    val icon: ImageVector = if (isVisible) FilterFilled else Filter
-    val toggleText =
-        stringResource(
-            if (isVisible) Res.string.hide_links_filter_sidebar else Res.string.show_links_filter_sidebar,
-        )
-    Tooltip({ Text(toggleText) }) {
-        IconButton(onClick = onToggle) { _ ->
-            Icon(
-                painter = rememberVectorPainter(icon),
-                contentDescription = toggleText,
-                modifier = Modifier.size(16.dp),
-                tint = JewelTheme.globalColors.text.normal,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LinkFilterScaffold(
-    isVisible: Boolean,
-    sidebarOnLeft: Boolean,
-    availableBookIds: Set<Long>,
-    selectedCategoryIds: Set<Long>,
-    selectedBookIds: Set<Long>,
-    onCategoryCheckedChange: (Long, Boolean) -> Unit,
-    onBookCheckedChange: (Long, Boolean) -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val movableContent = remember(content) { movableContentOf(content) }
-
-    if (!isVisible) {
-        movableContent()
-        return
-    }
-
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        val sidebar: @Composable () -> Unit = {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                LinkFilterSidebar(
-                    availableBookIds = availableBookIds,
-                    selectedCategoryIds = selectedCategoryIds,
-                    selectedBookIds = selectedBookIds,
-                    onCategoryCheckedChange = onCategoryCheckedChange,
-                    onBookCheckedChange = onBookCheckedChange,
-                    modifier = Modifier.width(230.dp).fillMaxHeight(),
-                )
-            }
-        }
-        val mainContent: @Composable () -> Unit = {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Box(modifier = Modifier.fillMaxSize()) { movableContent() }
-            }
-        }
-
-        Row(modifier = Modifier.fillMaxSize()) {
-            if (sidebarOnLeft) {
-                sidebar()
-                VerticalDivider()
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
-            } else {
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { mainContent() }
-                VerticalDivider()
-                sidebar()
-            }
-        }
-    }
-}
-
-private fun computeEffectiveCharCounts(
-    sourceSections: List<SourceSection>,
-    allCharCounts: List<Int>,
-    expandedItemIds: Set<Long>,
-    capacity: Int,
-): List<Int> {
-    if (allCharCounts.isEmpty()) return emptyList()
-    val result = ArrayList<Int>(allCharCounts.size)
-    var globalIdx = 0
-    for (section in sourceSections) {
-        if (globalIdx >= allCharCounts.size) break
-        // Header entry in allCharCounts is 0
-        result.add(allCharCounts[globalIdx++])
-        val itemCount = section.items.itemCount
-        for (i in 0 until itemCount) {
-            if (globalIdx >= allCharCounts.size) break
-            val rawCount = allCharCounts[globalIdx++]
-            val item = section.items.peek(i)
-            val isExpanded = item != null && item.link.id in expandedItemIds
-            val effectiveCount =
-                if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT && !isExpanded) {
-                    if (capacity > 0) {
-                        minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
-                    } else {
-                        minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
-                    }
-                } else {
-                    rawCount
-                }
-            result.add(effectiveCount)
-        }
-    }
-    // Any remaining items if allCharCounts has entries beyond loaded sections
-    while (globalIdx < allCharCounts.size) {
-        val rawCount = allCharCounts[globalIdx++]
-        val effectiveCount =
-            if (rawCount > MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT) {
-                if (capacity > 0) {
-                    minOf(rawCount, capacity * MAX_COLLAPSED_LINK_ITEM_LINES)
-                } else {
-                    minOf(rawCount, MAX_COLLAPSED_LINK_ITEM_CHAR_COUNT)
-                }
-            } else {
-                rawCount
-            }
-        result.add(effectiveCount)
-    }
-    return result
 }

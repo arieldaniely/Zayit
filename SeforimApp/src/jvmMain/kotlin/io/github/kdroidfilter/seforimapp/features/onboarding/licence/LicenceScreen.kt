@@ -21,6 +21,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AccentMark
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.Checkbox
@@ -34,14 +35,30 @@ import seforimapp.seforimapp.generated.resources.next_button
 @Composable
 fun LicenceScreen(
     navController: NavController,
-    progressBarState: ProgressBarState = ProgressBarState,
+    progressBarState: ProgressBarState = LocalAppGraph.current.onboardingProgressBarState,
 ) {
     LaunchedEffect(Unit) {
         progressBarState.setProgress(0.1f)
     }
+    val appGraph = LocalAppGraph.current
     LicenceView(
         onNext = {
-            navController.navigate(OnBoardingDestination.TypeOfInstallationScreen)
+            // Check if DB exists and has compatible version
+            val dbExists = runCatching { appGraph.databasePathProvider.get() }.isSuccess
+            val dbVersionCompatible =
+                if (dbExists) {
+                    appGraph.databaseVersionManager.isDatabaseVersionCompatible()
+                } else {
+                    false
+                }
+
+            if (dbExists && dbVersionCompatible) {
+                // DB exists and version is compatible - skip install flow and go to user info
+                navController.navigate(OnBoardingDestination.UserProfilScreen)
+            } else {
+                // DB doesn't exist or version is incompatible - continue with installation flow
+                navController.navigate(OnBoardingDestination.AvailableDiskSpaceScreen)
+            }
         },
         onPrevious = { navController.navigateUp() },
     )

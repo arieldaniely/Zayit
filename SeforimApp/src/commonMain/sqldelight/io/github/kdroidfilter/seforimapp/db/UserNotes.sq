@@ -22,8 +22,8 @@ CREATE INDEX IF NOT EXISTS idx_user_notes_line ON user_notes(bookId, lineId);
 selectAllForBook:
 SELECT * FROM user_notes WHERE bookId = ?;
 
-selectAll:
-SELECT * FROM user_notes ORDER BY updatedAt DESC, id DESC;
+selectRecent:
+SELECT * FROM user_notes ORDER BY updatedAt DESC LIMIT ?;
 
 selectForLine:
 SELECT * FROM user_notes WHERE bookId = ? AND lineId = ?;

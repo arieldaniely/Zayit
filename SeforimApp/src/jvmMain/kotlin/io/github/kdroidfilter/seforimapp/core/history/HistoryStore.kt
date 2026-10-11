@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.core.history
 
 import androidx.compose.runtime.Stable
+import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import io.github.kdroidfilter.seforimapp.db.Visit_history
 import kotlinx.coroutines.Dispatchers
@@ -9,8 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 /** One deduplicated history entry (Chrome-like: last visit wins, count accumulates). */
 @Stable
@@ -24,7 +23,8 @@ data class VisitEntry(
     val visitCount: Long,
     val tocEntryId: Long? = null,
     val lineId: Long? = null,
-    val searchContext: SearchVisitContext? = null,
+    val searchScope: SearchScope = SearchScope.Global,
+    val searchGlobalExtended: Boolean = false,
 )
 
 enum class VisitKind { BOOK, SEARCH }
@@ -67,34 +67,46 @@ class HistoryStore(
                 visitedAt = timestamp,
                 tocEntryId = tocEntryId,
                 lineId = lineId,
-                searchContext = null,
+                searchCategoryId = null,
+                searchBookId = null,
+                searchTocId = null,
+                searchExtended = false,
             )
             _revision.update { it + 1 }
         }
 
+    /**
+     * Records an executed search with the [scope] it ran in: one history row per (query, scope, extended), titled
+     * with [scopeLabel] (the scope's name) so a scoped search reads apart from the same query elsewhere.
+     */
     suspend fun recordSearchVisit(
         query: String,
+        scope: SearchScope,
+        globalExtended: Boolean,
+        scopeLabel: String?,
         timestamp: Long,
-        context: SearchVisitContext? = null,
     ): Unit =
         withContext(Dispatchers.IO) {
             val q = query.trim()
             if (q.isBlank()) return@withContext
             queries.upsertVisit(
-                key =
-                    if (context == null) {
-                        "search:$q"
-                    } else {
-                        "search:${Json.encodeToString(listOf(q, Json.encodeToString(context.copy(scopeTitle = ""))))}"
-                    },
+                key = searchKey(q, scope, globalExtended),
                 kind = KIND_SEARCH,
                 bookId = null,
                 searchQuery = q,
-                title = q,
+                title = if (scopeLabel.isNullOrBlank()) q else "$q — $scopeLabel",
                 visitedAt = timestamp,
                 tocEntryId = null,
                 lineId = null,
-                searchContext = context?.let { Json.encodeToString(it) },
+                searchCategoryId = null,
+                searchBookId =
+                    when (scope) {
+                        is SearchScope.Book -> scope.bookId
+                        is SearchScope.Toc -> scope.bookId
+                        else -> null
+                    },
+                searchTocId = (scope as? SearchScope.Toc)?.tocId,
+                searchExtended = globalExtended,
             )
             _revision.update { it + 1 }
         }
@@ -103,14 +115,13 @@ class HistoryStore(
     suspend fun query(
         query: String,
         limit: Int,
-        offset: Int = 0,
     ): List<VisitEntry> =
         withContext(Dispatchers.IO) {
             val rows =
                 if (query.isBlank()) {
-                    queries.selectRecent(limit.toLong(), offset.toLong()).executeAsList()
+                    queries.selectRecent(limit.toLong()).executeAsList()
                 } else {
-                    queries.searchByTitle(query = query.trim(), limitCount = limit.toLong(), offsetCount = offset.toLong()).executeAsList()
+                    queries.searchByTitle(query = query.trim(), limitCount = limit.toLong()).executeAsList()
                 }
             rows.map { it.toEntry() }
         }
@@ -138,8 +149,29 @@ class HistoryStore(
             visitCount = visitCount,
             tocEntryId = tocEntryId,
             lineId = lineId,
-            searchContext = searchContext?.let { runCatching { Json.decodeFromString<SearchVisitContext>(it) }.getOrNull() },
+            searchScope =
+                when {
+                    searchTocId != null && searchBookId != null -> SearchScope.Toc(bookId = searchBookId, tocId = searchTocId)
+                    searchBookId != null -> SearchScope.Book(searchBookId)
+                    // A search once scoped to a category (searchCategoryId) runs everywhere now
+                    else -> SearchScope.Global
+                },
+            searchGlobalExtended = searchExtended,
         )
+
+    private fun searchKey(
+        query: String,
+        scope: SearchScope,
+        globalExtended: Boolean,
+    ): String {
+        val scopeKey =
+            when (scope) {
+                SearchScope.Global, is SearchScope.Category -> "g"
+                is SearchScope.Book -> "b${scope.bookId}"
+                is SearchScope.Toc -> "t${scope.tocId}"
+            } + if (globalExtended) "x" else ""
+        return "search:$scopeKey:$query"
+    }
 
     private companion object {
         const val KIND_BOOK = "book"

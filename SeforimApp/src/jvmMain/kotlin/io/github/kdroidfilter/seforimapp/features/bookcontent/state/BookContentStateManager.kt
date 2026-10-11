@@ -33,7 +33,7 @@ class BookContentStateManager(
         val tocVisible = persisted.isTocVisible
         val notesVisible = persisted.isNotesVisible
         val bottomPaneVisible = persisted.showCommentaries || persisted.showSources
-        val targumVisible = persisted.showTargum || persisted.showMentions
+        val targumVisible = persisted.showTargum
 
         return BookContentState(
             tabId = tabId,
@@ -53,7 +53,7 @@ class BookContentStateManager(
                 TocState(
                     expandedEntries = persisted.expandedTocEntryIds,
                     children = emptyMap(),
-                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it != 0L && it != -1L },
+                    selectedEntryId = persisted.selectedTocEntryId.takeIf { it > 0 },
                     isVisible = tocVisible,
                     scrollIndex = persisted.tocScrollIndex,
                     scrollOffset = persisted.tocScrollOffset,
@@ -68,15 +68,21 @@ class BookContentStateManager(
             content =
                 ContentState(
                     selectedLines = emptySet(), // Les objets Line seront chargés par le ViewModel
-                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it != 0L && it != -1L },
+                    primarySelectedLineId = persisted.primarySelectedLineId.takeIf { it > 0 },
                     isTocEntrySelection = persisted.isTocEntrySelection,
                     showCommentaries = persisted.showCommentaries,
                     showTargum = persisted.showTargum,
                     showSources = persisted.showSources,
-                    showMentions = persisted.showMentions,
+                    shnayimMikra = persisted.shnayimMikra,
                     scrollIndex = persisted.contentScrollIndex,
                     scrollOffset = persisted.contentScrollOffset,
-                    anchorId = persisted.contentAnchorLineId,
+                    // A restored tab with no saved position opens on its selected line: its pager is
+                    // centred there, and the text lays out on it, the lines above loading as it scrolls up.
+                    anchorId =
+                        persisted.contentAnchorLineId.takeIf { it > 0 }
+                            ?: persisted.primarySelectedLineId.takeIf {
+                                it > 0 && persisted.contentScrollIndex == 0 && persisted.contentScrollOffset == 0
+                            } ?: persisted.contentAnchorLineId,
                     anchorIndex = persisted.contentAnchorIndex,
                     paragraphScrollPosition = persisted.paragraphScrollPosition,
                     chapterScrollPosition = persisted.chapterScrollPosition,
@@ -181,16 +187,6 @@ class BookContentStateManager(
     }
 
     /**
-     * Updates history pane state only.
-     */
-    fun updateHistory(
-        save: Boolean = true,
-        transform: HistoryState.() -> HistoryState,
-    ) {
-        update(save) { copy(history = history.transform()) }
-    }
-
-    /**
      * Met à jour uniquement le contenu
      */
     fun updateContent(
@@ -228,7 +224,6 @@ class BookContentStateManager(
                 scrollIndex = 0,
                 scrollOffset = 0,
                 showSources = false,
-                showMentions = false,
                 topAnchorLineId = -1L,
                 topAnchorRequestTimestamp = 0L,
             )
@@ -282,7 +277,7 @@ class BookContentStateManager(
                 showCommentaries = currentState.content.showCommentaries,
                 showTargum = currentState.content.showTargum,
                 showSources = currentState.content.showSources,
-                showMentions = currentState.content.showMentions,
+                shnayimMikra = currentState.content.shnayimMikra,
                 paragraphScrollPosition = currentState.content.paragraphScrollPosition,
                 chapterScrollPosition = currentState.content.chapterScrollPosition,
                 selectedChapter = currentState.content.selectedChapter,

@@ -9,37 +9,70 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    # The official builds include the smart siddur and the semantic search (open core): their private Maven packages
+    # are readable only with the access of their own repositories, so a classic token with read:packages (GITHUB_TOKEN
+    # cannot reach them); the semantic search uses the siddur's token too
+    env:
+      SEFORIM_SIDDUR_TOKEN: ${{ secrets.SEFORIM_SIDDUR_TOKEN }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux x64 - one native image, then all package formats
+          # Linux x64 (DEB) - GraalVM
           - os: ubuntu-latest
             arch: amd64
+            pkg: deb
             graalvm: true
 
-          # Linux ARM64 - one native image, then all package formats
+          # Linux ARM64 (DEB) - GraalVM
           - os: ubuntu-24.04-arm
             arch: arm64
+            pkg: deb
             graalvm: true
 
-          # Windows x64 - JBR. PDFBox's AWT renderer is not reliable in Native Image;
-          # use the same JVM runtime as the portable distribution.
+          # Linux x64 (RPM) - GraalVM
+          - os: ubuntu-latest
+            arch: amd64
+            pkg: rpm
+            graalvm: true
+
+          # Linux ARM64 (RPM) - GraalVM
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            pkg: rpm
+            graalvm: true
+
+          # Linux x64 (Pacman) - GraalVM
+          - os: ubuntu-latest
+            arch: amd64
+            pkg: pacman
+            graalvm: true
+
+          # Linux ARM64 (Pacman) - GraalVM
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            pkg: pacman
+            graalvm: true
+
+          # Windows x64 - GraalVM
           - os: windows-latest
             arch: amd64
             rust_target: x86_64-pc-windows-msvc
-            graalvm: false
+            graalvm: true
 
-          # Windows ARM64 - JBR (no Liberica NIK available)
+          # Windows ARM64 - JVM (no native-image toolchain)
           - os: windows-11-arm
             arch: arm64
             rust_target: aarch64-pc-windows-msvc
             graalvm: false
 
-          # macOS Apple Silicon (ARM64) - JVM fallback (Liberica NIK deadlocks)
+          # macOS Apple Silicon (ARM64) - GraalVM
           - os: macos-26
             jdk_arch: aarch64
-            graalvm: false
+            graalvm: true
 
           # macOS Intel (x64) - GraalVM
           - os: macos-26-intel
@@ -53,16 +86,20 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Normalize version for manual runs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(git describe --tags --abbrev=0)
+          echo "Using latest tag for version: $tag"
+          echo "GITHUB_REF=refs/tags/$tag" >> "$GITHUB_ENV"
+
       - name: Compute version and asset name
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
-            tag="${GITHUB_REF#refs/tags/}"
-          else
-            tag="$(git describe --tags --abbrev=0)"
-            echo "Using latest tag for version: $tag"
-          fi
+          tag="${GITHUB_REF#refs/tags/}"
           echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
           case "${{ matrix.os }}" in
             ubuntu*)  plat=linux ;;
@@ -70,99 +107,104 @@ jobs:
             macos*)   plat=macos ;;
             *)        plat=unknown ;;
           esac
+          # deb and rpm share the same arch on the same runner — keep the pkg suffix so artifact names stay unique.
+          pkg_suffix=""
+          if [ -n "${{ matrix.pkg }}" ]; then pkg_suffix="-${{ matrix.pkg }}"; fi
           # generate-update-yml infers the platform from the artifact dir name (must contain linux/macos/windows).
-          echo "ASSET_NAME=release-assets-${plat}-${{ matrix.arch || matrix.jdk_arch }}" >> "$GITHUB_ENV"
-
-      # electron-builder downloads its FPM toolset for DEB/RPM/Pacman packaging.
-      # Preserve it across runs instead of making every matrix job fetch it again.
-      - name: Cache electron-builder toolsets
-        if: startsWith(matrix.os, 'ubuntu')
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/electron-builder
-          key: electron-builder-${{ runner.os }}-${{ runner.arch }}-26.15.3
+          echo "ASSET_NAME=release-assets-${plat}-${{ matrix.arch || matrix.jdk_arch }}${pkg_suffix}" >> "$GITHUB_ENV"
 
       - name: Setup Nucleus
-        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
+        uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@712f1e520c73fd68e1e7514b17700e577643802c
+        # The Nucleus plugin provisions the GraalVM toolchain itself (Oracle GraalVM per the
+        # graalvm { toolchain { } } DSL, Liberica NIK on Intel macs); this only sets up
+        # Xcode/MSVC and caches the toolchain.
         with:
           graalvm: ${{ matrix.graalvm }}
-          jbr-version: '25.0.3b496.62'
+          graalvm-distribution: oracle
 
-      - name: Prepare electron-builder for macOS packaging
-        if: startsWith(matrix.os, 'macos')
-        uses: ./.github/actions/prepare-electron-builder
-
-      - name: Build and stage Windows Bluetooth adapters
-        if: startsWith(matrix.os, 'windows')
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $cmakeArch = if ('${{ matrix.arch }}' -eq 'arm64') { 'ARM64' } else { 'x64' }
-          $platform = if ('${{ matrix.arch }}' -eq 'arm64') { 'windows-arm64' } else { 'windows-x64' }
-          cmake -S sharedstudy/native -B sharedstudy/native/build -A $cmakeArch "-DZAYIT_NATIVE_PLATFORM=$platform"
-          cmake --build sharedstudy/native/build --config Release --parallel
-          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
-
-      - name: Build and stage macOS BLE peripheral adapter
-        if: startsWith(matrix.os, 'macos')
+      # GPG-signs the .deb/.rpm and enables Nucleus' passwordless self-update: the package ships a
+      # root-owned update helper + polkit policy that installs an update only if its detached
+      # <pkg>.asc verifies against the public key bundled in the app.
+      - name: Setup Linux signing
+        if: startsWith(matrix.os, 'ubuntu') && (matrix.pkg == 'deb' || matrix.pkg == 'rpm')
         shell: bash
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_KEY_ID: ${{ secrets.LINUX_GPG_KEY_ID }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          if [ '${{ matrix.jdk_arch }}' = 'aarch64' ]; then
-            native_arch=arm64
-            platform=macos-arm64
-          else
-            native_arch=x86_64
-            platform=macos-x64
+          if [ -z "$LINUX_GPG_PRIVATE_KEY" ]; then
+            echo "::warning::No LINUX_GPG_PRIVATE_KEY secret; Linux packages stay unsigned (password-prompted updates)."
+            exit 0
           fi
-          cmake \
-            -S sharedstudy/native \
-            -B sharedstudy/native/build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES="$native_arch" \
-            -DZAYIT_NATIVE_PLATFORM="$platform"
-          cmake --build sharedstudy/native/build --config Release --parallel
-          cmake --install sharedstudy/native/build --config Release --prefix sharedstudy/src/jvmMain/resources
+          KEY_FILE="$RUNNER_TEMP/zayit-signing-key.asc"
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" > "$KEY_FILE"
+          {
+            echo ""
+            echo "compose.desktop.linux.sign=true"
+            echo "compose.desktop.linux.signing.keyId=$LINUX_GPG_KEY_ID"
+            echo "compose.desktop.linux.signing.keyFile=$KEY_FILE"
+            echo "compose.desktop.linux.signing.passphrase=$LINUX_GPG_PASSPHRASE"
+            echo "compose.desktop.linux.signing.silentUpdate=true"
+          } >> gradle.properties
+          echo "LINUX_SIGNED=true" >> "$GITHUB_ENV"
 
       # Linux builds
-      - name: Build & stage Linux packages
-        if: startsWith(matrix.os, 'ubuntu')
+      - name: Build & stage Linux .deb
+        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'deb'
         shell: bash
         run: |
           set -euo pipefail
-          # One Gradle invocation shares the expensive native-image task and the
-          # downloaded FPM toolset across all three package formats.
-          ./gradlew \
-            :SeforimApp:packageGraalvmDeb \
-            :SeforimApp:packageGraalvmRpm \
-            :SeforimApp:packageGraalvmPacman
+          ./gradlew :SeforimApp:packageGraalvmDeb
           mkdir -p staging
-
-          deb_src="$(find SeforimApp/build/compose/binaries/main/graalvm-deb -name '*.deb' -print -quit)"
-          rpm_src="$(find SeforimApp/build/compose/binaries/main/graalvm-rpm -name '*.rpm' -print -quit)"
-          pacman_src="$(find SeforimApp/build/compose/binaries/main/graalvm-pacman -name '*.pacman' -print -quit)"
-          [ -n "$deb_src" ] || { echo "::error::No .deb produced"; exit 1; }
-          [ -n "$rpm_src" ] || { echo "::error::No .rpm produced"; exit 1; }
-          [ -n "$pacman_src" ] || { echo "::error::No pacman package produced"; exit 1; }
-
+          src="$(find SeforimApp/build/compose/binaries/main/graalvm-deb -name '*.deb' | head -n1)"
+          [ -n "$src" ] || { echo "::error::No .deb produced"; exit 1; }
           # Name kept in sync with website/public/download/launch.linux deb pattern.
-          cp "$deb_src" "staging/zayita_${VERSION}_${{ matrix.arch }}.deb"
+          cp "$src" "staging/zayit_${VERSION}_${{ matrix.arch }}.deb"
+          # Detached signature, fetched by the updater next to the package for the passwordless install.
+          if [ "${LINUX_SIGNED:-}" = "true" ]; then
+            [ -f "$src.asc" ] || { echo "::error::No detached signature for $src"; exit 1; }
+            cp "$src.asc" "staging/zayit_${VERSION}_${{ matrix.arch }}.deb.asc"
+          fi
 
+      - name: Build & stage Linux .rpm
+        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'rpm'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :SeforimApp:packageGraalvmRpm
+          mkdir -p staging
+          src="$(find SeforimApp/build/compose/binaries/main/graalvm-rpm -name '*.rpm' | head -n1)"
+          [ -n "$src" ] || { echo "::error::No .rpm produced"; exit 1; }
           case "${{ matrix.arch }}" in
             amd64) rpm_arch=x86_64 ;;
             arm64) rpm_arch=aarch64 ;;
             *)     rpm_arch="${{ matrix.arch }}" ;;
           esac
           # Name kept in sync with website/public/download/launch.linux rpm pattern.
-          cp "$rpm_src" "staging/zayita-${VERSION}-1.${rpm_arch}.rpm"
+          cp "$src" "staging/zayit-${VERSION}-1.${rpm_arch}.rpm"
+          if [ "${LINUX_SIGNED:-}" = "true" ]; then
+            [ -f "$src.asc" ] || { echo "::error::No detached signature for $src"; exit 1; }
+            cp "$src.asc" "staging/zayit-${VERSION}-1.${rpm_arch}.rpm.asc"
+          fi
 
+      - name: Build & stage Linux .pacman
+        if: startsWith(matrix.os, 'ubuntu') && matrix.pkg == 'pacman'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :SeforimApp:packageGraalvmPacman
+          mkdir -p staging
+          # Nucleus emits the Arch package with a .pacman extension.
+          src="$(find SeforimApp/build/compose/binaries/main/graalvm-pacman -name '*.pacman' | head -n1)"
+          [ -n "$src" ] || { echo "::error::No pacman package produced"; exit 1; }
           case "${{ matrix.arch }}" in
             amd64) pac_arch=x86_64 ;;
             arm64) pac_arch=aarch64 ;;
             *)     pac_arch="${{ matrix.arch }}" ;;
           esac
-          # Nucleus emits the Arch package with a .pacman extension.
-          cp "$pacman_src" "staging/zayita-${VERSION}-1-${pac_arch}.pacman"
+          cp "$src" "staging/zayit-${VERSION}-1-${pac_arch}.pacman"
 
       # Windows GraalVM build (x64)
       - name: Build Windows NSIS installer (GraalVM)
@@ -170,8 +212,8 @@ jobs:
         shell: pwsh
         run: .\gradlew.bat :SeforimApp:packageGraalvmNsis
 
-      # Windows JBR build (x64 and ARM64)
-      - name: Build Windows NSIS installer (JBR)
+      # Windows JVM build (ARM64)
+      - name: Build Windows NSIS installer (JVM)
         if: startsWith(matrix.os, 'windows') && !matrix.graalvm
         shell: pwsh
         run: .\gradlew.bat :SeforimApp:createReleaseDistributable :SeforimApp:packageReleaseNsis
@@ -191,79 +233,28 @@ jobs:
           $ver = $env:VERSION
 
           $nsis = Get-ChildItem `
-            "SeforimApp\build\compose\binaries\main\graalvm-nsis\zayita-*-nsis.exe", `
-            "SeforimApp\build\compose\binaries\main-release\nsis\zayita-*-nsis.exe" `
+            "SeforimApp\build\compose\binaries\main\graalvm-nsis\zayit-*-nsis.exe", `
+            "SeforimApp\build\compose\binaries\main-release\nsis\zayit-*-nsis.exe" `
             -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $nsis) { Write-Error "NSIS installer not found"; exit 1 }
 
           New-Item -ItemType Directory -Force staging | Out-Null
 
           # Raw NSIS (silent oneClick) — consumed by the auto-updater only.
-          Copy-Item $nsis.FullName "staging\Zayita-$ver-windows-$wtok-nsis.exe"
+          Copy-Item $nsis.FullName "staging\Zayit-$ver-windows-$wtok-nsis.exe"
 
           # Rust wrapper installer (splash UI) embeds and runs the NSIS silently — this is the user-facing download.
           Push-Location installer
           New-Item -ItemType Directory -Force resources | Out-Null
-          Copy-Item "..\art\splash.png" "resources\splash.png"
-          Copy-Item $nsis.FullName "resources\zayita-nsis.exe"
+          Copy-Item "..\SeforimApp\src\jvmMain\assets\common\splash.png" "resources\splash.png"
+          Copy-Item $nsis.FullName "resources\zayit-nsis.exe"
           cargo build --release --target ${{ matrix.rust_target }}
           Pop-Location
-          Copy-Item "installer\target\${{ matrix.rust_target }}\release\zayita-installer.exe" "staging\Zayita-$ver-windows-$wtok.exe"
-
-      # A self-contained ZIP that keeps user data beside the application. This is
-      # intentionally built with the regular Compose runtime rather than NIK so the
-      # same layout is available on both Windows x64 and Windows ARM64.
-      - name: Build & stage portable Windows ZIP
-        if: startsWith(matrix.os, 'windows')
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $wtok = if ('${{ matrix.arch }}' -eq 'amd64') { 'x64' } else { 'arm64' }
-
-          if ('${{ matrix.arch }}' -eq 'amd64') {
-            .\gradlew.bat --no-daemon :SeforimApp:createDistributable
-            $appDir = 'SeforimApp\build\compose\binaries\main\app'
-          } else {
-            # The ARM64 installer step already creates this distributable.
-            $appDir = 'SeforimApp\build\compose\binaries\main-release\app'
-          }
-
-          if (-not (Test-Path $appDir -PathType Container)) {
-            throw "Compose app directory was not found: $appDir"
-          }
-
-          New-Item -ItemType Directory -Force portable-staging | Out-Null
-          $portableRoot = "zayita-$env:VERSION-windows-$wtok-portable"
-          New-Item -ItemType Directory -Force $portableRoot | Out-Null
-          Copy-Item (Join-Path $appDir '*') $portableRoot -Recurse -Force
-
-          $zayitaRoot = Join-Path $portableRoot 'zayita'
-          New-Item -ItemType Directory -Force (Join-Path $zayitaRoot 'data\databases') | Out-Null
-          New-Item -ItemType File -Force (Join-Path $zayitaRoot 'zayita.portable') | Out-Null
-
-          @'
-          זיתא - מהדורה ניידת ל-Windows
-
-          כל נתוני המשתמש ומסדי הנתונים נשמרים בתיקיית data שליד התוכנה.
-          ניתן להפעיל מצב נייד גם באמצעות ZAYITA_PORTABLE=1 או ‎-Dzayita.portable=true.
-          '@ | Set-Content (Join-Path $zayitaRoot 'README-portable.txt') -Encoding utf8
-
-          Compress-Archive `
-            -Path (Join-Path $portableRoot '*') `
-            -DestinationPath "portable-staging\Zayita-$env:VERSION-windows-$wtok-portable.zip" `
-            -Force
-
-      - name: Upload portable Windows asset
-        if: startsWith(matrix.os, 'windows')
-        uses: actions/upload-artifact@v6
-        with:
-          name: portable-assets-windows-${{ matrix.arch }}
-          path: portable-staging/*.zip
-          if-no-files-found: error
+          Copy-Item "installer\target\${{ matrix.rust_target }}\release\zayit-installer.exe" "staging\Zayit-$ver-windows-$wtok.exe"
 
       # macOS builds (GraalVM): .dmg (download) + .zip (auto-update)
       - name: Build & stage macOS .dmg + .zip
-        if: startsWith(matrix.os, 'macos') && matrix.graalvm
+        if: startsWith(matrix.os, 'macos')
         shell: bash
         run: |
           set -euo pipefail
@@ -282,40 +273,12 @@ jobs:
           ls staging/*.dmg >/dev/null 2>&1 || { echo "::error::No .dmg produced"; exit 1; }
           ls staging/*.zip >/dev/null 2>&1 || { echo "::error::No .zip produced"; exit 1; }
 
-      # Liberica NIK 25 repeatedly deadlocks during native-image generation on
-      # Apple Silicon. Keep the ARM64 release reliable with the regular JVM
-      # distribution while retaining GraalVM for Intel macOS.
-      - name: Build & stage macOS ARM64 JVM .dmg + .zip
-        if: startsWith(matrix.os, 'macos') && !matrix.graalvm
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew :SeforimApp:packageReleaseDmg :SeforimApp:packageReleaseZip
-          mkdir -p staging
-
-          SEARCH_ROOT="SeforimApp/build/compose/binaries/main-release"
-          find "$SEARCH_ROOT/dmg" -name '*.dmg' -exec cp {} staging/ \;
-          find "$SEARCH_ROOT/zip" \( -name '*.zip' -o -name '*.zip.blockmap' \) -exec cp {} staging/ \;
-
-          ls staging/*.dmg >/dev/null 2>&1 || { echo "::error::No .dmg produced"; exit 1; }
-          ls staging/*.zip >/dev/null 2>&1 || { echo "::error::No .zip produced"; exit 1; }
-
       - name: Upload release assets
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ASSET_NAME }}
           path: staging/*
           if-no-files-found: error
-
-      - name: Upload packaging diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: packaging-diagnostics-${{ matrix.os }}-${{ matrix.arch || matrix.jdk_arch }}
-          path: |
-            SeforimApp/build/compose/logs/**
-            SeforimApp/build/compose/tmp/*.args.txt
-          if-no-files-found: ignore
 
   release:
     needs: build
@@ -356,24 +319,17 @@ jobs:
       # (latest.yml / latest-mac.yml / latest-linux.yml) — handles multi-arch and the
       # Rust-wrapped exe / manual macOS zip correctly since it hashes the final assets.
       - name: Generate auto-update feeds (latest*.yml)
-        uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@main
+        uses: kdroidFilter/Nucleus/.github/actions/generate-update-yml@712f1e520c73fd68e1e7514b17700e577643802c
         with:
           artifacts-path: artifacts
           version: ${{ env.VERSION }}
           channel: latest
 
-      # Keep portable ZIPs out of update-feed generation, then merge them back for publication.
-      - name: Download portable Windows assets
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-          pattern: portable-assets-*
-          merge-multiple: true
-
-      # Creates/updates the GitHub release and uploads every installer + the consolidated feeds.
+      # Creates/updates the GitHub release as a draft (published manually after validation) and uploads every
+      # installer + the consolidated feeds; auto-update clients only see it once published.
       - name: Create release and upload installers + feeds
-        uses: kdroidFilter/Nucleus/.github/actions/publish-release@main
+        uses: kdroidFilter/Nucleus/.github/actions/publish-release@712f1e520c73fd68e1e7514b17700e577643802c
         with:
           artifacts-path: artifacts
           tag: ${{ env.TAG }}
-          release-type: release
+          release-type: draft

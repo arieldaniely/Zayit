@@ -1,9 +1,11 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.download
 
-import io.github.kdroidfilter.seforimapp.features.onboarding.data.selectDistributionArchives
-import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
-import io.github.kdroidfilter.seforimapp.network.HttpsConnectionFactory
+import io.github.kdroidfilter.seforimapp.features.onboarding.extract.BundleManifest
+import io.github.kdroidfilter.seforimapp.features.onboarding.extract.BundleParts
 import io.github.kdroidfilter.seforimapp.releasefetcher.github.GitHubReleaseFetcher
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.databasesDir
+import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,10 +16,12 @@ import java.io.File
 class DownloadUseCase(
     private val gitHubReleaseFetcher: GitHubReleaseFetcher,
 ) {
+    private val http = HttpFileDownloader()
+
     /**
-     * Downloads the latest split bundle (.tar.zst split into numbered parts) and extracts it directly,
-     * without creating an intermediate .tar file. If only a single .tar.zst exists (no parts), it is
-     * downloaded and extracted as well.
+     * Downloads the latest split bundle (.tar.zst split into .part01 … .partNN, any number of parts),
+     * verified against the release's bundle manifest when there is one. If only a single .tar.zst
+     * exists (no parts), it is downloaded instead. Extraction is a separate step.
      *
      * Progress: during network transfers, reports bytes and speed; during extraction, progress continues
      * from the last value to 100% with speed set to 0.
@@ -30,12 +34,34 @@ class DownloadUseCase(
                 withContext(Dispatchers.IO) { gitHubReleaseFetcher.getLatestRelease() }
                     ?: error("No release found")
 
-            // Choose one complete distribution, never mix parts from optional bundles or variants.
-            val selectedAssets = selectDistributionArchives(latestRelease.assets, "seforim_bundle.tar.zst") { it.name }
-            val partAssets = selectedAssets.filter { it.name.contains(".part") }
-            val singleAsset = selectedAssets.firstOrNull { it.name == "seforim_bundle.tar.zst" }
+            // The manifest lists the parts with their checksums; older releases only have the parts
+            // (or a single .tar.zst), found by name.
+            val assetsByName = latestRelease.assets.associateBy { it.name }
+            val manifestText =
+                assetsByName[BundleParts.manifestNameFor(BundleParts.BUNDLE_NAME)]?.let { asset ->
+                    http.downloadText(asset.browser_download_url)
+                }
+            val manifest = manifestText?.let { BundleManifest.parseOrNull(it) }
+            val downloads =
+                if (manifest != null) {
+                    manifest.parts.map { part ->
+                        val asset = assetsByName[part.file] ?: error("Release is missing ${part.file}")
+                        PlannedDownload(asset.browser_download_url, part.file, part.size, part.sha256)
+                    }
+                } else {
+                    val legacyParts = BundleParts.legacyPartNames(assetsByName.keys).map { assetsByName.getValue(it) }
+                    if (legacyParts.isNotEmpty()) BundleParts.requireComplete(legacyParts.map { it.size.toLong() })
+                    legacyParts
+                        .ifEmpty { listOfNotNull(latestRelease.assets.firstOrNull { it.name.endsWith(".tar.zst", true) }) }
+                        .map { asset ->
+                            // GitHub's own checksum still lets us verify releases published without a manifest
+                            val sha256 = asset.digest?.takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")
+                            PlannedDownload(asset.browser_download_url, asset.name, asset.size.toLong(), sha256)
+                        }
+                }
+            if (downloads.isEmpty()) error("No bundle assets found in latest release")
 
-            val dbDir = databaseInstallDirectory().apply { mkdirs() }
+            val dbDir = File(FileKit.databasesDir.path).apply { mkdirs() }
 
             // Keep running stats for a smoother, more stable UX
             var lastBytes = 0L
@@ -73,76 +99,31 @@ class DownloadUseCase(
                 }
             }
 
-            if (partAssets.isNotEmpty()) {
-                val knownTotal = partAssets.sumOf { it.size.toLong() }.takeIf { it > 0L }
-                var downloaded = 0L
-                val files =
-                    partAssets.map { asset ->
-                        val file = File(dbDir, asset.name)
-                        downloadFile(asset.browser_download_url, file) { read, _ -> report(downloaded + read, knownTotal) }
-                        require(file.length() == asset.size.toLong()) { "Incomplete bundle part: ${asset.name}" }
-                        downloaded += file.length()
-                        file
+            val total = downloads.sumOf { it.size }
+            var doneBytes = 0L
+            val files =
+                downloads.map { download ->
+                    File(dbDir, download.name).also { file ->
+                        http.download(download.url, file, download.size, download.sha256) { read -> report(doneBytes + read, total) }
+                        doneBytes += download.size
                     }
-                report(downloaded, downloaded)
-                return@withContext files.first().absolutePath
-            } else if (singleAsset != null) {
-                // Backward-compatible: single .tar.zst
-                val tmp = File(dbDir, singleAsset.name)
-                val knownTotal = runCatching { (singleAsset.size as? Number)?.toLong() }.getOrNull()?.takeIf { it > 0L }
-                var totalLength: Long? = null
-                downloadFile(singleAsset.browser_download_url, tmp) { r, t ->
-                    if (t != null) totalLength = t
-                    report(r, knownTotal ?: totalLength)
                 }
-                val total = knownTotal ?: totalLength ?: tmp.length()
-                onProgress(total, total, 1f, 0L)
-                return@withContext tmp.absolutePath
-            } else {
-                error("No bundle assets found in latest release")
+            report(total, total)
+            // Extraction checks the parts against the manifest when it sits next to them
+            if (manifest != null &&
+                manifestText != null
+            ) {
+                File(dbDir, BundleParts.manifestNameFor(BundleParts.BUNDLE_NAME)).writeText(manifestText)
             }
+            // Return path to the first file; extraction discovers the other parts next to it
+            files.first().absolutePath
         }
 
-    private suspend fun downloadFile(
-        url: String,
-        dest: File,
-        onBytes: (readSoFar: Long, totalBytes: Long?) -> Unit,
-    ) {
-        withContext(Dispatchers.IO) {
-            val connection =
-                HttpsConnectionFactory.openConnection(url) {
-                    setRequestProperty("Accept", "application/octet-stream")
-                    setRequestProperty("User-Agent", "Zayita/1.0 (+https://github.com/arieldaniely/Zayit)")
-                    connectTimeout = 30_000
-                    readTimeout = 60_000
-                    instanceFollowRedirects = true
-                }
-            connection.connect()
-            val code = connection.responseCode
-            if (code !in 200..299) {
-                connection.disconnect()
-                error("Download failed: $code")
-            }
-            val totalLength =
-                connection.contentLengthLong.takeIf { it > 0 }
-                    ?: connection.getHeaderFieldLong("Content-Length", -1L).takeIf { it > 0 }
-            connection.inputStream.use { input ->
-                dest.outputStream().use { out ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var total = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read <= 0) break
-                        out.write(buffer, 0, read)
-                        total += read
-                        onBytes(total, totalLength)
-                    }
-                    out.flush()
-                }
-            }
-            connection.disconnect()
-        }
-        // Final callback to ensure UI shows completed values
-        onBytes(dest.length(), dest.length().takeIf { it > 0L })
-    }
+    /** One file of the bundle, with the size (and, from the manifest, the sha256) it must have. */
+    private class PlannedDownload(
+        val url: String,
+        val name: String,
+        val size: Long,
+        val sha256: String?,
+    )
 }

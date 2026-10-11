@@ -1,7 +1,6 @@
 package io.github.kdroidfilter.seforimapp.framework.update
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.deltaupdater.DeltaApplierClient
@@ -27,8 +26,8 @@ import java.nio.file.Path
  */
 object DbDeltaRecoveryBootstrap {
     /** Returns `true` if a half-applied delta was rolled back. */
-    fun runOnce(): Boolean {
-        val dbPath = resolveDbPathOrNull() ?: return false
+    fun runOnce(appSettings: AppSettings): Boolean {
+        val dbPath = resolveDbPathOrNull(appSettings) ?: return false
         if (!File(dbPath).exists()) return false
         return try {
             val recovered = DeltaApplierClient().recoverIfNeeded(Path.of(dbPath))
@@ -49,18 +48,15 @@ object DbDeltaRecoveryBootstrap {
      * file is missing. Returns `null` when no candidate path is resolvable —
      * in which case there's nothing to recover.
      */
-    private fun resolveDbPathOrNull(): String? {
+    private fun resolveDbPathOrNull(appSettings: AppSettings): String? {
         val env = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
         if (env != null) return env
         val settings =
-            runCatching { AppSettings.getDatabasePath() }
+            runCatching { appSettings.getDatabasePath() }
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() && !it.endsWith("lexical.db", ignoreCase = true) }
         if (settings != null) return settings
-        return runCatching { File(portableDatabasesDirPath(), "seforim.db").absolutePath }
+        return runCatching { File(FileKit.databasesDir.path, "seforim.db").absolutePath }
             .getOrNull()
     }
 }
-
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

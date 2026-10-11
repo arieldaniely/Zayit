@@ -29,18 +29,16 @@ import androidx.compose.ui.zIndex
 import io.github.kdroidfilter.seforimapp.core.presentation.components.ChevronIcon
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.SelectableRow
+import io.github.kdroidfilter.seforimapp.core.presentation.components.SharedIcon
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
-import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.revealItem
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.icons.Book_2
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.*
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -59,10 +57,8 @@ fun CategoryBookTreeView(
     navigationState: NavigationState,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
-    onPdfBookClick: (Book) -> Unit,
     onScroll: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
-    isPdfEdition: Boolean = false,
     // Optional search integration: counts + selection override
     categoryCounts: Map<Long, Int> = emptyMap(),
     bookCounts: Map<Long, Int> = emptyMap(),
@@ -70,15 +66,14 @@ fun CategoryBookTreeView(
     selectedBookIdOverride: Long? = null,
     showCounts: Boolean = false,
     booksForCategoryOverride: Map<Long, List<Book>> = emptyMap(),
+    onCategoryRevealComplete: () -> Unit = {},
 ) {
     /* ---------------------------------------------------------------------
      * Build the flat hierarchical list to display.
      * -------------------------------------------------------------------- */
-    val pdfLibraryVersion by TalmudPdfService.libraryVersion.collectAsState()
-    val pdfTitles by produceState<Set<String>>(initialValue = emptySet(), pdfLibraryVersion) {
-        value = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
-    }
 
+    // Indexed once per catalog: each expanded category used to scan every book of the library
+    val booksByCategory = remember(navigationState.booksInCategory) { navigationState.booksInCategory.groupBy { it.categoryId } }
     val treeItems =
         remember(
             navigationState.rootCategories,
@@ -87,7 +82,6 @@ fun CategoryBookTreeView(
             navigationState.booksInCategory,
             navigationState.selectedCategory,
             navigationState.selectedBook,
-            isPdfEdition,
             // Rebuild when search-related inputs change
             showCounts,
             categoryCounts,
@@ -95,27 +89,22 @@ fun CategoryBookTreeView(
             selectedCategoryIdOverride,
             selectedBookIdOverride,
             booksForCategoryOverride,
-            onPdfBookClick,
-            pdfTitles,
         ) {
             buildTreeItems(
                 rootCategories = navigationState.rootCategories,
                 expandedCategories = navigationState.expandedCategories,
                 categoryChildren = navigationState.categoryChildren,
-                booksInCategory = navigationState.booksInCategory,
+                booksByCategory = booksByCategory,
                 selectedCategory = navigationState.selectedCategory,
                 selectedBook = navigationState.selectedBook,
-                isPdfEdition = isPdfEdition,
                 onCategoryClick = onCategoryClick,
                 onBookClick = onBookClick,
-                onPdfBookClick = onPdfBookClick,
                 categoryCounts = categoryCounts,
                 bookCounts = bookCounts,
                 selectedCategoryIdOverride = selectedCategoryIdOverride,
                 selectedBookIdOverride = selectedBookIdOverride,
                 showCounts = showCounts,
                 booksForCategoryOverride = booksForCategoryOverride,
-                pdfTitles = pdfTitles,
             )
         }
 
@@ -153,17 +142,15 @@ fun CategoryBookTreeView(
         }
     }
 
-    // 3) After restoration, if a book is selected, ensure it's brought into view once.
-    var didAutoCenter by remember(navigationState.selectedBook?.id) { mutableStateOf(false) }
-    LaunchedEffect(navigationState.selectedBook?.id, treeItems.size, hasRestored, didAutoCenter) {
-        val selId = navigationState.selectedBook?.id ?: return@LaunchedEffect
-        if (!didAutoCenter && hasRestored && treeItems.isNotEmpty()) {
-            val idx = treeItems.indexOfFirst { it.id == "book_${'$'}selId" }
-            if (idx >= 0) {
-                listState.scrollToItem(idx, 0)
-                didAutoCenter = true
-            }
-        }
+    // 3) A category revealed from elsewhere (the breadcrumb) is scrolled into view, then the request consumed
+    val currentOnCategoryRevealComplete by rememberUpdatedState(onCategoryRevealComplete)
+    LaunchedEffect(navigationState.categoryReveal, treeItems, hasRestored) {
+        val reveal = navigationState.categoryReveal ?: return@LaunchedEffect
+        if (!hasRestored) return@LaunchedEffect
+        val idx = treeItems.indexOfFirst { it.id == "category_$reveal" }
+        if (idx >= 0) listState.revealItem(idx)
+        // Consumed even when missing, so that it never fires later out of the blue
+        currentOnCategoryRevealComplete()
     }
 
     /* ---------------------------------------------------------------------
@@ -350,28 +337,23 @@ private fun buildTreeItems(
     rootCategories: List<Category>,
     expandedCategories: Set<Long>,
     categoryChildren: Map<Long, List<Category>>,
-    booksInCategory: Set<Book>,
+    booksByCategory: Map<Long, List<Book>>,
     selectedCategory: Category?,
     selectedBook: Book?,
-    isPdfEdition: Boolean,
     onCategoryClick: (Category) -> Unit,
     onBookClick: (Book) -> Unit,
-    onPdfBookClick: (Book) -> Unit,
     categoryCounts: Map<Long, Int>,
     bookCounts: Map<Long, Int>,
     selectedCategoryIdOverride: Long?,
     selectedBookIdOverride: Long?,
     showCounts: Boolean,
     booksForCategoryOverride: Map<Long, List<Book>>,
-    pdfTitles: Set<String>,
 ): List<TreeItem> =
     buildList {
         fun addCategory(
             category: Category,
             level: Int,
-            pathTitles: List<String>,
         ) {
-            val currentPathTitles = pathTitles + category.title
             // In search mode, only render categories that contain results
             if (showCounts) {
                 val catCount = categoryCounts[category.id] ?: 0
@@ -407,7 +389,7 @@ private fun buildTreeItems(
                     if (showCounts) {
                         booksForCategoryOverride[category.id].orEmpty().asSequence()
                     } else {
-                        booksInCategory.asSequence().filter { it.categoryId == category.id }
+                        booksByCategory[category.id].orEmpty().asSequence()
                     }
                 booksSeq
                     .distinctBy { it.id }
@@ -422,8 +404,8 @@ private fun buildTreeItems(
                                     BookItem(
                                         book = book,
                                         isSelected =
-                                            !isPdfEdition &&
-                                                (selectedBookIdOverride?.let { it == book.id } ?: (selectedBook?.id == book.id)),
+                                            selectedBookIdOverride?.let { it == book.id }
+                                                ?: (selectedBook?.id == book.id),
                                         onClick = { onBookClick(book) },
                                         count = bookCounts[book.id] ?: 0,
                                         showCount = showCounts,
@@ -431,39 +413,17 @@ private fun buildTreeItems(
                                 },
                             ),
                         )
-                        if (
-                            !showCounts &&
-                            pdfTitles.contains(book.title.trim()) &&
-                            TalmudPdfService.isTalmudBavliCategoryPath(currentPathTitles)
-                        ) {
-                            add(
-                                TreeItem(
-                                    id = "pdf_book_${book.id}",
-                                    level = level + 1,
-                                    content = {
-                                        BookItem(
-                                            book = book,
-                                            isSelected = isPdfEdition && selectedBook?.id == book.id,
-                                            onClick = { onPdfBookClick(book) },
-                                            count = 0,
-                                            showCount = false,
-                                            isPdf = true,
-                                        )
-                                    },
-                                ),
-                            )
-                        }
                     }
 
                 // Subcategories
                 categoryChildren[category.id]?.forEach { child ->
-                    addCategory(child, level + 1, currentPathTitles)
+                    addCategory(child, level + 1)
                 }
             }
         }
 
         rootCategories.forEach { category ->
-            addCategory(category, 0, emptyList())
+            addCategory(category, 0)
         }
     }
 
@@ -510,7 +470,7 @@ private fun CategoryItem(
             tint = JewelTheme.globalColors.text.normal,
             contentDescription = "",
         )
-        Icon(
+        SharedIcon(
             key = AllIconsKeys.Nodes.Folder,
             contentDescription = null,
         )
@@ -529,7 +489,6 @@ private fun BookItem(
     showCount: Boolean,
     checkboxChecked: Boolean? = null,
     onCheckboxToggle: ((Boolean) -> Unit)? = null,
-    isPdf: Boolean = false,
 ) {
     SelectableRow(isSelected = isSelected, onClick = onClick) {
         Row(
@@ -544,22 +503,18 @@ private fun BookItem(
                         onCheckedChange = onCheckboxToggle,
                     )
                 }
-                if (isPdf) {
-                    PdfEditionMarker(selected = isSelected)
-                } else {
-                    Icon(
-                        imageVector = Book_2,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint =
-                            if (isSelected) {
-                                JewelTheme.globalColors.text.selected
-                            } else {
-                                JewelTheme.globalColors.text.normal
-                                    .copy(alpha = 0.7f)
-                            },
-                    )
-                }
+                Icon(
+                    imageVector = Book_2,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint =
+                        if (isSelected) {
+                            JewelTheme.globalColors.text.selected
+                        } else {
+                            JewelTheme.globalColors.text.normal
+                                .copy(alpha = 0.7f)
+                        },
+                )
                 Text(text = book.title, fontWeight = if (isSelected) Bold else Normal)
             }
             if (showCount && count > 0) CountBadge(count)

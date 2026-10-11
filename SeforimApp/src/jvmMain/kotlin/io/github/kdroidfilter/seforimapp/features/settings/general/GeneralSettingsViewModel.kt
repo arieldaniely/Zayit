@@ -15,20 +15,21 @@ import kotlinx.coroutines.flow.stateIn
 @ContributesIntoMap(AppScope::class)
 @ViewModelKey
 @Inject
-class GeneralSettingsViewModel : ViewModel() {
-    private val dbPath = MutableStateFlow(AppSettings.getDatabasePath())
-    private val closeTree = MutableStateFlow(AppSettings.getCloseBookTreeOnNewBookSelected())
-    private val persist = MutableStateFlow(AppSettings.isPersistSessionEnabled())
-    private val keepAwake = MutableStateFlow(AppSettings.isKeepScreenAwakeOnBookEnabled())
+class GeneralSettingsViewModel(
+    private val appSettings: AppSettings,
+) : ViewModel() {
+    private val dbPath = MutableStateFlow(appSettings.getDatabasePath())
+    private val closeTree = MutableStateFlow(appSettings.getCloseBookTreeOnNewBookSelected())
+    private val persist = MutableStateFlow(appSettings.isPersistSessionEnabled())
+    private val keepAwake = MutableStateFlow(appSettings.isKeepScreenAwakeOnBookEnabled())
 
     val state =
-        combine(dbPath, closeTree, persist, keepAwake, AppSettings.searchFeedbackEnabledFlow) { path, c, p, k, feedback ->
+        combine(dbPath, closeTree, persist, keepAwake) { path, c, p, k ->
             GeneralSettingsState(
                 databasePath = path,
                 closeTreeOnNewBook = c,
                 persistSession = p,
                 keepScreenAwakeOnBook = k,
-                searchFeedbackEnabled = feedback,
             )
         }.stateIn(
             viewModelScope,
@@ -38,23 +39,21 @@ class GeneralSettingsViewModel : ViewModel() {
                 closeTreeOnNewBook = closeTree.value,
                 persistSession = persist.value,
                 keepScreenAwakeOnBook = keepAwake.value,
-                searchFeedbackEnabled = AppSettings.isSearchFeedbackEnabled(),
             ),
         )
 
     fun onEvent(event: GeneralSettingsEvents) {
         when (event) {
-            is GeneralSettingsEvents.SetSearchFeedbackEnabled -> AppSettings.setSearchFeedbackEnabled(event.value)
             is GeneralSettingsEvents.SetCloseTreeOnNewBook -> {
-                AppSettings.setCloseBookTreeOnNewBookSelected(event.value)
+                appSettings.setCloseBookTreeOnNewBookSelected(event.value)
                 closeTree.value = event.value
             }
             is GeneralSettingsEvents.SetPersistSession -> {
-                AppSettings.setPersistSessionEnabled(event.value)
+                appSettings.setPersistSessionEnabled(event.value)
                 persist.value = event.value
             }
             is GeneralSettingsEvents.SetKeepScreenAwakeOnBook -> {
-                AppSettings.setKeepScreenAwakeOnBookEnabled(event.value)
+                appSettings.setKeepScreenAwakeOnBookEnabled(event.value)
                 keepAwake.value = event.value
             }
         }

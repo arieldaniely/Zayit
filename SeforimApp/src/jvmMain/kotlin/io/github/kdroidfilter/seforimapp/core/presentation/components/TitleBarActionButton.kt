@@ -1,34 +1,32 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+import androidx.compose.ui.window.PopupPositionProvider
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.IconActionButton
-import org.jetbrains.jewel.ui.component.TabState
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.component.styling.IconButtonColors
 import org.jetbrains.jewel.ui.component.styling.IconButtonMetrics
 import org.jetbrains.jewel.ui.component.styling.IconButtonStyle
 import org.jetbrains.jewel.ui.icon.IconKey
-import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import org.jetbrains.jewel.ui.theme.iconButtonStyle
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -40,45 +38,23 @@ fun TitleBarActionButton(
     tooltipText: String,
     shortcutHint: String? = null,
     enabled: Boolean = true,
-    isActive: Boolean = false,
-    indicatorColor: Color? = null,
 ) {
     val accent = JewelTheme.globalColors.outlines.focused
     val baseStyle = JewelTheme.iconButtonStyle
-    val isIslands = ThemeUtils.isIslandsStyle()
-    val activeTabBg =
-        JewelTheme.defaultTabStyle.colors
-            .backgroundFor(TabState.of(selected = true, active = true))
-            .value
-
     val style =
-        remember(accent, baseStyle, isIslands, isActive, activeTabBg) {
+        remember(accent, baseStyle) {
             val c = baseStyle.colors
-            val normalBg =
-                if (isActive) {
-                    if (isIslands) accent.copy(alpha = 0.20f) else activeTabBg
-                } else {
-                    c.background
-                }
-            val hoverBg =
-                if (isActive) {
-                    if (isIslands) accent.copy(alpha = 0.25f) else activeTabBg
-                } else {
-                    accent.copy(alpha = 0.12f)
-                }
-            val pressBg = accent.copy(alpha = 0.20f)
-
             IconButtonStyle(
                 colors =
                     IconButtonColors(
                         foregroundSelectedActivated = c.foregroundSelectedActivated,
-                        background = normalBg,
+                        background = c.background,
                         backgroundDisabled = c.backgroundDisabled,
-                        backgroundSelected = normalBg,
-                        backgroundSelectedActivated = normalBg,
+                        backgroundSelected = c.backgroundSelected,
+                        backgroundSelectedActivated = c.backgroundSelectedActivated,
                         backgroundFocused = c.backgroundFocused,
-                        backgroundPressed = pressBg,
-                        backgroundHovered = hoverBg,
+                        backgroundPressed = accent.copy(alpha = 0.20f),
+                        backgroundHovered = accent.copy(alpha = 0.12f),
                         border = c.border,
                         borderDisabled = c.borderDisabled,
                         borderSelected = c.borderSelected,
@@ -88,20 +64,38 @@ fun TitleBarActionButton(
                         borderHovered = Color.Transparent,
                     ),
                 metrics =
-                    if (isIslands) {
-                        IconButtonMetrics(
-                            cornerSize = CornerSize(8.dp),
-                            borderWidth = baseStyle.metrics.borderWidth,
-                            padding = baseStyle.metrics.padding,
-                            minSize = baseStyle.metrics.minSize,
-                        )
-                    } else {
-                        baseStyle.metrics
-                    },
+                    IconButtonMetrics(
+                        cornerSize = CornerSize(8.dp),
+                        borderWidth = baseStyle.metrics.borderWidth,
+                        padding = baseStyle.metrics.padding,
+                        minSize = baseStyle.metrics.minSize,
+                    ),
             )
         }
 
-    val buttonModifier = Modifier.width(36.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
+    val buttonModifier = Modifier.width(40.dp).fillMaxHeight().padding(horizontal = 2.dp, vertical = 4.dp)
+
+    val belowAnchorPlacement =
+        remember {
+            object : TooltipPlacement {
+                @Composable
+                override fun positionProvider(cursorPosition: Offset): PopupPositionProvider =
+                    object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: IntRect,
+                            windowSize: IntSize,
+                            layoutDirection: LayoutDirection,
+                            popupContentSize: IntSize,
+                        ): IntOffset =
+                            IntOffset(
+                                x =
+                                    (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2)
+                                        .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                                y = anchorBounds.bottom,
+                            )
+                    }
+            }
+        }
 
     Tooltip(
         tooltip = {
@@ -114,24 +108,15 @@ fun TitleBarActionButton(
                 }
             }
         },
+        tooltipPlacement = belowAnchorPlacement,
     ) {
-        Box(modifier = buttonModifier) {
-            IconActionButton(
-                key = key,
-                onClick = onClick,
-                enabled = enabled,
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                style = style,
-            )
-            indicatorColor?.let { color ->
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(8.dp)
-                        .background(color, CircleShape),
-                )
-            }
-        }
+        IconActionButton(
+            key = key,
+            onClick = onClick,
+            enabled = enabled,
+            contentDescription = contentDescription,
+            modifier = buttonModifier,
+            style = style,
+        )
     }
 }

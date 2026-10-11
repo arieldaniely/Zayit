@@ -22,6 +22,17 @@ sealed interface BookContentEvent {
         val category: Category,
     ) : BookContentEvent
 
+    /** Reveals a category in the tree (expanding, never collapsing). */
+    data class RevealCategory(
+        val category: Category,
+    ) : BookContentEvent
+
+    /** Hands the keyboard focus back to the book text. */
+    data object FocusText : BookContentEvent
+
+    /** The tree scrolled to the revealed category. */
+    data object CategoryRevealed : BookContentEvent
+
     data class BookSelected(
         val book: Book,
     ) : BookContentEvent
@@ -32,6 +43,19 @@ sealed interface BookContentEvent {
 
     data object ToggleBookTree : BookContentEvent
 
+    // Search bar of the book tree pane
+    data object ToggleBookTreeSearch : BookContentEvent
+
+    data object CloseBookTreeSearch : BookContentEvent
+
+    data class BookTreeSearchQueryChanged(
+        val query: String,
+    ) : BookContentEvent
+
+    data class BookTreeSearchBookSelected(
+        val bookId: Long,
+    ) : BookContentEvent
+
     // TOC events
     data class TocEntryExpanded(
         val entry: TocEntry,
@@ -39,11 +63,22 @@ sealed interface BookContentEvent {
 
     data object ToggleToc : BookContentEvent
 
+    // Search bar of the TOC pane
+    data object ToggleTocSearch : BookContentEvent
+
+    data object CloseTocSearch : BookContentEvent
+
+    data class TocSearchQueryChanged(
+        val query: String,
+    ) : BookContentEvent
+
+    // A TOC entry, or an alt TOC one by its negated id
+    data class TocSearchEntrySelected(
+        val tocId: Long,
+    ) : BookContentEvent
+
     // Notes pane
     data object ToggleNotes : BookContentEvent
-
-    // History pane
-    data object ToggleHistory : BookContentEvent
 
     data class NotesScrolled(
         val index: Int,
@@ -92,6 +127,8 @@ sealed interface BookContentEvent {
     data class OpenBookAtLine(
         val bookId: Long,
         val lineId: Long,
+        /** Marks the lines from [lineId] to this one (see [ContentState.markedRange]). */
+        val endLineId: Long? = null,
     ) : BookContentEvent
 
     // Open a book by its id (VM resolves Book)
@@ -109,30 +146,21 @@ sealed interface BookContentEvent {
         val baseLineIds: List<Long> = emptyList(),
     ) : BookContentEvent
 
-    data class OpenSourceBookInNewTab(
-        val bookId: Long,
-        val baseLineIds: List<Long>,
-    ) : BookContentEvent
-
     data object ToggleCommentaries : BookContentEvent
 
     data object ToggleTargum : BookContentEvent
 
+    data object ToggleShnayimMikra : BookContentEvent
+
     data object ToggleSources : BookContentEvent
 
-    data object ToggleMentions : BookContentEvent
+    /** Shows or hides the book-details pane (in every tab: one setting). */
+    data object ToggleBookDetails : BookContentEvent
 
-    data object ToggleDiacritics : BookContentEvent
-
-    data object OpenPdfEdition : BookContentEvent
-
-    data object OpenTextEdition : BookContentEvent
-
-    data class OpenPdfEditionForBook(
-        val book: io.github.kdroidfilter.seforimlibrary.core.models.Book,
-    ) : BookContentEvent
+    data object CycleDiacritics : BookContentEvent
 
     data class ContentScrolled(
+        val bookId: Long,
         val anchorId: Long,
         val anchorIndex: Int,
         val scrollIndex: Int,
@@ -184,6 +212,11 @@ sealed interface BookContentEvent {
     data class OpenCommentaryTarget(
         val bookId: Long,
         val lineId: Long?,
+    ) : BookContentEvent
+
+    // Opens an author's page in a new tab
+    data class OpenAuthor(
+        val authorId: Long,
     ) : BookContentEvent
 
     data class SelectedCommentatorsChanged(

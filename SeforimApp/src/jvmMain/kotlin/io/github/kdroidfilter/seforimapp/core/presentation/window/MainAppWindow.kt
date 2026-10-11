@@ -8,10 +8,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -22,43 +24,43 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.window.WindowPlacement
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.kdroid.gematria.converter.toHebrewNumeral
 import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.energymanager.EnergyManager
-import dev.nucleusframework.taskbarprogress.tao.hideTaskbarProgress
-import dev.nucleusframework.taskbarprogress.tao.showTaskbarIndeterminate
-import dev.nucleusframework.taskbarprogress.tao.showTaskbarProgress
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
-import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
+import dev.nucleusframework.window.tao.BindTabGroupWindow
+import dev.nucleusframework.window.tao.JoinSatelliteWorkspace
+import dev.nucleusframework.window.tao.TabGroupWindowPlacement
+import dev.nucleusframework.window.tao.isRepeat
 import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
+import io.github.kdroidfilter.seforimapp.core.e2e.E2e
+import io.github.kdroidfilter.seforimapp.core.e2e.e2eCapture
 import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
-import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent
+import io.github.kdroidfilter.seforimapp.core.presentation.tabs.ClosePinnedTabHint
+import io.github.kdroidfilter.seforimapp.core.presentation.text.rememberRefLinkUriHandler
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.hasFindInPage
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
-import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberCopyToClipboard
+import io.github.kdroidfilter.seforimapp.core.selectionCopyShortcut
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
-import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyTabPlanner
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
-import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.AppIcon
@@ -81,6 +83,7 @@ fun NucleusApplicationScope.MainAppWindow(
     windowViewModelOwner: ViewModelStoreOwner,
     onQuit: () -> Unit,
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     val appGraph = LocalAppGraph.current
     val desktopMgr = appGraph.desktopManager
     val tabsVm = openWindow.tabsViewModel
@@ -151,7 +154,7 @@ fun NucleusApplicationScope.MainAppWindow(
                 onQuit()
             } else {
                 desktopMgr.closeWindow(openWindow.id)
-                SessionManager.saveIfEnabled(appGraph)
+                appGraph.sessionManager.saveIfEnabled()
             }
         },
         title = windowTitle,
@@ -169,32 +172,28 @@ fun NucleusApplicationScope.MainAppWindow(
                     openWindow.tabSearchVisible.value = !openWindow.tabSearchVisible.value
                     true
                 } else if (
-                    HISTORY_FAVORITES_ENABLED &&
-                    (
-                        (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
-                            (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.H)
-                    )
+                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
+                    (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.H)
                 ) {
                     openHistoryTab()
                     true
                 } else if (
-                    HISTORY_FAVORITES_ENABLED &&
-                    (
-                        (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
-                            (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.O)
-                    )
+                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
+                    (!PlatformInfo.isMacOS && keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.O)
                 ) {
                     openFavoritesTab()
                     true
+                } else if (isCtrlOrCmd && keyEvent.isShiftPressed && keyEvent.key == Key.T) {
+                    desktopMgr.reopenClosedTab(openWindow.id)
+                    true
+                } else if (isCtrlOrCmd && keyEvent.isShiftPressed && keyEvent.key == Key.W) {
+                    tabsVm.onEvent(TabsEvents.CloseAll)
+                    true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.T) {
-                    tabsVm.onEvent(
-                        if (keyEvent.isShiftPressed) TabsEvents.ReopenLastClosedTab else TabsEvents.OnAdd,
-                    )
+                    tabsVm.onEvent(TabsEvents.OnAdd)
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.W) {
-                    tabsVm.onEvent(
-                        if (keyEvent.isShiftPressed) TabsEvents.CloseAll else TabsEvents.OnClose(currentIndex),
-                    )
+                    tabsVm.closeSelectedTab(repeat = keyEvent.isRepeat)
                     true
                 } else if (isCtrlOrCmd && keyEvent.key == Key.Tab) {
                     val count = currentTabs.size
@@ -204,21 +203,8 @@ fun NucleusApplicationScope.MainAppWindow(
                         tabsVm.onEvent(TabsEvents.OnSelect(newIndex))
                     }
                     true
-                } else if (
-                    (
-                        keyEvent.isAltPressed &&
-                            !keyEvent.isCtrlPressed &&
-                            !keyEvent.isShiftPressed &&
-                            !keyEvent.isMetaPressed &&
-                            keyEvent.key == Key.Home
-                    ) ||
-                    (
-                        keyEvent.isMetaPressed &&
-                            keyEvent.isShiftPressed &&
-                            !keyEvent.isCtrlPressed &&
-                            !keyEvent.isAltPressed &&
-                            keyEvent.key == Key.H
-                    )
+                } else if ((keyEvent.isAltPressed && keyEvent.key == Key.SystemHome) ||
+                    (keyEvent.isMetaPressed && keyEvent.isShiftPressed && keyEvent.key == Key.H)
                 ) {
                     val currentTabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId
                     if (currentTabId != null) {
@@ -245,27 +231,15 @@ fun NucleusApplicationScope.MainAppWindow(
                         }
                     true
                 } else {
-                    val currentDest = currentTabs.getOrNull(currentIndex)?.destination
-                    val zoomCommand =
-                        if (currentDest is TabsDestination.PdfContent) {
-                            pdfZoomCommand(
-                                key = keyEvent.key,
-                                type = keyEvent.type,
-                                isCtrlPressed = keyEvent.isCtrlPressed,
-                                isMetaPressed = keyEvent.isMetaPressed,
-                            )
-                        } else {
-                            null
-                        }
-                    if (zoomCommand != null && currentDest is TabsDestination.PdfContent) {
-                        PdfZoomControllerRegistry.dispatch(currentDest.tabId, zoomCommand)
-                    } else {
-                        processKeyShortcuts(
-                            keyEvent = keyEvent,
-                            onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
-                            tabId = currentDest?.tabId ?: "",
-                        )
-                    }
+                    processKeyShortcuts(
+                        keyEvent = keyEvent,
+                        appSettings = appSettings,
+                        onNavigateTo = { /* no-op: legacy shortcuts not used here */ },
+                        tabId = currentTabs.getOrNull(currentIndex)?.destination?.tabId ?: "",
+                        findAvailable =
+                            currentTabs.getOrNull(currentIndex)?.destination?.hasFindInPage(appGraph.tabPersistedStateStore) == true,
+                        selectedText = { tabId -> appGraph.selectionContext.selectedTextIn(tabId) },
+                    )
                 }
             } else {
                 false
@@ -275,20 +249,6 @@ fun NucleusApplicationScope.MainAppWindow(
         // Hook up the native window: focus tracking feeds DesktopManager (dock menu, deep links
         // and desktop actions target the focused window), and toFront() needs the handle.
         val nucleusWin = nucleusWindow
-        val semanticProgress by SemanticAssetsManager.installationProgress.collectAsState()
-        val semanticAvailability by SemanticAssetsManager.availability.collectAsState()
-        LaunchedEffect(nucleusWin, semanticProgress, semanticAvailability) {
-            val fraction = semanticProgress?.fraction
-            when {
-                fraction != null -> nucleusWin.showTaskbarProgress(fraction.toDouble())
-                semanticProgress != null || semanticAvailability == SemanticAssetsManager.Availability.VALIDATING ->
-                    nucleusWin.showTaskbarIndeterminate()
-                else -> nucleusWin.hideTaskbarProgress()
-            }
-        }
-        DisposableEffect(nucleusWin) {
-            onDispose { nucleusWin.hideTaskbarProgress() }
-        }
         DisposableEffect(nucleusWin) {
             openWindow.nucleusWindow = nucleusWin
             onDispose {
@@ -299,6 +259,26 @@ fun NucleusApplicationScope.MainAppWindow(
             nucleusWin.focusFlow.collect { focused ->
                 if (focused) desktopMgr.onWindowFocused(openWindow.id)
             }
+        }
+
+        // Remember the floating size: while maximized the native window reports the screen frame.
+        LaunchedEffect(windowState) {
+            snapshotFlow { windowState.placement to windowState.size }.collect { (placement, size) ->
+                if (placement == WindowPlacement.Floating && size.isSpecified) openWindow.floatingSize = size
+            }
+        }
+
+        // The window shows one group of its desktop's tab workspace: binding it is what lets tabs
+        // be dropped here, torn off from here, and moved by the workspace. Its pane docks join it.
+        val session = openWindow.session
+        val groupId = openWindow.groupId
+        key(session, groupId) {
+            openWindow.group()?.let { group ->
+                BindTabGroupWindow(session.workspace, group, nucleusWin.unsafe.taoWindow)
+                TabGroupWindowPlacement(group, windowState)
+            }
+            JoinSatelliteWorkspace(session.panesOf(groupId, navigation = true), nucleusWin.unsafe.taoWindow)
+            JoinSatelliteWorkspace(session.panesOf(groupId, navigation = false), nucleusWin.unsafe.taoWindow)
         }
 
         // Settings dialog, composed inside the window it was opened from so it
@@ -316,97 +296,23 @@ fun NucleusApplicationScope.MainAppWindow(
             LocalOpenWindow provides openWindow,
             LocalWindowViewModelStoreOwner provides windowViewModelOwner,
             LocalViewModelStoreOwner provides windowViewModelOwner,
+            // Citation links in the texts open their target in a new tab of this window
+            LocalUriHandler provides rememberRefLinkUriHandler(openWindow.tabsViewModel),
         ) {
-            val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
-            val autoOpenedSharedStudyTabs =
-                remember(sharedStudyState.sessionId) { mutableStateMapOf<String, Long>() }
-            val dismissedSharedStudyBooks =
-                remember(sharedStudyState.sessionId) { mutableSetOf<Long>() }
-            DisposableEffect(tabsVm, sharedStudyState.sessionId) {
-                val previousListener = tabsVm.onTabClosedListener
-                val listener: (io.github.kdroidfilter.seforim.tabs.TabItem) -> Unit = { tab ->
-                    autoOpenedSharedStudyTabs.remove(tab.destination.tabId)?.let(dismissedSharedStudyBooks::add)
-                    previousListener?.invoke(tab)
-                }
-                tabsVm.onTabClosedListener = listener
-                onDispose {
-                    if (tabsVm.onTabClosedListener === listener) tabsVm.onTabClosedListener = previousListener
-                }
-            }
-            LaunchedEffect(sharedStudyState.locations, state.isActive, sharedStudyState.sessionId) {
-                if (!state.isActive) return@LaunchedEffect
-                sharedStudyState.locations
-                    .filterKeys { it != appGraph.sharedStudyCoordinator.localParticipantId }
-                    .values
-                    .forEach { location ->
-                        val tabsState = tabsVm.state.value
-                        val openTabs =
-                            tabsState.tabs.mapNotNull { tab ->
-                                val destination = tab.destination
-                                val bookId =
-                                    when (destination) {
-                                        is TabsDestination.BookContent -> destination.bookId
-                                        is TabsDestination.PdfContent -> destination.bookId
-                                        else -> return@mapNotNull null
-                                    }
-                                val lineId =
-                                    when (destination) {
-                                        is TabsDestination.BookContent -> destination.lineId
-                                        is TabsDestination.PdfContent -> destination.lineId
-                                    }
-                                SharedStudyTabPlanner.OpenTab(
-                                    tabId = destination.tabId,
-                                    bookId = bookId,
-                                    visibleLineIds = listOfNotNull(lineId),
-                                    active = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)?.id == tab.id,
-                                )
-                            }
-                        val currentLineId =
-                            tabsState.tabs
-                                .getOrNull(tabsState.selectedTabIndex)
-                                ?.destination
-                                ?.let { destination ->
-                                    when (destination) {
-                                        is TabsDestination.BookContent -> destination.lineId
-                                        is TabsDestination.PdfContent -> destination.lineId
-                                        else -> null
-                                    }
-                                }
-                        val plan =
-                            SharedStudyTabPlanner.plan(
-                                location,
-                                openTabs,
-                                currentLineId,
-                                dismissedBookIds = dismissedSharedStudyBooks,
-                            )
-                        if (plan.action == SharedStudyTabPlanner.Action.OPEN_BACKGROUND_TAB) {
-                            val tabId = UUID.randomUUID().toString()
-                            tabsVm.openBackgroundTab(
-                                TabsDestination.BookContent(
-                                    bookId = location.bookId,
-                                    tabId = tabId,
-                                    lineId = location.lineId,
-                                ),
-                            )
-                            autoOpenedSharedStudyTabs[tabId] = location.bookId
-                        }
-                    }
-            }
-
-            MainTitleBar()
+            MainTitleBar(Modifier.e2eCapture(openWindow.id + E2e.TITLE_BAR))
 
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).
-            val keepAwakeEnabled by AppSettings.keepScreenAwakeOnBookFlow.collectAsState()
+            val keepAwakeEnabled by appSettings.keepScreenAwakeOnBookFlow.collectAsState()
             val shouldKeepScreenAwake =
                 keepAwakeEnabled &&
                     state.isActive &&
                     selectedTab?.destination is TabsDestination.BookContent
             LaunchedEffect(shouldKeepScreenAwake) {
                 if (shouldKeepScreenAwake) {
-                    EnergyManager.keepScreenAwake()
+                    EnergyManager.keepAwake()
                 } else {
-                    EnergyManager.releaseScreenAwake()
+                    EnergyManager.releaseAwake()
                 }
             }
 
@@ -415,42 +321,47 @@ fun NucleusApplicationScope.MainAppWindow(
             // app-wide via LocalIsTouchMode.
             var isTouchMode by remember { mutableStateOf(false) }
 
+            val copyToClipboard = rememberCopyToClipboard()
             // Intercept key combos early to avoid focus traversal consuming Tab
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .e2eCapture(openWindow.id)
                         .detectTouchMode { isTouchMode = it }
-                        // Wayland pending-drop resolution: while a cross-window tab drop is
-                        // awaiting its target, the first pointer sample this window receives
-                        // (the compositor's post-release pointer-enter) identifies it as the
-                        // window under the cursor. Non-consuming, no-op otherwise.
-                        .pointerInput(openWindow.id) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val e = awaitPointerEvent(PointerEventPass.Initial)
-                                    val dock = appGraph.tabDockManager
-                                    if (dock.hasPendingDrop()) {
-                                        dock.onWindowPointerSample(
-                                            openWindow.id,
-                                            e.changes.first().position,
-                                        )
-                                    }
-                                }
+                        .onPreviewKeyEvent { keyEvent ->
+                            // Copy without nikud / with source: before the focused text, which would copy it as is
+                            val selectionCopy =
+                                selectionCopyShortcut(
+                                    keyEvent,
+                                    appGraph.selectionContext,
+                                    tabsVm.state.value.let {
+                                        it.tabs
+                                            .getOrNull(it.selectedTabIndex)
+                                            ?.destination
+                                            ?.tabId
+                                    } ?: "",
+                                )
+                            if (selectionCopy != null) {
+                                copyToClipboard(selectionCopy)
+                                return@onPreviewKeyEvent true
                             }
-                        }.onPreviewKeyEvent { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown) {
                                 val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
                                 when {
-                                    // Ctrl/Cmd + W closes the current tab; Shift closes all tabs.
+                                    // Ctrl/Cmd + Shift + W => close all tabs
+                                    isCtrlOrCmd && keyEvent.isShiftPressed && keyEvent.key == Key.W -> {
+                                        tabsVm.onEvent(TabsEvents.CloseAll)
+                                        true
+                                    }
+                                    // Ctrl/Cmd + Shift + T => reopen the last closed tab
+                                    isCtrlOrCmd && keyEvent.isShiftPressed && keyEvent.key == Key.T -> {
+                                        desktopMgr.reopenClosedTab(openWindow.id)
+                                        true
+                                    }
+                                    // Ctrl/Cmd + W => close current tab
                                     isCtrlOrCmd && keyEvent.key == Key.W -> {
-                                        tabsVm.onEvent(
-                                            if (keyEvent.isShiftPressed) {
-                                                TabsEvents.CloseAll
-                                            } else {
-                                                TabsEvents.OnClose(selectedIndex)
-                                            },
-                                        )
+                                        tabsVm.closeSelectedTab(repeat = keyEvent.isRepeat)
                                         true
                                     }
                                     // Ctrl/Cmd + Shift + Tab => previous tab
@@ -477,67 +388,39 @@ fun NucleusApplicationScope.MainAppWindow(
                                         true
                                     }
                                     // Cmd+Y (macOS) / Ctrl+H (others) => history page (Chrome-like)
-                                    HISTORY_FAVORITES_ENABLED &&
+                                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.Y) ||
                                         (
-                                            (
-                                                PlatformInfo.isMacOS &&
-                                                    keyEvent.isMetaPressed &&
-                                                    !keyEvent.isShiftPressed &&
-                                                    keyEvent.key == Key.Y
-                                            ) ||
-                                                (
-                                                    !PlatformInfo.isMacOS &&
-                                                        keyEvent.isCtrlPressed &&
-                                                        !keyEvent.isShiftPressed &&
-                                                        keyEvent.key == Key.H
-                                                )
-                                        ) -> {
+                                            !PlatformInfo.isMacOS &&
+                                                keyEvent.isCtrlPressed &&
+                                                !keyEvent.isShiftPressed &&
+                                                keyEvent.key == Key.H
+                                        )
+                                    -> {
                                         openHistoryTab()
                                         true
                                     }
                                     // Cmd+Alt+B (macOS) / Ctrl+Shift+O (others) => favorites page (Chrome-like)
-                                    HISTORY_FAVORITES_ENABLED &&
+                                    (PlatformInfo.isMacOS && keyEvent.isMetaPressed && keyEvent.isAltPressed && keyEvent.key == Key.B) ||
                                         (
-                                            (
-                                                PlatformInfo.isMacOS &&
-                                                    keyEvent.isMetaPressed &&
-                                                    keyEvent.isAltPressed &&
-                                                    keyEvent.key == Key.B
-                                            ) ||
-                                                (
-                                                    !PlatformInfo.isMacOS &&
-                                                        keyEvent.isCtrlPressed &&
-                                                        keyEvent.isShiftPressed &&
-                                                        keyEvent.key == Key.O
-                                                )
-                                        ) -> {
+                                            !PlatformInfo.isMacOS &&
+                                                keyEvent.isCtrlPressed &&
+                                                keyEvent.isShiftPressed &&
+                                                keyEvent.key == Key.O
+                                        )
+                                    -> {
                                         openFavoritesTab()
                                         true
                                     }
-                                    // Ctrl/Cmd + T opens a tab; Shift reopens the most recently closed tab.
+                                    // Ctrl/Cmd + T => new tab
                                     isCtrlOrCmd && keyEvent.key == Key.T -> {
-                                        tabsVm.onEvent(
-                                            if (keyEvent.isShiftPressed) {
-                                                TabsEvents.ReopenLastClosedTab
-                                            } else {
-                                                TabsEvents.OnAdd
-                                            },
-                                        )
+                                        tabsVm.onEvent(TabsEvents.OnAdd)
                                         true
                                     }
                                     // Alt + Home (Windows) or Cmd + Shift + H (macOS) => go Home on current tab
-                                    (
-                                        keyEvent.isAltPressed &&
-                                            !keyEvent.isCtrlPressed &&
-                                            !keyEvent.isShiftPressed &&
-                                            !keyEvent.isMetaPressed &&
-                                            keyEvent.key == Key.Home
-                                    ) ||
+                                    (keyEvent.isAltPressed && keyEvent.key == Key.SystemHome) ||
                                         (
                                             keyEvent.isMetaPressed &&
                                                 keyEvent.isShiftPressed &&
-                                                !keyEvent.isCtrlPressed &&
-                                                !keyEvent.isAltPressed &&
                                                 keyEvent.key == Key.H
                                         ) -> {
                                         val currentTabId = tabs.getOrNull(selectedIndex)?.destination?.tabId
@@ -597,8 +480,9 @@ fun NucleusApplicationScope.MainAppWindow(
                         },
             ) {
                 CompositionLocalProvider(LocalIsTouchMode provides isTouchMode) {
-                    TabsContent()
+                    WindowBody(openWindow)
                 }
+                ClosePinnedTabHint(tabsVm, Modifier.align(Alignment.TopCenter))
             }
         }
     }

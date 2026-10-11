@@ -1,9 +1,9 @@
 package io.github.kdroidfilter.seforimapp.features.database.update
 
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.onboarding.extract.BundleParts
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
-import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.vinceglb.filekit.FileKit
@@ -21,7 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * before a fresh install.
  *
  * Deletion is authoritative: it targets the directory of the *actual* configured
- * database ([AppSettings.getDatabasePath]) as well as the default databases
+ * database ([appSettings.getDatabasePath]) as well as the default databases
  * directory, so a database installed by an older build in a non-default location is
  * still removed. NIO [Files.deleteIfExists] is used so a locked file — common on
  * Windows when an antivirus, the Windows Search indexer, or a leftover handle holds
@@ -30,7 +30,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * and recorded for a retry at the next launch via [PendingDbCleanup], so the caller
  * can refuse to start a multi-GB download that would otherwise fill the disk.
  */
-class DatabaseCleanupUseCase {
+class DatabaseCleanupUseCase(
+    private val databasePathProvider: DatabasePathProvider,
+    private val appSettings: AppSettings,
+) {
     sealed interface CleanupResult {
         /** Every known artifact was removed (or was already absent). */
         data class Success(
@@ -45,18 +48,18 @@ class DatabaseCleanupUseCase {
 
     suspend fun cleanupDatabaseFiles(): CleanupResult =
         withContext(Dispatchers.IO) {
-            val currentDbPath = AppSettings.getDatabasePath()
+            val currentDbPath = appSettings.getDatabasePath()
 
-            // Keep the recorded location: the fresh database must be downloaded back into
-            // the folder the user selected. Only invalidate the runtime path cache while the
-            // old file is removed.
-            resetDatabasePathCache()
+            // The old database is going away: forget the recorded path and the cached
+            // resolution so the app re-resolves the freshly installed location later.
+            appSettings.setDatabasePath(null)
+            databasePathProvider.reset()
 
             // Candidate directories: the real DB directory (may be non-default for
             // legacy installs) plus the current default databases directory.
             val dirs = LinkedHashSet<File>()
             currentDbPath?.let { File(it).parentFile?.let(dirs::add) }
-            runCatching { File(portableDatabasesDirPath()) }.getOrNull()?.let(dirs::add)
+            runCatching { File(FileKit.databasesDir.path) }.getOrNull()?.let(dirs::add)
 
             var freed = 0L
             val undeletable = mutableListOf<File>()
@@ -96,17 +99,14 @@ class DatabaseCleanupUseCase {
     /** True for files this app installs alongside the database and must remove on reinstall. */
     private fun isDatabaseArtifact(file: File): Boolean {
         val name = file.name.lowercase()
-        return name in
-            setOf(
-                "seforim.db",
-                "lexical.db",
-                "seforim.db-wal",
-                "seforim.db-shm",
-                "lexical.db-wal",
-                "lexical.db-shm",
-                "seforim.db.lucene",
-                "seforim.db.lookup.lucene",
-            ) ||
+        return name.endsWith(".db") ||
+            // seforim.db, lexical.db
+            name.endsWith(".db-wal") ||
+            name.endsWith(".db-shm") ||
+            // SQLite WAL/SHM sidecars
+            name.endsWith(".lucene") ||
+            name.contains(".lookup.lucene") ||
+            // Lucene index dirs
             name == "catalog.pb" ||
             // precomputed catalog (previously mis-targeted as ".proto")
             name == "release_info.txt" ||
@@ -117,7 +117,8 @@ class DatabaseCleanupUseCase {
             // stale pending-cleanup marker
             // download / extraction leftovers
             name.endsWith(".tar.zst") ||
-            Regex(".*\\.part\\d+", RegexOption.IGNORE_CASE).matches(name) ||
+            BundleParts.isPart(name) ||
+            BundleParts.isManifest(name) ||
             name.endsWith(".zst") ||
             name.endsWith(".tmp")
     }
@@ -148,6 +149,3 @@ class DatabaseCleanupUseCase {
         }
     }
 }
-
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

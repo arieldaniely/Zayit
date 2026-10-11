@@ -2,20 +2,14 @@ package io.github.kdroidfilter.seforimapp.core.presentation.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.hasFindInPage
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
-import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
@@ -29,21 +23,17 @@ import seforimapp.seforimapp.generated.resources.*
 // dropped from IntelliJ Platform icons 262, so the asset is shipped locally.
 private object SystemThemeIconAnchor
 
-private object SharedStudyIconAnchor
-
 private val SystemTheme = PathIconKey("icons/system_theme.svg", SystemThemeIconAnchor::class.java)
-private val SharedStudy = PathIconKey("icons/shared_study.svg", SharedStudyIconAnchor::class.java)
 
 @Composable
 fun TitleBarActionsButtonsView() {
+    val appSettings = LocalAppGraph.current.appSettings
     val appGraph = LocalAppGraph.current
-    var sharedStudyDialogVisible by remember { mutableStateOf(false) }
-    val sharedStudyState by appGraph.sharedStudyCoordinator.state.collectAsState()
     val mainAppState = appGraph.mainAppState
     val theme = mainAppState.theme.collectAsState().value
 
-    // Update badge: shown only for PROMPT updates (MINOR/MAJOR any OS, or Linux PATCH).
-    // Silent Win/Mac PATCH updates apply on close and never surface here.
+    // Update badge: shown only for PROMPT updates (MINOR/MAJOR any OS, or Linux PATCH without
+    // the passwordless helper). Silent PATCH updates apply on close and never surface here.
     val updateState =
         appGraph.appUpdateService.state
             .collectAsState()
@@ -58,23 +48,7 @@ fun TitleBarActionsButtonsView() {
     val tabsViewModel: TabsViewModel = LocalOpenWindow.current.tabsViewModel
     val tabsState = tabsViewModel.state.collectAsState().value
     val currentTab = tabsState.tabs.getOrNull(tabsState.selectedTabIndex)
-    val currentTabId = currentTab?.destination?.tabId
-    val isFindOpen = currentTabId?.let { AppSettings.findBarOpenFlow(it).collectAsState().value } ?: false
-    val findEnabled =
-        when (val dest = currentTab?.destination) {
-            is TabsDestination.Search -> true
-            is TabsDestination.BookContent -> {
-                (dest.bookId != 0L && dest.bookId != -1L) ||
-                    (
-                        appGraph.tabPersistedStateStore
-                            .get(dest.tabId)
-                            ?.bookContent
-                            ?.selectedBookId
-                            ?.let { it != 0L && it != -1L } ?: false
-                    )
-            }
-            else -> false
-        }
+    val findEnabled = currentTab?.destination?.hasFindInPage(appGraph.tabPersistedStateStore) == true
 
     val iconDescription =
         when (theme) {
@@ -120,30 +94,6 @@ fun TitleBarActionsButtonsView() {
     }
 
     TitleBarActionButton(
-        key = SharedStudy,
-        contentDescription = stringResource(Res.string.shared_study),
-        onClick = { sharedStudyDialogVisible = true },
-        tooltipText =
-            stringResource(
-                if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) {
-                    Res.string.shared_study_tooltip_active
-                } else {
-                    Res.string.shared_study_tooltip
-                },
-            ),
-        isActive = sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected,
-        indicatorColor =
-            if (sharedStudyState.hasStartedDiscovery || sharedStudyState.isConnected) Color(0xFF22A06B) else null,
-    )
-
-    if (sharedStudyDialogVisible) {
-        SharedStudyDialog(
-            coordinator = appGraph.sharedStudyCoordinator,
-            onDismiss = { sharedStudyDialogVisible = false },
-        )
-    }
-
-    TitleBarActionButton(
         key = AllIconsKeys.Nodes.HomeFolder,
         contentDescription = stringResource(Res.string.home),
         onClick = {
@@ -168,8 +118,8 @@ fun TitleBarActionsButtonsView() {
             val selectedIndex = tabsViewModel.selectedTabIndex.value
             val tabId = tabs.getOrNull(selectedIndex)?.destination?.tabId ?: return@TitleBarActionButton
             // Toggle the Find-in-Page bar for the current tab only
-            val isOpen = AppSettings.findBarOpenFlow(tabId).value
-            if (isOpen) AppSettings.closeFindBar(tabId) else AppSettings.openFindBar(tabId)
+            val isOpen = appSettings.findBarOpenFlow(tabId).value
+            if (isOpen) appSettings.closeFindBar(tabId) else appSettings.showFindBar(tabId, appGraph.selectionContext.selectedTextIn(tabId))
         },
         tooltipText =
             if (findEnabled) {
@@ -181,13 +131,14 @@ fun TitleBarActionsButtonsView() {
             },
         shortcutHint = findShortcutHint,
         enabled = findEnabled,
-        isActive = isFindOpen,
     )
 
-    // On macOS the native Favorites menu covers this; shortcuts still work.
-    // Tab Search is placed immediately before the tabs in MainTitleBar.
+    // Chrome-like Tab Search (open tabs + visit history) and Favorites menu.
+    // On macOS the native History/Favorites menus (searchable) cover them; shortcuts still work.
     if (!PlatformInfo.isMacOS) {
         FavoritesMenuButton()
+        TabSearchButton()
+        ToolsMenuButton()
     }
     // On macOS, theme toggle and settings are handled by the native menu bar
     if (!PlatformInfo.isMacOS) {

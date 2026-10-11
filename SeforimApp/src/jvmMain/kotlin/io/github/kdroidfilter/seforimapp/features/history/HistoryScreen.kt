@@ -3,7 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.history
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,11 +21,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import io.github.kdroidfilter.seforim.tabs.TabType
-import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.history.VisitEntry
 import io.github.kdroidfilter.seforimapp.core.history.VisitKind
-import io.github.kdroidfilter.seforimapp.core.history.searchDescription
-import io.github.kdroidfilter.seforimapp.core.history.searchDestination
+import io.github.kdroidfilter.seforimapp.core.history.destination
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CardSurface
 import io.github.kdroidfilter.seforimapp.core.presentation.components.ConfirmPopup
 import io.github.kdroidfilter.seforimapp.core.presentation.components.EmptyState
@@ -63,13 +60,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.UUID
 
-private const val HISTORY_PAGE_LIMIT = 100
+private const val HISTORY_PAGE_LIMIT = 500
 
 /**
  * Full visit-history page (the chrome://history equivalent): searchable, grouped by day,
- * with per-entry deletion and clear-all. Rendered as a regular tab destination.
+ * unbounded, with per-entry deletion and clear-all. Rendered as a regular tab destination.
  */
 @Composable
 fun HistoryTabContent(tabId: String) {
@@ -87,49 +83,15 @@ fun HistoryTabContent(tabId: String) {
     var query by remember { mutableStateOf("") }
     val revision by historyStore.revision.collectAsState()
     var entries by remember { mutableStateOf<List<VisitEntry>>(emptyList()) }
-    var hasMore by remember { mutableStateOf(false) }
-    var isLoadingMore by remember { mutableStateOf(false) }
     LaunchedEffect(query, revision) {
-        isLoadingMore = false
-        val firstPage = historyStore.query(query, HISTORY_PAGE_LIMIT)
-        entries = firstPage
-        hasMore = firstPage.size == HISTORY_PAGE_LIMIT
-    }
-
-    fun loadMore() {
-        if (isLoadingMore || !hasMore) return
-        val requestedQuery = query
-        val requestedRevision = revision
-        val requestedOffset = entries.size
-        scope.launch {
-            isLoadingMore = true
-            try {
-                val nextPage = historyStore.query(requestedQuery, HISTORY_PAGE_LIMIT, offset = requestedOffset)
-                if (query == requestedQuery && revision == requestedRevision && entries.size == requestedOffset) {
-                    entries += nextPage
-                    hasMore = nextPage.size == HISTORY_PAGE_LIMIT
-                }
-            } finally {
-                if (query == requestedQuery && revision == requestedRevision) {
-                    isLoadingMore = false
-                }
-            }
-        }
+        entries = historyStore.query(query, HISTORY_PAGE_LIMIT)
     }
 
     fun openEntry(entry: VisitEntry) {
-        val destination =
-            when (entry.kind) {
-                VisitKind.BOOK ->
-                    entry.bookId?.let {
-                        TabsDestination.BookContent(bookId = it, tabId = UUID.randomUUID().toString(), lineId = entry.lineId)
-                    }
-                VisitKind.SEARCH ->
-                    entry.searchDestination(UUID.randomUUID().toString(), appGraph.tabPersistedStateStore)
-            } ?: return
+        val destination = entry.destination() ?: return
         debugln { "[History] open ${entry.key}" }
         // Chrome-like: clicking a history entry navigates in the current tab
-        tabsViewModel.replaceCurrentTabWithNewTabId(destination, newTabId = destination.tabId)
+        tabsViewModel.replaceCurrentTabWithNewTabId(destination)
     }
 
     HistoryPageContent(
@@ -137,9 +99,6 @@ fun HistoryTabContent(tabId: String) {
         query = query,
         onQueryChange = { query = it },
         entries = entries,
-        hasMore = hasMore,
-        isLoadingMore = isLoadingMore,
-        onLoadMore = ::loadMore,
         onClearAll = { scope.launch { historyStore.clearAll() } },
         onOpen = ::openEntry,
         onDelete = { entry -> scope.launch { historyStore.delete(entry.key) } },
@@ -152,9 +111,6 @@ private fun HistoryPageContent(
     query: String,
     onQueryChange: (String) -> Unit,
     entries: List<VisitEntry>,
-    hasMore: Boolean,
-    isLoadingMore: Boolean,
-    onLoadMore: () -> Unit,
     onClearAll: () -> Unit,
     onOpen: (VisitEntry) -> Unit,
     onDelete: (VisitEntry) -> Unit,
@@ -163,7 +119,6 @@ private fun HistoryPageContent(
     val today = remember { LocalDate.now(zone) }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault()) }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
     val todayLabel = stringResource(Res.string.history_today)
     val yesterdayLabel = stringResource(Res.string.history_yesterday)
 
@@ -233,7 +188,7 @@ private fun HistoryPageContent(
             )
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 grouped.forEach { (day, dayEntries) ->
@@ -270,7 +225,6 @@ private fun HistoryPageContent(
                                             }
                                         ListRow(
                                             title = entry.title,
-                                            subtitle = entry.searchDescription(),
                                             onOpen = { onOpen(entry) },
                                             onDelete = { onDelete(entry) },
                                             leadingContent = {
@@ -298,13 +252,6 @@ private fun HistoryPageContent(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-                if (hasMore) {
-                    item(key = "load-more-${entries.size}") {
-                        LaunchedEffect(entries.size, isLoadingMore) {
-                            if (!isLoadingMore) currentOnLoadMore()
                         }
                     }
                 }

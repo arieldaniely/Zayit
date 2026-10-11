@@ -18,6 +18,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.formatBytes
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.koalaplot.core.pie.DefaultSlice
 import io.github.koalaplot.core.pie.PieChart
@@ -36,16 +37,13 @@ import seforimapp.seforimapp.generated.resources.*
 @Composable
 fun AvailableDiskSpaceScreen(
     navController: NavController,
-    progressBarState: ProgressBarState = ProgressBarState,
+    progressBarState: ProgressBarState = LocalAppGraph.current.onboardingProgressBarState,
 ) {
     val viewModel: AvailableDiskSpaceViewModel =
         metroViewModel(viewModelStoreOwner = LocalWindowViewModelStoreOwner.current)
     val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(Unit) {
-        progressBarState.setProgress(0.2f)
-        viewModel.onEvent(AvailableDiskSpaceEvents.Refresh)
-    }
+    LaunchedEffect(Unit) { progressBarState.setProgress(0.2f) }
 
     AvailableDiskSpaceView(
         state = state,
@@ -62,7 +60,7 @@ fun AvailableDiskSpaceView(
     onNext: () -> Unit = {},
 ) {
     val requiredBytes = AvailableDiskSpaceUseCase.REQUIRED_SPACE_BYTES
-    // Include both the installed library and temporary download space.
+    // Space breakdown: permanent (8.5 GB) + temporary (2.5 GB) = total required (11 GB)
     val permanentSpaceBytes = (AvailableDiskSpaceUseCase.FINAL_SPACE_GB * 1024 * 1024 * 1024).toLong()
     val temporarySpaceBytes = (AvailableDiskSpaceUseCase.TEMPORARY_SPACE_GB * 1024 * 1024 * 1024).toLong()
 
@@ -78,7 +76,6 @@ fun AvailableDiskSpaceView(
             return@OnBoardingScaffold
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(Res.string.onboarding_disk_space_required, formatBytes(requiredBytes)))
             // Pie chart: Used, Permanent Space, Temporary Space, Free After Installation
             val total = state.totalDiskSpace
             val used = (total - state.availableDiskSpace).coerceAtLeast(0)
@@ -92,23 +89,13 @@ fun AvailableDiskSpaceView(
                 )
             val colors = generateHueColorPalette(slices.size)
 
-            Row(Modifier.height(200.dp).fillMaxWidth()) {
+            Row(Modifier.weight(0.9f)) {
                 PieChart(
                     values = slices,
-                    modifier = Modifier.size(180.dp).weight(1f),
+                    modifier = Modifier.size(240.dp).weight(1f),
+                    // ponytail: koalaplot 0.12 dropped hoverElement; the legend shows the labels
                     slice = { i: Int ->
-                        val labelText =
-                            when (i) {
-                                0 -> stringResource(Res.string.disk_pie_used_with_value, formatBytes(used))
-                                1 -> stringResource(Res.string.disk_pie_permanent_space, formatBytes(permanentSpaceBytes))
-                                2 -> stringResource(Res.string.disk_pie_temporary_space, formatBytes(temporarySpaceBytes))
-                                else -> stringResource(Res.string.disk_pie_free_after_with_value, formatBytes(freeAfter))
-                            }
-                        DefaultSlice(
-                            color = colors[i],
-                            hoverExpandFactor = 1.05f,
-                            hoverElement = { Text(labelText) },
-                        )
+                        DefaultSlice(color = colors[i], hoverExpandFactor = 1.05f)
                     },
                     labelConnector = {},
                 )
@@ -126,7 +113,7 @@ fun AvailableDiskSpaceView(
                 }
             }
 
-            Row(modifier = Modifier.padding(top = 12.dp)) {
+            Row(modifier = Modifier.weight(0.2f)) {
                 val recheckLabel = stringResource(Res.string.recheck_button)
 
                 if (state.hasEnoughSpace) {

@@ -3,8 +3,6 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
-import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
@@ -16,11 +14,13 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.ContentUs
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.NavigationUseCase
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.NotesUseCase
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.TocUseCase
+import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
+import io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore
+import io.github.kdroidfilter.seforimapp.testAppSettings
 import io.github.kdroidfilter.seforimlibrary.core.models.AltTocEntry
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
-import io.github.vinceglb.filekit.FileKit
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,6 +29,7 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -54,9 +55,7 @@ class PostSelectLineTest {
     private lateinit var repository: SeforimRepository
     private lateinit var useCaseFactory: BookContentUseCaseFactory
     private lateinit var titleUpdateManager: TabTitleUpdateManager
-    private lateinit var tabsViewModel: TabsViewModel
     private lateinit var desktopManager: DesktopManager
-    private lateinit var historyStore: HistoryStore
 
     // Mocked use cases
     private lateinit var contentUseCase: ContentUseCase
@@ -72,21 +71,26 @@ class PostSelectLineTest {
 
     @BeforeTest
     fun setup() {
-        FileKit.init("io.github.kdroidfilter.seforimapp.test")
         Dispatchers.setMain(testDispatcher)
 
         persistedStore = TabPersistedStateStore()
         repository = mockk(relaxed = true)
         titleUpdateManager = TabTitleUpdateManager()
-        tabsViewModel =
-            TabsViewModel(
+        desktopManager =
+            DesktopManager(
+                tabPersistedStateStore = persistedStore,
+                thumbnails =
+                    TabThumbnailStore(
+                        kotlin.io.path
+                            .createTempDirectory()
+                            .toFile(),
+                    ),
                 titleUpdateManager = titleUpdateManager,
-                startDestination = TabsDestination.Home(tabId = "start"),
+                searchHomeViewModelFactory = {
+                    SearchHomeViewModel(TabPersistedStateStore(), mockk(relaxed = true), mockk(relaxed = true), testAppSettings())
+                },
+                defaultDesktopName = "D1",
             )
-        desktopManager = mockk(relaxed = true)
-        historyStore = mockk(relaxed = true)
-        every { desktopManager.tabsViewModelFor(testTabId) } returns tabsViewModel
-        every { desktopManager.tabExistsFlow(testTabId) } returns flowOf(true)
 
         // Create mocked use cases
         contentUseCase = mockk(relaxed = true)
@@ -111,7 +115,7 @@ class PostSelectLineTest {
                 every { createContentUseCase(any()) } returns contentUseCase
                 every { createCommentariesUseCase(any(), any()) } returns commentariesUseCase
                 every { createAltTocUseCase(any()) } returns altTocUseCase
-                every { createTocUseCase(any()) } returns tocUseCase
+                every { createTocUseCase(any(), any()) } returns tocUseCase
                 every { createNotesUseCase(any()) } returns notesUseCase
                 every { createCategoryDisplaySettingsUseCase() } returns categoryDisplaySettingsUseCase
             }
@@ -140,7 +144,9 @@ class PostSelectLineTest {
             useCaseFactory = useCaseFactory,
             titleUpdateManager = titleUpdateManager,
             desktopManager = desktopManager,
-            historyStore = historyStore,
+            historyStore = mockk<HistoryStore>(relaxed = true),
+            sessionManager = mockk { every { isRestoringSession } returns MutableStateFlow(false) },
+            appSettings = testAppSettings(),
         )
     }
 

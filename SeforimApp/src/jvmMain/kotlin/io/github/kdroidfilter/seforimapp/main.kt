@@ -40,10 +40,13 @@ import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.isDevEnv
+import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.cli.runCli
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.vinceglb.filekit.FileKit
 import io.sentry.Sentry
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +55,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import seforimapp.seforimapp.generated.resources.*
 import java.awt.*
@@ -361,6 +365,18 @@ fun main(args: Array<String>) {
                     // Persist search feedback and retry pending events throughout the app lifetime.
                     LaunchedEffect(appGraph) {
                         appGraph.searchFeedbackService.run()
+                    }
+
+                    // Prepare the local model while the home screen is visible, so the
+                    // first submitted search can reuse the same initialized session.
+                    LaunchedEffect(appGraph) {
+                        withContext(Dispatchers.IO) {
+                            runCatching { appGraph.searchEngine.denseReady() }
+                                .onFailure {
+                                    if (it is CancellationException) throw it
+                                    warnln(it) { "Search initialization failed" }
+                                }
+                        }
                     }
 
                     // Check for updates once at startup. PATCH updates are pre-downloaded

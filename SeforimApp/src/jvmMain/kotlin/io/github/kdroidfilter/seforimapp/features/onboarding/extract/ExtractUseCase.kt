@@ -5,6 +5,7 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
 import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
+import io.github.kdroidfilter.seforimlibrary.search.SemanticFileFingerprint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -14,6 +15,7 @@ import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.SequenceInputStream
+import java.security.MessageDigest
 
 class ExtractUseCase {
     suspend fun extractToDatabase(
@@ -90,6 +92,7 @@ class ExtractUseCase {
             }
         }
 
+        val digest = MessageDigest.getInstance("SHA-256")
         val totalCompressed = sourceZst.length().coerceAtLeast(1L)
         FileInputStream(sourceZst).use { fis ->
             val cis = CountingInputStream(fis)
@@ -100,6 +103,7 @@ class ExtractUseCase {
                         val read = zin.read(buffer)
                         if (read <= 0) break
                         out.write(buffer, 0, read)
+                        digest?.update(buffer, 0, read)
                         onProgress(cis.count.toFloat() / totalCompressed.toFloat())
                     }
                     out.fd.sync()
@@ -107,6 +111,7 @@ class ExtractUseCase {
             }
         }
         onProgress(1f)
+        SemanticFileFingerprint.remember(targetDb.toPath(), digest.digest().joinToString("") { "%02x".format(it) })
         return targetDb
     }
 
@@ -140,42 +145,50 @@ class ExtractUseCase {
 
         val totalCompressed = zstFile.length().coerceAtLeast(1L)
         var extractedDb: File? = null
-        FileInputStream(zstFile).use { fis ->
-            CountingInputStream(BufferedInputStream(fis, 1 shl 20)).use { cis ->
-                ZstdInputStream(cis).use { zIn ->
-                    ConcatenatedTarInputStream(zIn).use { tar ->
-                        while (true) {
-                            val entry = tar.nextEntry ?: break
-                            val name = installationEntryName(entry.name)
-                            require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
-                            val outFile = File(destDir, name).canonicalFile
-                            require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
-                            if (entry.isDirectory) {
-                                outFile.mkdirs()
-                            } else {
-                                outFile.parentFile?.mkdirs()
-                                FileOutputStream(outFile).use { out ->
-                                    val buffer = ByteArray(1024 * 1024)
-                                    var remaining = entry.size
-                                    while (remaining > 0) {
-                                        val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
-                                        val read = tar.read(buffer, 0, toRead)
-                                        check(read > 0) { "Incomplete archive entry" }
-                                        out.write(buffer, 0, read)
-                                        remaining -= read
-                                        onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+        var databaseDigest: String? = null
+        StagedIndexDirectories(destDir).use { indexes ->
+            FileInputStream(zstFile).use { fis ->
+                CountingInputStream(BufferedInputStream(fis, 1 shl 20)).use { cis ->
+                    ZstdInputStream(cis).use { zIn ->
+                        ConcatenatedTarInputStream(zIn).use { tar ->
+                            while (true) {
+                                val entry = tar.nextEntry ?: break
+                                val name = installationEntryName(entry.name)
+                                require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                                val outFile = indexes.resolve(name)
+                                if (entry.isDirectory) {
+                                    outFile.mkdirs()
+                                } else {
+                                    outFile.parentFile?.mkdirs()
+                                    val digest = if (name == "seforim.db") MessageDigest.getInstance("SHA-256") else null
+                                    FileOutputStream(outFile).use { out ->
+                                        val buffer = ByteArray(1024 * 1024)
+                                        var remaining = entry.size
+                                        while (remaining > 0) {
+                                            val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
+                                            val read = tar.read(buffer, 0, toRead)
+                                            check(read > 0) { "Incomplete archive entry" }
+                                            out.write(buffer, 0, read)
+                                            digest?.update(buffer, 0, read)
+                                            remaining -= read
+                                            onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+                                        }
+                                        out.fd.sync()
                                     }
-                                    out.fd.sync()
+                                    if (outFile.name.equals("seforim.db", ignoreCase = true)) {
+                                        extractedDb = outFile
+                                        databaseDigest = digest?.digest()?.joinToString("") { "%02x".format(it) }
+                                    }
                                 }
-                                if (outFile.name.equals("seforim.db", ignoreCase = true)) {
-                                    extractedDb = outFile
-                                }
+                                onProgress(cis.count.toFloat() / totalCompressed.toFloat())
                             }
-                            onProgress(cis.count.toFloat() / totalCompressed.toFloat())
                         }
                     }
                 }
             }
+            checkNotNull(extractedDb) { "No .db file found in archive" }
+            indexes.commit()
+            databaseDigest?.let { SemanticFileFingerprint.remember(checkNotNull(extractedDb).toPath(), it) }
         }
         return extractedDb ?: error("No .db file found in archive")
     }
@@ -229,40 +242,48 @@ class ExtractUseCase {
         val seq = SequenceInputStream(ins.toEnumeration())
 
         var extractedDb: File? = null
-        CountingInputStream(seq).use { cis ->
-            ZstdInputStream(cis).use { zIn ->
-                ConcatenatedTarInputStream(zIn).use { tar ->
-                    while (true) {
-                        val entry = tar.nextEntry ?: break
-                        val name = installationEntryName(entry.name)
-                        require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
-                        val outFile = File(destDir, name).canonicalFile
-                        require(outFile.toPath().startsWith(destDir.canonicalFile.toPath())) { "Unsafe archive entry" }
-                        if (entry.isDirectory) {
-                            outFile.mkdirs()
-                        } else {
-                            outFile.parentFile?.mkdirs()
-                            FileOutputStream(outFile).use { out ->
-                                val buffer = ByteArray(1024 * 1024)
-                                var remaining = entry.size
-                                while (remaining > 0) {
-                                    val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
-                                    val read = tar.read(buffer, 0, toRead)
-                                    check(read > 0) { "Incomplete archive entry" }
-                                    out.write(buffer, 0, read)
-                                    remaining -= read
-                                    onUiProgress(mapProgress(cis.count))
+        var databaseDigest: String? = null
+        StagedIndexDirectories(destDir).use { indexes ->
+            CountingInputStream(seq).use { cis ->
+                ZstdInputStream(cis).use { zIn ->
+                    ConcatenatedTarInputStream(zIn).use { tar ->
+                        while (true) {
+                            val entry = tar.nextEntry ?: break
+                            val name = installationEntryName(entry.name)
+                            require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                            val outFile = indexes.resolve(name)
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                val digest = if (name == "seforim.db") MessageDigest.getInstance("SHA-256") else null
+                                FileOutputStream(outFile).use { out ->
+                                    val buffer = ByteArray(1024 * 1024)
+                                    var remaining = entry.size
+                                    while (remaining > 0) {
+                                        val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
+                                        val read = tar.read(buffer, 0, toRead)
+                                        check(read > 0) { "Incomplete archive entry" }
+                                        out.write(buffer, 0, read)
+                                        digest?.update(buffer, 0, read)
+                                        remaining -= read
+                                        onUiProgress(mapProgress(cis.count))
+                                    }
+                                    out.fd.sync()
                                 }
-                                out.fd.sync()
+                                if (outFile.name.equals("seforim.db", ignoreCase = true)) {
+                                    extractedDb = outFile
+                                    databaseDigest = digest?.digest()?.joinToString("") { "%02x".format(it) }
+                                }
                             }
-                            if (outFile.name.equals("seforim.db", ignoreCase = true)) {
-                                extractedDb = outFile
-                            }
+                            onUiProgress(mapProgress(cis.count))
                         }
-                        onUiProgress(mapProgress(cis.count))
                     }
                 }
             }
+            checkNotNull(extractedDb) { "No .db file found in archive" }
+            indexes.commit()
+            databaseDigest?.let { SemanticFileFingerprint.remember(checkNotNull(extractedDb).toPath(), it) }
         }
         onUiProgress(1f)
         return extractedDb ?: error("No .db file found in archive")

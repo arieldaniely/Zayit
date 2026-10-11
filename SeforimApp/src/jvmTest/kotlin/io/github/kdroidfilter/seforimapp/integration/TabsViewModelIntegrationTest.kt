@@ -78,6 +78,49 @@ class TabsViewModelIntegrationTest {
     // ==================== Tab Addition Tests ====================
 
     @Test
+    fun `enabled history and favorites retain their destinations`() =
+        runTest {
+            assertTrue(HISTORY_FAVORITES_ENABLED)
+            listOf(TabsDestination.History("history"), TabsDestination.Favorites("favorites")).forEach { destination ->
+                viewModel.openTab(destination)
+                assertEquals(
+                    destination,
+                    viewModel.state.value.tabs
+                        .first()
+                        .destination,
+                )
+                val model = TabsViewModel(titleUpdateManager, destination)
+                try {
+                    assertEquals(
+                        destination,
+                        model.state.value.tabs
+                            .first()
+                            .destination,
+                    )
+                } finally {
+                    model.dispose()
+                }
+            }
+        }
+
+    @Test
+    fun `restored history and favorites retain their titles and selection`() =
+        runTest {
+            val history = TabsDestination.History("history")
+            val favorites = TabsDestination.Favorites("favorites")
+            viewModel.restoreTabs(
+                destinations = listOf(history, favorites),
+                selectedIndex = 1,
+                titles = mapOf("history" to ("History" to TabType.HISTORY), "favorites" to ("Favorites" to TabType.FAVORITES)),
+            )
+            val state = viewModel.state.value
+            assertEquals(listOf(history, favorites), state.tabs.map { it.destination })
+            assertEquals(listOf("History", "Favorites"), state.tabs.map { it.title })
+            assertEquals(listOf(TabType.HISTORY, TabType.FAVORITES), state.tabs.map { it.tabType })
+            assertEquals(1, state.selectedTabIndex)
+        }
+
+    @Test
     fun `hidden history and favorites cannot be opened through navigation`() =
         runTest {
             if (HISTORY_FAVORITES_ENABLED) return@runTest

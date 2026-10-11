@@ -31,14 +31,12 @@ class RepositorySnippetSourceProvider(
             val result = mutableMapOf<Long, String>()
 
             for ((bookId, bookLines) in byBook) {
-                // Determine the range of line indices we need to load (including neighbors)
-                val minIdx = bookLines.minOf { it.lineIndex }
-                val maxIdx = bookLines.maxOf { it.lineIndex }
-                val rangeStart = (minIdx - SNIPPET_NEIGHBOR_WINDOW).coerceAtLeast(0)
-                val rangeEnd = maxIdx + SNIPPET_NEIGHBOR_WINDOW
-
-                // Load all lines in the extended range
-                val allLines = repository.getLines(bookId, rangeStart, rangeEnd)
+                // Distant hits must not cause us to read the entire intervening book.
+                // Merge only overlapping context windows; retain exactly the same snippets.
+                val allLines =
+                    snippetContextRanges(bookLines.map { it.lineIndex }).flatMap { range ->
+                        repository.getLines(bookId, range.first, range.last)
+                    }
 
                 // Create a map of lineIndex -> cleaned plain text
                 val plainByIndex =
@@ -73,4 +71,18 @@ class RepositorySnippetSourceProvider(
             .clean(content, Safelist.none())
             .replace("\\s+".toRegex(), " ")
             .trim()
+}
+
+internal fun snippetContextRanges(indices: List<Int>): List<IntRange> {
+    val ranges = mutableListOf<IntRange>()
+    for (index in indices.distinct().sorted()) {
+        val next = (index - SNIPPET_NEIGHBOR_WINDOW).coerceAtLeast(0)..index + SNIPPET_NEIGHBOR_WINDOW
+        val previous = ranges.lastOrNull()
+        if (previous != null && next.first.toLong() <= previous.last.toLong() + 1) {
+            ranges[ranges.lastIndex] = previous.first..maxOf(previous.last, next.last)
+        } else {
+            ranges += next
+        }
+    }
+    return ranges
 }

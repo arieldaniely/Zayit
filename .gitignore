@@ -30,5 +30,6 @@ DATABASE_LICENSING_REVIEW_HE.md
 **/.codex-local-build/
 **/.codex-validation-build/
 **/.codex-app-validation-build/
+**/.codex-distribution-validation-build/
 **/.codex-local-project-cache/
 __pycache__/

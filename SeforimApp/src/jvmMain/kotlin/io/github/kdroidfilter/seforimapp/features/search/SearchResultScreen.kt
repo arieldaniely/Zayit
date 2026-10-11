@@ -98,7 +98,7 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.*
 
 // Temporary release switch. Set to true to restore the grouped book cards.
-private const val GROUPED_SEARCH_RESULTS_ENABLED = false
+private const val GROUPED_SEARCH_RESULTS_ENABLED = true
 
 @Stable
 data class SearchShellActions(

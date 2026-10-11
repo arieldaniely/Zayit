@@ -62,8 +62,10 @@ internal object SemanticAssetsManager {
             val stamp = semanticBundleStamp(assetRoot, db)
             if (stamp != validatedStamp) {
                 _availability.value = Availability.VALIDATING
-                validate()
-                validatedStamp = stamp
+                // The search engine owns and initializes the model session. Checking readiness
+                // must not initialize a second session concurrently with the first UI search.
+                verify(assetRoot)
+                validatedStamp = semanticBundleStamp(assetRoot, db)
                 _availability.value = Availability.READY
             }
             _availability.value == Availability.READY

@@ -32,6 +32,16 @@ class ExtractUseCaseTest {
                         val installed = ExtractUseCase().extractToDatabase(archive.path) {}
                         assertEquals(File(install, "databases/seforim.db").absolutePath, installed)
                         assertEquals("books", File(installed).readText())
+                        val fingerprint =
+                            java.util.Properties().apply {
+                                File(installed).resolveSibling(".seforim.db.sha256-cache").inputStream().use { load(it) }
+                            }
+                        val expectedDigest =
+                            java.security.MessageDigest
+                                .getInstance("SHA-256")
+                                .digest("books".toByteArray())
+                                .joinToString("") { "%02x".format(it) }
+                        assertEquals(expectedDigest, fingerprint.getProperty("sha256"))
                         assertEquals(pdf, File(install, "databases/תלמוד בבלי/ברכות.pdf").exists())
                         assertEquals(vectors, File(install, "databases/seforim.db.semantic/model/tokenizer.json").exists())
                         assertTrue(archive.exists())
@@ -89,6 +99,71 @@ class ExtractUseCaseTest {
                     assertEquals("tokenizer", File(directory, "seforim.db.semantic/model/tokenizer.json").readText())
                     assertEquals("vectors", File(directory, "seforim.db.semantic/index/shard-00/segments").readText())
                 }
+            }
+        }
+
+    @Test
+    fun `replaces all old shards and stale text index commits for single and split archives`() =
+        runBlocking {
+            withInstallRoot { root, source ->
+                val archive = File(source, "upgrade.tar.zst")
+                writeBundle(
+                    archive,
+                    mapOf(
+                        "seforim.db" to "books",
+                        "seforim.db.semantic/index/shard-00/segments_1" to "int8",
+                        "seforim.db.lucene/segments_1" to "text",
+                    ),
+                )
+                val parts =
+                    archive.readBytes().toList().chunked(37).mapIndexed { index, bytes ->
+                        File(source, "upgrade.tar.zst.part%02d".format(index + 1)).apply { writeBytes(bytes.toByteArray()) }
+                    }
+                for ((index, selected) in listOf(archive, parts.first()).withIndex()) {
+                    val install = File(root, "upgrade-$index").apply { mkdirs() }
+                    selectInstallationRoot(install)
+                    val data = File(install, "databases")
+                    repeat(8) { shard ->
+                        File(data, "seforim.db.semantic/index/shard-%02d/segments_999".format(shard)).apply {
+                            parentFile.mkdirs()
+                            writeText("old")
+                        }
+                    }
+                    File(data, "seforim.db.lucene/segments_999").apply {
+                        parentFile.mkdirs()
+                        writeText("old")
+                    }
+                    ExtractUseCase().extractToDatabase(selected.path) {}
+                    assertEquals(listOf("shard-00"), File(data, "seforim.db.semantic/index").list()!!.toList())
+                    assertEquals(listOf("segments_1"), File(data, "seforim.db.lucene").list()!!.toList())
+                    assertFalse(File(data, "seforim.db.semantic/index/shard-00/segments_999").exists())
+                    assertFalse(data.list()!!.any { it.startsWith(".index-install-") })
+                }
+            }
+        }
+
+    @Test
+    fun `keeps old indexes when an archive fails validation`() =
+        runBlocking {
+            withInstallRoot { root, source ->
+                selectInstallationRoot(root)
+                val old =
+                    File(root, "databases/seforim.db.semantic/index/shard-07/segments_999").apply {
+                        parentFile.mkdirs()
+                        writeText("old")
+                    }
+                val archive = File(source, "failed.tar.zst")
+                writeBundle(
+                    archive,
+                    linkedMapOf(
+                        "seforim.db" to "books",
+                        "seforim.db.semantic/index/shard-00/segments_1" to "new",
+                        "../escaped.db" to "unsafe",
+                    ),
+                )
+                assertFailsWith<IllegalArgumentException> { ExtractUseCase().extractToDatabase(archive.path) {} }
+                assertEquals("old", old.readText())
+                assertFalse(File(root, "databases/seforim.db.semantic/index/shard-00").exists())
             }
         }
 

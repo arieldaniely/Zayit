@@ -2,34 +2,32 @@ package io.github.kdroidfilter.seforimapp.features.onboarding.extract
 
 import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
+import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
+import io.github.kdroidfilter.seforimapp.framework.database.databaseInstallDirectory
+import io.github.kdroidfilter.seforimlibrary.search.SemanticFileFingerprint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.InputStream
-import java.io.OutputStream
 import java.io.SequenceInputStream
-import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.util.HexFormat
 
 class ExtractUseCase(
     private val appSettings: AppSettings,
+    private val databasePathProvider: DatabasePathProvider,
+    private val talmudPdfService: TalmudPdfService,
 ) {
     suspend fun extractToDatabase(
         sourcePath: String,
         onProgress: (Float) -> Unit,
     ): String =
         withContext(Dispatchers.Default) {
-            val dbDirV = FileKit.databasesDir
-            val dbDir = File(dbDirV.path).apply { mkdirs() }
+            val dbDir = databaseInstallDirectory(appSettings).apply { mkdirs() }
             val source = File(sourcePath)
             require(source.exists()) { "Selected file not found" }
 
@@ -38,20 +36,13 @@ class ExtractUseCase(
                 withContext(Dispatchers.IO) {
                     val lower = source.name.lowercase()
                     when {
-                        BundleParts.isPart(source.name) -> {
+                        Regex(".*\\.tar\\.zst\\.part\\d+").matches(lower) -> {
                             val bundle = BundleParts.resolve(source)
                             val parts = bundle.parts
-                            val result =
-                                extractTarZstFromPartsStreaming(parts, dbDir, bundle.sha256) { mapped ->
-                                    onProgress(mapped)
-                                }
-                            // Only cleanup if parts live in our databases directory (downloaded by the app)
-                            val canDelete =
-                                runCatching {
-                                    val base = dbDir.canonicalFile
-                                    parts.all { it.parentFile?.canonicalFile == base }
-                                }.getOrDefault(false)
-                            if (canDelete) BundleParts.bundleFiles(source).forEach { runCatching { it.delete() } }
+                            val result = extractTarZstFromPartsStreaming(parts, dbDir, bundle.sha256, onProgress)
+                            if (parts.all { it.parentFile?.canonicalFile == dbDir.canonicalFile }) {
+                                parts.forEach { it.delete() }
+                            }
                             result
                         }
                         lower.endsWith(".tar.zst") -> {
@@ -72,6 +63,8 @@ class ExtractUseCase(
                 }
             onProgress(1f)
             appSettings.setDatabasePath(dbFile.absolutePath)
+            databasePathProvider.reset()
+            talmudPdfService.refreshAvailablePdfTitles()
             runCatching { maybeCleanupSources(source, dbDir) }
             return@withContext dbFile.absolutePath
         }
@@ -104,23 +97,30 @@ class ExtractUseCase(
             }
         }
 
+        val digest = MessageDigest.getInstance("SHA-256")
         val totalCompressed = sourceZst.length().coerceAtLeast(1L)
-        FileInputStream(sourceZst).use { fis ->
-            val cis = CountingInputStream(fis)
-            ZstdInputStream(cis).use { zin ->
-                FileOutputStream(targetDb).use { out ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) {
-                        val read = zin.read(buffer)
-                        if (read <= 0) break
-                        out.write(buffer, 0, read)
-                        onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+        StagedIndexDirectories(targetDb.parentFile).use { files ->
+            val stagedDb = files.resolve(targetDb.name)
+            FileInputStream(sourceZst).use { fis ->
+                val cis = CountingInputStream(fis)
+                ZstdInputStream(cis).use { zin ->
+                    FileOutputStream(stagedDb).use { out ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val read = zin.read(buffer)
+                            if (read <= 0) break
+                            out.write(buffer, 0, read)
+                            digest?.update(buffer, 0, read)
+                            onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+                        }
+                        out.fd.sync()
                     }
-                    out.fd.sync()
                 }
             }
+            files.commit()
         }
         onProgress(1f)
+        SemanticFileFingerprint.remember(targetDb.toPath(), digest.digest().joinToString("") { "%02x".format(it) })
         return targetDb
     }
 
@@ -154,45 +154,56 @@ class ExtractUseCase(
 
         val totalCompressed = zstFile.length().coerceAtLeast(1L)
         var extractedDb: File? = null
-        FileInputStream(zstFile).use { fis ->
-            CountingInputStream(BufferedInputStream(fis, 1 shl 20)).use { cis ->
-                ZstdInputStream(cis).use { zIn ->
-                    TarArchiveInputStream(zIn).use { tar ->
-                        while (true) {
-                            val entry = tar.nextEntry ?: break
-                            val name = entry.name
-                            val outFile = File(destDir, name)
-                            if (entry.isDirectory) {
-                                outFile.mkdirs()
-                            } else {
-                                outFile.parentFile?.mkdirs()
-                                FileOutputStream(outFile).use { out ->
-                                    val buffer = ByteArray(1024 * 1024)
-                                    var remaining = entry.size
-                                    while (remaining > 0) {
-                                        val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
-                                        val read = tar.read(buffer, 0, toRead)
-                                        if (read <= 0) break
-                                        out.write(buffer, 0, read)
-                                        remaining -= read
-                                        onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+        var databaseDigest: String? = null
+        StagedIndexDirectories(destDir).use { indexes ->
+            FileInputStream(zstFile).use { fis ->
+                CountingInputStream(BufferedInputStream(fis, 1 shl 20)).use { cis ->
+                    ZstdInputStream(cis).use { zIn ->
+                        ConcatenatedTarInputStream(zIn).use { tar ->
+                            while (true) {
+                                val entry = tar.nextEntry ?: break
+                                val name = installationEntryName(entry.name)
+                                require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                                val outFile = indexes.resolve(name)
+                                if (entry.isDirectory) {
+                                    outFile.mkdirs()
+                                } else {
+                                    outFile.parentFile?.mkdirs()
+                                    val digest = if (name == "seforim.db") MessageDigest.getInstance("SHA-256") else null
+                                    FileOutputStream(outFile).use { out ->
+                                        val buffer = ByteArray(1024 * 1024)
+                                        var remaining = entry.size
+                                        while (remaining > 0) {
+                                            val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
+                                            val read = tar.read(buffer, 0, toRead)
+                                            check(read > 0) { "Incomplete archive entry" }
+                                            out.write(buffer, 0, read)
+                                            digest?.update(buffer, 0, read)
+                                            remaining -= read
+                                            onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+                                        }
+                                        out.fd.sync()
                                     }
-                                    out.fd.sync()
+                                    if (name.equals("seforim.db", ignoreCase = true)) {
+                                        extractedDb = outFile
+                                        databaseDigest = digest?.digest()?.joinToString("") { "%02x".format(it) }
+                                    }
                                 }
-                                if (name.endsWith(".db", ignoreCase = true)) {
-                                    extractedDb = outFile
-                                }
+                                onProgress(cis.count.toFloat() / totalCompressed.toFloat())
                             }
-                            onProgress(cis.count.toFloat() / totalCompressed.toFloat())
+                            zIn.transferTo(java.io.OutputStream.nullOutputStream())
                         }
                     }
                 }
             }
+            checkNotNull(extractedDb) { "No .db file found in archive" }
+            indexes.commit()
+            extractedDb = File(destDir, "seforim.db")
+            databaseDigest?.let { SemanticFileFingerprint.remember(checkNotNull(extractedDb).toPath(), it) }
         }
         return extractedDb ?: error("No .db file found in archive")
     }
 
-    /** Extracts the concatenated [parts]; when [expectedSha256] is known, the compressed stream must match it. */
     private fun extractTarZstFromPartsStreaming(
         parts: List<File>,
         destDir: File,
@@ -241,53 +252,78 @@ class ExtractUseCase(
 
         val ins = parts.map { BufferedInputStream(FileInputStream(it), 1 shl 20) }
         val seq = SequenceInputStream(ins.toEnumeration())
-        // Hashing the bytes already read for extraction costs no extra I/O
-        val digest = expectedSha256?.let { MessageDigest.getInstance("SHA-256") }
+        val compressedDigest = expectedSha256?.let { MessageDigest.getInstance("SHA-256") }
+        val compressed = compressedDigest?.let { java.security.DigestInputStream(seq, it) } ?: seq
 
         var extractedDb: File? = null
-        CountingInputStream(digest?.let { DigestInputStream(seq, it) } ?: seq).use { cis ->
-            ZstdInputStream(cis).use { zIn ->
-                TarArchiveInputStream(zIn).use { tar ->
-                    while (true) {
-                        val entry = tar.nextEntry ?: break
-                        val name = entry.name
-                        val outFile = File(destDir, name)
-                        if (entry.isDirectory) {
-                            outFile.mkdirs()
-                        } else {
-                            outFile.parentFile?.mkdirs()
-                            FileOutputStream(outFile).use { out ->
-                                val buffer = ByteArray(1024 * 1024)
-                                var remaining = entry.size
-                                while (remaining > 0) {
-                                    val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
-                                    val read = tar.read(buffer, 0, toRead)
-                                    if (read <= 0) break
-                                    out.write(buffer, 0, read)
-                                    remaining -= read
-                                    onUiProgress(mapProgress(cis.count))
+        var databaseDigest: String? = null
+        StagedIndexDirectories(destDir).use { indexes ->
+            CountingInputStream(compressed).use { cis ->
+                ZstdInputStream(cis).use { zIn ->
+                    ConcatenatedTarInputStream(zIn).use { tar ->
+                        while (true) {
+                            val entry = tar.nextEntry ?: break
+                            val name = installationEntryName(entry.name)
+                            require(!entry.isSymbolicLink && !entry.isLink) { "Archive links are not supported" }
+                            val outFile = indexes.resolve(name)
+                            if (entry.isDirectory) {
+                                outFile.mkdirs()
+                            } else {
+                                outFile.parentFile?.mkdirs()
+                                val digest = if (name == "seforim.db") MessageDigest.getInstance("SHA-256") else null
+                                FileOutputStream(outFile).use { out ->
+                                    val buffer = ByteArray(1024 * 1024)
+                                    var remaining = entry.size
+                                    while (remaining > 0) {
+                                        val toRead = if (remaining >= buffer.size) buffer.size else remaining.toInt()
+                                        val read = tar.read(buffer, 0, toRead)
+                                        check(read > 0) { "Incomplete archive entry" }
+                                        out.write(buffer, 0, read)
+                                        digest?.update(buffer, 0, read)
+                                        remaining -= read
+                                        onUiProgress(mapProgress(cis.count))
+                                    }
+                                    out.fd.sync()
                                 }
-                                out.fd.sync()
+                                if (name.equals("seforim.db", ignoreCase = true)) {
+                                    extractedDb = outFile
+                                    databaseDigest = digest?.digest()?.joinToString("") { "%02x".format(it) }
+                                }
                             }
-                            if (name.endsWith(".db", ignoreCase = true)) {
-                                extractedDb = outFile
-                            }
+                            onUiProgress(mapProgress(cis.count))
                         }
-                        onUiProgress(mapProgress(cis.count))
-                    }
-                    if (digest != null) {
-                        // The tar ends before the compressed stream does; hash the rest too
-                        cis.transferTo(OutputStream.nullOutputStream())
-                        if (!HexFormat.of().formatHex(digest.digest()).equals(expectedSha256, ignoreCase = true)) {
-                            extractedDb?.delete()
-                            error("The database bundle is corrupted (sha256 mismatch)")
+                        zIn.transferTo(java.io.OutputStream.nullOutputStream())
+                        if (compressedDigest != null) {
+                            cis.transferTo(java.io.OutputStream.nullOutputStream())
+                            check(
+                                java.util.HexFormat
+                                    .of()
+                                    .formatHex(compressedDigest.digest())
+                                    .equals(expectedSha256, true),
+                            ) {
+                                "The database bundle is corrupted (sha256 mismatch)"
+                            }
                         }
                     }
                 }
             }
+            checkNotNull(extractedDb) { "No .db file found in archive" }
+            indexes.commit()
+            extractedDb = File(destDir, "seforim.db")
+            databaseDigest?.let { SemanticFileFingerprint.remember(checkNotNull(extractedDb).toPath(), it) }
         }
         onUiProgress(1f)
         return extractedDb ?: error("No .db file found in archive")
+    }
+
+    // Reuse the standalone semantic bundle unchanged inside full distributions.
+    private fun installationEntryName(name: String): String {
+        val normalized = name.removePrefix("./")
+        return if (normalized.substringBefore('/') in setOf("model", "index")) {
+            "seforim.db.semantic/$normalized"
+        } else {
+            normalized
+        }
     }
 
     private fun <T> List<T>.toEnumeration(): java.util.Enumeration<T> =
@@ -299,6 +335,23 @@ class ExtractUseCase(
             override fun nextElement(): T = this@toEnumeration[index++]
         }
 
+    private fun findSplitParts(anyPart: File): List<File> {
+        val directory = anyPart.parentFile ?: error("Invalid parts path")
+        val base = anyPart.name.substringBeforeLast(".part")
+        val pattern = Regex(Regex.escape(base) + "\\.part(\\d+)")
+        val parts =
+            directory
+                .listFiles()
+                .orEmpty()
+                .filter { it.isFile && pattern.matches(it.name) }
+                .sortedBy { pattern.matchEntire(it.name)!!.groupValues[1].toInt() }
+        require(parts.isNotEmpty()) { "Missing bundle parts" }
+        require(parts.map { pattern.matchEntire(it.name)!!.groupValues[1].toInt() } == (1..parts.size).toList()) {
+            "Missing bundle parts"
+        }
+        return parts
+    }
+
     private fun maybeCleanupSources(
         source: File,
         dbDir: File,
@@ -306,8 +359,8 @@ class ExtractUseCase(
         if (source.parentFile?.canonicalFile == dbDir.canonicalFile) {
             if (source.name.endsWith(".tar.zst", true)) {
                 runCatching { source.delete() }
-            } else if (BundleParts.isPart(source.name)) {
-                BundleParts.bundleFiles(source).forEach { runCatching { it.delete() } }
+            } else if (source.name.contains(".tar.zst.part")) {
+                findSplitParts(source).forEach { part -> runCatching { part.delete() } }
             }
         }
     }

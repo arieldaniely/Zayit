@@ -22,21 +22,21 @@ class AvailableDiskSpaceUseCaseTest {
     @Test
     fun `available disk space returns positive value`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
             assertTrue(info.availableBytes > 0, "Available disk space should be positive")
         }
 
     @Test
     fun `total disk space returns positive value`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
             assertTrue(info.totalBytes > 0, "Total disk space should be positive")
         }
 
     @Test
     fun `total disk space is greater than or equal to available space`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
             assertTrue(
                 info.totalBytes >= info.availableBytes,
                 "Total space (${info.totalBytes}) should be >= available space (${info.availableBytes})",
@@ -46,7 +46,7 @@ class AvailableDiskSpaceUseCaseTest {
     @Test
     fun `remainingAfterInstall is consistent with available space`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
             val expectedRemaining = info.availableBytes - AvailableDiskSpaceUseCase.REQUIRED_SPACE_BYTES
             assertEquals(expectedRemaining, info.remainingAfterInstall)
         }
@@ -54,7 +54,7 @@ class AvailableDiskSpaceUseCaseTest {
     @Test
     fun `hasEnoughSpace is consistent with available space`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
             val expectedHasEnough = info.availableBytes >= AvailableDiskSpaceUseCase.REQUIRED_SPACE_BYTES
             assertEquals(expectedHasEnough, info.hasEnoughSpace)
         }

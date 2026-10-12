@@ -49,7 +49,7 @@ fun InitView(onNext: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Image(
-            painter = painterResource(Res.drawable.zayit_transparent),
+            painter = painterResource(Res.drawable.zayita_home_logo),
             contentDescription = null,
             modifier = Modifier.size(176.dp),
         )

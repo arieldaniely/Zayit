@@ -17,8 +17,6 @@ import androidx.navigation.NavController
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
-import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
-import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,8 +31,11 @@ import seforimapp.seforimapp.generated.resources.*
 @Composable
 fun PdfLibrarySetupScreen(
     navController: NavController,
-    progressBarState: ProgressBarState = ProgressBarState,
+    progressBarState: ProgressBarState = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.onboardingProgressBarState,
 ) {
+    val graph = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current
+    val talmudPdfService = graph.talmudPdfService
+    val semanticAssetsManager = graph.semanticAssetsManager
     val scope = rememberCoroutineScope()
     var missingPdf by remember { mutableStateOf(false) }
     var missingVectors by remember { mutableStateOf(false) }
@@ -54,7 +55,7 @@ fun PdfLibrarySetupScreen(
         progressBarState.setProgress(0.9f)
         val missing =
             withContext(Dispatchers.IO) {
-                !TalmudPdfService.isInstalled() to !SemanticAssetsManager.validatedReady()
+                !talmudPdfService.isInstalled() to !semanticAssetsManager.validatedReady()
             }
         missingPdf = missing.first
         missingVectors = missing.second
@@ -77,8 +78,8 @@ fun PdfLibrarySetupScreen(
                         scope.launch {
                             try {
                                 withContext(Dispatchers.IO) {
-                                    if (missingPdf && installPdf) TalmudPdfService.downloadAndInstall()
-                                    if (missingVectors && installVectors) SemanticAssetsManager.downloadBundle()
+                                    if (missingPdf && installPdf) talmudPdfService.downloadAndInstall()
+                                    if (missingVectors && installVectors) semanticAssetsManager.downloadBundle()
                                 }
                                 continueToProfile()
                             } catch (failure: kotlinx.coroutines.CancellationException) {
@@ -86,8 +87,8 @@ fun PdfLibrarySetupScreen(
                             } catch (_: Exception) {
                                 failed = true
                                 // Keep successful components installed; retry only what is still missing.
-                                missingPdf = withContext(Dispatchers.IO) { !TalmudPdfService.isInstalled() }
-                                missingVectors = withContext(Dispatchers.IO) { !SemanticAssetsManager.validatedReady() }
+                                missingPdf = withContext(Dispatchers.IO) { !talmudPdfService.isInstalled() }
+                                missingVectors = withContext(Dispatchers.IO) { !semanticAssetsManager.validatedReady() }
                             } finally {
                                 installing = false
                             }

@@ -305,7 +305,7 @@ class OnboardingFlowIntegrationTest {
     @Test
     fun `disk space use case provides consistent calculations`() =
         runTest {
-            val info = AvailableDiskSpaceUseCase().getDiskSpaceInfo()
+            val info = AvailableDiskSpaceUseCase(io.github.kdroidfilter.seforimapp.core.settings.AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))).getDiskSpaceInfo()
 
             // Total should be >= available
             assertTrue(info.totalBytes >= info.availableBytes)

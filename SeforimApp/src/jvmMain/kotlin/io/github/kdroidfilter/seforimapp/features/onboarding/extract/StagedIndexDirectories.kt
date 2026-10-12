@@ -8,7 +8,7 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
-/** Publish complete indexes only after the archive has been read successfully. */
+/** Publish the database and complete asset directories only after the archive has been verified. */
 internal class StagedIndexDirectories(
     destination: File,
 ) : Closeable {
@@ -26,8 +26,8 @@ internal class StagedIndexDirectories(
                 .toPath()
         require(selected.startsWith(destination)) { "Unsafe archive entry" }
         val component = destination.relativize(selected).firstOrNull()?.toString()
-        if (component !in INDEX_DIRECTORIES) return selected.toFile()
-        components.add(component!!)
+        require(!component.isNullOrBlank() && component != ".previous") { "Unsafe archive entry" }
+        components.add(component)
         return staging.resolve(destination.relativize(selected)).toFile()
     }
 
@@ -39,23 +39,36 @@ internal class StagedIndexDirectories(
             for (component in components) {
                 val target = destination.resolve(component)
                 val backup = backups.resolve(component)
-                if (Files.exists(target)) Files.move(target, backup)
+                if (Files.exists(target)) moveWithRetry(target, backup)
                 replaced.add(component)
-                Files.move(staging.resolve(component), target)
+                moveWithRetry(staging.resolve(component), target)
             }
         } catch (failure: Exception) {
             for (component in replaced.asReversed()) {
                 try {
                     val target = destination.resolve(component)
                     val backup = backups.resolve(component)
-                    if (Files.exists(target)) Files.move(target, staging.resolve(component))
-                    if (Files.exists(backup)) Files.move(backup, target)
+                    if (Files.exists(target)) moveWithRetry(target, staging.resolve(component))
+                    if (Files.exists(backup)) moveWithRetry(backup, target)
                 } catch (rollback: Exception) {
                     preserveBackup = true
                     failure.addSuppressed(rollback)
                 }
             }
             throw failure
+        }
+    }
+
+    private fun moveWithRetry(source: Path, target: Path) {
+        for (attempt in 0..5) {
+            try {
+                Files.move(source, target)
+                return
+            } catch (failure: java.nio.file.AccessDeniedException) {
+                if (attempt == 5) throw failure
+                // Windows may briefly retain a scan handle after an extracted file is closed.
+                Thread.sleep(50L shl attempt)
+            }
         }
     }
 
@@ -83,9 +96,5 @@ internal class StagedIndexDirectories(
                 }
             },
         )
-    }
-
-    private companion object {
-        val INDEX_DIRECTORIES = setOf("seforim.db.lucene", "seforim.db.lookup.lucene", "seforim.db.semantic")
     }
 }

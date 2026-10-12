@@ -1,29 +1,22 @@
 package io.github.kdroidfilter.seforimapp.features.onboarding.diskspace
 
-import dev.nucleusframework.systeminfo.SystemInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class AvailableDiskSpaceUseCase {
+class AvailableDiskSpaceUseCase(
+    private val appSettings: io.github.kdroidfilter.seforimapp.core.settings.AppSettings,
+) {
     /**
      * Reads available and total disk space via Nucleus SystemInfo.
      * Must be called from a coroutine — dispatched to IO internally.
      */
     suspend fun getDiskSpaceInfo(): DiskSpaceInfo =
         withContext(Dispatchers.IO) {
-            val disks = SystemInfo.disks()
-
-            val systemDir =
-                disks.firstOrNull {
-                    it.mountPoint.contains(System.getProperty("user.home")) ||
-                        it.mountPoint == "/" ||
-                        it.mountPoint.startsWith("C:")
-                } ?: disks.first()
-
-            DiskSpaceInfo(
-                availableBytes = systemDir.availableSpace,
-                totalBytes = systemDir.totalSpace,
-            )
+            var directory =
+                io.github.kdroidfilter.seforimapp.framework.database
+                    .databaseInstallDirectory(appSettings)
+            while (!directory.exists() && directory.parentFile != null) directory = directory.parentFile
+            DiskSpaceInfo(directory.usableSpace, directory.totalSpace)
         }
 
     data class DiskSpaceInfo(

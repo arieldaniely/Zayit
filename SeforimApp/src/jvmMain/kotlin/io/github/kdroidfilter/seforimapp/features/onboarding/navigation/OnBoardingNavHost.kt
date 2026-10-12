@@ -43,6 +43,14 @@ fun OnBoardingNavHost(navController: NavHostController) {
             noAnimatedComposable<OnBoardingDestination.LicenceScreen> {
                 LicenceScreen(navController)
             }
+            noAnimatedComposable<OnBoardingDestination.DatabaseLocationScreen> {
+                io.github.kdroidfilter.seforimapp.features.onboarding.databaselocation
+                    .DatabaseLocationScreen(navController)
+            }
+            noAnimatedComposable<OnBoardingDestination.PdfLibrarySetupScreen> {
+                io.github.kdroidfilter.seforimapp.features.onboarding.pdf
+                    .PdfLibrarySetupScreen(navController)
+            }
             noAnimatedComposable<OnBoardingDestination.AvailableDiskSpaceScreen> {
                 AvailableDiskSpaceScreen(navController)
             }

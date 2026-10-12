@@ -3,9 +3,6 @@ package io.github.kdroidfilter.seforimapp.features.onboarding.download
 import io.github.kdroidfilter.seforimapp.features.onboarding.extract.BundleManifest
 import io.github.kdroidfilter.seforimapp.features.onboarding.extract.BundleParts
 import io.github.kdroidfilter.seforimapp.releasefetcher.github.GitHubReleaseFetcher
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -15,6 +12,7 @@ import java.io.File
  */
 class DownloadUseCase(
     private val gitHubReleaseFetcher: GitHubReleaseFetcher,
+    private val appSettings: io.github.kdroidfilter.seforimapp.core.settings.AppSettings,
 ) {
     private val http = HttpFileDownloader()
 
@@ -61,7 +59,10 @@ class DownloadUseCase(
                 }
             if (downloads.isEmpty()) error("No bundle assets found in latest release")
 
-            val dbDir = File(FileKit.databasesDir.path).apply { mkdirs() }
+            val dbDir =
+                io.github.kdroidfilter.seforimapp.framework.database
+                    .databaseInstallDirectory(appSettings)
+                    .apply { mkdirs() }
 
             // Keep running stats for a smoother, more stable UX
             var lastBytes = 0L

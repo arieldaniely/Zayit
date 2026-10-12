@@ -2,7 +2,7 @@ package io.github.kdroidfilter.seforimapp.features.onboarding.extract
 
 import com.github.luben.zstd.ZstdOutputStream
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.kdroidfilter.seforimapp.framework.database.resetDatabasePathCache
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.selectInstallationRoot
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
@@ -16,6 +16,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ExtractUseCaseTest {
+    private val settings = AppSettings(com.russhwolf.settings.PropertiesSettings(java.util.Properties()))
+    private val paths = DatabasePathProvider(settings)
+    private val pdfService = io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService(paths)
     @Test
     fun `imports precisely the components in each distribution and selects the books database`() =
         runBlocking {
@@ -23,13 +26,13 @@ class ExtractUseCaseTest {
                 for (pdf in listOf(false, true)) {
                     for (vectors in listOf(false, true)) {
                         val install = File(root, "variant-$pdf-$vectors").apply { mkdirs() }
-                        selectInstallationRoot(install)
+                        selectInstallationRoot(install, settings, paths)
                         val entries = linkedMapOf("seforim.db" to "books", "lexical.db" to "dictionary")
                         if (pdf) entries["תלמוד בבלי/ברכות.pdf"] = "pdf"
                         if (vectors) entries["seforim.db.semantic/model/tokenizer.json"] = "tokenizer"
                         val archive = File(source, "variant-$pdf-$vectors.tar.zst")
                         writeBundle(archive, entries)
-                        val installed = ExtractUseCase().extractToDatabase(archive.path) {}
+                        val installed = ExtractUseCase(settings, paths, pdfService).extractToDatabase(archive.path) {}
                         assertEquals(File(install, "databases/seforim.db").absolutePath, installed)
                         assertEquals("books", File(installed).readText())
                         val fingerprint =
@@ -54,7 +57,7 @@ class ExtractUseCaseTest {
     fun `imports more than two compressed parts in numeric order`() =
         runBlocking {
             withInstallRoot { root, source ->
-                selectInstallationRoot(root)
+                selectInstallationRoot(root, settings, paths)
                 val archive = File(source, "seforim_bundle.tar.zst")
                 writeBundle(archive, mapOf("seforim.db" to "books", "lexical.db" to "dictionary"))
                 val bytes = archive.readBytes()
@@ -65,7 +68,7 @@ class ExtractUseCaseTest {
                         }
                     }
                 assertEquals(3, parts.size)
-                val installed = ExtractUseCase().extractToDatabase(parts.first().path) {}
+                val installed = ExtractUseCase(settings, paths, pdfService).extractToDatabase(parts.first().path) {}
                 assertEquals("books", File(installed).readText())
                 assertTrue(parts.all { it.exists() })
             }
@@ -91,8 +94,8 @@ class ExtractUseCaseTest {
                     }
                 for ((index, archive) in listOf(combined, parts.first()).withIndex()) {
                     val install = File(root, "concatenated-$index").apply { mkdirs() }
-                    selectInstallationRoot(install)
-                    val installed = ExtractUseCase().extractToDatabase(archive.path) {}
+                    selectInstallationRoot(install, settings, paths)
+                    val installed = ExtractUseCase(settings, paths, pdfService).extractToDatabase(archive.path) {}
                     assertEquals("books", File(installed).readText())
                     val directory = File(installed).parentFile
                     assertEquals("pdf", File(directory, "תלמוד בבלי/ברכות.pdf").readText())
@@ -121,7 +124,7 @@ class ExtractUseCaseTest {
                     }
                 for ((index, selected) in listOf(archive, parts.first()).withIndex()) {
                     val install = File(root, "upgrade-$index").apply { mkdirs() }
-                    selectInstallationRoot(install)
+                    selectInstallationRoot(install, settings, paths)
                     val data = File(install, "databases")
                     repeat(8) { shard ->
                         File(data, "seforim.db.semantic/index/shard-%02d/segments_999".format(shard)).apply {
@@ -133,7 +136,7 @@ class ExtractUseCaseTest {
                         parentFile.mkdirs()
                         writeText("old")
                     }
-                    ExtractUseCase().extractToDatabase(selected.path) {}
+                    ExtractUseCase(settings, paths, pdfService).extractToDatabase(selected.path) {}
                     assertEquals(listOf("shard-00"), File(data, "seforim.db.semantic/index").list()!!.toList())
                     assertEquals(listOf("segments_1"), File(data, "seforim.db.lucene").list()!!.toList())
                     assertFalse(File(data, "seforim.db.semantic/index/shard-00/segments_999").exists())
@@ -146,7 +149,7 @@ class ExtractUseCaseTest {
     fun `keeps old indexes when an archive fails validation`() =
         runBlocking {
             withInstallRoot { root, source ->
-                selectInstallationRoot(root)
+                selectInstallationRoot(root, settings, paths)
                 val old =
                     File(root, "databases/seforim.db.semantic/index/shard-07/segments_999").apply {
                         parentFile.mkdirs()
@@ -161,7 +164,7 @@ class ExtractUseCaseTest {
                         "../escaped.db" to "unsafe",
                     ),
                 )
-                assertFailsWith<IllegalArgumentException> { ExtractUseCase().extractToDatabase(archive.path) {} }
+                assertFailsWith<IllegalArgumentException> { ExtractUseCase(settings, paths, pdfService).extractToDatabase(archive.path) {} }
                 assertEquals("old", old.readText())
                 assertFalse(File(root, "databases/seforim.db.semantic/index/shard-00").exists())
             }
@@ -171,22 +174,22 @@ class ExtractUseCaseTest {
     fun `rejects archive entries outside the installation root`() =
         runBlocking {
             withInstallRoot { root, source ->
-                selectInstallationRoot(root)
+                selectInstallationRoot(root, settings, paths)
                 val archive = File(source, "unsafe.tar.zst")
                 writeBundle(archive, mapOf("../escaped.db" to "unsafe"))
-                assertFailsWith<IllegalArgumentException> { ExtractUseCase().extractToDatabase(archive.path) {} }
+                assertFailsWith<IllegalArgumentException> { ExtractUseCase(settings, paths, pdfService).extractToDatabase(archive.path) {} }
                 assertFalse(File(root, "escaped.db").exists())
             }
         }
 
     private suspend fun withInstallRoot(block: suspend (File, File) -> Unit) {
-        val previous = AppSettings.getDatabasePath()
+        val previous = settings.getDatabasePath()
         val directory = createTempDirectory("zayita-extract-test").toFile()
         try {
             block(File(directory, "root").apply { mkdirs() }, File(directory, "source").apply { mkdirs() })
         } finally {
-            AppSettings.setDatabasePath(previous)
-            resetDatabasePathCache()
+            settings.setDatabasePath(previous)
+            paths.reset()
             directory.deleteRecursively()
         }
     }

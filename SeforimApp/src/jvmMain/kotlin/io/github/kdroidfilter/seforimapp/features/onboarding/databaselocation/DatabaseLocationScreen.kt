@@ -62,16 +62,17 @@ private enum class DatabaseLocationStatus {
 @Composable
 fun DatabaseLocationScreen(
     navController: NavController,
-    progressBarState: ProgressBarState = ProgressBarState,
+    progressBarState: ProgressBarState = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.onboardingProgressBarState,
 ) {
+    val graph = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current
     val scope = rememberCoroutineScope()
-    var directory by remember { mutableStateOf(installationRootDirectory()) }
+    var directory by remember { mutableStateOf(installationRootDirectory(graph.appSettings)) }
     val status = remember(directory) { inspectDirectory(directory) }
 
     LaunchedEffect(Unit) { progressBarState.setProgress(0.15f) }
 
     fun continueWithDirectory() {
-        selectInstallationRoot(directory)
+        selectInstallationRoot(directory, graph.appSettings, graph.databasePathProvider)
         val destination =
             if (status == DatabaseLocationStatus.READY) {
                 OnBoardingDestination.PdfLibrarySetupScreen
@@ -150,7 +151,13 @@ private fun inspectDirectory(directory: File): DatabaseLocationStatus {
     val databaseFile = databaseFileIn(databaseDirectoryInRoot(directory))
     return when {
         !databaseFile.isFile -> DatabaseLocationStatus.NOT_FOUND
-        DatabaseVersionManager.isDatabaseVersionCompatible(databaseFile) -> DatabaseLocationStatus.READY
+        File(databaseFile.parentFile, "release_info.txt")
+            .takeIf { it.isFile }
+            ?.readText()
+            ?.trim()
+            ?.let {
+                it.matches(Regex("[0-9]{14}")) && it >= DatabaseVersionManager.getMinimumRequiredVersion()
+            } == true -> DatabaseLocationStatus.READY
         else -> DatabaseLocationStatus.UPDATE_REQUIRED
     }
 }

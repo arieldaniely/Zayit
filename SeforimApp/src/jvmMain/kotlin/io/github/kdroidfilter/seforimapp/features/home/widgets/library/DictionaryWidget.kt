@@ -98,11 +98,12 @@ import java.util.concurrent.ConcurrentHashMap
 internal enum class Dictionary(
     val bookTitle: String,
     val label: String,
+    vararg val titleAliases: String,
 ) {
-    ARUKH("ספר הערוך", "הערוך"),
-    HAFLAAH("הפלאה שבערכין על ספר הערוך", "הפלאה שבערכין"),
-    LAAZEI_RASHI("אוצר לעזי רש\"י", "לעזי רש״י"),
-    SHORASHIM("ספר השרשים לרדק", "השרשים לרד״ק"),
+    ARUKH("ספר הערוך", "הערוך", "הערוך", "ערוך"),
+    HAFLAAH("הפלאה שבערכין על ספר הערוך", "הפלאה שבערכין", "הפלאה שבערכין"),
+    LAAZEI_RASHI("אוצר לעזי רש\"י", "לעזי רש״י", "אוצר לעזי רשי", "לעזי רש״י"),
+    SHORASHIM("ספר השרשים לרדק", "השרשים לרד״ק", "ספר השורשים לרדק", "ספר השרשים", "ספר השורשים"),
 }
 
 /** A word of [dictionary], the start of its explanation, and its lines in the book, [first] to [last]. */
@@ -151,7 +152,39 @@ private fun String.plain() = replace(TAG, "").replace("&nbsp;", " ").trim()
 private val NOT_A_WORD = Regex("""^(נשלם|סליק|בספר )""")
 
 /** From the first letter's heading (אות האל״ף) on: the preface's bold lines and headings aren't words. */
-private fun List<Line>.fromFirstLetter() = dropWhile { !(it.content.startsWith("<h2") && it.content.plain().startsWith("אות")) }
+private fun List<Line>.fromFirstLetter(): List<Line> {
+    val first =
+        indexOfFirst { line ->
+            val heading =
+                org.jsoup.Jsoup
+                    .parseBodyFragment(line.content)
+                    .selectFirst("h1,h2,h3,h4,h5,h6")
+                    ?.text()
+            heading?.startsWith("אות") == true
+        }
+    return if (first >= 0) drop(first) else this
+}
+
+/** Older Otzaria editions wrap their headwords differently from the upstream Sefaria editions. */
+internal fun emphasizedHeadword(html: String): Pair<String, String>? {
+    val body =
+        org.jsoup.Jsoup
+            .parseBodyFragment(html)
+            .body()
+    var node: org.jsoup.nodes.Node = body
+    while (node is org.jsoup.nodes.Element && node.tagName() !in setOf("b", "strong")) {
+        val meaningful = node.childNodes().filterNot { it is org.jsoup.nodes.TextNode && it.isBlank }
+        node = meaningful.firstOrNull() ?: return null
+        if (node !is org.jsoup.nodes.Element || node.tagName() !in setOf("p", "div", "span", "big", "b", "strong")) return null
+    }
+    val word = (node as? org.jsoup.nodes.Element)?.text()?.trim().orEmpty()
+    if (word.isEmpty()) return null
+    node.remove()
+    return word to body.text().trim()
+}
+
+internal fun Dictionary.matchesBookTitle(title: String): Boolean =
+    (listOf(bookTitle) + titleAliases).any { normalizeWord(it) == normalizeWord(title) }
 
 /** [lines] of [bookId], the book of this dictionary, as its entries; its headings and other lines left out. */
 internal fun Dictionary.parse(
@@ -170,11 +203,12 @@ internal fun Dictionary.parse(
                 lines.mapNotNull { line ->
                     ARUKH_ENTRY.find(line.content)?.destructured?.let { (word, rest) ->
                         entry(line, word, rest.plain().replace(GERMAN, ""))
-                    }
+                    } ?: emphasizedHeadword(line.content)?.let { (word, rest) -> entry(line, word, rest.replace(GERMAN, "")) }
                 }
             Dictionary.HAFLAAH ->
                 lines.fromFirstLetter().mapNotNull { line ->
                     BOLD_ENTRY.find(line.content)?.destructured?.let { (word, rest) -> entry(line, word, rest) }
+                        ?: emphasizedHeadword(line.content)?.let { (word, rest) -> entry(line, word, rest) }
                 }
             Dictionary.LAAZEI_RASHI ->
                 lines.mapNotNull { line ->
@@ -189,7 +223,13 @@ internal fun Dictionary.parse(
             Dictionary.SHORASHIM -> {
                 val book = lines.fromFirstLetter()
                 book.mapIndexedNotNull { i, line ->
-                    val root = ROOT.find(line.content)?.groupValues?.get(1) ?: return@mapIndexedNotNull null
+                    val root =
+                        ROOT.find(line.content)?.groupValues?.get(1)
+                            ?: org.jsoup.Jsoup
+                                .parseBodyFragment(line.content)
+                                .selectFirst("h3")
+                                ?.text()
+                            ?: return@mapIndexedNotNull null
                     val body = book.subList(i + 1, book.size).takeWhile { !it.content.startsWith("<h") }
                     entry(line, root, body.firstOrNull()?.content.orEmpty()).copy(last = body.lastOrNull()?.lineIndex ?: line.lineIndex)
                 }
@@ -240,17 +280,22 @@ private suspend fun readDictionaries(
                     withContext(Dispatchers.Default) {
                         // The repository opens the library DB: never while the card composes, so a DB missing fails here
                         val repository = graph.repository
-                        repository
-                            .getBookByTitle(dictionary.bookTitle)
-                            ?.let { book ->
-                                // The library DB has one connection, held through each query: read in short
-                                // pages, so a book opened meanwhile waits for one page, not for the whole dictionary
-                                val lines =
-                                    (0 until book.totalLines step PAGE_LINES).flatMap { start ->
-                                        repository.getLines(book.id, start, start + PAGE_LINES - 1)
-                                    }
-                                dictionary.parse(book.id, lines)
-                            }.orEmpty()
+                        (
+                            repository.getBookByTitle(dictionary.bookTitle)
+                                ?: graph.catalogCache
+                                    .getAllBooks()
+                                    ?.filter { dictionary.matchesBookTitle(it.title) }
+                                    ?.sortedWith(compareBy({ !it.isBaseBook }, { it.id }))
+                                    ?.firstOrNull()
+                        )?.let { book ->
+                            // The library DB has one connection, held through each query: read in short
+                            // pages, so a book opened meanwhile waits for one page, not for the whole dictionary
+                            val lines =
+                                (0 until book.totalLines step PAGE_LINES).flatMap { start ->
+                                    repository.getLines(book.id, start, start + PAGE_LINES - 1)
+                                }
+                            dictionary.parse(book.id, lines)
+                        }.orEmpty()
                     }
                 }.onFailure { if (it is CancellationException) throw it }
                     .getOrNull()

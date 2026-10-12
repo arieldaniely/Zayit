@@ -3,11 +3,30 @@ package io.github.kdroidfilter.seforimapp.features.home.widgets.library
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DictionaryWidgetTest {
     private fun lines(vararg contents: String) = contents.mapIndexed { i, c -> Line(id = 100L + i, bookId = 1, lineIndex = i, content = c) }
 
     private fun DictionaryEntry.short() = Triple(word, gloss, first..last)
+
+    @Test
+    fun readsHeadwordsWrappedByOlderDictionaryEditions() {
+        val entries = Dictionary.ARUKH.parse(
+            1,
+            lines("<p><big><strong>אגמא</strong></big> [German]. פירוש המילה</p>"),
+        )
+        assertEquals(listOf(Triple("אגמא", "פירוש המילה", 0..0)), entries.map { it.short() })
+        assertEquals(null, emphasizedHeadword("הקדמה עם <b>מילה</b> מודגשת באמצע"))
+    }
+
+    @Test
+    fun resolvesDictionaryTitleSpellingAndQuoteVariants() {
+        assertTrue(Dictionary.SHORASHIM.matchesBookTitle("ספר השורשים לרד״ק"))
+        assertTrue(Dictionary.LAAZEI_RASHI.matchesBookTitle("אוצר לעזי רש״י"))
+        assertFalse(Dictionary.ARUKH.matchesBookTitle("שולחן ערוך"))
+    }
 
     @Test
     fun arukhWithoutItsGermanNorItsHeadings() {

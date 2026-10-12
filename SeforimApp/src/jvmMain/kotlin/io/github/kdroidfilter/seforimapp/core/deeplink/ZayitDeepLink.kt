@@ -16,7 +16,7 @@ import java.util.UUID
  *  - zayit://book/<bookId>/line/<lineId>   -> open the book scrolled to a precise line
  *  - zayit://search/<url-encoded-query>    -> open a search
  */
-const val ZAYIT_SCHEME = "zayit"
+const val ZAYIT_SCHEME = "zayita"
 
 private const val PREFIX = "$ZAYIT_SCHEME://"
 private const val HOST_BOOK = "book"
@@ -58,8 +58,8 @@ fun TabsDestination.toShareLink(): String? =
  * the book exists) is the caller's responsibility.
  */
 fun parseZayitDeepLink(uri: String): TabsDestination? {
-    if (!uri.startsWith(PREFIX)) return null
-    val path = uri.removePrefix(PREFIX)
+    val prefix = listOf(PREFIX, "zayit://").firstOrNull { uri.startsWith(it) } ?: return null
+    val path = uri.removePrefix(prefix)
     val segments = path.split('/').filter { it.isNotEmpty() }
     if (segments.isEmpty()) return null
     val newTabId = UUID.randomUUID().toString()

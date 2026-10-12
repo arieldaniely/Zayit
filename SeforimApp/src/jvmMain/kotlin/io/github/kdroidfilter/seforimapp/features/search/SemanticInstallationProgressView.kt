@@ -19,7 +19,8 @@ import seforimapp.seforimapp.generated.resources.semantic_install_validating
 
 @Composable
 internal fun SemanticInstallationProgressView() {
-    val progress by SemanticAssetsManager.installationProgress.collectAsState()
+    val semanticAssetsManager = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.semanticAssetsManager
+    val progress by semanticAssetsManager.installationProgress.collectAsState()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val fraction = progress?.fraction
         if (progress?.phase == SemanticAssetsManager.InstallationPhase.EXTRACTING && fraction != null) {

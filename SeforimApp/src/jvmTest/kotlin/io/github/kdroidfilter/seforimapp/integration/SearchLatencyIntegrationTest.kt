@@ -118,31 +118,31 @@ class SearchLatencyIntegrationTest {
         engine: HybridSearchEngine,
     ) = kotlinx.coroutines.coroutineScope {
         val settings = PropertiesSettings(Properties())
-        AppSettings.initialize(settings)
-        AppSettings.setDatabasePath(database)
+        val appSettings = AppSettings(settings)
+        appSettings.setSearchFeedbackEnabled(false)
+        appSettings.setDatabasePath(database)
         Dispatchers.setMain(Dispatchers.Default)
         val settingsDriver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         UserSettingsDb.Schema.create(settingsDriver)
         val store = TabPersistedStateStore()
         val titles = TabTitleUpdateManager()
-        val home = SearchHomeViewModel(store, repository, LuceneLookupSearchService(Path.of("$database.lookup.lucene")), settings)
-        val model =
-            SearchResultViewModel(
-                SavedStateHandle(),
-                store,
-                repository,
-                engine,
-                titles,
-                DesktopManager(store, titles, { home }, "benchmark"),
-                HistoryStore(UserSettingsDb(settingsDriver)),
-                SearchFeedbackService(repository),
-            )
+        val paths = io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider(appSettings)
+        val versions = io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager(paths)
+        val semantic = io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager(paths)
+        val lookup = LuceneLookupSearchService(Path.of("$database.lookup.lucene"))
+        val home = SearchHomeViewModel(store, repository, lookup, appSettings)
+        val desktop = DesktopManager(store, io.github.kdroidfilter.seforimapp.framework.session.TabThumbnailStore(java.nio.file.Files.createTempDirectory("zayit-bench-thumbnails").toFile()), titles, { home }, "benchmark")
+        val model = SearchResultViewModel(
+            SavedStateHandle(), store, repository, engine,
+            SearchFeedbackService(repository, appSettings, versions, semantic), semantic,
+            titles, desktop, HistoryStore(UserSettingsDb(settingsDriver)), appSettings, lookup,
+        )
         val visible = launch { model.visibleResultsFlow.collect() }
         try {
             model.onEvent(SearchResultViewModel.SearchResultEvents.SetUiVisible(true))
             for (mode in listOf(SearchMode.SMART, SearchMode.FLEXIBLE)) {
                 model.setQuery("")
-                model.onEvent(SearchResultViewModel.SearchResultEvents.SetMode(mode))
+                model.setMode(mode)
                 for (query in listOf(
                     "מצוות התלויות בארץ",
                     "שמירת שבת",

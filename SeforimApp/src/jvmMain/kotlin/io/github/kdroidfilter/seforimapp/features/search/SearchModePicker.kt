@@ -80,12 +80,13 @@ fun SearchModePicker(
     onModeChange: (SearchMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val semanticAssetsManager = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.semanticAssetsManager
     var showInstall by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(false) }
     var selectionRevision by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    val availability by SemanticAssetsManager.availability.collectAsState()
+    val availability by semanticAssetsManager.availability.collectAsState()
     val options =
         listOf(
             stringResource(Res.string.search_mode_exact),
@@ -116,7 +117,7 @@ fun SearchModePicker(
             checking = true
             scope.launch {
                 try {
-                    val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+                    val ready = withContext(Dispatchers.IO) { semanticAssetsManager.validatedReady() }
                     if (revision != selectionRevision) return@launch
                     if (ready) {
                         onModeChange(SearchMode.SMART)
@@ -318,6 +319,7 @@ private fun SemanticInstallDialog(
     onDismiss: () -> Unit,
     onReady: () -> Unit,
 ) {
+    val semanticAssetsManager = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.semanticAssetsManager
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -385,13 +387,13 @@ private fun SemanticInstallDialog(
                 DefaultButton(enabled = !busy, onClick = {
                     install {
                         withContext(Dispatchers.IO) {
-                            SemanticAssetsManager.downloadBundle { part, total ->
+                            semanticAssetsManager.downloadBundle { part, total ->
                                 scope.launch {
                                     downloadPart = part
                                     downloadTotal = total
                                 }
                             }
-                            if (!SemanticAssetsManager.validatedReady()) {
+                            if (!semanticAssetsManager.validatedReady()) {
                                 throw SemanticBundleImportException(SemanticBundleImportProblem.INVALID_BUNDLE)
                             }
                         }
@@ -404,8 +406,8 @@ private fun SemanticInstallDialog(
                         val files = withContext(Dispatchers.IO) { chooseFiles() }
                         if (files.isNotEmpty()) {
                             withContext(Dispatchers.IO) {
-                                SemanticAssetsManager.importBundle(files)
-                                if (!SemanticAssetsManager.validatedReady()) {
+                                semanticAssetsManager.importBundle(files)
+                                if (!semanticAssetsManager.validatedReady()) {
                                     throw SemanticBundleImportException(SemanticBundleImportProblem.INVALID_BUNDLE)
                                 }
                             }

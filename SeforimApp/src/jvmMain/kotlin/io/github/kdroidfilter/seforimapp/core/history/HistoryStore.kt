@@ -25,7 +25,27 @@ data class VisitEntry(
     val lineId: Long? = null,
     val searchScope: SearchScope = SearchScope.Global,
     val searchGlobalExtended: Boolean = false,
-)
+    val searchMode: String = "FLEXIBLE",
+) {
+    val searchContext: SearchVisitContext? get() =
+        if (kind != VisitKind.SEARCH || searchMode.isBlank()) {
+            null
+        } else {
+            SearchVisitContext(
+                mode = searchMode,
+                globalExtended = searchGlobalExtended,
+                categoryId = (searchScope as? SearchScope.Category)?.categoryId ?: 0L,
+                bookId =
+                    when (val scope = searchScope) {
+                        is SearchScope.Book -> scope.bookId
+                        is SearchScope.Toc -> scope.bookId
+                        else -> 0L
+                    },
+                tocId = (searchScope as? SearchScope.Toc)?.tocId ?: 0L,
+                scopeTitle = title.removePrefix(searchQuery.orEmpty()).trim(' ', '—'),
+            )
+        }
+}
 
 enum class VisitKind { BOOK, SEARCH }
 
@@ -70,6 +90,7 @@ class HistoryStore(
                 searchCategoryId = null,
                 searchBookId = null,
                 searchTocId = null,
+                searchMode = "FLEXIBLE",
                 searchExtended = false,
             )
             _revision.update { it + 1 }
@@ -85,12 +106,13 @@ class HistoryStore(
         globalExtended: Boolean,
         scopeLabel: String?,
         timestamp: Long,
+        mode: String = "FLEXIBLE",
     ): Unit =
         withContext(Dispatchers.IO) {
             val q = query.trim()
             if (q.isBlank()) return@withContext
             queries.upsertVisit(
-                key = searchKey(q, scope, globalExtended),
+                key = searchKey(q, scope, globalExtended, mode),
                 kind = KIND_SEARCH,
                 bookId = null,
                 searchQuery = q,
@@ -98,7 +120,7 @@ class HistoryStore(
                 visitedAt = timestamp,
                 tocEntryId = null,
                 lineId = null,
-                searchCategoryId = null,
+                searchCategoryId = (scope as? SearchScope.Category)?.categoryId,
                 searchBookId =
                     when (scope) {
                         is SearchScope.Book -> scope.bookId
@@ -106,10 +128,26 @@ class HistoryStore(
                         else -> null
                     },
                 searchTocId = (scope as? SearchScope.Toc)?.tocId,
+                searchMode = mode,
                 searchExtended = globalExtended,
             )
             _revision.update { it + 1 }
         }
+
+    suspend fun recordSearchVisit(
+        query: String,
+        timestamp: Long,
+        context: SearchVisitContext,
+    ) {
+        val scope =
+            when {
+                context.tocId != 0L -> SearchScope.Toc(context.bookId, context.tocId)
+                context.bookId != 0L -> SearchScope.Book(context.bookId)
+                context.categoryId != 0L -> SearchScope.Category(context.categoryId)
+                else -> SearchScope.Global
+            }
+        recordSearchVisit(query, scope, context.globalExtended, context.scopeTitle, timestamp, context.mode)
+    }
 
     /** Most recent entries, or entries whose title matches [query] when non-blank. */
     suspend fun query(
@@ -153,24 +191,28 @@ class HistoryStore(
                 when {
                     searchTocId != null && searchBookId != null -> SearchScope.Toc(bookId = searchBookId, tocId = searchTocId)
                     searchBookId != null -> SearchScope.Book(searchBookId)
-                    // A search once scoped to a category (searchCategoryId) runs everywhere now
+                    searchCategoryId != null -> SearchScope.Category(searchCategoryId)
+                    // A legacy global search keeps its original mode when known
                     else -> SearchScope.Global
                 },
             searchGlobalExtended = searchExtended,
+            searchMode = searchMode,
         )
 
     private fun searchKey(
         query: String,
         scope: SearchScope,
         globalExtended: Boolean,
+        mode: String,
     ): String {
         val scopeKey =
             when (scope) {
-                SearchScope.Global, is SearchScope.Category -> "g"
+                SearchScope.Global -> "g"
+                is SearchScope.Category -> "c${scope.categoryId}"
                 is SearchScope.Book -> "b${scope.bookId}"
                 is SearchScope.Toc -> "t${scope.tocId}"
             } + if (globalExtended) "x" else ""
-        return "search:$scopeKey:$query"
+        return "search:$mode:$scopeKey:$query"
     }
 
     private companion object {

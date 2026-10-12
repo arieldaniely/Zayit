@@ -16,6 +16,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class SemanticBundleArchivesTest {
+    private val assets = SemanticAssetsManager(io.mockk.mockk(relaxed = true))
     @Test
     fun `zip extraction reports compressed bytes throughout large entries`() =
         withDirectory { directory ->
@@ -28,7 +29,7 @@ class SemanticBundleArchivesTest {
             }
             val stage = Files.createDirectory(directory.resolve("stage"))
             val byteCounts = mutableListOf<Long>()
-            SemanticAssetsManager.extractZip(archive, stage, 0, byteCounts::add)
+            assets.extractZip(archive, stage, 0, byteCounts::add)
             assertTrue(byteCounts.size > 1)
             assertTrue(byteCounts.all { it > 0 })
             assertTrue(byteCounts.sum() in content.size.toLong()..Files.size(archive))
@@ -50,7 +51,7 @@ class SemanticBundleArchivesTest {
             val stage = Files.createDirectory(directory.resolve("stage"))
             val failure =
                 assertFailsWith<SemanticBundleImportException> {
-                    SemanticAssetsManager.extractZip(archive, stage, 0)
+                    assets.extractZip(archive, stage, 0)
                 }
             assertEquals(SemanticBundleImportProblem.DAMAGED_ARCHIVE, failure.problem)
         }
@@ -66,7 +67,7 @@ class SemanticBundleArchivesTest {
                 zip.closeEntry()
             }
             val stage = Files.createDirectory(directory.resolve("stage"))
-            assertEquals(content.size.toLong(), SemanticAssetsManager.extractZip(archive, stage, 0))
+            assertEquals(content.size.toLong(), assets.extractZip(archive, stage, 0))
             assertContentEquals(content, Files.readAllBytes(stage.resolve("model/tokenizer.json")))
         }
 
@@ -81,7 +82,7 @@ class SemanticBundleArchivesTest {
 
             val stage = Files.createDirectory(directory.resolve("stage"))
             val byteCounts = mutableListOf<Long>()
-            SemanticAssetsManager.extractTarZstd(resolved, stage, byteCounts::add)
+            assets.extractTarZstd(resolved, stage, byteCounts::add)
             assertTrue(byteCounts.size > 1)
             assertEquals(resolved.sumOf(Files::size), byteCounts.sum())
             assertContentEquals(content, Files.readAllBytes(stage.resolve("model/tokenizer.json")))
@@ -124,7 +125,7 @@ class SemanticBundleArchivesTest {
 
             val failure =
                 assertFailsWith<SemanticBundleImportException> {
-                    SemanticAssetsManager.extractTarZstd(resolveSemanticBundleArchives(listOf(parts.first())), stage)
+                    assets.extractTarZstd(resolveSemanticBundleArchives(listOf(parts.first())), stage)
                 }
             assertEquals(SemanticBundleImportProblem.DAMAGED_ARCHIVE, failure.problem)
         }

@@ -96,7 +96,8 @@ internal object HistoryWidget : HomeWidget {
         state: HomeWidgetsState,
         modifier: Modifier,
     ) {
-        val store = LocalAppGraph.current.historyStore
+        val graph = LocalAppGraph.current
+        val store = graph.historyStore
         val revision by store.revision.collectAsState()
         val entries by produceState(emptyList<VisitEntry>(), revision) { value = store.query("", LIST_LIMIT) }
         val yesterday = stringResource(Res.string.history_yesterday)
@@ -112,7 +113,7 @@ internal object HistoryWidget : HomeWidget {
                     title = entry.title,
                     trailing = entry.visitedAt.whenLabel(yesterday),
                     icon = { if (entry.kind == VisitKind.SEARCH) Icon(AllIconsKeys.Actions.Find, null) else VectorIcon(bookOpenTabs(it)) },
-                    onClick = { entry.destination()?.let(state.openTab) },
+                    onClick = { entry.destination(graph.tabPersistedStateStore)?.let(state.openTab) },
                 )
             }
         }

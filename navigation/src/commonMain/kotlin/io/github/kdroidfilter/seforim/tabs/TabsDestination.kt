@@ -24,6 +24,8 @@ sealed interface TabsDestination {
         val scope: SearchScope = SearchScope.Global,
         /** Searches all books rather than only the base ones. */
         val globalExtended: Boolean = false,
+        /** Explicit mode for history navigation; null preserves an existing tab selection. */
+        val mode: String? = null,
     ) : TabsDestination
 
     @Serializable

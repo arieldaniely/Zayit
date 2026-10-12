@@ -88,7 +88,7 @@ fun HistoryTabContent(tabId: String) {
     }
 
     fun openEntry(entry: VisitEntry) {
-        val destination = entry.destination() ?: return
+        val destination = entry.destination(appGraph.tabPersistedStateStore) ?: return
         debugln { "[History] open ${entry.key}" }
         // Chrome-like: clicking a history entry navigates in the current tab
         tabsViewModel.replaceCurrentTabWithNewTabId(destination)

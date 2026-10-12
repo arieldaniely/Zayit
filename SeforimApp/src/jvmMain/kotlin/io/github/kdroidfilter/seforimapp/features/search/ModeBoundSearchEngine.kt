@@ -11,7 +11,7 @@ internal class ModeBoundSearchEngine(
     private val delegate: SearchEngine,
     private val selectedMode: () -> SearchMode,
     private val onFallback: () -> Unit = {},
-    private val semanticReady: () -> Boolean = SemanticAssetsManager::validatedReady,
+    private val semanticReady: () -> Boolean,
 ) : SearchEngine by delegate {
     override fun openSession(
         query: String,
@@ -59,8 +59,11 @@ internal class ModeBoundSearchEngine(
 
             override val effectiveMode: SearchMode get() = session.effectiveMode ?: effective
 
-            override suspend fun nextPage(limit: Int): SearchPage? {
-                val page = session.nextPage(limit)
+            override suspend fun nextPage(
+                limit: Int,
+                snippets: Boolean,
+            ): SearchPage? {
+                val page = session.nextPage(limit, snippets)
                 if (effective == SearchMode.SMART &&
                     selectedMode() == SearchMode.SMART &&
                     session.effectiveMode == SearchMode.FLEXIBLE
@@ -82,14 +85,18 @@ internal class ModeBoundSearchEngine(
         baseBookOnly: Boolean,
         mode: SearchMode,
     ): SearchFacets? =
-        delegate.computeFacets(
-            query,
-            near,
-            bookFilter,
-            categoryFilter,
-            bookIds,
-            lineIds,
-            baseBookOnly,
-            selectedMode(),
-        )
+        if (selectedMode() == SearchMode.SMART) {
+            null
+        } else {
+            delegate.computeFacets(
+                query,
+                near,
+                bookFilter,
+                categoryFilter,
+                bookIds,
+                lineIds,
+                baseBookOnly,
+                selectedMode(),
+            )
+        }
 }

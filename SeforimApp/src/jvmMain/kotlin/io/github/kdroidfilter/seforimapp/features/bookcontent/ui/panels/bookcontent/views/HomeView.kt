@@ -40,7 +40,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -90,6 +89,7 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsState
 import io.github.kdroidfilter.seforimapp.features.home.widgets.decodeLayout
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
 import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference
 import io.github.kdroidfilter.seforimapp.features.search.domain.searchKey
@@ -102,6 +102,7 @@ import io.github.kdroidfilter.seforimapp.icons.bookOpenTabs
 import io.github.kdroidfilter.seforimapp.texteffects.TypewriterPlaceholder
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.github.kdroidfilter.seforimlibrary.search.SearchMode
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -411,7 +412,11 @@ private fun HomeBody(
                         FullWidthSection(gapAfter = 4.dp) {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 Box(homeContentModifier) {
-                                    Spacer(Modifier.height(4.dp))
+                                    val modeCode by appSettings.defaultSearchModeFlow.collectAsState()
+                                    SearchModePicker(
+                                        mode = SearchMode.entries.firstOrNull { it.name == modeCode } ?: SearchMode.FLEXIBLE,
+                                        onModeChange = { appSettings.setDefaultSearchModeCode(it.name) },
+                                    )
                                 }
                             }
                         }
@@ -653,39 +658,13 @@ internal fun FreezableCenter(
  */
 @Composable
 internal fun LogoImage(modifier: Modifier = Modifier) {
-    val isDark = JewelTheme.isDark
-    val logoTint = logoTint()
-    val tintAlpha = 0.25f
-    // Mipmapped downscaling (Medium, on Skia): the PNGs are far larger than the logo is ever shown
-    val logo = BitmapPainter(imageResource(Res.drawable.zayit_new_logo), filterQuality = FilterQuality.Medium)
-    val logoText = BitmapPainter(imageResource(Res.drawable.zayit_new_logo_text), filterQuality = FilterQuality.Medium)
-
-    Box(modifier) {
-        // Base layer: full logo with original colors
-        Image(
-            logo,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-        // Subtle tint overlay: SoftLight preserves transparency, tints only colored areas
-        Image(
-            logo,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            alpha = tintAlpha,
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-        // Text overlay: tint color painted through the text alpha mask
-        Image(
-            logoText,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            colorFilter = ColorFilter.tint(logoTint, BlendMode.SrcIn),
-        )
-    }
+    Image(
+        painter = BitmapPainter(imageResource(Res.drawable.zayita_home_logo), filterQuality = FilterQuality.Medium),
+        contentDescription = null,
+        modifier = modifier,
+    )
 }
 
-/** The logo's tint: the accent in dark, gold in light. */
 @Composable
 private fun logoTint(): Color =
     if (JewelTheme.isDark) JewelTheme.globalColors.outlines.focused else AccentColor.Gold.forMode(isDark = false)

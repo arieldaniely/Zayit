@@ -123,7 +123,7 @@ class SearchHomeViewModel(
     private val lookup: LuceneLookupSearchService,
     private val appSettings: AppSettings,
     // The home page's greeting needs the user's profile; a results tab's bar doesn't
-    observeProfile: Boolean = true,
+    private val observeProfile: Boolean = true,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchHomeUiState())
     val uiState: StateFlow<SearchHomeUiState> = _uiState.asStateFlow()
@@ -569,6 +569,7 @@ class SearchHomeViewModel(
             val nextSearch =
                 (current.search ?: SearchPersistedState()).withScope(scope).copy(
                     query = query,
+                    mode = if (observeProfile) appSettings.getDefaultSearchModeCode() else current.search?.mode ?: "FLEXIBLE",
                     globalExtended = selected.globalExtended,
                     selectedCategoryIds = emptySet(),
                     selectedBookIds = emptySet(),

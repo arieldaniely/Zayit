@@ -66,6 +66,9 @@ private const val LAZY_PAGE_SIZE = 25
 @Stable
 data class SearchUiState(
     val query: String = "",
+    val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+    val semanticFallback: Boolean = false,
+    val feedbackSearchId: String = "",
     // The query the current results were actually searched with (frozen at search time). Used for
     // the embedding highlight, so typing in the field WITHOUT pressing Enter never re-highlights.
     val executedQuery: String = "",
@@ -95,7 +98,9 @@ class SearchResultViewModel(
     @Assisted savedStateHandle: SavedStateHandle,
     private val persistedStore: TabPersistedStateStore,
     private val repository: SeforimRepository,
-    private val lucene: SearchEngine,
+    searchEngine: SearchEngine,
+    private val searchFeedbackService: SearchFeedbackService,
+    private val semanticAssetsManager: SemanticAssetsManager,
     private val titleUpdateManager: TabTitleUpdateManager,
     private val desktopManager: DesktopManager,
     private val historyStore: HistoryStore,
@@ -129,8 +134,17 @@ class SearchResultViewModel(
                 ?.let { runCatching { Json.decodeFromString<SearchScope>(it) }.getOrNull() }
                 ?: SearchScope.Global
         val globalExtended = savedStateHandle.get<Boolean>(StateKeys.SEARCH_GLOBAL_EXTENDED) ?: false
-        if (scope == SearchScope.Global && !globalExtended) return
-        updatePersistedSearch { it.withScope(scope).copy(globalExtended = globalExtended) }
+        val mode =
+            savedStateHandle
+                .get<String>(StateKeys.SEARCH_MODE)
+                ?.takeIf { code ->
+                    io.github.kdroidfilter.seforimlibrary.search.SearchMode.entries
+                        .any { it.name == code }
+                }
+        if (scope == SearchScope.Global && !globalExtended && mode == null) return
+        updatePersistedSearch {
+            it.withScope(scope).copy(globalExtended = globalExtended, mode = mode ?: it.mode)
+        }
     }
 
     /** The name of the TOC entry or book the search is scoped to, shown in its history entry. */
@@ -267,6 +281,7 @@ class SearchResultViewModel(
             }
 
             is SearchResultEvents.OpenResult -> {
+                recordFeedback(event.result, SearchFeedbackType.ENTRY, "text")
                 openResult(event.result, event.openInNewTab)
             }
 
@@ -297,11 +312,41 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState())
+    private val lucene: SearchEngine =
+        ModeBoundSearchEngine(
+            searchEngine,
+            selectedMode = { _uiState.value.mode },
+            onFallback = {
+                _uiState.update {
+                    it.copy(
+                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                        semanticFallback = true,
+                    )
+                }
+                updatePersistedSearch { it.copy(mode = "FLEXIBLE", snapshot = null) }
+            },
+            semanticReady = semanticAssetsManager::validatedReady,
+        )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    fun setMode(mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode) {
+        _uiState.update { it.copy(mode = mode, semanticFallback = false) }
+        updatePersistedSearch { it.copy(mode = mode.name, snapshot = null) }
+        executeSearch()
+    }
+
     private var currentJob: Job? = null
 
     // Lazy loading: keep session open for on-demand pagination
+    private var feedbackSession: FeedbackSearchSession? = null
     private var currentSession: SearchSession? = null
+        set(value) {
+            field = value
+            if (value is FeedbackSearchSession) {
+                feedbackSession = value
+                _uiState.update { it.copy(feedbackSearchId = value.feedbackContext.searchId) }
+            }
+        }
     private var currentTocAllowedLineIds: Set<Long> = emptySet()
     private var currentSearchQuery: String = ""
     private val lazyLoadMutex = Mutex()
@@ -496,6 +541,9 @@ class SearchResultViewModel(
         bookId: Long,
         lineId: Long,
     ) {
+        _uiState.value.results
+            .firstOrNull { it.bookId == bookId && it.lineId == lineId }
+            ?.let { recordFeedback(it, SearchFeedbackType.ENTRY, "text") }
         desktopManager.tabsViewModelFor(tabId)?.openTab(
             TabsDestination.BookContent(bookId = bookId, tabId = UUID.randomUUID().toString(), lineId = lineId),
         )
@@ -703,6 +751,11 @@ class SearchResultViewModel(
         _uiState.value =
             _uiState.value.copy(
                 query = initialQuery,
+                mode =
+                    runCatching {
+                        io.github.kdroidfilter.seforimlibrary.search.SearchMode
+                            .valueOf(persisted.mode)
+                    }.getOrDefault(io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE),
                 draftQuery = persisted.draftQuery.ifBlank { initialQuery },
                 globalExtended = persisted.globalExtended,
                 scrollIndex = persisted.scrollIndex,
@@ -896,7 +949,14 @@ class SearchResultViewModel(
         val persisted = persistedSearchState()
         val scope = persisted.scope
         viewModelScope.launch {
-            historyStore.recordSearchVisit(q, scope, persisted.globalExtended, scopeLabel(scope), System.currentTimeMillis())
+            historyStore.recordSearchVisit(
+                q,
+                scope,
+                persisted.globalExtended,
+                scopeLabel(scope),
+                System.currentTimeMillis(),
+                _uiState.value.mode.name,
+            )
         }
         // New search: clear any previous streaming job and reset scroll/anchor state
         currentJob?.cancel()
@@ -1842,6 +1902,49 @@ class SearchResultViewModel(
      * Returns a list of display strings in order. Uses lightweight caches to avoid repeated lookups.
      */
     suspend fun getBreadcrumbPiecesFor(result: SearchResult): List<String> = getBreadcrumbPieces(result)
+
+    fun recordFeedback(
+        result: SearchResult,
+        type: SearchFeedbackType,
+        destination: String? = null,
+    ) {
+        val state = _uiState.value
+        if (state.isLoading || !appSettings.isSearchFeedbackEnabled()) return
+        val session = feedbackSession
+        val context =
+            session?.feedbackContext ?: FeedbackSearchContext(
+                searchId = state.feedbackSearchId,
+                query = currentSearchQuery.ifBlank { state.query },
+                requestedMode = state.mode,
+                near = DEFAULT_NEAR,
+                bookFilter = state.scopeBook?.id,
+                categoryFilter = persistedSearchState().filterCategoryId.takeIf { it != 0L },
+                baseBookOnly = !state.globalExtended,
+            )
+        val visible = visibleResultsFlow.value
+        val position = visible.indexOfFirst { it.bookId == result.bookId && it.lineId == result.lineId }
+        searchFeedbackService.record(
+            result = result,
+            type = type,
+            context = context,
+            effectiveMode = session?.effectiveMode ?: state.mode,
+            position = position.takeIf { it >= 0 }?.plus(1),
+            retrievalPosition =
+                state.results
+                    .indexOfFirst { it.bookId == result.bookId && it.lineId == result.lineId }
+                    .takeIf { it >= 0 }
+                    ?.plus(1),
+            loadedCount = visible.size,
+            totalCount = state.progressTotal,
+            selectedBooks = _selectedBookIds.value.sorted(),
+            selectedCategories = _selectedCategoryIds.value.sorted(),
+            selectedTocs = _selectedTocIds.value.sorted(),
+            viewBookId = state.scopeBook?.id,
+            viewCategoryId = persistedSearchState().filterCategoryId.takeIf { it != 0L },
+            viewTocId = state.scopeTocId,
+            destination = destination,
+        )
+    }
 
     fun openResult(result: SearchResult) {
         viewModelScope.launch {

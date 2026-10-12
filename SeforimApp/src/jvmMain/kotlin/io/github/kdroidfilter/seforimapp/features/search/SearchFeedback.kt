@@ -106,6 +106,9 @@ internal fun matchedFeedbackParts(snippet: String): List<String> =
 @Inject
 class SearchFeedbackService(
     private val repository: SeforimRepository,
+    private val appSettings: AppSettings,
+    private val databaseVersionManager: DatabaseVersionManager,
+    private val semanticAssetsManager: SemanticAssetsManager,
 ) {
     private val queue = Channel<suspend () -> Unit>(capacity = 128)
     private val sendSignal = Channel<Unit>(Channel.CONFLATED)
@@ -119,7 +122,7 @@ class SearchFeedbackService(
         coroutineScope {
             launch(Dispatchers.IO) {
                 for (save in queue) {
-                    if (!AppSettings.isSearchFeedbackEnabled()) continue
+                    if (!appSettings.isSearchFeedbackEnabled()) continue
                     try {
                         save()
                         sendSignal.trySend(Unit)
@@ -135,7 +138,7 @@ class SearchFeedbackService(
                 while (true) {
                     var failed = false
                     try {
-                        outbox.flush(transport, AppSettings::isSearchFeedbackEnabled)
+                        outbox.flush(transport, appSettings::isSearchFeedbackEnabled)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (failure: Exception) {
@@ -165,7 +168,7 @@ class SearchFeedbackService(
         viewTocId: Long?,
         destination: String? = null,
     ) {
-        if (!AppSettings.isSearchFeedbackEnabled()) return
+        if (!appSettings.isSearchFeedbackEnabled()) return
         if (type != SearchFeedbackType.ENTRY && effectiveMode != SearchMode.SMART) return
         val occurredAt = Instant.now().toString()
         val accepted =
@@ -175,8 +178,8 @@ class SearchFeedbackService(
                     SearchFeedbackPayload(
                         occurredAt = occurredAt,
                         softwareVersion = UpdaterConfig().currentVersion,
-                        databaseVersion = DatabaseVersionManager.getCurrentDatabaseVersion(),
-                        modelVersion = if (effectiveMode == SearchMode.SMART) SemanticAssetsManager.feedbackModelVersion else null,
+                        databaseVersion = databaseVersionManager.getCurrentDatabaseVersion(),
+                        modelVersion = if (effectiveMode == SearchMode.SMART) semanticAssetsManager.feedbackModelVersion else null,
                         feedbackType = type.name.lowercase(),
                         search = context,
                         effectiveSearchMode = effectiveMode.name.lowercase(),
@@ -201,7 +204,7 @@ class SearchFeedbackService(
                         viewTocId = viewTocId,
                         destination = destination,
                     )
-                if (AppSettings.isSearchFeedbackEnabled()) outbox.save(payload.eventId, occurredAt, payloadJson.encodeToString(payload))
+                if (appSettings.isSearchFeedbackEnabled()) outbox.save(payload.eventId, occurredAt, payloadJson.encodeToString(payload))
             }
         if (accepted.isFailure) warnln { "Search feedback queue is full" }
     }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +33,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -119,6 +124,8 @@ data class SearchShellActions(
     val onMoreFromBook: (bookId: Long) -> Unit = {},
     val onBackFromBook: () -> Unit = {},
     val onOpenAuthor: (Long) -> Unit = {},
+    val onModeChange: (io.github.kdroidfilter.seforimlibrary.search.SearchMode) -> Unit = {},
+    val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
 )
 
 /**
@@ -208,6 +215,7 @@ private fun SearchResultContentMvi(
     tabId: String,
 ) {
     val appSettings = LocalAppGraph.current.appSettings
+    val feedbackEnabled by appSettings.searchFeedbackEnabledFlow.collectAsState()
     val listState = rememberLazyListState()
     // A flat list by relevance, as on Google: at most two passages of a book in a row
     // Narrowed to a book ("more from it"), or searched in one from the start (home's book / TOC scope):
@@ -387,6 +395,7 @@ private fun SearchResultContentMvi(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             LogoBranch(Modifier.height(LOGO_HEIGHT).aspectRatio(LOGO_RATIO))
+                            SearchModePicker(state.mode, actions.onModeChange)
                             UnifiedSearchBar(
                                 searchUi = homeSearchUi,
                                 searchCallbacks = homeSearchCallbacks,
@@ -540,6 +549,11 @@ private fun SearchResultContentMvi(
                                             },
                                             onOpen = { result -> openResult(result, false) },
                                             onMoreInBook = { actions.onMoreFromBook(item.hit.bookId) },
+                                            feedbackEnabled =
+                                                feedbackEnabled &&
+                                                    state.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART,
+                                            feedbackSearchId = state.feedbackSearchId,
+                                            onFeedback = { actions.onFeedback(item.hit, it) },
                                         )
                                     }
                                     // Loading indicator at the end of the list (only for lazy loading)
@@ -642,7 +656,7 @@ private fun SearchResultContentMvi(
 
 /** One result of the flat list: a passage, and how many more its book has ([more], on the book's first result only). */
 @Stable
-private data class ResultItem(
+internal data class ResultItem(
     val hit: SearchResult,
     val more: Int,
 ) {
@@ -725,7 +739,7 @@ internal fun readingSecondary(): Color =
  * book's other results.
  */
 @Composable
-private fun ResultView(
+internal fun ResultView(
     item: ResultItem,
     selected: Boolean,
     findQuery: String?,
@@ -735,8 +749,12 @@ private fun ResultView(
     onClick: (SearchResult) -> Unit,
     onOpen: (SearchResult) -> Unit,
     onMoreInBook: () -> Unit,
+    feedbackEnabled: Boolean = false,
+    feedbackSearchId: String = "",
+    onFeedback: (SearchFeedbackType) -> Unit = {},
 ) {
     val hit = item.hit
+    var selectedFeedback by remember(hit.lineId, feedbackSearchId) { mutableStateOf<SearchFeedbackType?>(null) }
     // Titles in the app's text color, bold, as every other text; the rest grey
     val ink = JewelTheme.globalColors.text.normal
     val grey = readingSecondary()
@@ -796,6 +814,14 @@ private fun ResultView(
                 }
                 Snippet(hit, findQuery, bookFontCode)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (feedbackEnabled && (hovered || selected)) {
+                        SearchFeedbackButtons(selectedFeedback) { type ->
+                            if (selectedFeedback != type) {
+                                selectedFeedback = type
+                                onFeedback(type)
+                            }
+                        }
+                    }
                     if (item.more > 0) {
                         ResultLink(
                             stringResource(Res.string.search_more_from_book, item.more, hit.bookTitle),
@@ -1233,4 +1259,64 @@ private fun StableListScrollbar(
         },
         modifier = modifier,
     )
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun SearchFeedbackButtons(
+    selected: SearchFeedbackType?,
+    onFeedback: (SearchFeedbackType) -> Unit,
+) {
+    val thumb =
+        remember {
+            ImageVector
+                .Builder("SearchFeedbackThumb", 24.dp, 24.dp, 24f, 24f)
+                .apply {
+                    path(fill = SolidColor(Color.Black)) {
+                        moveTo(3f, 10f)
+                        lineTo(6f, 10f)
+                        lineTo(6f, 21f)
+                        lineTo(3f, 21f)
+                        close()
+                        moveTo(8f, 10f)
+                        lineTo(13f, 3f)
+                        lineTo(15f, 3f)
+                        lineTo(15f, 9f)
+                        lineTo(21f, 9f)
+                        lineTo(21f, 13f)
+                        lineTo(18f, 21f)
+                        lineTo(8f, 21f)
+                        close()
+                    }
+                }.build()
+        }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (type in listOf(SearchFeedbackType.LIKE, SearchFeedbackType.DISLIKE)) {
+            val label =
+                stringResource(
+                    if (type == SearchFeedbackType.LIKE) Res.string.search_feedback_like else Res.string.search_feedback_dislike,
+                )
+            Tooltip({ Text(label) }) {
+                IconButton(
+                    onClick = { onFeedback(type) },
+                    modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                ) {
+                    Icon(
+                        imageVector = thumb,
+                        contentDescription = label,
+                        modifier =
+                            Modifier.size(17.dp).graphicsLayer {
+                                rotationZ = if (type == SearchFeedbackType.DISLIKE) 180f else 0f
+                            },
+                        tint =
+                            if (selected == type) {
+                                JewelTheme.globalColors.outlines.focused
+                            } else {
+                                JewelTheme.globalColors.text.info
+                            },
+                    )
+                }
+            }
+        }
+    }
 }

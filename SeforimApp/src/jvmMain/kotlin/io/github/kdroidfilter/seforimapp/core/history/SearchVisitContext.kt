@@ -45,5 +45,11 @@ fun VisitEntry.searchDestination(
     searchContext?.let { context ->
         store.update(tabId) { it.copy(search = context.persistedState(query)) }
     }
-    return TabsDestination.Search(searchQuery = query, tabId = tabId)
+    return TabsDestination.Search(
+        searchQuery = query,
+        tabId = tabId,
+        scope = searchScope,
+        globalExtended = searchGlobalExtended,
+        mode = searchMode.takeIf { it.isNotBlank() },
+    )
 }

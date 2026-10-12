@@ -10,6 +10,7 @@ object StateKeys {
     const val LINE_ID = "lineId"
 
     // Scope of a fresh search tab (a search reopened from history)
+    const val SEARCH_MODE = "searchMode"
     const val SEARCH_SCOPE = "searchScope"
     const val SEARCH_GLOBAL_EXTENDED = "searchGlobalExtended"
 

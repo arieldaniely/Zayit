@@ -218,7 +218,7 @@ private fun TabSearchPopupContent(onDismiss: () -> Unit) {
                         label = entry.title,
                         tabType = if (entry.kind == VisitKind.BOOK) TabType.BOOK else TabType.SEARCH,
                         onClick = {
-                            entry.destination()?.let(currentWindow.tabsViewModel::openTab)
+                            entry.destination(appGraph.tabPersistedStateStore)?.let(currentWindow.tabsViewModel::openTab)
                             onDismiss()
                         },
                         onClose = null,

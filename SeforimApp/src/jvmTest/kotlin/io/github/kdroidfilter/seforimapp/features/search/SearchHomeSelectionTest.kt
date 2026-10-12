@@ -4,6 +4,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.mockk.coEvery
+import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -32,16 +34,15 @@ class SearchHomeSelectionTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
-        mockkObject(SemanticAssetsManager)
-        every { SemanticAssetsManager.validatedReady() } returns false
         store = TabPersistedStateStore()
-        viewModel = SearchHomeViewModel(store, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val repository = mockk<SeforimRepository>(relaxed = true)
+        coEvery { repository.getLineIdsForTocEntry(toc.id) } returns listOf(toc.lineId!!)
+        viewModel = SearchHomeViewModel(store, repository, mockk(relaxed = true), mockk(relaxed = true))
     }
 
     @AfterTest
     fun tearDown() {
         viewModel.viewModelScope.cancel()
-        unmockkObject(SemanticAssetsManager)
         Dispatchers.resetMain()
     }
 
@@ -59,18 +60,13 @@ class SearchHomeSelectionTest {
         }
 
     @Test
-    fun `explicit opening uses selected combined anchor for text and PDF`() =
+    fun `explicit opening uses the selected anchor regardless of suggestion visibility`() =
         runTest {
-            for (pdf in listOf(false, true)) {
-                viewModel.onPickBook(book, pdf)
+            for (showSuggestions in listOf(false, true)) {
+                viewModel.onPickBook(book, showSuggestions)
                 viewModel.onPickToc(toc)
                 viewModel.openSelectedReferenceInCurrentTab("tab")
-                val expected =
-                    if (pdf) {
-                        SearchHomeNavigationEvent.NavigateToPdfContent(book.id, "tab", toc.lineId)
-                    } else {
-                        SearchHomeNavigationEvent.NavigateToBookContent(book.id, "tab", toc.lineId)
-                    }
+                val expected = SearchHomeNavigationEvent.NavigateToBookContent(book.id, "tab", toc.lineId)
                 assertEquals(expected, viewModel.navigationEvents.first())
             }
         }

@@ -484,6 +484,8 @@ fun rememberSearchShellActions(viewModel: SearchResultViewModel): SearchShellAct
             onMoreFromBook = viewModel::showMoreFromBook,
             onBackFromBook = viewModel::backFromBook,
             onOpenAuthor = viewModel::openAuthor,
+            onModeChange = viewModel::setMode,
+            onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
         )
     }
 
@@ -595,6 +597,7 @@ class SimpleTabViewModelOwner(
                 when (destination) {
                     is TabsDestination.Search -> {
                         putString("searchQuery", destination.searchQuery)
+                        destination.mode?.let { putString(StateKeys.SEARCH_MODE, it) }
                         putString(StateKeys.SEARCH_SCOPE, Json.encodeToString<SearchScope>(destination.scope))
                         if (destination.globalExtended) putBoolean(StateKeys.SEARCH_GLOBAL_EXTENDED, true)
                     }

@@ -80,6 +80,7 @@ import seforimapp.seforimapp.generated.resources.no_notes_saved
 import seforimapp.seforimapp.generated.resources.note_body_placeholder
 import seforimapp.seforimapp.generated.resources.notes_info_word_level
 import seforimapp.seforimapp.generated.resources.notes_pane
+import seforimapp.seforimapp.generated.resources.shared_study_note_by
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -125,6 +126,39 @@ fun NotesPanel(
     onConsumeDraft: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val coordinator = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current.sharedStudyCoordinator
+    val study by coordinator.state.collectAsState()
+    val remoteNotes =
+        study.notes.values
+            .filter {
+                it.bookId == bookId && it.authorId != coordinator.localParticipantId && it.lineId in selectedLineIds
+            }.sortedBy { it.updatedAt }
+
+    fun publishSavedNote(id: Long) {
+        if (!coordinator.state.value.isConnected) return
+        val sharedId = coordinator.sharedNoteId(bookId, id)
+        val note =
+            noteStore.notesByBook.value[bookId]
+                .orEmpty()
+                .firstOrNull { it.id == id }
+        if (note == null) {
+            coordinator.removeNote(sharedId)
+        } else {
+            coordinator.publishNote(
+                io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyNote(
+                    sharedId,
+                    coordinator.localParticipantId,
+                    bookId,
+                    note.lineId,
+                    note.startOffset,
+                    note.endOffset,
+                    note.note,
+                    note.quote,
+                    note.updatedAt,
+                ),
+            )
+        }
+    }
     val paneHoverSource = remember { MutableInteractionSource() }
     val scope = rememberCoroutineScope()
     val currentOnEvent by rememberUpdatedState(onEvent)
@@ -182,7 +216,7 @@ fun NotesPanel(
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (notes.isEmpty() && effectiveDraft == null) {
+            if (notes.isEmpty() && effectiveDraft == null && remoteNotes.isEmpty()) {
                 NotesEmptyState()
             } else {
                 val listState =
@@ -201,6 +235,19 @@ fun NotesPanel(
                     state = listState,
                     modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp),
                 ) {
+                    items(remoteNotes, key = { "remote-${it.id}" }) { note ->
+                        NoteCard(quote = note.quote.takeIf { it.isNotBlank() }, accentStrong = false) {
+                            Column {
+                                val name =
+                                    study.participants
+                                        .firstOrNull { it.id == note.authorId }
+                                        ?.displayName
+                                        .orEmpty()
+                                Text(stringResource(seforimapp.seforimapp.generated.resources.Res.string.shared_study_note_by, name))
+                                Text(note.body)
+                            }
+                        }
+                    }
                     items(notes, key = { it.id }) { note ->
                         NoteCard(
                             quote = note.quote.takeIf { it.isNotBlank() },
@@ -216,9 +263,15 @@ fun NotesPanel(
                                     scope.launch {
                                         // A blank body deletes the note (NoteStore.updateNote contract).
                                         noteStore.updateNote(bookId, note.id, text, System.currentTimeMillis())
+                                        publishSavedNote(note.id)
                                     }
                                 },
-                                onDelete = { scope.launch { noteStore.removeNote(bookId, note.id) } },
+                                onDelete = {
+                                    scope.launch {
+                                        noteStore.removeNote(bookId, note.id)
+                                        publishSavedNote(note.id)
+                                    }
+                                },
                             )
                         }
                     }
@@ -246,6 +299,7 @@ fun NotesPanel(
                                             when {
                                                 text.isBlank() && id != null -> {
                                                     noteStore.removeNote(bookId, id)
+                                                    publishSavedNote(id)
                                                     draftCreatedId = null
                                                 }
                                                 text.isNotBlank() && id == null -> {
@@ -259,16 +313,21 @@ fun NotesPanel(
                                                             timestamp = now,
                                                             quote = effectiveDraft.quote,
                                                         )
+                                                    draftCreatedId?.let(::publishSavedNote)
                                                 }
                                                 text.isNotBlank() && id != null -> {
                                                     noteStore.updateNote(bookId, id, text, now)
+                                                    publishSavedNote(id)
                                                 }
                                             }
                                         }
                                     },
                                     onDelete = {
                                         scope.launch {
-                                            draftCreatedId?.let { noteStore.removeNote(bookId, it) }
+                                            draftCreatedId?.let {
+                                                noteStore.removeNote(bookId, it)
+                                                publishSavedNote(it)
+                                            }
                                             draftCreatedId = null
                                         }
                                         if (isExplicitDraft) onConsumeDraft()

@@ -85,7 +85,6 @@ import androidx.compose.ui.zIndex
 import com.github.jaiimageio.jpeg2000.impl.J2KImageReaderSpi
 import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Book
 import kotlinx.coroutines.Dispatchers
@@ -206,6 +205,7 @@ private fun PdfReader(
     isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val appSettings = LocalAppGraph.current.appSettings
     val repository = LocalAppGraph.current.repository
     val textAnchors by produceState<List<PdfTextAnchor>>(emptyList(), bookId) {
         value =
@@ -223,8 +223,8 @@ private fun PdfReader(
     val currentSelectedLineId by rememberUpdatedState(selectedLineId)
     val currentOnLineSelected by rememberUpdatedState(onLineSelect)
     var programmaticTarget by remember(session) { mutableStateOf<Int?>(null) }
-    val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
-    val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")
+    val showFind by appSettings.findBarOpenFlow(tabId).collectAsState()
+    val persistedFindQuery by appSettings.findQueryFlow(tabId).collectAsState("")
     val findState = remember(tabId) { TextFieldState() }
     val scope = rememberCoroutineScope()
     var searchMatches by remember(session) { mutableStateOf(emptyList<PdfSearchMatch>()) }
@@ -262,7 +262,7 @@ private fun PdfReader(
 
     LaunchedEffect(findState.text, showFind, session) {
         val query = findState.text.toString()
-        AppSettings.setFindQuery(tabId, if (query.length >= 2) query else "")
+        appSettings.setFindQuery(tabId, if (query.length >= 2) query else "")
         if (!showFind || query.length < 2) {
             searchMatches = emptyList()
             selectedMatchIndex = -1
@@ -315,8 +315,7 @@ private fun PdfReader(
                     state = findState,
                     onEnterNext = { navigateToMatch(true) },
                     onEnterPrev = { navigateToMatch(false) },
-                    onClose = { AppSettings.closeFindBar(tabId) },
-                    showSmartModeToggle = false,
+                    onClose = { appSettings.closeFindBar(tabId) },
                 )
             }
         }

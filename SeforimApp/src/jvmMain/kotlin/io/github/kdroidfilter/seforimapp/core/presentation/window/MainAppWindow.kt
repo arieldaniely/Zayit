@@ -299,6 +299,8 @@ fun NucleusApplicationScope.MainAppWindow(
             // Citation links in the texts open their target in a new tab of this window
             LocalUriHandler provides rememberRefLinkUriHandler(openWindow.tabsViewModel),
         ) {
+            io.github.kdroidfilter.seforimapp.features.sharedstudy
+                .SharedStudyWindowBindings(tabsVm, state.isActive)
             MainTitleBar(Modifier.e2eCapture(openWindow.id + E2e.TITLE_BAR))
 
             // Keep the screen awake while a book is open in the current tab and this window is

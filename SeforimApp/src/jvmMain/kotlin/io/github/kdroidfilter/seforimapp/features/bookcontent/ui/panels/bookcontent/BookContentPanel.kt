@@ -7,9 +7,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -27,15 +30,24 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnecti
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.*
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfContentView
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.CheckboxRow
 import org.jetbrains.jewel.ui.component.CircularProgressIndicator
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.open_pdf_edition
+import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -74,41 +86,108 @@ fun BookContentPanel(
             .padding(vertical = 6.dp, horizontal = 4.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(JewelTheme.globalColors.panelBackground)
-    Box(modifier = modifier.fillMaxSize()) {
-        when {
-            // If no book is selected
-            uiState.navigation.selectedBook == null -> {
-                // If we're actively loading a book for this tab, avoid flashing the Home screen.
-                // Show a minimal loader until the selected book is ready.
-                if (uiState.isLoading || isRestoringSession) {
-                    LoaderPanel()
-                } else {
-                    HomeView(
-                        onEvent = onEvent,
-                        searchUi = searchUi,
-                        searchCallbacks = searchCallbacks,
-                        modifier = homeCardModifier,
-                    )
+    val graph = LocalAppGraph.current
+    val selectedBook = uiState.navigation.selectedBook
+    val pdfVersion by graph.talmudPdfService.libraryVersion.collectAsState()
+    val pdf by produceState<File?>(null, selectedBook?.id, pdfVersion) {
+        value =
+            withContext(Dispatchers.IO) {
+                selectedBook?.let { book ->
+                    val categories = graph.catalogCache.getCategoriesById().orEmpty()
+                    val titles = mutableListOf<String>()
+                    val visited = mutableSetOf<Long>()
+                    var category = categories[book.categoryId]
+                    while (category != null && visited.add(category.id)) {
+                        titles += category.title
+                        category = category.parentId?.let(categories::get)
+                    }
+                    if (category != null || !graph.talmudPdfService.isTalmudBavliCategoryPath(titles)) {
+                        null
+                    } else {
+                        graph.talmudPdfService.pdfForTitle(book.title)
+                    }
                 }
             }
+    }
+    val persisted = graph.tabPersistedStateStore.get(uiState.tabId)?.bookContent
+    var preferPdf by rememberSaveable(uiState.tabId, selectedBook?.id) {
+        mutableStateOf(persisted?.preferPdf ?: false)
+    }
+    var pdfZoom by rememberSaveable(uiState.tabId, selectedBook?.id) {
+        mutableStateOf(persisted?.pdfZoom ?: 1f)
+    }
+    Column(modifier = modifier.fillMaxSize()) {
+        io.github.kdroidfilter.seforimapp.features.sharedstudy
+            .SharedStudyReaderBar(uiState, isSelected, onEvent)
+        if (pdf != null) {
+            CheckboxRow(
+                text = stringResource(Res.string.open_pdf_edition),
+                checked = preferPdf,
+                onCheckedChange = { enabled ->
+                    preferPdf = enabled
+                    graph.tabPersistedStateStore.update(uiState.tabId) { current ->
+                        current.copy(bookContent = current.bookContent.copy(preferPdf = enabled))
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            when {
+                preferPdf && pdf != null && selectedBook != null -> {
+                    PdfContentView(
+                        file = pdf,
+                        tabId = uiState.tabId,
+                        bookId = selectedBook.id,
+                        selectedLineId = uiState.content.primarySelectedLineId,
+                        requestedReferences = emptyList(),
+                        zoom = pdfZoom,
+                        onZoomChange = { zoom ->
+                            pdfZoom = zoom
+                            graph.tabPersistedStateStore.update(uiState.tabId) { current ->
+                                current.copy(bookContent = current.bookContent.copy(pdfZoom = zoom))
+                            }
+                        },
+                        onLineSelect = { onEvent(BookContentEvent.LoadAndSelectLine(it)) },
+                        isActive = isSelected,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
 
-            // Book is selected but providers are not ready yet (initialization in progress)
-            // Show a centered loader to avoid flash of partial content.
-            uiState.providers == null || uiState.isLoading -> {
-                LoaderPanel()
-            }
+                // If no book is selected
+                uiState.navigation.selectedBook == null -> {
+                    // If we're actively loading a book for this tab, avoid flashing the Home screen.
+                    // Show a minimal loader until the selected book is ready.
+                    if (uiState.isLoading || isRestoringSession) {
+                        LoaderPanel()
+                    } else {
+                        HomeView(
+                            onEvent = onEvent,
+                            searchUi = searchUi,
+                            searchCallbacks = searchCallbacks,
+                            modifier = homeCardModifier,
+                        )
+                    }
+                }
 
-            // Main content when book and providers are ready
-            else -> {
-                BookContentPanelContent(
-                    uiState = uiState,
-                    onEvent = onEvent,
-                    diacritics = diacritics,
-                    isSelected = isSelected,
-                    bookCharCounts = bookCharCounts,
-                    noteDraft = noteDraft,
-                    tabUi = tabUi ?: viewModel { BookTabUi() },
-                )
+                // Book is selected but providers are not ready yet (initialization in progress)
+                // Show a centered loader to avoid flash of partial content.
+                uiState.providers == null || uiState.isLoading -> {
+                    LoaderPanel()
+                }
+
+                // Main content when book and providers are ready
+                else -> {
+                    BookContentPanelContent(
+                        uiState = uiState,
+                        onEvent = onEvent,
+                        diacritics = diacritics,
+                        isSelected = isSelected,
+                        bookCharCounts = bookCharCounts,
+                        noteDraft = noteDraft,
+                        tabUi = tabUi ?: viewModel { BookTabUi() },
+                    )
+                }
             }
         }
     }

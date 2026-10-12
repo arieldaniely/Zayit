@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.github.kdroidfilter.seforimapp.features.home.widgets.availableTools
+import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog
 import io.github.kdroidfilter.seforimapp.features.siddur.installedSiddur
 import io.github.kdroidfilter.seforimapp.features.siddur.openSiddurTab
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
@@ -20,6 +21,7 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.menu_tools
+import seforimapp.seforimapp.generated.resources.shared_study
 import seforimapp.seforimapp.generated.resources.siddur_title
 
 /**
@@ -29,6 +31,9 @@ import seforimapp.seforimapp.generated.resources.siddur_title
 @Composable
 fun ToolsMenuButton() {
     val toolWindows = LocalAppGraph.current.toolWindows
+    var sharedStudyVisible by remember { mutableStateOf(false) }
+    val coordinator = LocalAppGraph.current.sharedStudyCoordinator
+    val sharedStudyLabel = stringResource(Res.string.shared_study)
     var visible by remember { mutableStateOf(false) }
     val label = stringResource(Res.string.menu_tools)
     val tools = availableTools.map { it to stringResource(it.title) }
@@ -59,6 +64,13 @@ fun ToolsMenuButton() {
                         },
                     ) { Text(siddur) }
                 }
+                selectableItem(
+                    selected = false,
+                    onClick = {
+                        visible = false
+                        sharedStudyVisible = true
+                    },
+                ) { Text(sharedStudyLabel) }
                 tools.forEach { (tool, title) ->
                     selectableItem(
                         selected = false,
@@ -71,4 +83,5 @@ fun ToolsMenuButton() {
             }
         }
     }
+    if (sharedStudyVisible) SharedStudyDialog(coordinator) { sharedStudyVisible = false }
 }

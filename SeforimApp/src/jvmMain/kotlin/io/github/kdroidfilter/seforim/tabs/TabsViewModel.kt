@@ -175,6 +175,11 @@ class TabsViewModel internal constructor(
         session.addTab(destination, groupId, index = ids().indexOf(currentId()).coerceAtLeast(0))
     }
 
+    /** Adds a remote study book through the workspace while retaining the selected tab. */
+    fun openBackgroundTab(destination: TabsDestination) {
+        session.addTab(destination, groupId, index = ids().size, select = false)
+    }
+
     /** Navigates the selected tab to [destination], keeping the tab (and its ViewModels). */
     fun replaceCurrentTabDestination(destination: TabsDestination) {
         val tabId = currentId() ?: return

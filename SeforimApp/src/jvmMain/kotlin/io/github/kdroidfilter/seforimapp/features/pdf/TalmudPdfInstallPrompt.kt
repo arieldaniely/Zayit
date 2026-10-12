@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.icons.Book
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,6 +47,9 @@ import java.io.File
 @Composable
 fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
     val currentOnDone by rememberUpdatedState(onDone)
+    val graph = io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph.current
+    val talmudPdfService = graph.talmudPdfService
+    val appSettings = graph.appSettings
     var installing by remember { mutableStateOf(false) }
     var downloadRequested by remember { mutableStateOf(false) }
     var importRequested by remember { mutableStateOf(false) }
@@ -91,7 +93,7 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
                     Text(stringResource(Res.string.pdf_install_prompt_later))
                 }
                 OutlinedButton(enabled = !installing, onClick = {
-                    AppSettings.setTalmudPdfInstallSkipped(true)
+                    appSettings.setTalmudPdfInstallSkipped(true)
                     currentOnDone()
                 }) { Text(stringResource(Res.string.pdf_install_prompt_skip)) }
             }
@@ -100,7 +102,7 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
 
     if (downloadRequested) {
         LaunchedEffect(Unit) {
-            runCatching { withContext(Dispatchers.IO) { TalmudPdfService.downloadAndInstall() } }
+            runCatching { withContext(Dispatchers.IO) { talmudPdfService.downloadAndInstall() } }
                 .onFailure { error = it.message }
                 .onSuccess { currentOnDone() }
             installing = false
@@ -122,7 +124,7 @@ fun TalmudPdfInstallPrompt(onDone: () -> Unit) {
         if (selected != null) {
             installing = true
             error = null
-            runCatching { withContext(Dispatchers.IO) { TalmudPdfService.importArchive(selected) } }
+            runCatching { withContext(Dispatchers.IO) { talmudPdfService.importArchive(selected) } }
                 .onFailure { error = it.message }
                 .onSuccess { currentOnDone() }
             installing = false

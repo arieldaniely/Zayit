@@ -2,7 +2,7 @@ package io.github.kdroidfilter.seforimapp.features.pdf
 
 import com.github.luben.zstd.ZstdInputStream
 import io.github.kdroidfilter.seforimapp.features.onboarding.data.selectDistributionArchives
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,7 +27,11 @@ private const val TALMUD_ROOT_TITLE = "תלמוד"
 private const val BAVLI_CATEGORY_TITLE = "בבלי"
 private const val RELEASE_URL = "https://api.github.com/repos/arieldaniely/SeforimLibrary/releases/latest"
 
-object TalmudPdfService {
+@dev.zacsweers.metro.Inject
+@dev.zacsweers.metro.SingleIn(io.github.kdroidfilter.seforimapp.framework.di.AppScope::class)
+class TalmudPdfService(
+    private val databasePathProvider: DatabasePathProvider,
+) {
     private val pdfTitleCache = AtomicReference<Set<String>?>(null)
     private val _libraryVersion = MutableStateFlow(0L)
     val libraryVersion: StateFlow<Long> = _libraryVersion.asStateFlow()
@@ -36,7 +40,7 @@ object TalmudPdfService {
         ImageIO.scanForPlugins()
     }
 
-    fun pdfDirectory(): File = File(File(getDatabasePath()).absoluteFile.parentFile, TALMUD_BAVLI_DIR)
+    fun pdfDirectory(): File = File(File(databasePathProvider.get()).absoluteFile.parentFile, TALMUD_BAVLI_DIR)
 
     fun isInstalled(): Boolean = scanAvailablePdfTitles().isNotEmpty()
 
@@ -167,7 +171,7 @@ object TalmudPdfService {
 
     fun removeInstalledLibrary() {
         val directory = pdfDirectory().canonicalFile
-        val databaseParent = File(getDatabasePath()).absoluteFile.parentFile.canonicalFile
+        val databaseParent = File(databasePathProvider.get()).absoluteFile.parentFile.canonicalFile
         require(directory.parentFile == databaseParent) { "Refusing to remove an unexpected PDF directory" }
         if (directory.exists()) {
             check(directory.deleteRecursively()) { "Could not remove the installed PDF library" }

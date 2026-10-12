@@ -314,7 +314,13 @@ class BookContentStateManager(
             )
 
         persistedStore.update(tabId) { current ->
-            current.copy(bookContent = persisted)
+            current.copy(
+                bookContent =
+                    persisted.copy(
+                        preferPdf = current.bookContent.preferPdf && current.bookContent.selectedBookId == persisted.selectedBookId,
+                        pdfZoom = current.bookContent.pdfZoom,
+                    ),
+            )
         }
     }
 }

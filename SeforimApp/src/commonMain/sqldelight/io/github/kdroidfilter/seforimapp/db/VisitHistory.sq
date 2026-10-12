@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS visit_history (
     searchCategoryId INTEGER,
     searchBookId INTEGER,
     searchTocId INTEGER,
+    searchMode TEXT NOT NULL DEFAULT 'FLEXIBLE',
     searchExtended INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0
 );
 
@@ -21,9 +22,9 @@ CREATE INDEX IF NOT EXISTS idx_visit_history_time ON visit_history(visitedAt);
 
 upsertVisit:
 INSERT INTO visit_history(key, kind, bookId, searchQuery, title, visitedAt, visitCount, tocEntryId, lineId,
-    searchCategoryId, searchBookId, searchTocId, searchExtended)
+    searchCategoryId, searchBookId, searchTocId, searchMode, searchExtended)
 VALUES (:key, :kind, :bookId, :searchQuery, :title, :visitedAt, 1, :tocEntryId, :lineId,
-    :searchCategoryId, :searchBookId, :searchTocId, :searchExtended)
+    :searchCategoryId, :searchBookId, :searchTocId, :searchMode, :searchExtended)
 ON CONFLICT(key) DO UPDATE SET
     visitedAt = excluded.visitedAt,
     title = excluded.title,

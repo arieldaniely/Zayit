@@ -1,7 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.mockk.every
@@ -39,12 +39,12 @@ class PersonalLibraryServiceTest {
                 runBlocking { release.await() }
                 updated to null
             }
-            mockkObject(CatalogCache)
-            mockkStatic(::getDatabasePath)
+            val catalog = mockk<CatalogCache>(relaxed = true)
+            val paths = mockk<DatabasePathProvider>()
             try {
-                every { CatalogCache.reloadCatalog() } returns Unit
-                every { getDatabasePath() } returns "base.db"
-                val service = PersonalLibraryService(manager, overlay, search, repository)
+                every { catalog.reloadCatalog() } returns Unit
+                every { paths.get() } returns "base.db"
+                val service = PersonalLibraryService(manager, overlay, search, repository, paths, catalog)
                 val job = launch(Dispatchers.Default) { service.requestSynchronize(original) }
                 withTimeout(10_000) { started.await() }
                 job.cancel()
@@ -56,11 +56,9 @@ class PersonalLibraryServiceTest {
                 assertEquals(updated, service.state.value.configuration)
                 verify(exactly = 1) { overlay.attach(null) }
                 verify(exactly = 1) { search.replacePersonal(null) }
-                verify(exactly = 1) { CatalogCache.reloadCatalog() }
+                verify(exactly = 1) { catalog.reloadCatalog() }
             } finally {
                 release.complete(Unit)
-                unmockkObject(CatalogCache)
-                unmockkStatic(::getDatabasePath)
             }
         }
 }

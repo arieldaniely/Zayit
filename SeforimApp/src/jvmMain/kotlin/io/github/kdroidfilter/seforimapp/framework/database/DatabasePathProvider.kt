@@ -4,6 +4,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
+import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.databasesDir
@@ -57,7 +58,11 @@ class DatabasePathProvider(
             }
 
         // 3) Fallback to default location
-        val defaultDbPath = File(FileKit.databasesDir.path, DEFAULT_DB_NAME).absolutePath
+        val defaultDbPath =
+            File(
+                if (PortablePaths.isPortable) PortablePaths.databasesDir else File(FileKit.databasesDir.path),
+                DEFAULT_DB_NAME,
+            ).absolutePath
 
         val dbPath = envDbPath ?: settingsPath ?: defaultDbPath
 

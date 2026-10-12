@@ -63,7 +63,6 @@ class SettingsScreensUiTest {
         expectedText: String,
         content: @Composable () -> Unit,
     ) = runComposeUiTest {
-        AppSettings.initialize(PropertiesSettings(Properties()))
         val graph = createGraph<AppGraph>()
         val owner =
             object : ViewModelStoreOwner {
@@ -85,7 +84,6 @@ class SettingsScreensUiTest {
             onNodeWithText(expectedText).assertExists()
         } finally {
             owner.viewModelStore.clear()
-            AppSettings.initialize(PropertiesSettings(Properties()))
-        }
+            }
     }
 }

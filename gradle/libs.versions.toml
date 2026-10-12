@@ -55,6 +55,12 @@ graalHotspot = "22.0.0.2"
 intellijPlatformIcons = "262.10968.63"
 jbrApi = "1.10.1"
 
+platformtools = "0.7.5"
+zmanim = "2.5.0"
+pdfbox = "3.0.5"
+blueFalcon = "3.7.7"
+jbig2Imageio = "3.0.4"
+jaiImageioJpeg2000 = "1.4.0"
 [libraries]
 asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 
@@ -179,6 +185,15 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 metro-runtime = { module = "dev.zacsweers.metro:runtime", version.ref = "metro" }
 metrox-viewmodel-compose = { module = "dev.zacsweers.metro:metrox-viewmodel-compose", version.ref = "metro" }
 
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+blue-falcon-core = { module = "dev.bluefalcon:blue-falcon-core", version.ref = "blueFalcon" }
+blue-falcon-engine-windows = { module = "dev.bluefalcon:blue-falcon-engine-windows", version.ref = "blueFalcon" }
+blue-falcon-engine-macos-jvm = { module = "dev.bluefalcon:blue-falcon-engine-macos-jvm", version.ref = "blueFalcon" }
+jbig2-imageio = { module = "org.apache.pdfbox:jbig2-imageio", version.ref = "jbig2Imageio" }
+jai-imageio-core = { module = "com.github.jai-imageio:jai-imageio-core", version.ref = "jaiImageioJpeg2000" }
+jai-imageio-jpeg2000 = { module = "com.github.jai-imageio:jai-imageio-jpeg2000", version.ref = "jaiImageioJpeg2000" }
+platformtools-appmanager = { module = "io.github.kdroidfilter:platformtools.appmanager", version.ref = "platformtools" }
+zmanim = { module = "com.kosherjava:zmanim", version.ref = "zmanim" }
 [plugins]
 
 multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -201,3 +216,4 @@ structured-coroutines = { id = "io.github.santimattius.structured-coroutines", v
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 sentryJvmGradle = { id = "io.sentry.jvm.gradle", version.ref = "sentry" }
+

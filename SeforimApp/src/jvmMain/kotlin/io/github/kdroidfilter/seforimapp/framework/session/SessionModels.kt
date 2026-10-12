@@ -69,6 +69,8 @@ data class BookContentPersistedState(
     val notesScrollIndex: Int = 0,
     val notesScrollOffset: Int = 0,
     // Content
+    val preferPdf: Boolean = false,
+    val pdfZoom: Float = 1f,
     val selectedLineIds: Set<Long> = emptySet(),
     val primarySelectedLineId: Long = -1L,
     val isTocEntrySelection: Boolean = false,
@@ -186,6 +188,7 @@ data class DesktopsState(
 
 @Serializable
 data class SearchPersistedState(
+    val mode: String = "FLEXIBLE",
     val query: String = "",
     val globalExtended: Boolean = false,
     val datasetScope: String = "global",

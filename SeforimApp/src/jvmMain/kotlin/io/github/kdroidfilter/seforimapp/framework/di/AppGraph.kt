@@ -58,7 +58,13 @@ abstract class AppGraph : ViewModelGraph {
     abstract val noteStore: NoteStore
     abstract val repository: SeforimRepository
     abstract val searchEngine: SearchEngine
+    abstract val talmudPdfService: io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+    abstract val personalLibraryService: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
+    abstract val personalLibraryManager: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
+    abstract val semanticAssetsManager: io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
+    abstract val searchFeedbackService: io.github.kdroidfilter.seforimapp.features.search.SearchFeedbackService
     abstract val desktopManager: DesktopManager
+    abstract val sharedStudyCoordinator: io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
     abstract val sessionManager: SessionManager
     abstract val googleDriveSync: GoogleDriveSync
 

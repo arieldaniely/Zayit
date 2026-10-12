@@ -59,7 +59,6 @@ import seforimapp.seforimapp.generated.resources.NachlieliCLM_Bold
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_BoldOblique
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_Light
 import seforimapp.seforimapp.generated.resources.NachlieliCLM_LightOblique
-import seforimapp.seforimapp.generated.resources.RashiAmiti
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.ShofarDemi_Bold
 import seforimapp.seforimapp.generated.resources.ShofarDemi_BoldOblique
@@ -224,7 +223,7 @@ object FontCatalog {
                 )
             "rashiamiti" ->
                 FontFamily(
-                    Font(resource = Res.font.RashiAmiti, weight = FontWeight.Normal),
+                    Font(resource = Res.font.notorashihebrew, weight = FontWeight.Normal),
                 )
             "shofar" ->
                 FontFamily(

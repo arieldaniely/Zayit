@@ -29,6 +29,48 @@ import java.util.concurrent.ConcurrentHashMap
 class AppSettings(
     private val settings: Settings,
 ) {
+    private val _defaultSearchModeFlow = MutableStateFlow(getDefaultSearchModeCode())
+    val defaultSearchModeFlow: StateFlow<String> = _defaultSearchModeFlow.asStateFlow()
+
+    fun getDefaultSearchModeCode(): String = settings.getString("default_search_mode", "FLEXIBLE")
+
+    fun setDefaultSearchModeCode(code: String) {
+        require(code in setOf("EXACT", "FLEXIBLE", "SMART"))
+        settings.putString("default_search_mode", code)
+        _defaultSearchModeFlow.value = code
+    }
+
+    private val _searchFeedbackEnabledFlow = MutableStateFlow(isSearchFeedbackEnabled())
+    val searchFeedbackEnabledFlow: StateFlow<Boolean> = _searchFeedbackEnabledFlow.asStateFlow()
+
+    fun isSearchFeedbackEnabled(): Boolean = settings.getBoolean("search_feedback_enabled", true)
+
+    fun setSearchFeedbackEnabled(enabled: Boolean) {
+        settings.putBoolean("search_feedback_enabled", enabled)
+        _searchFeedbackEnabledFlow.value = enabled
+    }
+
+    fun getOrCreateSharedStudyDeviceId(): String =
+        settings
+            .getStringOrNull("shared_study_device_id")
+            ?.takeIf { it.isNotBlank() }
+            ?: java.util.UUID
+                .randomUUID()
+                .toString()
+                .also { settings.putString("shared_study_device_id", it) }
+
+    fun getSharedStudyDisplayName(): String? = settings.getStringOrNull("shared_study_display_name")
+
+    fun setSharedStudyDisplayName(value: String) = settings.putString("shared_study_display_name", value.trim().take(48))
+
+    fun isTalmudPdfInstallSkipped(): Boolean = settings.getBoolean("talmud_pdf_install_skipped", false)
+
+    fun setTalmudPdfInstallSkipped(value: Boolean) = settings.putBoolean("talmud_pdf_install_skipped", value)
+
+    fun getErrorReportEmail(): String = settings.getString("error_report_email", "")
+
+    fun setErrorReportEmail(value: String) = settings.putString("error_report_email", value)
+
     // StateFlow to observe text size changes
     private val _textSizeFlow = MutableStateFlow(getTextSize())
     val textSizeFlow: StateFlow<Float> = _textSizeFlow.asStateFlow()

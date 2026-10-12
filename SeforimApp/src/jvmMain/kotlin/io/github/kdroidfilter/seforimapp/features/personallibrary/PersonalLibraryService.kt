@@ -1,7 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourceProvider
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
@@ -20,6 +20,8 @@ class PersonalLibraryService(
     private val overlay: PersonalLibraryOverlay,
     private val search: CompositeSearchEngine,
     private val repository: SeforimRepository,
+    private val databasePathProvider: DatabasePathProvider,
+    private val catalogCache: CatalogCache,
 ) {
     private val _state = MutableStateFlow(PersonalLibraryUiState(configuration = manager.store.load()))
     val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
@@ -41,7 +43,7 @@ class PersonalLibraryService(
                             _state.update { it.copy(progress = progress) }
                         }
                     overlay.attach(artifacts?.databasePath)
-                    val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
+                    val dictionary = Path.of(databasePathProvider.get()).resolveSibling("lexical.db")
                     search.replacePersonal(
                         artifacts?.let {
                             LuceneSearchEngine(
@@ -51,7 +53,7 @@ class PersonalLibraryService(
                             )
                         },
                     )
-                    CatalogCache.reloadCatalog()
+                    catalogCache.reloadCatalog()
                     updated
                 }
             }

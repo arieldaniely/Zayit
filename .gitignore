@@ -33,3 +33,11 @@ DATABASE_LICENSING_REVIEW_HE.md
 **/.codex-distribution-validation-build/
 **/.codex-local-project-cache/
 __pycache__/
+
+# Isolated upstream integration validation outputs
+**/.codex-upstream-*-build/
+**/.codex-*-integration-cache/
+**/.codex-integration-cache/
+.codex-upstream-*-init.gradle
+.codex-*-integration-build.log
+artifacts/upstream-integration/

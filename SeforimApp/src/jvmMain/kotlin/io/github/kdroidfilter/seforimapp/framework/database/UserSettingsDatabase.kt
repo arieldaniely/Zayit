@@ -13,6 +13,16 @@ private const val SETTINGS_DB_NAME = "user_settings.db"
 const val USER_SETTINGS_DRIVER = "userSettingsDriver"
 
 fun getUserSettingsDatabasePath(): String {
-    val root = (E2e.userDataDir ?: File(FileKit.databasesDir.path, SETTINGS_DB_DIR)).apply { mkdirs() }
+    val root =
+        (
+            E2e.userDataDir ?: File(
+                if (io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths.isPortable) {
+                    io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths.databasesDir.path
+                } else {
+                    FileKit.databasesDir.path
+                },
+                SETTINGS_DB_DIR,
+            )
+        ).apply { mkdirs() }
     return File(root, SETTINGS_DB_NAME).absolutePath
 }

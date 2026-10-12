@@ -95,7 +95,7 @@ class PersonalLibraryImporter(
     private fun createSchema(database: Path) {
         val driver = JdbcSqliteDriver("jdbc:sqlite:$database")
         try {
-            SeforimDb.Schema.create(driver)
+            SeforimDb(driver).transaction { SeforimDb.Schema.create(driver) }
         } finally {
             driver.close()
         }

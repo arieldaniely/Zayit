@@ -1343,6 +1343,17 @@
         },
         {
             "type": "sun.util.resources.cldr.CalendarData"
+        },
+        {
+            "type": "org.apache.lucene.store.MemorySegmentIndexInputProvider",
+            "methods": [
+                {
+                    "name": "<init>",
+                    "parameterTypes": [
+                        "int"
+                    ]
+                }
+            ]
         }
     ],
     "foreign": {

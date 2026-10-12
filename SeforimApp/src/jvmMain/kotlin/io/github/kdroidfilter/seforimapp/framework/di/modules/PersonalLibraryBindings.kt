@@ -9,7 +9,7 @@ import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibrar
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
@@ -21,14 +21,17 @@ import java.nio.file.Path
 object PersonalLibraryBindings {
     @Provides
     @SingleIn(AppScope::class)
-    fun providePersonalLibraryManager(settings: Settings): PersonalLibraryManager {
+    fun providePersonalLibraryManager(
+        settings: Settings,
+        databasePathProvider: DatabasePathProvider,
+    ): PersonalLibraryManager {
         val storage =
             Path
                 .of(getUserSettingsDatabasePath())
                 .toAbsolutePath()
                 .parent
                 .resolve("personal-library")
-        return PersonalLibraryManager(settings, Path.of(getDatabasePath()), storage)
+        return PersonalLibraryManager(settings, Path.of(databasePathProvider.get()), storage)
     }
 
     @Provides
@@ -43,5 +46,7 @@ object PersonalLibraryBindings {
         overlay: PersonalLibraryOverlay,
         search: CompositeSearchEngine,
         repository: SeforimRepository,
-    ): PersonalLibraryService = PersonalLibraryService(manager, overlay, search, repository)
+        databasePathProvider: DatabasePathProvider,
+        catalogCache: io.github.kdroidfilter.seforimapp.framework.database.CatalogCache,
+    ): PersonalLibraryService = PersonalLibraryService(manager, overlay, search, repository, databasePathProvider, catalogCache)
 }

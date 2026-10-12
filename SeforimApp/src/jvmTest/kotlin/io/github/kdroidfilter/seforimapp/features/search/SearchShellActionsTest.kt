@@ -15,7 +15,6 @@ class SearchShellActionsTest {
         var scrollCalled = false
         var cancelCalled = false
         var openResultCalled = false
-        var openPdfResultCalled = false
         var requestBreadcrumbCalled = false
         var loadMoreCalled = false
         var categoryCheckedCalled = false
@@ -28,12 +27,10 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = { submitCalled = true },
                 onQueryChange = { queryCalled = true },
-                onModeChange = {},
                 onGlobalExtendedChange = { globalExtendedCalled = true },
                 onScroll = { _, _, _, _ -> scrollCalled = true },
                 onCancelSearch = { cancelCalled = true },
                 onOpenResult = { _, _ -> openResultCalled = true },
-                onOpenPdfResult = { _, _ -> openPdfResultCalled = true },
                 onRequestBreadcrumb = { requestBreadcrumbCalled = true },
                 onLoadMore = { loadMoreCalled = true },
                 onCategoryCheckedChange = { _, _ -> categoryCheckedCalled = true },
@@ -41,8 +38,6 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = { ensureScopeBookCalled = true },
                 onTocToggle = { _, _ -> tocToggleCalled = true },
                 onTocFilter = { tocFilterCalled = true },
-                onCategoryFilter = {},
-                onBookFilter = {},
             )
 
         assertNotNull(actions)
@@ -88,12 +83,10 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = {},
                 onQueryChange = {},
-                onModeChange = {},
                 onGlobalExtendedChange = {},
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = noOp,
                 onOpenResult = noOpResult,
-                onOpenPdfResult = noOpResult,
                 onRequestBreadcrumb = noOpBreadcrumb,
                 onLoadMore = noOp,
                 onCategoryCheckedChange = { _, _ -> },
@@ -101,8 +94,6 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = {},
                 onTocToggle = noOpTocToggle,
                 onTocFilter = noOpTocFilter,
-                onCategoryFilter = {},
-                onBookFilter = {},
             )
 
         // Each lambda is a unique instance, so equality will not match
@@ -118,12 +109,10 @@ class SearchShellActionsTest {
             SearchShellActions(
                 onSubmit = {},
                 onQueryChange = {},
-                onModeChange = {},
                 onGlobalExtendedChange = {},
                 onScroll = { _, _, _, _ -> },
                 onCancelSearch = {},
                 onOpenResult = { _, _ -> },
-                onOpenPdfResult = { _, _ -> },
                 onRequestBreadcrumb = {},
                 onLoadMore = {},
                 onCategoryCheckedChange = { _, _ -> },
@@ -131,8 +120,6 @@ class SearchShellActionsTest {
                 onEnsureScopeBookForToc = {},
                 onTocToggle = { _, _ -> },
                 onTocFilter = {},
-                onCategoryFilter = {},
-                onBookFilter = {},
             )
 
         val modified = original.copy(onSubmit = { newSubmitCalled = true })

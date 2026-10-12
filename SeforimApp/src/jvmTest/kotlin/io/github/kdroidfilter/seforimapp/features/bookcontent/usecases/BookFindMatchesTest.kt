@@ -38,7 +38,8 @@ class BookFindMatchesTest {
                 bookIds: Collection<Long>?,
                 lineIds: Collection<Long>?,
                 baseBookOnly: Boolean,
-            ): SearchSession? = null
+        mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode,
+    ): SearchSession? = null
 
             override fun searchBooksByTitlePrefix(
                 query: String,
@@ -59,7 +60,8 @@ class BookFindMatchesTest {
                 bookIds: Collection<Long>?,
                 lineIds: Collection<Long>?,
                 baseBookOnly: Boolean,
-            ): SearchFacets? = null
+        mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode,
+    ): SearchFacets? = null
 
             override fun close() = Unit
         }

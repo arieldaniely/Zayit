@@ -138,6 +138,8 @@ private fun initializeSentry() {
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 fun main(args: Array<String>) {
+    io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
+        .configureSystemProperties()
     // Headless CLI mode: when the binary is launched as `zayit cli <args...>` (e.g. from the
     // in-app "open CLI in terminal" action), delegate to the SeforimLibrary search CLI and exit
     // BEFORE any Sentry/Nucleus/GUI initialization. This keeps the normal GUI launch path
@@ -190,6 +192,8 @@ fun main(args: Array<String>) {
 
         // Create the application graph via Metro and expose via CompositionLocal
         val appGraph = remember { createGraph<AppGraph>().also(::warmCatalog) }
+
+        LaunchedEffect(appGraph) { if (!E2e.enabled) appGraph.searchFeedbackService.run() }
 
         // Daily Google Drive backup while the app runs (a no-op until an account is connected).
         LaunchedEffect(appGraph) { if (!E2e.enabled) appGraph.googleDriveSync.runAutoBackup() }

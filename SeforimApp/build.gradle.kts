@@ -32,6 +32,16 @@ structuredCoroutines {
 
 val version = Versioning.resolveVersion(project)
 
+val macPackageVersion =
+    version.substringBefore('-').split('.').let { components ->
+        require(components.size in 1..3 && components.all { it.toIntOrNull() != null }) {
+            "macOS package version must contain one to three numeric components: $version"
+        }
+        components
+            .mapIndexed { index, component -> component.toInt() + if (index == 0) 1 else 0 }
+            .joinToString(".")
+    }
+
 sentry {
     includeSourceContext = true
     org = System.getenv("SENTRY_ORG") ?: "kdroidfilter"
@@ -117,6 +127,7 @@ kotlin {
             implementation(project(":texteffects"))
             implementation(project(":network"))
             implementation(project(":backup-drive"))
+            implementation(project(":sharedstudy"))
 
             // Paging (AndroidX Paging 3)
             implementation(libs.androidx.paging.common)
@@ -200,6 +211,10 @@ kotlin {
 
             // HTML sanitization for search snippets
             implementation(libs.jsoup)
+            implementation(libs.pdfbox)
+            implementation(libs.jbig2.imageio)
+            implementation(libs.jai.imageio.core)
+            implementation(libs.jai.imageio.jpeg2000)
 
             implementation(libs.kosherkotlin)
 
@@ -218,7 +233,7 @@ nucleus.application {
     nucleusOptimization = true
     graalvm {
         isEnabled = true
-        imageName = "zayit"
+        imageName = "zayita"
         optimization = NativeImageOptimization.LEVEL_3
         nativeImageConfigBaseDir.set(layout.projectDirectory.dir("src/graalvm"))
         buildArgs.add("--initialize-at-build-time=org.slf4j")
@@ -227,15 +242,15 @@ nucleus.application {
         }
     }
     nativeDistributions {
-        appName = "זית"
-        packageName = "zayit"
+        appName = "זיתא"
+        packageName = "zayita"
         description = "ספריית הלימוד שמובילה ישר לטקסט"
         compressionLevel = CompressionLevel.Ultra
 
         publish {
             github {
                 enabled = true
-                owner = "kdroidFilter"
+                owner = "arieldaniely"
                 repo = "Zayit"
                 channel = ReleaseChannel.Latest
                 releaseType = ReleaseType.Release
@@ -245,7 +260,7 @@ nucleus.application {
         // Package-time resources root; include files under OS-specific subfolders (common, macos, windows, linux)
         appResourcesRootDir.set(layout.projectDirectory.dir("src/jvmMain/assets"))
         enableAotCache = true
-        homepage = "https://zayitapp.com"
+        homepage = "https://arieldaniely.github.io/Zayit/"
         licenseFile.set(File(project.rootDir, "LICENSE"))
         modules(
             "java.sql",
@@ -264,17 +279,17 @@ nucleus.application {
             TargetFormat.Nsis,
             TargetFormat.Pacman,
         )
-        vendor = "KDroidFilter"
+        vendor = "Zayita Project"
         cleanupNativeLibs = true
 
         // Register the custom URL scheme so shareable deep links (zayit://book/...,
         // zayit://search/...) are routed to the app by the OS on macOS, Windows and Linux.
-        protocol("זית", "zayit")
+        protocol("זיתא", "zayita")
 
         linux {
             iconFile.set(project.file("desktopAppIcons/LinuxIcon.png"))
             packageVersion = version
-            debMaintainer = "elyahou.hadass@gmail.com"
+            debMaintainer = "Zayita Project <arieldaniely@users.noreply.github.com>"
             menuGroup = "Education"
         }
         windows {
@@ -282,7 +297,7 @@ nucleus.application {
             packageVersion = version
             dirChooser = false
             shortcut = true
-            upgradeUuid = "d9f21975-4359-4818-a623-6e9a3f0a07ca"
+            upgradeUuid = "8e25f9ce-1d32-49d7-b867-c9b217135d71"
             msi { perMachine = false }
 
             nsis {
@@ -301,9 +316,15 @@ nucleus.application {
         }
         macOS {
             iconFile.set(project.file("desktopAppIcons/MacosIcon.icns"))
-            bundleID = "io.github.kdroidfilter.seforimapp.desktopApp"
-            packageVersion = version
-            packageName = "זית"
+            bundleID = "io.github.arieldaniely.zayita.desktopApp"
+            packageVersion = macPackageVersion
+            packageName = "זיתא"
+            infoPlist {
+                extraKeysRawXml = """
+                    <key>NSBluetoothAlwaysUsageDescription</key>
+                    <string>זיתא משתמשת ב-Bluetooth כדי לאפשר לימוד משותף בין מחשבים קרובים.</string>
+                """.trimIndent()
+            }
         }
         buildTypes.release.proguard {
             isEnabled = true

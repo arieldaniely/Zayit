@@ -29,6 +29,16 @@ class CatalogCache(
 ) {
     private var _catalog: PrecomputedCatalog? = null
 
+    @Synchronized
+    fun reloadCatalog() {
+        _catalog = null
+        _rootCategories = null
+        _categoryChildren = null
+        _categoriesById = null
+        _allBooks = null
+        _allBooksWithAltFlags = null
+    }
+
     // Cached extracted data - computed once from the catalog
     private var _rootCategories: List<Category>? = null
     private var _categoryChildren: Map<Long, List<Category>>? = null
@@ -154,7 +164,11 @@ class CatalogCache(
     private fun loadCatalog(): PrecomputedCatalog? =
         try {
             val dbPath = databasePathProvider.get()
-            val catalog = CatalogLoader.loadCatalog(dbPath)
+            val catalog =
+                CatalogLoader.loadCatalog(dbPath)?.let {
+                    io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryCatalogMerger
+                        .merge(it)
+                }
 
             if (catalog != null) {
                 infoln { "[CatalogCache] Precomputed catalog loaded: ${catalog.totalCategories} categories, ${catalog.totalBooks} books" }

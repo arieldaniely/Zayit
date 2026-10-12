@@ -2,7 +2,6 @@ package io.github.kdroidfilter.seforimapp.features.search
 
 import com.github.luben.zstd.ZstdIOException
 import com.github.luben.zstd.ZstdInputStream
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder
 import io.github.kdroidfilter.seforimlibrary.search.VectorSearcher
@@ -33,7 +32,11 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 /** Installs a complete, versioned index and model bundle beside the database. */
-internal object SemanticAssetsManager {
+@dev.zacsweers.metro.Inject
+@dev.zacsweers.metro.SingleIn(io.github.kdroidfilter.seforimapp.framework.di.AppScope::class)
+class SemanticAssetsManager(
+    private val databasePathProvider: io.github.kdroidfilter.seforimapp.framework.database.DatabasePathProvider,
+) {
     enum class InstallationPhase { DOWNLOADING, EXTRACTING, VALIDATING }
 
     data class InstallationProgress(
@@ -77,17 +80,17 @@ internal object SemanticAssetsManager {
         }
     }
 
-    private const val MODEL_NAME = "seforim-embed-round2-int8.onnx"
-    private const val MODEL_SHA = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
-    internal val feedbackModelVersion: String get() = "$MODEL_NAME:sha256:$MODEL_SHA"
-    private const val TOKENIZER_SHA = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
-    private const val RELEASE_API = "https://api.github.com/repos/arieldaniely/Zayit/releases?per_page=100"
-    private val db: Path get() = Path.of(getDatabasePath())
-    private val assetRoot: Path get() = Path.of("${getDatabasePath()}.semantic")
+    private val modelName = "seforim-embed-round2-int8.onnx"
+    private val modelSha = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
+    internal val feedbackModelVersion: String get() = "$modelName:sha256:$modelSha"
+    private val tokenizerSha = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
+    private val releaseApi = "https://api.github.com/repos/arieldaniely/Zayit/releases?per_page=100"
+    private val db: Path get() = Path.of(databasePathProvider.get())
+    private val assetRoot: Path get() = Path.of("${databasePathProvider.get()}.semantic")
     private val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
 
     fun isReady(): Boolean =
-        Files.isRegularFile(assetRoot.resolve("model/$MODEL_NAME")) &&
+        Files.isRegularFile(assetRoot.resolve("model/$modelName")) &&
             Files.isRegularFile(assetRoot.resolve("model/tokenizer.json")) &&
             Files.isDirectory(assetRoot.resolve("index"))
 
@@ -187,7 +190,7 @@ internal object SemanticAssetsManager {
     private fun downloadAndInstallBundle(onProgress: (Int, Int) -> Unit) {
         val response =
             client.send(
-                HttpRequest.newBuilder(URI.create(RELEASE_API)).header("Accept", "application/vnd.github+json").build(),
+                HttpRequest.newBuilder(URI.create(releaseApi)).header("Accept", "application/vnd.github+json").build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
         if (response.statusCode() != 200) throw SemanticBundleImportException(SemanticBundleImportProblem.DOWNLOAD_FAILED)
@@ -276,8 +279,8 @@ internal object SemanticAssetsManager {
 
     private fun verify(root: Path) {
         val modelDir = root.resolve("model")
-        require(hash(modelDir.resolve(MODEL_NAME)) == MODEL_SHA) { "קובץ המודל בחבילה אינו תואם ל־Round 2" }
-        require(hash(modelDir.resolve("tokenizer.json")) == TOKENIZER_SHA) { "הטוקנייזר בחבילה אינו תואם למודל" }
+        require(hash(modelDir.resolve(modelName)) == modelSha) { "קובץ המודל בחבילה אינו תואם ל־Round 2" }
+        require(hash(modelDir.resolve("tokenizer.json")) == tokenizerSha) { "הטוקנייזר בחבילה אינו תואם למודל" }
         VectorSearcher(root.resolve("index"), 256, db, modelDir).use { }
     }
 
@@ -367,7 +370,7 @@ internal object SemanticAssetsManager {
         val valid =
             name == "model/" ||
                 name == "index/" ||
-                name.matches(Regex("model/(?:$MODEL_NAME|tokenizer\\.json)")) ||
+                name.matches(Regex("model/(?:$modelName|tokenizer\\.json)")) ||
                 name.matches(Regex("index/shard-\\d+/?")) ||
                 name.matches(Regex("index/shard-\\d+/[^/]+"))
         require(valid) { "מבנה חבילת החיפוש אינו תקין: $name" }

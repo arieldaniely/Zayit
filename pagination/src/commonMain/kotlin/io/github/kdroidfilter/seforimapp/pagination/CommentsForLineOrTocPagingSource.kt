@@ -2,8 +2,7 @@ package io.github.kdroidfilter.seforimapp.pagination
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
-import io.github.kdroidfilter.seforimlibrary.core.models.LinkTypeClassification
+import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import kotlin.math.max
@@ -17,7 +16,6 @@ class CommentsForLineOrTocPagingSource(
     private val repository: SeforimRepository,
     private val baseLineId: Long,
     private val commentatorIds: Set<Long> = emptySet(),
-    private val linkLoadLevel: LinkLoadLevel = LinkLoadLevel.MINIMAL,
 ) : PagingSource<Int, CommentaryWithText>() {
     // Resolved set of lineIds to fetch (single line or section lines). Lazy initialized.
     private var resolvedLineIds: List<Long>? = null
@@ -60,10 +58,9 @@ class CommentsForLineOrTocPagingSource(
                 repository.getCommentariesForLineRange(
                     lineIds = ids,
                     activeCommentatorIds = commentatorIds,
-                    connectionTypes = LinkTypeClassification.commentaryTypes(linkLoadLevel),
+                    connectionTypes = setOf(ConnectionType.COMMENTARY),
                     offset = offset,
                     limit = limit,
-                    linkLoadLevel = linkLoadLevel,
                 )
 
             val prevKey = if (page == 0) null else page - 1

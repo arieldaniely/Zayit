@@ -214,3 +214,11 @@
 -keep class io.sentry.** { *; }
 -dontwarn io.sentry.**
 
+
+# Native bindings and service providers used by local semantic search and PDF rendering.
+-keep class org.apache.pdfbox.** { *; }
+-dontwarn org.apache.pdfbox.**
+-keep class com.github.jaiimageio.** { *; }
+-dontwarn com.github.jaiimageio.**
+-keep class org.apache.pdfbox.jbig2.** { *; }
+-dontwarn org.apache.pdfbox.jbig2.**

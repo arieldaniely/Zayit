@@ -49,7 +49,7 @@ jobs:
           fi
           db_path=$(find "$RUNNER_TEMP/zayit-db" -name seforim.db -type f -print -quit)
           test -n "$db_path"
-          echo "SEFORIMAPP_DATABASE_PATH=$db_path" >> "$GITHUB_ENV"
+          echo "SEFORIMAPP_DATABASE_PATH_Zayita=$db_path" >> "$GITHUB_ENV"
 
       - name: Replay recorded states on a fixed 2926x1622 desktop
         shell: bash

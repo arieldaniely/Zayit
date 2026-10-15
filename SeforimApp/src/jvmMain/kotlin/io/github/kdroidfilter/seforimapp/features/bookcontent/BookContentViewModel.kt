@@ -24,6 +24,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.Providers
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.BookContentUseCaseFactory
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.altTocIdOfSearchMatch
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
@@ -89,7 +90,7 @@ class BookContentViewModel(
     // UseCases - created via factory
     private val navigationUseCase = useCaseFactory.createNavigationUseCase(stateManager)
     private val contentUseCase = useCaseFactory.createContentUseCase(stateManager)
-    private val tocUseCase = useCaseFactory.createTocUseCase(stateManager)
+    private val tocUseCase = useCaseFactory.createTocUseCase(stateManager, viewModelScope)
     private val notesUseCase = useCaseFactory.createNotesUseCase(stateManager)
     private val altTocUseCase = useCaseFactory.createAltTocUseCase(stateManager)
     private val commentariesUseCase = useCaseFactory.createCommentariesUseCase(stateManager, viewModelScope)
@@ -450,6 +451,18 @@ class BookContentViewModel(
                 is BookContentEvent.BookTreeScrolled ->
                     navigationUseCase.updateBookTreeScrollPosition(event.index, event.offset)
 
+                BookContentEvent.ToggleBookTreeSearch ->
+                    navigationUseCase.toggleSearch()
+
+                BookContentEvent.CloseBookTreeSearch ->
+                    navigationUseCase.closeSearch()
+
+                is BookContentEvent.BookTreeSearchQueryChanged ->
+                    navigationUseCase.search(event.query)
+
+                is BookContentEvent.BookTreeSearchBookSelected ->
+                    navigationUseCase.selectSearchBook(event.bookId)?.let { loadBook(it) }
+
                 // TOC
                 is BookContentEvent.TocEntryExpanded ->
                     tocUseCase.toggleTocEntry(event.entry)
@@ -459,6 +472,18 @@ class BookContentViewModel(
 
                 is BookContentEvent.TocScrolled ->
                     tocUseCase.updateTocScrollPosition(event.index, event.offset)
+
+                BookContentEvent.ToggleTocSearch ->
+                    tocUseCase.toggleSearch()
+
+                BookContentEvent.CloseTocSearch ->
+                    tocUseCase.closeSearch()
+
+                is BookContentEvent.TocSearchQueryChanged ->
+                    tocUseCase.search(event.query)
+
+                is BookContentEvent.TocSearchEntrySelected ->
+                    openTocSearchMatch(event.tocId)
 
                 BookContentEvent.ToggleNotes ->
                     notesUseCase.toggleNotes()
@@ -475,8 +500,10 @@ class BookContentViewModel(
                 is BookContentEvent.AltTocScrolled ->
                     altTocUseCase.updateAltTocScrollPosition(event.index, event.offset)
 
-                is BookContentEvent.AltTocStructureSelected ->
+                is BookContentEvent.AltTocStructureSelected -> {
                     altTocUseCase.selectStructure(event.structure)
+                    tocUseCase.refreshSearch()
+                }
 
                 is BookContentEvent.AltTocEntrySelected -> {
                     val lineId = altTocUseCase.selectAltEntry(event.entry)
@@ -984,7 +1011,11 @@ class BookContentViewModel(
                 // Load TOC, alt-TOC, and line selection in parallel
                 coroutineScope {
                     launch { tocUseCase.loadRootToc(book.id) }
-                    launch { altTocUseCase.loadStructures(book) }
+                    launch {
+                        altTocUseCase.loadStructures(book)
+                        // A search typed meanwhile missed the alt TOC
+                        tocUseCase.refreshSearch()
+                    }
                     if (resolvedInitialLineId != null && shouldSelectLine) {
                         launch {
                             loadAndSelectLine(resolvedInitialLineId, recreatePager = false, scroll = false)
@@ -1061,6 +1092,19 @@ class BookContentViewModel(
             }
             _linesPagingData.value = contentUseCase.buildLinesPager(book.id, line.id)
         }
+    }
+
+    /** Opens the match [matchId] of the TOC search, a TOC or an alt TOC entry. */
+    private suspend fun openTocSearchMatch(matchId: Long) {
+        val altId = altTocIdOfSearchMatch(matchId)
+        if (altId == null) {
+            tocUseCase.selectSearchEntry(matchId)?.let { loadAndSelectLine(it) }
+            return
+        }
+        // Closed already: a double click or a held Enter must not jump twice
+        if (stateManager.state.value.toc.search == null) return
+        tocUseCase.closeSearch()
+        altTocUseCase.revealAltEntry(altId)?.let { loadAndSelectLine(it, syncAltToc = false) }
     }
 
     /** Loads and selects a line */

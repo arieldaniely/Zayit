@@ -116,6 +116,8 @@ import java.awt.event.InputEvent
 import javax.swing.KeyStroke
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ContextMenuRepresentation as ComposeContextMenuRepresentation
+import org.jetbrains.jewel.ui.component.ContextMenuRepresentation as JewelContextMenuRepresentation
+import org.jetbrains.jewel.ui.component.TextContextMenu as JewelTextContextMenu
 
 private val TextSearchContextMenuIconKey = PathIconKey("icons/lucide_text_search.svg", BookContentViewModel::class.java)
 
@@ -1031,4 +1033,19 @@ private data class SplitPaneConfig
 private fun normalizeSearchQuery(text: String): String {
     val normalizedLineBreaks = text.replace('\n', ' ').replace('\r', ' ')
     return normalizedLineBreaks.replace(Regex("\\s+"), " ").trim()
+}
+
+/**
+ * Restores Jewel's default text context menu (copy/cut/paste) for editable fields inside a
+ * book screen, where [BookTextMenus] (copy link, highlight, add note…) is irrelevant. Both the
+ * items and the representation are reset, since [BookTextMenus] overrides both.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PlainTextMenus(content: @Composable () -> Unit) {
+    CompositionLocalProvider(
+        LocalTextContextMenu provides JewelTextContextMenu,
+        LocalContextMenuRepresentation provides JewelContextMenuRepresentation,
+        content = content,
+    )
 }

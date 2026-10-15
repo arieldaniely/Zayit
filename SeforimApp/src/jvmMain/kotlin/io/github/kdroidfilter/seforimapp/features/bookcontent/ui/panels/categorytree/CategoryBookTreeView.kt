@@ -32,6 +32,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.Selectable
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.revealItem
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.icons.Book_2
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
@@ -70,6 +71,8 @@ fun CategoryBookTreeView(
     selectedBookIdOverride: Long? = null,
     showCounts: Boolean = false,
     booksForCategoryOverride: Map<Long, List<Book>> = emptyMap(),
+    // Scroll to the selected book only when out of view (moving through search results)
+    revealSelectionOnly: Boolean = false,
 ) {
     /* ---------------------------------------------------------------------
      * Build the flat hierarchical list to display.
@@ -160,7 +163,7 @@ fun CategoryBookTreeView(
         if (!didAutoCenter && hasRestored && treeItems.isNotEmpty()) {
             val idx = treeItems.indexOfFirst { it.id == "book_${'$'}selId" }
             if (idx >= 0) {
-                listState.scrollToItem(idx, 0)
+                if (revealSelectionOnly) listState.revealItem(idx) else listState.scrollToItem(idx, 0)
                 didAutoCenter = true
             }
         }

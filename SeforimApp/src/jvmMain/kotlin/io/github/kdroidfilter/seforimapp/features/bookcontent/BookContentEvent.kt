@@ -32,12 +32,39 @@ sealed interface BookContentEvent {
 
     data object ToggleBookTree : BookContentEvent
 
+    // Search bar of the book tree pane
+    data object ToggleBookTreeSearch : BookContentEvent
+
+    data object CloseBookTreeSearch : BookContentEvent
+
+    data class BookTreeSearchQueryChanged(
+        val query: String,
+    ) : BookContentEvent
+
+    data class BookTreeSearchBookSelected(
+        val bookId: Long,
+    ) : BookContentEvent
+
     // TOC events
     data class TocEntryExpanded(
         val entry: TocEntry,
     ) : BookContentEvent
 
     data object ToggleToc : BookContentEvent
+
+    // Search bar of the TOC pane
+    data object ToggleTocSearch : BookContentEvent
+
+    data object CloseTocSearch : BookContentEvent
+
+    data class TocSearchQueryChanged(
+        val query: String,
+    ) : BookContentEvent
+
+    // A TOC entry, or an alt TOC one by its negated id
+    data class TocSearchEntrySelected(
+        val tocId: Long,
+    ) : BookContentEvent
 
     // Notes pane
     data object ToggleNotes : BookContentEvent

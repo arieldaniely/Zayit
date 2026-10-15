@@ -104,7 +104,7 @@ object AppSettings {
 
     // Backing Settings storage (can be replaced at startup if needed)
     @Volatile
-    private var settings: Settings = Settings()
+    private var settings: Settings = createDesktopSettings()
 
     private val _searchFeedbackEnabledFlow = MutableStateFlow(isSearchFeedbackEnabled())
     val searchFeedbackEnabledFlow: StateFlow<Boolean> = _searchFeedbackEnabledFlow.asStateFlow()

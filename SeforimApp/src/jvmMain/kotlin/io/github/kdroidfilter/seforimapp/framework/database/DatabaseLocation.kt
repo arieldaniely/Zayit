@@ -11,7 +11,7 @@ const val BOOKS_DATABASE_FILE_NAME = "seforim.db"
 
 /** Returns the database file that an install or the next app launch should use. */
 fun requestedDatabaseFile(): File {
-    val environmentPath = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
+    val environmentPath = System.getenv("ZAYITA_DATABASE_PATH")?.takeIf { it.isNotBlank() }
     val configuredPath = AppSettings.getDatabasePath()?.takeIf { it.isNotBlank() }
     return File(environmentPath ?: configuredPath ?: File(defaultDatabasesDirectory(), BOOKS_DATABASE_FILE_NAME).path)
 }

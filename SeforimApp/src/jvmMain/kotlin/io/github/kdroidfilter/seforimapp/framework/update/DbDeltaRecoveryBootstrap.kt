@@ -1,13 +1,9 @@
 package io.github.kdroidfilter.seforimapp.framework.update
 
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
-import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
+import io.github.kdroidfilter.seforimapp.framework.database.requestedDatabaseFile
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.deltaupdater.DeltaApplierClient
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.databasesDir
-import io.github.vinceglb.filekit.path
 import java.io.File
 import java.nio.file.Path
 
@@ -50,17 +46,8 @@ object DbDeltaRecoveryBootstrap {
      * in which case there's nothing to recover.
      */
     private fun resolveDbPathOrNull(): String? {
-        val env = System.getenv("SEFORIMAPP_DATABASE_PATH")?.takeIf { it.isNotBlank() }
-        if (env != null) return env
-        val settings =
-            runCatching { AppSettings.getDatabasePath() }
-                .getOrNull()
-                ?.takeIf { it.isNotBlank() && !it.endsWith("lexical.db", ignoreCase = true) }
-        if (settings != null) return settings
-        return runCatching { File(portableDatabasesDirPath(), "seforim.db").absolutePath }
+        return runCatching { requestedDatabaseFile().absolutePath.takeUnless { it.endsWith("lexical.db", ignoreCase = true) } }
             .getOrNull()
     }
 }
 
-private fun portableDatabasesDirPath(): String =
-    if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path

@@ -17,6 +17,7 @@ import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.core.settings.createDesktopSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryManager
@@ -101,7 +102,7 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSettings(): Settings = if (PortablePaths.isPortable) PortableSettings() else Settings()
+    fun provideSettings(): Settings = if (PortablePaths.isPortable) PortableSettings() else createDesktopSettings()
 
     @Provides
     @SingleIn(AppScope::class)

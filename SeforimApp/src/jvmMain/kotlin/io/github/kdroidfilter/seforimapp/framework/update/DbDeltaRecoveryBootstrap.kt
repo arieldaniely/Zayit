@@ -45,9 +45,7 @@ object DbDeltaRecoveryBootstrap {
      * file is missing. Returns `null` when no candidate path is resolvable —
      * in which case there's nothing to recover.
      */
-    private fun resolveDbPathOrNull(): String? {
-        return runCatching { requestedDatabaseFile().absolutePath.takeUnless { it.endsWith("lexical.db", ignoreCase = true) } }
+    private fun resolveDbPathOrNull(): String? =
+        runCatching { requestedDatabaseFile().absolutePath.takeUnless { it.endsWith("lexical.db", ignoreCase = true) } }
             .getOrNull()
-    }
 }
-

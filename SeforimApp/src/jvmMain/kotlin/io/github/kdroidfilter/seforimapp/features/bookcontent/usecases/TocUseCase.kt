@@ -24,7 +24,7 @@ import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 class TocUseCase(
     private val repository: SeforimRepository,
     private val stateManager: BookContentStateManager,
-    @StructuredScope private val scope: CoroutineScope,
+    @property:StructuredScope private val scope: CoroutineScope,
 ) {
     // The whole TOC of a book, loaded once per search session: shared by the searches of
     // successive keystrokes, which cancel each other but not the load
@@ -185,12 +185,7 @@ class TocUseCase(
         if (stateManager.state.value.toc.search == null) return
         searchRunner.run(query) {
             val bookId = openBookId() ?: return@run null
-            val entries = bookToc(bookId).await()
-            if (entries == null) {
-                // Failed load: not kept, the next keystroke retries
-                tocLoad = null
-                return@run TocFilterResult()
-            }
+            val entries = bookToc(bookId)
             // The alt TOC shown under the TOC, whose entries are all loaded with it
             val altEntries =
                 stateManager.state.value.altToc
@@ -238,11 +233,13 @@ class TocUseCase(
         stateManager.state.value.navigation.selectedBook
             ?.id
 
-    private fun bookToc(bookId: Long): Deferred<List<TocEntry>> =
-        tocLoad?.takeIf { it.first == bookId }?.second
-            ?: scope
-                .async { runSuspendCatching { repository.getBookToc(bookId) }.getOrElse { emptyList() } }
-                .also { tocLoad = bookId to it }
+    private suspend fun bookToc(bookId: Long): List<TocEntry> {
+        tocLoad?.takeIf { it.first == bookId }?.second?.let { return it.await() }
+        return scope
+            .async { runSuspendCatching { repository.getBookToc(bookId) }.getOrElse { emptyList() } }
+            .also { tocLoad = bookId to it }
+            .await()
+    }
 
     /**
      * Réinitialise le TOC

@@ -274,7 +274,6 @@ class BookContentViewModelTest {
         // Given: A ContentScrolled event
         val event =
             BookContentEvent.ContentScrolled(
-                bookId = 1L,
                 anchorId = 1L,
                 anchorIndex = 5,
                 scrollIndex = 10,

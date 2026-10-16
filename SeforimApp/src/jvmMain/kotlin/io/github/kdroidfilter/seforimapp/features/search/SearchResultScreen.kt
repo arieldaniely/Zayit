@@ -756,6 +756,15 @@ private fun SearchResultContentMvi(
                                             isExpanded = expandedBooks[group.bookId] == true,
                                             expandedHits = expandedHits[group.bookId],
                                             onToggleExpand = onToggleExpand,
+                                            onFeedback =
+                                                if (state.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART &&
+                                                    !state.isLoading
+                                                ) {
+                                                    actions.onFeedback
+                                                } else {
+                                                    null
+                                                },
+                                            feedbackKey = state.feedbackSearchId,
                                         )
                                     }
                                     // Loading indicator at the end of the list (only for lazy loading)
@@ -902,7 +911,7 @@ private fun SearchResultContentMvi(
  * [totalCount] is the exact facet count for the book (may exceed loaded hits).
  */
 @Stable
-private data class BookGroup(
+internal data class BookGroup(
     val bookId: Long,
     val bookTitle: String,
     val primary: SearchResult,
@@ -1030,7 +1039,7 @@ private fun tocLeafOf(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BookResultCard(
+internal fun BookResultCard(
     group: BookGroup,
     textSize: Float,
     lineHeight: Float,
@@ -1044,6 +1053,8 @@ private fun BookResultCard(
     isExpanded: Boolean,
     expandedHits: List<SearchResult>?,
     onToggleExpand: (BookGroup) -> Unit,
+    onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
+    feedbackKey: String = "",
 ) {
     val collapsedCap = 3
     val loadedCount = 1 + group.secondaries.size
@@ -1146,11 +1157,14 @@ private fun BookResultCard(
             LaunchedEffect(primary.lineId) { if (primaryPieces == null) currentOnRequestBreadcrumb(primary) }
             val primaryLeaf = remember(primaryPieces, primary.bookTitle) { tocLeafOf(primaryPieces, primary.bookTitle) }
             val primaryDisplay = rememberSnippetDisplay(primary.snippet, textSize, findQuery, bookFontCode)
+            val primaryHoverSource = remember { MutableInteractionSource() }
+            val primaryHovered by primaryHoverSource.collectIsHoveredAsState()
             Row(
                 verticalAlignment = Alignment.Top,
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .hoverable(primaryHoverSource)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable { onOpenResult(primary) }
                         .pointerHoverIcon(PointerIcon.Hand)
@@ -1176,6 +1190,7 @@ private fun BookResultCard(
                     textAlign = TextAlign.Justify,
                     modifier = Modifier.weight(1f),
                 )
+                ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1198,6 +1213,8 @@ private fun BookResultCard(
                             pieces = breadcrumbs[sec.lineId],
                             onRequestBreadcrumb = onRequestBreadcrumb,
                             onClick = { onOpenResult(sec) },
+                            onFeedback = onFeedback,
+                            feedbackKey = feedbackKey,
                         )
                     }
                 }
@@ -1353,7 +1370,11 @@ private fun SecondaryResultRow(
     pieces: List<String>?,
     onRequestBreadcrumb: (SearchResult) -> Unit,
     onClick: () -> Unit,
+    onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
+    feedbackKey: String = "",
 ) {
+    val hoverSource = remember { MutableInteractionSource() }
+    val hovered by hoverSource.collectIsHoveredAsState()
     val currentOnRequestBreadcrumb by rememberUpdatedState(onRequestBreadcrumb)
     LaunchedEffect(result.lineId) { if (pieces == null) currentOnRequestBreadcrumb(result) }
     val tocLeaf = remember(pieces, result.bookTitle) { tocLeafOf(pieces, result.bookTitle) }
@@ -1362,6 +1383,7 @@ private fun SecondaryResultRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .hoverable(hoverSource)
                 .clip(RoundedCornerShape(6.dp))
                 .clickable(onClick = onClick)
                 .pointerHoverIcon(PointerIcon.Hand)
@@ -1389,6 +1411,30 @@ private fun SecondaryResultRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        ResultFeedback(result, feedbackKey, hovered, onFeedback)
+    }
+}
+
+@Composable
+private fun ResultFeedback(
+    result: SearchResult,
+    feedbackKey: String,
+    hovered: Boolean,
+    onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)?,
+) {
+    val enabled by AppSettings.searchFeedbackEnabledFlow.collectAsState()
+    var selected by remember(result.bookId, result.lineId, feedbackKey) { mutableStateOf<SearchFeedbackType?>(null) }
+    if (onFeedback != null && enabled) {
+        Box(Modifier.width(64.dp).height(28.dp)) {
+            if (hovered) {
+                SearchFeedbackButtons(selected) { type ->
+                    if (selected != type) {
+                        selected = type
+                        onFeedback(result, type)
+                    }
+                }
+            }
+        }
     }
 }
 

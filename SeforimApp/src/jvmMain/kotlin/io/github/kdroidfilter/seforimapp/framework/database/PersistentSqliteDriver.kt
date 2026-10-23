@@ -10,13 +10,12 @@ import app.cash.sqldelight.driver.jdbc.JdbcPreparedStatement
 import io.github.kdroidfilter.seforimlibrary.dao.repository.LinkPartitionQueryDriver
 import java.sql.Connection
 import java.sql.DriverManager
-import java.sql.PreparedStatement
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * SQLite JDBC driver backed by a single persistent connection with a per-identifier
- * [PreparedStatement] cache.
+ * SQLite JDBC driver backed by a single persistent connection with a bounded SQL-text
+ * prepared-statement cache.
  *
  * Profiling (JFR 2026-04-23) showed the stock [app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver]
  * routing every non-transactional query through `ThreadedConnectionManager` — which
@@ -29,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap
  *  - A single [Connection] opened at construction time, kept alive until [close].
  *  - `getConnection()` returns that connection; `closeConnection()` is a no-op.
  *  - Read-tuning PRAGMAs applied once at init (WAL / NORMAL sync / page+mmap caches).
- *  - Prepared-statement cache keyed by SqlDelight's `identifier: Int` — the same
- *    integer it passes on every generated query call. Statements are synchronized
+ *  - At most 128 idle prepared statements, keyed by SQL text to distinguish variable-arity queries.
+ *    Active statements stay out of the cache until their cursors close. Access is synchronized
  *    on the single connection because SQLite's JDBC connection is not thread-safe.
  *
  * Transactions are handled by [JdbcDriver]'s base `autoCommit` machinery; we just
@@ -44,11 +43,9 @@ class PersistentSqliteDriver(
     LinkPartitionQueryDriver {
     private val connection: Connection = DriverManager.getConnection(url, properties)
 
-    // Statement cache keyed by SQL text — SqlDelight sometimes reuses the same
-    // `identifier` for queries whose SQL varies (e.g. `IN (?,?,?)` with variable
-    // arity), so we avoid crashes by keying on the actual SQL string. Bounded in
-    // practice: a few hundred distinct queries across the whole app. Never evicted.
-    private val statementCache = HashMap<String, PreparedStatement>()
+    // SQLDelight reuses identifiers for variable-arity IN queries. Key by SQL text,
+    // but bound the cache: every distinct arity otherwise retains native SQLite memory.
+    private val statementCache = SqliteStatementCache(connection::prepareStatement)
 
     @Volatile
     private var personalOverlayAttached = false
@@ -75,7 +72,6 @@ class PersistentSqliteDriver(
     /** Close cached cursors before replacing the attached schema, under the query connection lock. */
     fun clearStatementCache() {
         synchronized(connection) {
-            statementCache.values.forEach { it.close() }
             statementCache.clear()
         }
     }
@@ -129,13 +125,13 @@ class PersistentSqliteDriver(
         if (mainLineIds.isEmpty()) return false
         synchronized(connection) {
             val placeholders = List(mainLineIds.size) { "?" }.joinToString(",")
-            val statement =
-                prepare(
-                    "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
-                )
-            statement.clearParameters()
-            mainLineIds.forEachIndexed { index, id -> statement.setLong(index + 1, id) }
-            statement.executeQuery().use { rows -> return rows.next() }
+            return statementCache.withStatement(
+                "SELECT 1 FROM personal.link WHERE targetLineId IN ($placeholders) LIMIT 1",
+            ) { statement ->
+                statement.clearParameters()
+                mainLineIds.forEachIndexed { index, id -> statement.setLong(index + 1, id) }
+                statement.executeQuery().use { rows -> rows.next() }
+            }
         }
     }
 
@@ -163,9 +159,11 @@ class PersistentSqliteDriver(
 
     override fun close() {
         synchronized(connection) {
-            statementCache.values.forEach { runCatching { it.close() } }
-            statementCache.clear()
-            connection.close()
+            try {
+                statementCache.clear()
+            } finally {
+                connection.close()
+            }
         }
     }
 
@@ -188,20 +186,20 @@ class PersistentSqliteDriver(
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<Long> {
         synchronized(connection) {
-            val stmt = prepare(sql)
-            stmt.clearParameters()
-            if (binders != null) JdbcPreparedStatement(stmt).binders()
-            val hasResultSet = stmt.execute()
-            val rows =
-                if (hasResultSet) {
-                    // Drain any result set to release the statement's cursor so the next
-                    // call (e.g. a subsequent PRAGMA) doesn't hit SQLITE_BUSY.
-                    stmt.resultSet?.close()
-                    0L
-                } else {
-                    stmt.updateCount.toLong()
-                }
-            return QueryResult.Value(rows)
+            return statementCache.withStatement(sql) { stmt ->
+                stmt.clearParameters()
+                if (binders != null) JdbcPreparedStatement(stmt).binders()
+                val hasResultSet = stmt.execute()
+                val rows =
+                    if (hasResultSet) {
+                        // Close PRAGMA result sets before the next statement can execute.
+                        stmt.resultSet?.close()
+                        0L
+                    } else {
+                        stmt.updateCount.toLong()
+                    }
+                QueryResult.Value(rows)
+            }
         }
     }
 
@@ -230,30 +228,12 @@ class PersistentSqliteDriver(
                             attached = true,
                         )
                 }
-            val stmt = prepare(effectiveSql)
-            stmt.clearParameters()
-            if (binders != null) JdbcPreparedStatement(stmt).binders()
-            // Inlined from `JdbcPreparedStatement.executeQuery`, minus the `preparedStatement.close()`
-            // in its `finally` — closing would defeat the whole point of caching. We close the
-            // ResultSet via `.use { }` instead so SQLite frees the cursor for the next call.
-            stmt.executeQuery().use { rs ->
-                return mapper(JdbcCursor(rs))
+            return statementCache.withStatement(effectiveSql) { stmt ->
+                stmt.clearParameters()
+                if (binders != null) JdbcPreparedStatement(stmt).binders()
+                stmt.executeQuery().use { rs -> mapper(JdbcCursor(rs)) }
             }
         }
-    }
-
-    /**
-     * Returns a cached [PreparedStatement] for [sql], preparing it lazily on first
-     * use. Caller must hold the connection's monitor.
-     */
-    private fun prepare(sql: String): PreparedStatement {
-        statementCache[sql]?.let { cached ->
-            if (!cached.isClosed) return cached
-            statementCache.remove(sql)
-        }
-        val fresh = connection.prepareStatement(sql)
-        statementCache[sql] = fresh
-        return fresh
     }
 }
 

@@ -173,10 +173,6 @@ object AppCoreBindings {
         val dictionaryPath = indexPath.resolveSibling("lexical.db")
         val snippetProvider = RepositorySnippetSourceProvider(repository)
         val base = LuceneSearchEngine(indexPath, snippetProvider, dictionaryPath = dictionaryPath)
-        val personal =
-            personalLibrary.activeArtifacts()?.let {
-                LuceneSearchEngine(it.indexPath, snippetProvider, dictionaryPath = dictionaryPath)
-            }
         val semantic =
             HybridSearchEngine(
                 lexical = base,
@@ -202,6 +198,16 @@ object AppCoreBindings {
                     }
                 },
             )
+        val personal =
+            personalLibrary.activeArtifacts()?.let {
+                io.github.kdroidfilter.seforimapp.features.personallibrary.personalSearchEngine(
+                    it,
+                    personalLibrary.store.load(),
+                    repository,
+                    Paths.get(dbPath),
+                    semantic::sharedEmbedder,
+                )
+            }
         return CompositeSearchEngine(semantic, personal)
     }
 

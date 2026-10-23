@@ -53,6 +53,14 @@ import seforimapp.seforimapp.generated.resources.personal_library_stats
 import seforimapp.seforimapp.generated.resources.personal_library_success
 import seforimapp.seforimapp.generated.resources.personal_library_title
 import seforimapp.seforimapp.generated.resources.personal_library_working
+import seforimapp.seforimapp.generated.resources.personal_semantic_build
+import seforimapp.seforimapp.generated.resources.personal_semantic_cancel
+import seforimapp.seforimapp.generated.resources.personal_semantic_description
+import seforimapp.seforimapp.generated.resources.personal_semantic_disable
+import seforimapp.seforimapp.generated.resources.personal_semantic_model_required
+import seforimapp.seforimapp.generated.resources.personal_semantic_pending
+import seforimapp.seforimapp.generated.resources.personal_semantic_ready
+import seforimapp.seforimapp.generated.resources.personal_semantic_title
 import java.io.File
 
 @Composable
@@ -162,6 +170,35 @@ fun PersonalLibrarySettingsScreen() {
                     }
                 }
             }
+            Text(stringResource(Res.string.personal_semantic_title), fontSize = 16.sp)
+            Text(stringResource(Res.string.personal_semantic_description), fontSize = 12.sp)
+            if (state.configuration.semanticEnabled) {
+                Text(
+                    stringResource(
+                        if (state.configuration.semanticGeneration == state.configuration.activeGeneration) {
+                            Res.string.personal_semantic_ready
+                        } else {
+                            Res.string.personal_semantic_pending
+                        },
+                    ),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    enabled = !state.isWorking && state.configuration.activeGeneration != null,
+                    onClick = viewModel::buildSemanticIndex,
+                ) { Text(stringResource(Res.string.personal_semantic_build)) }
+                if (state.configuration.semanticEnabled) {
+                    OutlinedButton(enabled = !state.isWorking, onClick = viewModel::disableSemanticIndex) {
+                        Text(stringResource(Res.string.personal_semantic_disable))
+                    }
+                }
+                if (state.semanticWorking) {
+                    OutlinedButton(onClick = viewModel::cancelSemanticIndex) {
+                        Text(stringResource(Res.string.personal_semantic_cancel))
+                    }
+                }
+            }
             if (state.isWorking) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(stringResource(Res.string.personal_library_working))
@@ -172,7 +209,12 @@ fun PersonalLibrarySettingsScreen() {
                 }
             }
             if (state.success) InlineSuccessBanner(stringResource(Res.string.personal_library_success), Modifier.fillMaxWidth())
-            state.error?.let { InlineErrorBanner(it, Modifier.fillMaxWidth()) }
+            state.error?.let {
+                InlineErrorBanner(
+                    if (it == "SEMANTIC_MODEL_REQUIRED") stringResource(Res.string.personal_semantic_model_required) else it,
+                    Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

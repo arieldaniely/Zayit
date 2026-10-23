@@ -1,4 +1,12 @@
 <resources>
+    <string name="personal_semantic_title">חיפוש לפי משמעות בספרים אישיים — לבחירתך</string>
+    <string name="personal_semantic_description">כבוי כברירת מחדל. הפעלה מאפשרת למצוא גם רעיונות שנכתבו במילים אחרות, אך ההתאמות עשויות להיות פחות מדויקות. בניית האינדקס יכולה להימשך זמן רב בהתאם לכמות הטקסט ולמחשב, צורכת מעבד ושטח נוסף בדיסק וניתנת לביטול. העיבוד מקומי והספרים אינם נשלחים לרשת. נדרשת חבילת החיפוש החכם המותקנת בתוכנה. החיפוש הרגיל נשאר זמין גם ללא הפעלה. לאחר שינוי הספרים יש לבנות את האינדקס מחדש. כיבוי מחזיר לחיפוש רגיל; קובצי האינדקס נשמרים בדיסק.</string>
+    <string name="personal_semantic_build">בנייה והפעלת חיפוש לפי משמעות</string>
+    <string name="personal_semantic_disable">כיבוי חיפוש לפי משמעות</string>
+    <string name="personal_semantic_ready">האינדקס תואם לספרים האישיים הנוכחיים והחיפוש לפי משמעות מופעל.</string>
+    <string name="personal_semantic_pending">הספרים השתנו. החיפוש הרגיל פעיל; נדרשת בנייה מחדש לחיפוש לפי משמעות.</string>
+    <string name="personal_semantic_cancel">ביטול בניית האינדקס</string>
+    <string name="personal_semantic_model_required">יש להתקין תחילה את חבילת החיפוש החכם בהגדרות החיפוש. הספרים האישיים נשארו זמינים לחיפוש רגיל.</string>
     <string name="search_preview_title">תצוגה מקדימה בהקשר</string>
     <string name="search_preview_open">פתח בספר</string>
     <string name="search_preview_more_context">הצג הקשר נוסף</string>

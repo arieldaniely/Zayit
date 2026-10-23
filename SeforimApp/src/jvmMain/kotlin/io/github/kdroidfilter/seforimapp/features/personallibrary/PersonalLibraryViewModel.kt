@@ -17,6 +17,7 @@ import java.util.UUID
 data class PersonalLibraryUiState(
     val configuration: PersonalLibraryConfiguration = PersonalLibraryConfiguration(),
     val isWorking: Boolean = false,
+    val semanticWorking: Boolean = false,
     val progress: Float = 0f,
     val error: String? = null,
     val success: Boolean = false,
@@ -29,6 +30,7 @@ class PersonalLibraryViewModel(
     private val service: PersonalLibraryService,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PersonalLibraryUiState(configuration = service.configuration()))
+    private var semanticJob: kotlinx.coroutines.Job? = null
     val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
 
     init {
@@ -75,6 +77,19 @@ class PersonalLibraryViewModel(
         )
 
     fun reindex() = apply(_state.value.configuration, force = true)
+
+    fun buildSemanticIndex() {
+        if (_state.value.isWorking || semanticJob?.isActive == true) return
+        semanticJob = viewModelScope.launch { service.buildSemanticIndex() }
+    }
+
+    fun cancelSemanticIndex() {
+        semanticJob?.cancel()
+    }
+
+    fun disableSemanticIndex() {
+        viewModelScope.launch { service.disableSemanticIndex() }
+    }
 
     private fun mutate(
         id: String,

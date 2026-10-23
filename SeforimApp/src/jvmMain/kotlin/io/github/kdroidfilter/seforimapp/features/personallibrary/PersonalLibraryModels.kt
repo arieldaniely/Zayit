@@ -23,6 +23,9 @@ data class PersonalLibraryConfiguration(
     val folders: List<PersonalBookFolder> = emptyList(),
     val activeGeneration: String? = null,
     val synchronizedFingerprint: String? = null,
+    val semanticEnabled: Boolean = false,
+    val semanticGeneration: String? = null,
+    val semanticDirectory: String? = null,
 )
 
 data class PersonalLibraryArtifacts(

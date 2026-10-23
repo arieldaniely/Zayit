@@ -2,10 +2,9 @@ package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
-import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourceProvider
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
-import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -56,14 +55,9 @@ class PersonalLibraryService(
                         return@withContext updated
                     }
                     overlay.attach(artifacts?.databasePath)
-                    val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
                     search.replacePersonal(
                         artifacts?.let {
-                            LuceneSearchEngine(
-                                indexDir = it.indexPath,
-                                snippetProvider = RepositorySnippetSourceProvider(repository),
-                                dictionaryPath = dictionary,
-                            )
+                            personalSearchEngine(it, updated, repository, Path.of(getDatabasePath()), search::sharedEmbedder)
                         },
                     )
                     CatalogCache.reloadCatalog()
@@ -83,5 +77,78 @@ class PersonalLibraryService(
                     )
                 }
             }
+    }
+
+    suspend fun buildSemanticIndex() {
+        if (_state.value.isWorking) return
+        _state.update { it.copy(isWorking = true, semanticWorking = true, error = null, progress = 0f, success = false) }
+        try {
+            withContext(Dispatchers.IO) {
+                val configuration = manager.store.load()
+                val artifacts = checkNotNull(manager.activeArtifacts(configuration))
+                val model = checkNotNull(search.sharedEmbedder()) { "SEMANTIC_MODEL_REQUIRED" }
+                val output = artifacts.newSemanticDirectory()
+                var published = false
+                try {
+                    buildPersonalSemanticIndex(
+                        artifacts.databasePath,
+                        Path.of("${getDatabasePath()}.semantic/model"),
+                        output,
+                        embed = { model.embedClean(it, io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder.Role.PASSAGE) },
+                        onProgress = { progress -> _state.update { it.copy(progress = progress) } },
+                    )
+                    val updated =
+                        configuration.copy(
+                            semanticEnabled = true,
+                            semanticGeneration = artifacts.generation,
+                            semanticDirectory = output.toString(),
+                        )
+                    withContext(NonCancellable) {
+                        val engine =
+                            personalSearchEngine(artifacts, updated, repository, Path.of(getDatabasePath()), search::sharedEmbedder)
+                        manager.store.save(updated)
+                        search.replacePersonal(engine)
+                        published = true
+                        _state.update { it.copy(configuration = updated, success = true) }
+                    }
+                } finally {
+                    if (!published &&
+                        java.nio.file.Files
+                            .exists(output)
+                    ) {
+                        deletePersonalSemanticBuild(output)
+                    }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            _state.update { it.copy(error = error.message ?: error::class.simpleName) }
+        } finally {
+            _state.update { it.copy(isWorking = false, semanticWorking = false, progress = 0f) }
+        }
+    }
+
+    suspend fun disableSemanticIndex() {
+        if (_state.value.isWorking) return
+        _state.update { it.copy(isWorking = true, error = null) }
+        try {
+            withContext(Dispatchers.IO + NonCancellable) {
+                val configuration = manager.store.load().copy(semanticEnabled = false)
+                val engine =
+                    manager.activeArtifacts(configuration)?.let {
+                        personalSearchEngine(it, configuration, repository, Path.of(getDatabasePath()), search::sharedEmbedder)
+                    }
+                manager.store.save(configuration)
+                search.replacePersonal(engine)
+                _state.update { it.copy(configuration = configuration, success = false) }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            _state.update { it.copy(error = error.message ?: error::class.simpleName) }
+        } finally {
+            _state.update { it.copy(isWorking = false) }
+        }
     }
 }

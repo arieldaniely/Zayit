@@ -61,6 +61,7 @@ fun AccentMarkdownView(
     modifier: Modifier = Modifier,
     includeH3: Boolean = true,
     extraItems: (LazyListScope.() -> Unit)? = null,
+    markdownText: String? = null,
 ) {
     val isDark = JewelTheme.isDark
     val accent = JewelTheme.globalColors.outlines.focused
@@ -132,9 +133,12 @@ fun AccentMarkdownView(
         }
 
     var blocks by remember { mutableStateOf(emptyList<MarkdownBlock>()) }
-    LaunchedEffect(resourcePath) {
-        val bytes = Res.readBytes(resourcePath)
-        blocks = processor.processMarkdownDocument(bytes.decodeToString())
+    LaunchedEffect(resourcePath, markdownText) {
+        val content = markdownText ?: Res.readBytes(resourcePath).decodeToString()
+        blocks =
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                processor.processMarkdownDocument(content)
+            }
     }
 
     ProvideMarkdownStyling(markdownStyling, blockRenderer, NoOpCodeHighlighter) {

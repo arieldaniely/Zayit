@@ -16,6 +16,27 @@
     <string name="search_feedback_like">התוצאה מועילה</string>
     <string name="search_feedback_dislike">התוצאה אינה מועילה</string>
     <string name="app_name">זיתא</string>
+    <string name="book_information_title">מידע על הספר והמחברים</string>
+    <string name="book_information_missing">מידע נוסף אינו זמין במהדורת המאגר הזו.</string>
+    <string name="book_information_authors">מחברים</string>
+    <string name="book_information_editions">מהדורות ומקורות</string>
+    <string name="book_information_license">רישיון: %1$s</string>
+    <string name="book_information_source">פתח את המקור</string>
+    <string name="book_information_back">חזרה למידע על הספר</string>
+    <string name="book_information_dates">תאריכי פרסום: %1$s</string>
+    <string name="author_information_birth">שנת לידה: %1$s</string>
+    <string name="author_information_death">שנת פטירה: %1$s</string>
+    <string name="author_information_approx">בערך %1$d</string>
+    <string name="author_information_aliases">שמות נוספים: %1$s</string>
+    <string name="author_information_bio_notice">הביוגרפיה נוצרה בסיוע בינה מלאכותית; המקורות מופיעים בטקסט.</string>
+    <string name="author_information_books">ספרי המחבר</string>
+    <string name="author_era_zugot">תקופת הזוגות</string>
+    <string name="author_era_tannaim">תקופת התנאים</string>
+    <string name="author_era_amoraim">תקופת האמוראים</string>
+    <string name="author_era_geonim">תקופת הגאונים</string>
+    <string name="author_era_rishonim">תקופת הראשונים</string>
+    <string name="author_era_acharonim">תקופת האחרונים</string>
+    <string name="author_era_contemporary">בני זמננו</string>
     <string name="startup_loading">מכין את הספרייה לפתיחה…</string>
     <string name="startup_preparation_failed">לא ניתן לפתוח את הספרייה. אפשר לנסות שוב או לסגור את החלון.</string>
     <!-- Window title pattern: AppName - CurrentTab -->

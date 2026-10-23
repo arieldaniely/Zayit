@@ -1130,6 +1130,8 @@ internal fun BookResultCard(
                             .pointerHoverIcon(PointerIcon.Hand)
                             .clickable { onOpenResult(group.primary) },
                 )
+                io.github.kdroidfilter.seforimapp.features.bookcontent
+                    .BookInformationButton(group.bookId)
                 if (onOpenPdf != null) {
                     Spacer(Modifier.width(6.dp))
                     Tooltip({ Text(stringResource(Res.string.open_pdf_edition_tooltip)) }) {

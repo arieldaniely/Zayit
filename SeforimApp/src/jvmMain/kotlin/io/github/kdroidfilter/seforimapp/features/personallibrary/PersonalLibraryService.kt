@@ -8,6 +8,7 @@ import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,15 @@ class PersonalLibraryService(
 
     fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
 
+    suspend fun synchronizeAfterStartup() {
+        val configuration = withContext(Dispatchers.IO) { manager.takeStartupSynchronization() } ?: return
+        // Let restored windows become interactive before checking external folders.
+        delay(2_000)
+        if (!_state.value.isWorking && manager.store.load() == configuration) {
+            requestSynchronize(configuration)
+        }
+    }
+
     // Closing the settings view must not interrupt publication after the generation has been saved.
     suspend fun requestSynchronize(
         configuration: PersonalLibraryConfiguration,
@@ -36,10 +46,15 @@ class PersonalLibraryService(
         val result =
             runCatching {
                 withContext(Dispatchers.IO) {
+                    val previousGeneration = _state.value.configuration.activeGeneration
+                    val publishedDatabase = PersonalLibraryRuntime.activeDatabase
                     val (updated, artifacts) =
                         manager.synchronize(configuration, force) { progress ->
                             _state.update { it.copy(progress = progress) }
                         }
+                    if (updated.activeGeneration == previousGeneration && artifacts?.databasePath == publishedDatabase) {
+                        return@withContext updated
+                    }
                     overlay.attach(artifacts?.databasePath)
                     val dictionary = Path.of(getDatabasePath()).resolveSibling("lexical.db")
                     search.replacePersonal(

@@ -142,9 +142,9 @@ object AppCoreBindings {
     fun provideRepository(personalLibrary: PersonalLibraryManager): SeforimRepository {
         val dbPath = getDatabasePath()
         val personalArtifacts =
-            runCatching { personalLibrary.synchronize().second }
+            runCatching { personalLibrary.prepareForStartup() }
                 .onFailure { PersonalLibraryRuntime.startupError = it.message }
-                .getOrElse { personalLibrary.activeArtifacts() }
+                .getOrElse { personalLibrary.compatibleStartupArtifacts() }
         // Persistent single-connection driver with prepared-statement cache +
         // read-tuning PRAGMAs. Replaces `JdbcSqliteDriver` whose ThreadedConnectionManager
         // closes the SQLite connection after every non-transactional query (confirmed by

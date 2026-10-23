@@ -384,6 +384,10 @@ fun main(args: Array<String>) {
 
                     // Persist search feedback and retry pending events throughout the app lifetime.
                     LaunchedEffect(appGraph) {
+                        appGraph.personalLibraryService.synchronizeAfterStartup()
+                    }
+
+                    LaunchedEffect(appGraph) {
                         appGraph.searchFeedbackService.run()
                     }
 

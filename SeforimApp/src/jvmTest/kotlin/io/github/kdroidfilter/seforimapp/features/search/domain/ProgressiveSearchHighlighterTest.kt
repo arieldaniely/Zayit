@@ -109,7 +109,10 @@ class ProgressiveSearchHighlighterTest {
     ) : SearchSession {
         private var offset = 0L
 
-        override suspend fun nextPage(limit: Int): SearchPage = SearchPage(listOf(hit(++offset)), 2, offset == 2L)
+        override suspend fun nextPage(
+            limit: Int,
+            snippets: Boolean,
+        ): SearchPage = SearchPage(listOf(hit(++offset)), 2, offset == 2L)
 
         override fun highlightUpdates(hits: List<LineHit>): Flow<LineHit> = highlights(hits)
 

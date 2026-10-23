@@ -96,7 +96,10 @@ class ModeBoundSearchEngineTest {
             return object : SearchSession {
                 override val effectiveMode = reportedMode
 
-                override suspend fun nextPage(limit: Int): SearchPage? = null
+                override suspend fun nextPage(
+                    limit: Int,
+                    snippets: Boolean,
+                ): SearchPage? = null
 
                 override fun close() = Unit
             }

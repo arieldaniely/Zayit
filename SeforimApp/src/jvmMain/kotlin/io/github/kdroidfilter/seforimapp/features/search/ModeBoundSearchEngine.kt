@@ -59,8 +59,11 @@ internal class ModeBoundSearchEngine(
 
             override val effectiveMode: SearchMode get() = session.effectiveMode ?: effective
 
-            override suspend fun nextPage(limit: Int): SearchPage? {
-                val page = session.nextPage(limit)
+            override suspend fun nextPage(
+                limit: Int,
+                snippets: Boolean,
+            ): SearchPage? {
+                val page = session.nextPage(limit, snippets)
                 if (effective == SearchMode.SMART &&
                     selectedMode() == SearchMode.SMART &&
                     session.effectiveMode == SearchMode.FLEXIBLE

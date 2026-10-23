@@ -22,6 +22,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AppNativeM
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.window.MainAppWindow
+import io.github.kdroidfilter.seforimapp.core.presentation.window.StartupWindow
 import io.github.kdroidfilter.seforimapp.core.presentation.window.TabDragGhostWindow
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseUpdateWindow
@@ -38,6 +39,7 @@ import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
+import io.github.kdroidfilter.seforimapp.framework.startup.prepareStartup
 import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.isDevEnv
 import io.github.kdroidfilter.seforimapp.logger.warnln
@@ -287,6 +289,24 @@ fun main(args: Array<String>) {
                         isDatabaseMissing = isDatabaseMissing,
                     )
                 } else {
+                    // The repository provider may scan/import personal libraries and build their
+                    // indexes. Resolve it off the UI thread before any window requests it through DI.
+                    var startupAttempt by remember { mutableIntStateOf(0) }
+                    val preparation by produceState<Result<Unit>?>(null, appGraph, startupAttempt) {
+                        value = null
+                        value =
+                            prepareStartup { appGraph.repository }.onFailure {
+                                warnln(it) { "Application startup preparation failed" }
+                            }
+                    }
+                    if (preparation?.isSuccess != true) {
+                        StartupWindow(
+                            failed = preparation?.isFailure == true,
+                            onRetry = { startupAttempt++ },
+                        )
+                        return@IntUiTheme
+                    }
+
                     val desktopManager = appGraph.desktopManager
                     val windows by desktopManager.windows.collectAsState()
                     val focusedWindowId by desktopManager.focusedWindowId.collectAsState()

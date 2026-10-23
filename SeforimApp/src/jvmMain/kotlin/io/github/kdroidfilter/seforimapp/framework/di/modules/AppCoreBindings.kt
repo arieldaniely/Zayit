@@ -150,11 +150,16 @@ object AppCoreBindings {
         // closes the SQLite connection after every non-transactional query (confirmed by
         // JFR 2026-04-23: ~70 `NativeDB.prepare_utf8` + `NativeDB._close()` pairs / 20 s).
         val driver = PersistentSqliteDriver("jdbc:sqlite:$dbPath")
-        val repository = SeforimRepository(dbPath, driver)
-        val overlay = PersonalLibraryOverlay(driver)
-        overlay.attach(personalArtifacts?.databasePath)
-        PersonalLibraryRuntime.overlay = overlay
-        return repository
+        try {
+            val repository = SeforimRepository(dbPath, driver)
+            val overlay = PersonalLibraryOverlay(driver)
+            overlay.attach(personalArtifacts?.databasePath)
+            PersonalLibraryRuntime.overlay = overlay
+            return repository
+        } catch (failure: Throwable) {
+            runCatching { driver.close() }.onFailure(failure::addSuppressed)
+            throw failure
+        }
     }
 
     @Provides

@@ -1,4 +1,8 @@
 <resources>
+    <string name="search_preview_title">תצוגה מקדימה בהקשר</string>
+    <string name="search_preview_open">פתח בספר</string>
+    <string name="search_preview_more_context">הצג הקשר נוסף</string>
+    <string name="search_preview_unavailable">לא ניתן לטעון את הקטע. אפשר לפתוח את הספר ישירות.</string>
     <string name="settings_search_feedback">שיתוף נתונים לשיפור החיפוש</string>
     <string name="settings_search_feedback_description">שליחת שאילתות, הקטעים שנפתחו, דירוגי לייק ודיסלייק והגדרות החיפוש לשרת לשיפור המודל. ניתן לכבות בכל עת.</string>
     <string name="search_feedback_like">התוצאה מועילה</string>

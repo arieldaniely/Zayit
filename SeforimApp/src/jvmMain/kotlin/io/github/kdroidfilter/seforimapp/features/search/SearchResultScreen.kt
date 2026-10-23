@@ -731,6 +731,7 @@ private fun SearchResultContentMvi(
                                         }
                                         BookResultCard(
                                             group = group,
+                                            searchQuery = state.query,
                                             textSize = mainTextSize,
                                             lineHeight = mainLineHeight,
                                             fontFamily = hebrewFontFamily,
@@ -1055,7 +1056,23 @@ internal fun BookResultCard(
     onToggleExpand: (BookGroup) -> Unit,
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
+    searchQuery: String = "",
 ) {
+    var preview by remember(group.bookId, feedbackKey) { mutableStateOf<SearchResult?>(null) }
+    preview?.let { result ->
+        SearchResultPreview(
+            result = result,
+            query = searchQuery,
+            location = breadcrumbs[result.lineId].orEmpty().joinToString(" › "),
+            textSize = textSize,
+            fontFamily = fontFamily,
+            onDismiss = { preview = null },
+            onOpen = {
+                preview = null
+                onOpenResult(result)
+            },
+        )
+    }
     val collapsedCap = 3
     val loadedCount = 1 + group.secondaries.size
     val needsFetch = group.totalCount > loadedCount
@@ -1191,6 +1208,7 @@ internal fun BookResultCard(
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
+                PreviewResultButton { preview = primary }
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1213,6 +1231,7 @@ internal fun BookResultCard(
                             pieces = breadcrumbs[sec.lineId],
                             onRequestBreadcrumb = onRequestBreadcrumb,
                             onClick = { onOpenResult(sec) },
+                            onPreview = { preview = sec },
                             onFeedback = onFeedback,
                             feedbackKey = feedbackKey,
                         )
@@ -1370,6 +1389,7 @@ private fun SecondaryResultRow(
     pieces: List<String>?,
     onRequestBreadcrumb: (SearchResult) -> Unit,
     onClick: () -> Unit,
+    onPreview: () -> Unit,
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
 ) {
@@ -1412,6 +1432,18 @@ private fun SecondaryResultRow(
             modifier = Modifier.weight(1f),
         )
         ResultFeedback(result, feedbackKey, hovered, onFeedback)
+        PreviewResultButton(onPreview)
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun PreviewResultButton(onClick: () -> Unit) {
+    val label = stringResource(Res.string.search_preview_title)
+    Tooltip({ Text(label) }) {
+        IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
+            Icon(AllIconsKeys.Actions.Find, contentDescription = label, modifier = Modifier.size(16.dp))
+        }
     }
 }
 

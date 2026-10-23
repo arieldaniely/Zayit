@@ -401,17 +401,20 @@ internal fun semanticBundleStamp(
     database: Path,
 ): List<String> =
     Files.walk(root).use { paths ->
-        (
-            paths.filter {
-                Files.isRegularFile(it) &&
-                    !it.fileName.toString().endsWith(".sha256-cache") &&
-                    !it.fileName.toString().startsWith(".fingerprint-")
-            }.toList() + listOf(database)
-        ).sorted().map {
-            val attributes = Files.readAttributes(it, BasicFileAttributes::class.java)
-            "$it:${it.toRealPath()}:${attributes.size()}:${attributes.lastModifiedTime()}:" +
-                "${attributes.creationTime()}:${attributes.fileKey()}"
-        }
+        val bundleFiles =
+            paths
+                .filter {
+                    Files.isRegularFile(it) &&
+                        !it.fileName.toString().endsWith(".sha256-cache") &&
+                        !it.fileName.toString().startsWith(".fingerprint-")
+                }.toList()
+        (bundleFiles + listOf(database))
+            .sorted()
+            .map {
+                val attributes = Files.readAttributes(it, BasicFileAttributes::class.java)
+                "$it:${it.toRealPath()}:${attributes.size()}:${attributes.lastModifiedTime()}:" +
+                    "${attributes.creationTime()}:${attributes.fileKey()}"
+            }
     }
 
 /** Counts compressed input bytes, including bulk reads, without counting a byte twice. */

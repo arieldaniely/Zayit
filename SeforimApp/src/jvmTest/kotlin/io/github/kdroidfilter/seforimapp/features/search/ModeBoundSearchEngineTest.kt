@@ -11,6 +11,26 @@ import kotlin.test.assertEquals
 
 class ModeBoundSearchEngineTest {
     @Test
+    fun `explicit book scope searches all books and records actual coverage`() {
+        val delegate = RecordingEngine()
+        val engine = ModeBoundSearchEngine(delegate, { SearchMode.SMART }, semanticReady = { true })
+        val session = engine.openSession("query", bookIds = listOf(999L), baseBookOnly = true) as FeedbackSearchSession
+        assertEquals(false, delegate.requestedBaseOnly)
+        assertEquals(false, session.feedbackContext.baseBookOnly)
+        session.close()
+        engine.computeFacets("query", bookIds = listOf(999L), baseBookOnly = true)
+        assertEquals(false, delegate.requestedBaseOnly)
+    }
+
+    @Test
+    fun `global search preserves the base book preference`() {
+        val delegate = RecordingEngine()
+        val engine = ModeBoundSearchEngine(delegate, { SearchMode.FLEXIBLE })
+        engine.openSession("query", baseBookOnly = true)?.close()
+        assertEquals(true, delegate.requestedBaseOnly)
+    }
+
+    @Test
     fun `feedback context snapshots executed query mode and filters`() {
         var selected = SearchMode.SMART
         val engine = ModeBoundSearchEngine(RecordingEngine(), { selected }, semanticReady = { true })
@@ -81,6 +101,7 @@ class ModeBoundSearchEngineTest {
         private val reportedMode: SearchMode? = null,
     ) : SearchEngine {
         var requestedMode: SearchMode? = null
+        var requestedBaseOnly: Boolean? = null
 
         override fun openSession(
             query: String,
@@ -93,6 +114,7 @@ class ModeBoundSearchEngineTest {
             mode: SearchMode,
         ): SearchSession {
             requestedMode = mode
+            requestedBaseOnly = baseBookOnly
             return object : SearchSession {
                 override val effectiveMode = reportedMode
 
@@ -127,7 +149,10 @@ class ModeBoundSearchEngineTest {
             lineIds: Collection<Long>?,
             baseBookOnly: Boolean,
             mode: SearchMode,
-        ): SearchFacets? = null
+        ): SearchFacets? {
+            requestedBaseOnly = baseBookOnly
+            return null
+        }
 
         override fun close() = Unit
     }

@@ -559,6 +559,7 @@ class SearchHomeViewModel(
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = category,
+                globalExtended = true,
                 selectedScopeBook = null,
                 selectedScopeIsPdf = false,
                 selectedScopeToc = null,
@@ -606,6 +607,7 @@ class SearchHomeViewModel(
             _uiState.value.copy(
                 selectedScopeCategory = null,
                 selectedScopeBook = book,
+                globalExtended = true,
                 selectedScopeIsPdf = isPdf,
                 selectedScopeToc = null,
                 suggestionsVisible = false,
@@ -652,7 +654,8 @@ class SearchHomeViewModel(
     }
 
     fun onGlobalExtendedChange(extended: Boolean) {
-        _uiState.value = _uiState.value.copy(globalExtended = extended)
+        val scoped = _uiState.value.selectedScopeBook != null || _uiState.value.selectedScopeCategory != null
+        _uiState.value = _uiState.value.copy(globalExtended = extended || scoped)
     }
 
     fun onModeChange(mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode) {
@@ -743,7 +746,7 @@ class SearchHomeViewModel(
                 (current.search ?: SearchPersistedState()).copy(
                     query = query,
                     mode = selected.mode.name,
-                    globalExtended = selected.globalExtended,
+                    globalExtended = selected.globalExtended || datasetScope != "global",
                     datasetScope = datasetScope,
                     filterCategoryId = filterCategoryId,
                     filterBookId = filterBookId,

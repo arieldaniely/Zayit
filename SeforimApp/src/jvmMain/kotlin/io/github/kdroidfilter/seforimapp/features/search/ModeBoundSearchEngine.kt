@@ -24,6 +24,7 @@ internal class ModeBoundSearchEngine(
         mode: SearchMode,
     ): SearchSession? {
         val requested = selectedMode()
+        val effectiveBaseOnly = scopedBaseBooksOnly(baseBookOnly, bookFilter, categoryFilter, bookIds, lineIds)
         val effective =
             if (requested == SearchMode.SMART &&
                 (!semanticReady() || categoryFilter != null || lineIds != null)
@@ -41,7 +42,7 @@ internal class ModeBoundSearchEngine(
                 categoryFilter,
                 bookIds,
                 lineIds,
-                baseBookOnly,
+                effectiveBaseOnly,
                 effective,
             ) ?: return null
         return object : FeedbackSearchSession, SearchSession by session {
@@ -54,7 +55,7 @@ internal class ModeBoundSearchEngine(
                     categoryFilter = categoryFilter,
                     bookIds = bookIds?.sorted(),
                     lineIds = lineIds?.sorted(),
-                    baseBookOnly = baseBookOnly,
+                    baseBookOnly = effectiveBaseOnly,
                 )
 
             override val effectiveMode: SearchMode get() = session.effectiveMode ?: effective
@@ -92,7 +93,7 @@ internal class ModeBoundSearchEngine(
             categoryFilter,
             bookIds,
             lineIds,
-            baseBookOnly,
+            scopedBaseBooksOnly(baseBookOnly, bookFilter, categoryFilter, bookIds, lineIds),
             selectedMode(),
         )
 }

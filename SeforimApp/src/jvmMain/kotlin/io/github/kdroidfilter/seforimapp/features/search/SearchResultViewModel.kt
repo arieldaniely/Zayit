@@ -106,11 +106,15 @@ class SearchResultViewModel(
 
     internal val tabId: String = savedStateHandle.get<String>(StateKeys.TAB_ID) ?: ""
 
-    private fun persistedSearchState(): SearchPersistedState = persistedStore.get(tabId)?.search ?: SearchPersistedState()
+    private fun persistedSearchState(): SearchPersistedState =
+        (persistedStore.get(tabId)?.search ?: SearchPersistedState()).withScopeCoverage()
 
     private fun updatePersistedSearch(transform: (SearchPersistedState) -> SearchPersistedState) {
         persistedStore.update(tabId) { current ->
-            val next = transform(current.search ?: SearchPersistedState())
+            val next = transform(current.search ?: SearchPersistedState()).withScopeCoverage()
+            if (next.hasExplicitScope && next.globalExtended) {
+                _uiState.update { it.copy(globalExtended = true) }
+            }
             current.copy(search = next)
         }
     }
@@ -284,8 +288,9 @@ class SearchResultViewModel(
             }
 
             is SearchResultEvents.SetGlobalExtended -> {
-                _uiState.value = _uiState.value.copy(globalExtended = event.extended)
-                updatePersistedSearch { it.copy(globalExtended = event.extended) }
+                val extended = event.extended || persistedSearchState().hasExplicitScope
+                _uiState.value = _uiState.value.copy(globalExtended = extended)
+                updatePersistedSearch { it.copy(globalExtended = extended) }
             }
         }
     }

@@ -295,6 +295,10 @@ fun main(args: Array<String>) {
                             prepareStartup {
                                 appGraph.repository
                                 appGraph.catalogAccess.warm()
+                                // Opening a damaged Lucene index can fail. Keep disk work and
+                                // failures in the background preparation, before creating windows.
+                                // Constructing the facade does not load the semantic model.
+                                appGraph.searchEngine
                             }.onFailure {
                                 warnln(it) { "Application startup preparation failed" }
                             }

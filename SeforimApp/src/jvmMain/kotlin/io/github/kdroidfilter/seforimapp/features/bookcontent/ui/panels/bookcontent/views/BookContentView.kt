@@ -74,6 +74,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.extractLookupToken
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
+import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.SmartFindHighlights
+import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.SmartFindUseCase
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyNote
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.StudyLocation
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -720,25 +722,30 @@ fun BookContentView(
 
     // Smart mode: get highlight terms from search engine with dictionary expansion
     val appGraph = LocalAppGraph.current
-    val smartHighlightTerms by remember(smartModeEnabled, findState) {
-        derivedStateOf {
-            if (smartModeEnabled) {
-                val query = findState.text.toString()
-                if (query.length >= 2) {
-                    appGraph.searchEngine.buildHighlightTerms(query)
-                } else {
-                    emptyList()
-                }
-            } else {
-                emptyList()
+    var smartFind by remember(bookId) { mutableStateOf(SmartFindHighlights()) }
+    LaunchedEffect(bookId, showFind, smartModeEnabled, lazyPagingItems, listState) {
+        smartFind = SmartFindHighlights()
+        if (!showFind || !smartModeEnabled) return@LaunchedEffect
+        val finder = SmartFindUseCase(appGraph.searchEngine)
+        snapshotFlow { findState.text.toString() }
+            .debounce(100)
+            .collectLatest { query ->
+                smartFind = SmartFindHighlights(query, listOf(query).filter { it.length >= 2 })
+                val visible =
+                    snapshotFlow {
+                        listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+                            if (item.index in 0 until lazyPagingItems.itemCount) lazyPagingItems.peek(item.index) else null
+                        }
+                    }
+                finder.search(bookId, query, visible).collect { smartFind = it }
             }
-        }
     }
+    val smartHighlightTerms = smartFind.terms.takeIf { smartFind.query == findState.text.toString() }.orEmpty()
 
     var currentHitLineIndex by remember { mutableIntStateOf(-1) }
     var currentMatchLineId by remember { mutableStateOf<Long?>(null) }
     var currentMatchStart by remember { mutableIntStateOf(-1) }
-    val plainTextCache = remember(bookId) { mutableStateMapOf<Long, String>() }
+    val plainTextCache = remember(bookId) { java.util.concurrent.ConcurrentHashMap<Long, String>() }
 
     // Theme-derived inputs to the HTML annotation, hoisted here so the off-screen prefetcher
     // can build keys/annotations identical to those produced inside LineItem.
@@ -845,7 +852,14 @@ fun BookContentView(
                     plainTextCache.getOrPut(line.id) {
                         buildAnnotatedFromHtml(line.content, textSize).text
                     }
-                val start = findAllMatchesOriginal(text, query).firstOrNull()?.first ?: -1
+                val start =
+                    if (smartModeEnabled) {
+                        val terms = smartHighlightTerms + listOfNotNull(smartFind.passages[line.id])
+                        terms.mapNotNull { findAllMatchesOriginal(text, it).firstOrNull()?.first }.minOrNull()
+                            ?: if (line.id in smartFind.semanticLineIds) 0 else -1
+                    } else {
+                        findAllMatchesOriginal(text, query).firstOrNull()?.first ?: -1
+                    }
                 if (start >= 0) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         currentHitLineIndex = i
@@ -1113,7 +1127,12 @@ fun BookContentView(
                                         boldScale = boldScaleForPlatform,
                                         highlightQuery =
                                             findState.text.toString().takeIf { showFind && !smartModeEnabled },
-                                        highlightTerms = smartHighlightTerms.takeIf { showFind && smartModeEnabled },
+                                        highlightTerms =
+                                            if (showFind && smartModeEnabled) {
+                                                smartHighlightTerms + listOfNotNull(smartFind.passages[line.id])
+                                            } else {
+                                                null
+                                            },
                                         currentMatchStart =
                                             if (showFind && currentMatchLineId == line.id) currentMatchStart else null,
                                         annotatedCache = stableAnnotatedCache,

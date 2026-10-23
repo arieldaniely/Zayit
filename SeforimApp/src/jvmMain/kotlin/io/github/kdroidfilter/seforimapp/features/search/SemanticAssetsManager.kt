@@ -25,6 +25,7 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.Comparator
@@ -48,26 +49,24 @@ internal object SemanticAssetsManager {
 
     private val _availability = MutableStateFlow(Availability.UNAVAILABLE)
     val availability = _availability.asStateFlow()
-    private var validatedStamp: List<String>? = null
+    private val validationCache = SemanticBundleValidationCache()
 
     /** Cache expensive validation until the database or any bundle file changes. Call on IO. */
     @Synchronized
     fun validatedReady(): Boolean {
         if (!isReady()) {
-            validatedStamp = null
+            validationCache.invalidate()
             _availability.value = Availability.UNAVAILABLE
             return false
         }
         return try {
-            val stamp = semanticBundleStamp(assetRoot, db)
-            if (stamp != validatedStamp) {
+            validationCache.validate(assetRoot, db) {
                 _availability.value = Availability.VALIDATING
                 // The search engine owns and initializes the model session. Checking readiness
                 // must not initialize a second session concurrently with the first UI search.
                 verify(assetRoot)
-                validatedStamp = semanticBundleStamp(assetRoot, db)
-                _availability.value = Availability.READY
             }
+            _availability.value = Availability.READY
             _availability.value == Availability.READY
         } catch (failure: Throwable) {
             if (failure !is Exception && failure !is LinkageError) throw failure
@@ -163,7 +162,7 @@ internal object SemanticAssetsManager {
                 if (Files.exists(backup)) Files.move(backup, assetRoot, StandardCopyOption.ATOMIC_MOVE)
                 throw failure
             }
-            validatedStamp = null
+            validationCache.invalidate()
         } finally {
             _installationProgress.value = null
             if (Files.exists(stage)) deleteTree(stage)
@@ -402,8 +401,16 @@ internal fun semanticBundleStamp(
     database: Path,
 ): List<String> =
     Files.walk(root).use { paths ->
-        (paths.filter { Files.isRegularFile(it) }.toList() + listOf(database)).sorted().map {
-            "$it:${Files.size(it)}:${Files.getLastModifiedTime(it)}"
+        (
+            paths.filter {
+                Files.isRegularFile(it) &&
+                    !it.fileName.toString().endsWith(".sha256-cache") &&
+                    !it.fileName.toString().startsWith(".fingerprint-")
+            }.toList() + listOf(database)
+        ).sorted().map {
+            val attributes = Files.readAttributes(it, BasicFileAttributes::class.java)
+            "$it:${it.toRealPath()}:${attributes.size()}:${attributes.lastModifiedTime()}:" +
+                "${attributes.creationTime()}:${attributes.fileKey()}"
         }
     }
 

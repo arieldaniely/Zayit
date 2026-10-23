@@ -27,6 +27,12 @@ class CatalogAccess(
     @Volatile
     private var indices: Indices? = null
 
+    /** Prepares display indices before the first composition needs the catalog. */
+    fun warm() {
+        resolve()
+    }
+
+    @Synchronized
     private fun resolve(): Indices? {
         val catalog = catalogProvider() ?: return null
         val current = indices
@@ -61,19 +67,21 @@ class CatalogAccess(
         }
 
         val booksByCategory = HashMap<Long, List<BookRef>>()
-        val ancestorTitlesCache = HashMap<Long, List<String>>()
+        val prefixPatterns = HashMap<String, Regex>()
 
         fun walkBooks(cat: CatalogCategory) {
             val excludedPrefixes = excludedBookPrefixesFor(cat.id, parentIdByCategory)
-            val ancestorLabels =
-                ancestorTitlesCache.getOrPut(cat.id) {
-                    collectAncestorTitles(cat.id, rawCategoryTitles, parentIdByCategory)
+            val ancestorPatterns =
+                collectAncestorTitles(cat.id, rawCategoryTitles, parentIdByCategory).map { label ->
+                    prefixPatterns.getOrPut(label) {
+                        Regex("^${Regex.escape(label)}(?:\\s*[,:–—+\\-]\\s*|\\s+)")
+                    }
                 }
             // Strip ancestor labels first, then exclude books whose display title starts with
             // a forbidden prefix (e.g. שולחן ערוך, הקדמה → הקדמה → filtered).
             val refs =
                 cat.books.mapNotNull { book ->
-                    val display = stripAnyLabelPrefix(ancestorLabels, book.title)
+                    val display = stripAnyLabelPrefix(ancestorPatterns, book.title)
                     val trimmed = display.trimStart()
                     if (excludedPrefixes.any { trimmed.startsWith(it) }) {
                         null
@@ -137,33 +145,15 @@ class CatalogAccess(
     }
 
     private fun stripAnyLabelPrefix(
-        labels: List<String>,
+        patterns: List<Regex>,
         title: String,
     ): String {
         var result = title
-        for (label in labels) result = stripLabelPrefix(label, result)
-        return result
-    }
-
-    private fun stripLabelPrefix(
-        label: String,
-        title: String,
-    ): String {
-        if (label.isBlank()) return title
-        val prefix = Regex.escape(label)
-        val patterns =
-            listOf(
-                Regex("^$prefix\\s*,\\s*"),
-                Regex("^$prefix,\\s*"),
-                Regex("^$prefix\\s*[:–—-]\\s*"),
-                Regex("^$prefix\\s*\\+\\s*"),
-                Regex("^$prefix\\s+"),
-            )
-        for (p in patterns) {
-            val replaced = title.replaceFirst(p, "")
-            if (replaced !== title) return replaced.trimStart()
+        for (pattern in patterns) {
+            val match = pattern.find(result) ?: continue
+            result = result.substring(match.range.last + 1).trimStart()
         }
-        return title
+        return result
     }
 
     private companion object {

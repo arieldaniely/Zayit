@@ -292,7 +292,10 @@ fun main(args: Array<String>) {
                     val preparation by produceState<Result<Unit>?>(null, appGraph, startupAttempt) {
                         value = null
                         value =
-                            prepareStartup { appGraph.repository }.onFailure {
+                            prepareStartup {
+                                appGraph.repository
+                                appGraph.catalogAccess.warm()
+                            }.onFailure {
                                 warnln(it) { "Application startup preparation failed" }
                             }
                     }

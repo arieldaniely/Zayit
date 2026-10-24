@@ -47,8 +47,11 @@ class VectorCheckpoint:
             output.flush()
             os.fsync(output.fileno())
         temporary = self.path.with_suffix(".writing")
-        temporary.write_text(json.dumps({"identity": self.identity, "counts": self.counts,
-                                         "scanned": scanned, "lastLineId": last_line_id}), encoding="utf-8")
+        with temporary.open("w", encoding="utf-8") as output:
+            json.dump({"identity": self.identity, "counts": self.counts,
+                       "scanned": scanned, "lastLineId": last_line_id}, output)
+            output.flush()
+            os.fsync(output.fileno())
         temporary.replace(self.path)
         self.last_line_id, self.scanned = last_line_id, scanned
 

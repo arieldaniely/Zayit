@@ -182,16 +182,12 @@ def run(args: argparse.Namespace) -> None:
             counts[shard] += 1
 
     def encode_adaptively(batch):
-        try:
-            encode_batch(batch)
-        except torch.cuda.OutOfMemoryError:
-            if len(batch) == 1:
-                raise
-            torch.cuda.empty_cache()
-            print(f"worker {args.gpu}: retrying GPU batch as {len(batch) // 2} + {len(batch) - len(batch) // 2}", flush=True)
-            midpoint = len(batch) // 2
-            encode_adaptively(batch[:midpoint])
-            encode_adaptively(batch[midpoint:])
+        from vector_batches import encode_with_retry
+
+        encode_with_retry(
+            batch, encode_batch, torch.cuda.OutOfMemoryError, torch.cuda.empty_cache,
+            lambda left, right: print(f"worker {args.gpu}: retrying GPU batch as {left} + {right}", flush=True),
+        )
 
     try:
         rows = connection.execute(

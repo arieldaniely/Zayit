@@ -48,6 +48,7 @@ jobs:
           python -m pip install 'requests>=2.32,<3' 'zstandard>=0.23,<1'
           python -m unittest discover -s scripts -p 'test_semantic_transfer.py'
           python -m unittest discover -s scripts -p 'test_semantic_finalizer.py'
+          python -m unittest discover -s scripts -p 'test_vector_batches.py'
       - name: Verify secrets and prepare matching database and semantic index
         run: |
           test -n "$DB_TOKEN" || { echo 'SEFORIM_LIBRARY_TOKEN must read the database draft and write new release drafts'; exit 1; }

@@ -65,7 +65,7 @@ private fun NucleusApplicationScope.SettingsWindowView(
         styling = ThemeUtils.buildComponentStyling(),
     ) {
         val settingsDialogState =
-            rememberDialogState(position = WindowPosition.Aligned(Alignment.Center), size = DpSize(700.dp, 500.dp))
+            rememberDialogState(position = WindowPosition.Aligned(Alignment.Center), size = DpSize(960.dp, 720.dp))
         JewelDecoratedDialog(
             onCloseRequest = onClose,
             title = stringResource(Res.string.settings),
@@ -119,7 +119,7 @@ private fun NucleusApplicationScope.SettingsWindowView(
                             modifier =
                                 Modifier
                                     .fillMaxHeight()
-                                    .width(120.dp),
+                                    .width(220.dp),
                             navController = navController,
                         )
 

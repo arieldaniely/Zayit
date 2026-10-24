@@ -924,4 +924,18 @@
     <string name="semantic_install_validating">בודק את תקינות חבילת החיפוש…</string>
     <string name="personal_library_skipped_files">הייבוא הושלם. הקבצים הבאים לא יובאו:
 %1$s</string>
+    <string name="settings_search_placeholder">חיפוש בהגדרות…</string>
+    <string name="settings_search_clear">ניקוי החיפוש</string>
+    <string name="settings_search_empty">לא נמצאו הגדרות מתאימות. נסו מילה אחרת.</string>
+    <string name="settings_group_reading">סביבת הקריאה</string>
+    <string name="settings_group_library">ספרים וחיפוש</string>
+    <string name="settings_group_information">מידע ועזרה</string>
+    <string name="settings_description_general">פתיחה הפעלה חלונות לשוניות שמירת מצב מסך</string>
+    <string name="settings_description_display">מראה ערכת נושא צבעים כהה בהיר רקע וידג׳טים תצוגה</string>
+    <string name="settings_description_fonts">גופנים פונט כתב גודל טקסט פרשנים תרגום</string>
+    <string name="settings_description_profile">פרופיל אישי שם מיקום עיר מדינה קהילה זמנים</string>
+    <string name="settings_description_data">מסד מאגר הורדה התקנה עדכון אינדקס סמנטי חיפוש חכם מודל</string>
+    <string name="settings_description_personal">ספרייה ספרים אישיים תיקיות יבוא אינדקס סמנטי בנייה</string>
+    <string name="settings_description_about">אודות גרסה עדכונים תוכנה קשר תמיכה</string>
+    <string name="settings_description_conditions">תנאי שימוש רישיון זכויות יוצרים</string>
 </resources>

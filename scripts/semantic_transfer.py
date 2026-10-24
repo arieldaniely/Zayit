@@ -1,4 +1,4 @@
-"""Stream the semantic index into verified 1.9 GiB parts; no database or models."""
+"""Stream the semantic index into verified 1.9 GB parts; no database or models."""
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import zstandard
 
-PART_BYTES = int(1.9 * 1024**3)
+PART_BYTES = 1_900_000_000
 ARCHIVE = "semantic-index.tar.zst"
 
 

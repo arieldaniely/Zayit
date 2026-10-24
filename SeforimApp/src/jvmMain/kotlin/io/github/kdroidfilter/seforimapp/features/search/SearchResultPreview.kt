@@ -19,6 +19,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
@@ -75,7 +76,7 @@ internal fun SearchResultPreview(
                         PreviewParagraph(line.id, plain, graph.searchEngine.highlightRanges(plain, query))
                     }
                 }
-            }
+            }.onFailure { warnln(it) { "Unable to load search result preview" } }
     }
     val accent = JewelTheme.globalColors.outlines.focused
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -84,7 +85,7 @@ internal fun SearchResultPreview(
                 Modifier
                     .widthIn(max = 760.dp)
                     .fillMaxWidth(0.9f)
-                    .heightIn(max = 660.dp)
+                    .heightIn(min = 420.dp, max = 660.dp)
                     .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(16.dp))
                     .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(16.dp))
                     .padding(24.dp),
@@ -96,47 +97,48 @@ internal fun SearchResultPreview(
                 content == null -> CircularProgressIndicator()
                 content?.isFailure == true -> Text(stringResource(Res.string.search_preview_unavailable))
                 else -> {
-                    SelectionContainer(modifier = Modifier.weight(1f, fill = false)) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            content?.getOrNull().orEmpty().forEach { paragraph ->
-                                val highlighted =
-                                    remember(paragraph, accent) {
-                                        AnnotatedString
-                                            .Builder(paragraph.text)
-                                            .apply {
-                                                paragraph.ranges.forEach { range ->
-                                                    if (range.first >= 0 && range.last < paragraph.text.length) {
-                                                        addStyle(
-                                                            SpanStyle(background = accent.copy(alpha = 0.25f)),
-                                                            range.first,
-                                                            range.last + 1,
-                                                        )
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    ) {
+                        SelectionContainer {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                content?.getOrNull().orEmpty().forEach { paragraph ->
+                                    val highlighted =
+                                        remember(paragraph, accent) {
+                                            AnnotatedString
+                                                .Builder(paragraph.text)
+                                                .apply {
+                                                    paragraph.ranges.forEach { range ->
+                                                        if (range.first >= 0 && range.last < paragraph.text.length) {
+                                                            addStyle(
+                                                                SpanStyle(background = accent.copy(alpha = 0.25f)),
+                                                                range.first,
+                                                                range.last + 1,
+                                                            )
+                                                        }
                                                     }
-                                                }
-                                            }.toAnnotatedString()
-                                    }
-                                Text(
-                                    highlighted,
-                                    fontFamily = fontFamily,
-                                    fontSize = textSize.sp,
-                                    lineHeight = (textSize * 1.65f).sp,
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                if (paragraph.id ==
-                                                    result.lineId
-                                                ) {
-                                                    accent.copy(alpha = 0.08f)
-                                                } else {
-                                                    JewelTheme.globalColors.panelBackground
-                                                },
-                                                RoundedCornerShape(8.dp),
-                                            ).padding(10.dp),
-                                )
+                                                }.toAnnotatedString()
+                                        }
+                                    Text(
+                                        highlighted,
+                                        fontFamily = fontFamily,
+                                        fontSize = textSize.sp,
+                                        lineHeight = (textSize * 1.65f).sp,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    if (paragraph.id ==
+                                                        result.lineId
+                                                    ) {
+                                                        accent.copy(alpha = 0.08f)
+                                                    } else {
+                                                        JewelTheme.globalColors.panelBackground
+                                                    },
+                                                    RoundedCornerShape(8.dp),
+                                                ).padding(10.dp),
+                                    )
+                                }
                             }
                         }
                     }

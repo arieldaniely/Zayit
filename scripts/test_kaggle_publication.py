@@ -69,6 +69,10 @@ class PublicationTest(unittest.TestCase):
     def test_notebook_code_and_embedded_scripts_match_repository(self):
         root = Path(__file__).resolve().parents[1]
         notebook = json.loads((root / 'notebooks/build_semantic_index_kaggle_t4x2.ipynb').read_text(encoding='utf-8'))
+        code = '\n'.join(''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type'] == 'code')
+        self.assertNotIn('--all-distributions', code)
+        self.assertIn('--compression-level', code)
+        self.assertNotIn('release-tools', [cell['id'] for cell in notebook['cells']])
         for cell in notebook['cells']:
             if cell['cell_type'] != 'code' or cell['id'] == 'dependencies':
                 continue

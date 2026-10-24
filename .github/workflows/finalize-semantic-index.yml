@@ -1,0 +1,61 @@
+name: Finalize GPU semantic index and updated database
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_release_tag:
+        description: Database release used by the Kaggle notebook
+        required: true
+        type: string
+      transfer_release_tag:
+        description: Draft release containing semantic-transfer.json and Kaggle index parts
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-semantic-index
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DB_TOKEN: ${{ secrets.SEFORIM_LIBRARY_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      DB_TAG: ${{ inputs.db_release_tag }}
+      TRANSFER_TAG: ${{ inputs.transfer_release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install archive libraries and verify transfer regressions
+        run: |
+          python -m pip install 'requests>=2.32,<3' 'zstandard>=0.23,<1'
+          python -m unittest discover -s scripts -p 'test_semantic_transfer.py'
+          python -m unittest discover -s scripts -p 'test_semantic_finalizer.py'
+      - name: Verify secrets and prepare matching database and semantic index
+        run: |
+          test -n "$DB_TOKEN" || { echo 'SEFORIM_LIBRARY_TOKEN must read the database draft and write new release drafts'; exit 1; }
+          test -n "$HF_TOKEN" || { echo 'HF_TOKEN with access to the approved model is required'; exit 1; }
+          python scripts/finalize_semantic_index.py prepare --work "$RUNNER_TEMP/semantic-finalize" \
+            --db-release-tag "$DB_TAG" --transfer-release-tag "$TRANSFER_TAG"
+      - name: Merge Lucene segments, recompress at level 22 and upload verified drafts
+        run: |
+          chmod +x SeforimLibrary/gradlew
+          python scripts/finalize_semantic_index.py finish --work "$RUNNER_TEMP/semantic-finalize" \
+            --db-release-tag "$DB_TAG" --transfer-release-tag "$TRANSFER_TAG"

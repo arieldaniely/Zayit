@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 
 import requests
@@ -202,22 +203,17 @@ def main(args: argparse.Namespace) -> None:
         raise RuntimeError("Select Kaggle GPU T4 x2 in Notebook Settings")
     args.work.mkdir(parents=True, exist_ok=True)
     args.output.mkdir(parents=True, exist_ok=True)
-    token = os.getenv("GH_TOKEN")
-    if args.all_distributions and not token:
-        from kaggle_secrets import UserSecretsClient
-
-        token = UserSecretsClient().get_secret("GH_TOKEN")
     if args.all_distributions:
-        from kaggle_publish_distributions import Publisher
-
-        final_tag = args.publish_tag or args.db_release_tag + '-full'
-        if final_tag == args.db_release_tag:
-            raise ValueError('Final release must use a new tag')
-        publisher = Publisher(token)
-        args.publish_tag = publisher.allocate(args.db_repository, args.app_repository, final_tag, args.work)
+        raise ValueError("Full distributions are built by finalize-semantic-index.yml; Kaggle only exports the index")
+    token = os.getenv("GH_TOKEN")
+    if not token:
+        try:
+            from kaggle_secrets import UserSecretsClient
+            token = UserSecretsClient().get_secret("GH_TOKEN")
+        except Exception:
+            pass  # Public database releases do not require a GitHub credential.
     assets = release_assets(args.db_repository, args.db_release_tag, token)
     identity = {"repository": args.db_repository, "tag": args.db_release_tag,
-                "allDistributions": args.all_distributions,
                 "assets": [{"name": asset["name"], "digest": asset["digest"]} for asset in assets]}
     marker = args.work / "database-source.json"
     if marker.exists():
@@ -230,19 +226,13 @@ def main(args: argparse.Namespace) -> None:
     download_dir = args.work / "release"
     download_dir.mkdir(exist_ok=True)
     parts = []
-    for asset in assets:
-        name, digest = asset["name"], asset["digest"].removeprefix("sha256:")
-        path = download_dir / name
-        download(asset["url"] if token else asset["browser_download_url"], path, digest, token=token)
-        parts.append(path)
     database = args.work / "seforim.db"
-    if args.all_distributions:
-        from kaggle_publish_distributions import extract_complete
-
-        extract_complete(parts, args.work, MultipartStream, base_only=True)
-        if not database.is_file():
-            raise FileNotFoundError('The source release does not contain seforim.db')
-    else:
+    if not database.is_file():
+        for asset in assets:
+            name, digest = asset["name"], asset["digest"].removeprefix("sha256:")
+            path = download_dir / name
+            download(asset["url"] if token else asset["browser_download_url"], path, digest, token=token)
+            parts.append(path)
         extract_database(parts, database)
     database_sha = sha256(database)
     print("Database SHA-256:", database_sha, flush=True)
@@ -250,14 +240,9 @@ def main(args: argparse.Namespace) -> None:
         print("Database rows:", connection.execute("SELECT COUNT(*) FROM line").fetchone()[0], flush=True)
         if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("The extracted database failed SQLite quick_check")
-    if not args.all_distributions:
-        for part in parts:
-            part.unlink()
+    for part in parts:
+        part.unlink()
 
-    if args.all_distributions:
-        for name in ('seforim.db.lucene', 'seforim.db.lookup.lucene', 'catalog.pb', 'lexical.db', 'release_info.txt'):
-            if not (database.parent / name).exists():
-                raise FileNotFoundError(f'The source bundle is missing {name}; publish a complete base bundle')
     checkpoint, model_dir = fetch_models(args.work)
     java_home = install_java25(args.work)
     env = dict(os.environ, JAVA_HOME=str(java_home), RAYON_NUM_THREADS="2", OMP_NUM_THREADS="2")
@@ -283,11 +268,23 @@ def main(args: argparse.Namespace) -> None:
                 sys.executable, str(embed_script), "--db", str(database), "--checkpoint", str(checkpoint),
                 "--output", str(vectors_dir), "--gpu", str(gpu), "--gpus", "2", "--shards", "2",
                 "--batch", str(args.batch), "--onnx", str(model_dir / "seforim-embed-round2-int8.onnx"),
+                "--database-sha", database_sha,
             ]
             if args.amp:
                 command.append("--amp")
             processes.append(subprocess.Popen(command, env=env))
-        statuses = [process.wait() for process in processes]
+        try:
+            while any(process.poll() is None for process in processes):
+                if any(process.poll() not in (None, 0) for process in processes):
+                    raise RuntimeError("A GPU worker failed; its durable checkpoint can be resumed")
+                time.sleep(2)
+            statuses = [process.returncode for process in processes]
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.terminate()
+            for process in processes:
+                process.wait()
         if any(status != 0 for status in statuses):
             raise RuntimeError(f"GPU encoding failed: {statuses}")
         counts = [json.loads((vectors_dir / f"worker-{gpu}.json").read_text()) for gpu in range(2)]
@@ -332,31 +329,28 @@ def main(args: argparse.Namespace) -> None:
             f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
             f"-PsemanticVectors={vectors_dir}", f"-PsemanticIndexDir={index}",
             "-PshardIndex=0", "-PshardCount=1",
-            "--no-daemon", "--no-configuration-cache", "--max-workers=4",
+            "-PsemanticForceMerge=false", "-PsemanticHeap=2g",
+            "--no-daemon", "--no-configuration-cache", "--max-workers=2",
         ], cwd=library, env=env)
     for path in vector_files:
         path.unlink(missing_ok=True)
 
-    if args.all_distributions:
-        from kaggle_publish_distributions import build_distributions
-
-        build_distributions(args, database, model_dir, index, env, token, sha256, download,
-                            run_command, parts)
-        return
-
-    archive = args.output / "semantic-bundle.tar.zst"
-    run_command([
-        str(gradle), ":packaging:packageSemanticBundle",
-        f"-PseforimDb={database}", f"-PsemanticModelDir={model_dir}",
-        f"-PsemanticIndexDir={index}", f"-PsemanticBundleOutput={archive}", "-PzstdLevel=22",
-        "--no-daemon", "--no-configuration-cache", "--max-workers=4",
-    ], cwd=library, env=env)
-    outputs = sorted(args.output.glob("semantic-bundle.tar.zst*"))
-    manifest = args.output / "semantic-bundle.json"
-    outputs.append(manifest)
-    checksums = args.output / "checksums.sha256"
-    checksums.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in outputs), encoding="utf-8")
-    print("Ready for download:", *[str(path) for path in outputs + [checksums]], sep="\n", flush=True)
+    from semantic_transfer import pack
+    transfer = pack(index, args.output, database_sha=database_sha, model_sha=MODEL_SHA,
+                    tokenizer_sha=TOKENIZER_SHA, database_tag=args.db_release_tag, level=args.compression_level)
+    print("Ready for download: semantic-transfer.json and", len(transfer["parts"]), "index-only parts", flush=True)
+    if args.upload_transfer:
+        if not token:
+            raise ValueError("GH_TOKEN is required to upload the completed transfer; output files are safe")
+        from kaggle_publish_distributions import Publisher
+        publisher = Publisher(token)
+        tag = "semantic-transfer-" + args.db_release_tag + "-" + database_sha[:12]
+        release = publisher.draft(args.app_repository, tag, "Intermediate semantic index; finalized by GitHub Actions")
+        for part in transfer["parts"]:
+            publisher.upload(args.app_repository, release, args.output / part["file"], part["sha256"])
+        manifest_path = args.output / "semantic-transfer.json"
+        publisher.upload(args.app_repository, release, manifest_path, sha256(manifest_path))
+        print("Run finalize-semantic-index.yml with transfer_release_tag=" + tag, flush=True)
 
 
 if __name__ == "__main__":
@@ -365,11 +359,11 @@ if __name__ == "__main__":
     parser.add_argument("--db-release-tag", required=True)
     parser.add_argument("--db-repository", default="arieldaniely/SeforimLibrary")
     parser.add_argument("--all-distributions", action="store_true")
-    parser.add_argument("--publish-tag")
-    parser.add_argument("--pdf-release-tag")
     parser.add_argument("--app-repository", default="arieldaniely/Zayit")
     parser.add_argument("--work", type=Path, default=Path("/kaggle/temp/zayit-semantic"))
     parser.add_argument("--output", type=Path, default=Path("/kaggle/working"))
-    parser.add_argument("--batch", type=int, default=128)
+    parser.add_argument("--batch", type=int, default=64)
     parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--compression-level", type=int, choices=range(1, 7), default=3)
+    parser.add_argument("--upload-transfer", action="store_true")
     main(parser.parse_args())

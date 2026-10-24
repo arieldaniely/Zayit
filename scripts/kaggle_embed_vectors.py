@@ -18,6 +18,7 @@ import regex
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from vector_checkpoint import VectorCheckpoint
 from safetensors.torch import load_file
 from transformers import AutoTokenizer, BertModel, PreTrainedTokenizerFast
 
@@ -130,17 +131,20 @@ def run(args: argparse.Namespace) -> None:
     assert args.shards > 0 and args.shards % args.gpus == 0
     assert 0 <= args.gpu < args.gpus
     torch.set_num_threads(2)
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required; refusing a multi-day CPU fallback")
+    device = torch.device(f"cuda:{args.gpu}")
     if device.type == "cuda":
         assert torch.cuda.device_count() >= args.gpus, "Select Kaggle T4 x2 accelerator"
     print(f"worker {args.gpu}: device={device}", flush=True)
     tokenizer, model = load_model(args.checkpoint, device)
     args.output.mkdir(parents=True, exist_ok=True)
-    counts = {shard: 0 for shard in range(args.gpu, args.shards, args.gpus)}
-    outputs = {shard: (args.output / f"shard-{shard:02d}.bin").open("wb", buffering=1 << 20)
-               for shard in counts}
-    for output in outputs.values():
-        output.write(FILE_HEADER)
+    checkpoint = VectorCheckpoint(
+        args.output, args.gpu, range(args.gpu, args.shards, args.gpus),
+        {"databaseSha256": args.database_sha, "gpus": args.gpus, "shards": args.shards,
+         "model": "round2-8d7016cf472fb436dbd3ac843ef4d407c28d08f4", "amp": args.amp}, FILE_HEADER, RECORD_BYTES,
+    )
+    counts, outputs = checkpoint.counts, checkpoint.outputs
     connection = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
     started = time.monotonic()
     validated = False
@@ -177,31 +181,50 @@ def run(args: argparse.Namespace) -> None:
             outputs[shard].write(vector.tobytes())
             counts[shard] += 1
 
+    def encode_adaptively(batch):
+        try:
+            encode_batch(batch)
+        except torch.cuda.OutOfMemoryError:
+            if len(batch) == 1:
+                raise
+            torch.cuda.empty_cache()
+            print(f"worker {args.gpu}: retrying GPU batch as {len(batch) // 2} + {len(batch) - len(batch) // 2}", flush=True)
+            midpoint = len(batch) // 2
+            encode_adaptively(batch[:midpoint])
+            encode_adaptively(batch[midpoint:])
+
     try:
         rows = connection.execute(
             "SELECT l.id, l.bookId, l.content, b.isBaseBook FROM line l "
-            "JOIN book b ON b.id = l.bookId WHERE l.id % ? = ? ORDER BY l.id",
-            (args.gpus, args.gpu),
+            "JOIN book b ON b.id = l.bookId WHERE l.id > ? AND l.id % ? = ? ORDER BY l.id",
+            (checkpoint.last_line_id, args.gpus, args.gpu),
         )
         batch: list[tuple[int, int, int, str]] = []
-        scanned = 0
+        scanned = checkpoint.scanned
+        last_line_id = checkpoint.last_line_id
+        batches_since_checkpoint = 0
         for line_id, book_id, content, is_base in rows:
             scanned += 1
+            last_line_id = line_id
             normalized = clean(content or "")
             if normalized:
                 batch.append((line_id, book_id, is_base, normalized))
             if len(batch) >= args.batch:
-                encode_batch(batch)
+                encode_adaptively(batch)
                 batch.clear()
+                batches_since_checkpoint += 1
+                if batches_since_checkpoint >= 16:
+                    checkpoint.commit(last_line_id, scanned)
+                    batches_since_checkpoint = 0
             if scanned % 100_000 == 0:
                 print(f"worker {args.gpu}: scanned {scanned}, indexed {sum(counts.values())}, "
                       f"elapsed {time.monotonic() - started:.0f}s", flush=True)
         if batch:
-            encode_batch(batch)
+            encode_adaptively(batch)
+        checkpoint.commit(last_line_id, scanned)
     finally:
         connection.close()
-        for output in outputs.values():
-            output.close()
+        checkpoint.close()
     for shard, count in counts.items():
         assert (args.output / f"shard-{shard:02d}.bin").stat().st_size == len(FILE_HEADER) + count * RECORD_BYTES
     (args.output / f"worker-{args.gpu}.json").write_text(
@@ -213,6 +236,7 @@ def run(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", type=Path, required=True)
+    parser.add_argument("--database-sha", required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpu", type=int, required=True)

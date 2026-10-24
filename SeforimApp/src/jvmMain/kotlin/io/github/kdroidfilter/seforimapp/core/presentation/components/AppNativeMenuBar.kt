@@ -26,6 +26,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.home.widgets.availableTools
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.features.settings.navigation.SettingsDestination
@@ -50,6 +51,9 @@ fun AppNativeMenuBar(
     val persistSession by AppSettings.persistSessionFlow.collectAsState()
     val closeTreeOnNewBook by AppSettings.closeBookTreeOnNewBookSelectedFlow.collectAsState()
     val tabsState by tabsViewModel.state.collectAsState()
+    val toolsTitle = stringResource(Res.string.menu_tools)
+    val tools = availableTools.map { it.id to stringResource(it.title) }
+    val toolWindows = LocalAppGraph.current.toolWindows
 
     // Chrome-like History menu data: recent visits, refreshed on every history write
     val historyStore = LocalAppGraph.current.historyStore
@@ -329,6 +333,11 @@ fun AppNativeMenuBar(
             }
         }
 
+        Menu(toolsTitle) {
+            tools.forEach { (id, title) ->
+                Item(text = title) { toolWindows.open(id) }
+            }
+        }
         if (HISTORY_FAVORITES_ENABLED) {
             // History menu (Chrome-like): native search field filtering the entries, full
             // history page, and recent visits

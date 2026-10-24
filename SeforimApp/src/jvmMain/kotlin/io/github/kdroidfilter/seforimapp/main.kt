@@ -26,6 +26,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.window.StartupWindow
 import io.github.kdroidfilter.seforimapp.core.presentation.window.TabDragGhostWindow
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseUpdateWindow
+import io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindowsHost
 import io.github.kdroidfilter.seforimapp.features.onboarding.OnBoardingWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
@@ -447,6 +448,7 @@ fun main(args: Array<String>) {
                             initialDestination = settingsWindowState.initialDestination,
                         )
                     }
+                    ToolWindowsHost()
                     val updateDialogVisible by appGraph.appUpdateService.dialogVisible.collectAsState()
                     if (updateDialogVisible) {
                         UpdateDialog(

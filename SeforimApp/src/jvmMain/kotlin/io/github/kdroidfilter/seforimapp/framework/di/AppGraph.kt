@@ -29,6 +29,9 @@ import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
  */
 @DependencyGraph(AppScope::class)
 abstract class AppGraph : ViewModelGraph {
+    abstract val widgetPreferences: io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
+    abstract val toolWindows: io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindows
+    abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
     abstract val personalLibraryService: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
 
     abstract val searchFeedbackService: io.github.kdroidfilter.seforimapp.features.search.SearchFeedbackService

@@ -1,18 +1,22 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.home.widgets.ToolsMenuItems
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog
@@ -21,6 +25,7 @@ import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.update.showTitleBarIcon
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icon.PathIconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.*
@@ -143,6 +148,18 @@ fun TitleBarActionsButtonsView() {
         )
     }
 
+    DropdownButton(
+        popupWidthMatchButton = false,
+        showScrollbar = false,
+        popupContent = { close ->
+            androidx.compose.foundation.layout.Column(Modifier.width(180.dp)) {
+                ToolsMenuItems { id ->
+                    close()
+                    appGraph.toolWindows.open(id)
+                }
+            }
+        },
+    ) { Text(stringResource(Res.string.menu_tools)) }
     TitleBarActionButton(
         key = AllIconsKeys.Nodes.HomeFolder,
         contentDescription = stringResource(Res.string.home),

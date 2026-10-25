@@ -6,6 +6,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingData
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.PreviousPositions
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimapp.pagination.LinesPagingSource
 import io.github.kdroidfilter.seforimapp.pagination.PagingDefaults
@@ -318,71 +319,46 @@ class ContentUseCase(
      * Toggle l'affichage des commentaires
      */
     fun toggleCommentaries(): Boolean {
-        val currentState = stateManager.state.value
-        val isVisible = currentState.content.showCommentaries
-        val newPosition: Float
-
-        if (isVisible) {
-            // Cacher
-            val prev = currentState.layout.contentSplitState.positionPercentage
-            stateManager.updateLayout {
-                copy(
-                    previousPositions =
-                        previousPositions.copy(
-                            content = prev,
-                        ),
-                )
-            }
-            // Fully expand the main content when comments are hidden
-            newPosition = 1f
-            currentState.layout.contentSplitState.positionPercentage = newPosition
-        } else {
-            // Montrer
-            newPosition = currentState.layout.previousPositions.content
-            currentState.layout.contentSplitState.positionPercentage = newPosition
-        }
-
-        stateManager.updateContent {
-            copy(
-                showCommentaries = !isVisible,
-                showSources = if (!isVisible) false else showSources,
-                showMentions = showMentions,
+        val visible = stateManager.state.value.content
+        val shown =
+            toggleBottomPane(
+                isVisible = visible.showCommentaries,
+                otherVisible = visible.showSources,
+                previous = { content },
+                save = { copy(content = it) },
             )
-        }
-
-        return !isVisible
+        stateManager.updateContent { copy(showCommentaries = shown) }
+        return shown
     }
 
     fun toggleSources(): Boolean {
-        val currentState = stateManager.state.value
-        val isVisible = currentState.content.showSources
-        val newPosition: Float
-
-        if (isVisible) {
-            val prev = currentState.layout.contentSplitState.positionPercentage
-            stateManager.updateLayout {
-                copy(
-                    previousPositions =
-                        previousPositions.copy(
-                            sources = prev,
-                        ),
-                )
-            }
-            newPosition = 1f
-            currentState.layout.contentSplitState.positionPercentage = newPosition
-        } else {
-            newPosition = currentState.layout.previousPositions.sources
-            currentState.layout.contentSplitState.positionPercentage = newPosition
-        }
-
-        stateManager.updateContent {
-            copy(
-                showSources = !isVisible,
-                showCommentaries = if (!isVisible) false else showCommentaries,
-                showMentions = showMentions,
+        val visible = stateManager.state.value.content
+        val shown =
+            toggleBottomPane(
+                isVisible = visible.showSources,
+                otherVisible = visible.showCommentaries,
+                previous = { sources },
+                save = { copy(sources = it) },
             )
-        }
+        stateManager.updateContent { copy(showSources = shown) }
+        return shown
+    }
 
+    private fun toggleBottomPane(
+        isVisible: Boolean,
+        otherVisible: Boolean,
+        previous: PreviousPositions.() -> Float,
+        save: PreviousPositions.(Float) -> PreviousPositions,
+    ): Boolean {
+        val layout = stateManager.state.value.layout
+        val split = layout.contentSplitState
+        if (isVisible) {
+            val current = split.positionPercentage
+            stateManager.updateLayout { copy(previousPositions = previousPositions.save(current)) }
+            if (!otherVisible) split.positionPercentage = 1f
+        } else if (!otherVisible) {
+            split.positionPercentage = layout.previousPositions.previous()
+        }
         return !isVisible
     }
 

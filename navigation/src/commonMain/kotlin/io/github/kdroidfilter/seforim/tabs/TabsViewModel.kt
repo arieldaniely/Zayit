@@ -47,6 +47,7 @@ class TabsViewModel(
                 is TabsDestination.Home -> false
                 is TabsDestination.History -> false
                 is TabsDestination.Favorites -> false
+                is TabsDestination.Author -> dest.authorId != 0L && dest.authorId != -1L
                 is TabsDestination.Search -> dest.searchQuery.isNotBlank()
                 is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
                 is TabsDestination.PdfContent -> dest.bookId != -1L && dest.bookId != 0L
@@ -237,6 +238,7 @@ class TabsViewModel(
                 is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
                 is TabsDestination.History -> TabsDestination.History(destination.tabId)
                 is TabsDestination.Favorites -> TabsDestination.Favorites(destination.tabId)
+                is TabsDestination.Author -> TabsDestination.Author(destination.tabId, destination.authorId)
             }
 
         val newTab =
@@ -393,6 +395,11 @@ class TabsViewModel(
                             tabId = tab.destination.tabId,
                         )
                     is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = tab.destination.tabId)
+                    is TabsDestination.Author ->
+                        TabsDestination.Author(
+                            tabId = tab.destination.tabId,
+                            authorId = destination.authorId,
+                        )
                 }
 
             val isEditionSwitchForSameBook =
@@ -465,6 +472,11 @@ class TabsViewModel(
                             tabId = newTabId,
                         )
                     is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = newTabId)
+                    is TabsDestination.Author ->
+                        TabsDestination.Author(
+                            tabId = newTabId,
+                            authorId = destination.authorId,
+                        )
                 }
 
             val updated =
@@ -577,6 +589,7 @@ class TabsViewModel(
             is TabsDestination.Home -> TabType.SEARCH
             is TabsDestination.History -> TabType.HISTORY
             is TabsDestination.Favorites -> TabType.FAVORITES
+            is TabsDestination.Author -> TabType.AUTHOR
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
@@ -587,6 +600,7 @@ class TabsViewModel(
             is TabsDestination.Home -> ""
             is TabsDestination.History -> ""
             is TabsDestination.Favorites -> ""
+            is TabsDestination.Author -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
             is TabsDestination.PdfContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""

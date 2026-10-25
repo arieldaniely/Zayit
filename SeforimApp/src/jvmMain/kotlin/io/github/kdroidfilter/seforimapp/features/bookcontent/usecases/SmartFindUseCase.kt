@@ -52,7 +52,7 @@ internal class SmartFindUseCase(
                 for (batch in pending.chunked(8)) {
                     val texts = withContext(Dispatchers.Default) { batch.map { Jsoup.parse(it.content).text() } }
                     val passages =
-                        runSuspendCatching { engine.passagesByMeaning(query, texts) }.getOrNull() ?: return@collectLatest
+                        runSuspendCatching { engine.passagesInBookByMeaning(query, texts) }.getOrNull() ?: return@collectLatest
                     batch.forEachIndexed { index, line ->
                         val text = texts[index]
                         val passage = passages.getOrNull(index)?.takeIf { it.isNotBlank() } ?: text

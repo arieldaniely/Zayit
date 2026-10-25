@@ -22,10 +22,11 @@ import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.settings.ui.DisplaySettingsScreen
 import io.github.kdroidfilter.seforimapp.features.settings.ui.FontsSettingsScreen
 import io.github.kdroidfilter.seforimapp.features.settings.ui.ProfileSettingsScreen
+import io.github.kdroidfilter.seforimapp.features.settings.ui.UpdateStatusBanner
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.update.UpdateUiState
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
-import org.jetbrains.jewel.ui.component.InlineInformationBanner
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -47,7 +48,7 @@ class SettingsScreensUiTest {
             setContent {
                 IntUiTheme(isDark = false) {
                     Column(modifier = Modifier.width(400.dp).testTag("card")) {
-                        InlineInformationBanner(text = "בודק עדכונים", modifier = Modifier.testTag("banner"))
+                        UpdateStatusBanner(UpdateUiState.Checking, {}, {}, {}, Modifier.testTag("banner"))
                     }
                 }
             }

@@ -41,7 +41,6 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetSettings
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberAccentColor
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxRow
@@ -51,7 +50,7 @@ import org.jetbrains.jewel.ui.component.ListComboBox
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
-import seforimapp.seforimapp.generated.resources.*
+import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.home_widget_name_measures
 import seforimapp.seforimapp.generated.resources.home_widgets_options
 import java.math.BigDecimal
@@ -113,13 +112,12 @@ internal object MeasuresWidget : HomeWidget {
         state: HomeWidgetsState,
         modifier: Modifier,
     ) {
-        val shown = state[MeasuresSettings.shown]
         val field = rememberTextFieldState("1")
         var from by remember { mutableStateOf(LengthUnit.AMMA) }
         var to by remember { mutableStateOf(LengthUnit.TEFACH) }
         val typed = field.text.trim().toString()
-        val amount = typed.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
-        val etzbaos = amount?.let { it * from.etzbaos }?.takeIf { it.isFinite() }
+        val amount = typed.replace(',', '.').toDoubleOrNull()?.takeIf { it >= 0 }
+        val etzbaos = amount?.let { it * from.etzbaos }
         val ammaOpinions = AMMA_OPINIONS.filter { it.id in shown }
         val milOpinions = MIL_OPINIONS.filter { it.id in shown }
         val accent = rememberAccentColor(JewelTheme.isDark)
@@ -182,10 +180,10 @@ internal object MeasuresWidget : HomeWidget {
                 }
                 if (ammaOpinions.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(ROW_GAP)) {
-                        SectionTitle(stringResource(Res.string.measures_today))
+                        SectionTitle(TODAY_TITLE)
                         ammaOpinions.forEach { opinion ->
                             OpinionRow(
-                                label = stringResource(opinion.label),
+                                label = opinion.label,
                                 value = etzbaos?.let { length(it / ETZBAOS_IN_AMMA * opinion.cm) },
                                 source = opinion.source,
                                 accent = accent,
@@ -196,10 +194,10 @@ internal object MeasuresWidget : HomeWidget {
                 }
                 if (milOpinions.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(ROW_GAP)) {
-                        SectionTitle(stringResource(Res.string.measures_walk))
+                        SectionTitle(WALK_TITLE)
                         milOpinions.forEach { opinion ->
                             OpinionRow(
-                                label = stringResource(opinion.label),
+                                label = opinion.label,
                                 value = etzbaos?.let { duration(it / ETZBAOS_IN_AMMA / AMOS_IN_MIL * opinion.minutes * 60) },
                                 source = opinion.source,
                                 accent = accent,
@@ -224,6 +222,9 @@ private val OPINION_ROW_HEIGHT = 20.dp
 private val BLOCK_GAP = 8.dp
 private val ROW_GAP = 2.dp
 
+private const val TODAY_TITLE = "בימינו"
+private const val WALK_TITLE = "זמן הליכה"
+
 internal object MeasuresSettings : WidgetSettings(MeasuresWidget.id) {
     /** The ids of the opinions shown: every one until the user picks. */
     val shown by stringSet((AMMA_OPINIONS.map { it.id } + MIL_OPINIONS.map { it.id }).toSet())
@@ -235,18 +236,10 @@ private fun MeasuresOptions(state: HomeWidgetsState) {
     val shown = state[MeasuresSettings.shown]
     val toggle = { id: String, on: Boolean -> state[MeasuresSettings.shown] = if (on) shown + id else shown - id }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        OptionsGroup(stringResource(Res.string.measures_today))
-        AMMA_OPINIONS.forEach {
-            OptionRow(
-                it.id,
-                stringResource(it.label),
-                stringResource(Res.string.measures_amma_detail, length(it.cm), it.source.ref),
-                it.id in shown,
-                toggle,
-            )
-        }
-        OptionsGroup(stringResource(Res.string.measures_walk))
-        MIL_OPINIONS.forEach { OptionRow(it.id, stringResource(it.label), it.source.ref, it.id in shown, toggle) }
+        OptionsGroup(TODAY_TITLE)
+        AMMA_OPINIONS.forEach { OptionRow(it.id, it.label, "אמה ${length(it.cm)} · ${it.source.ref}", it.id in shown, toggle) }
+        OptionsGroup(WALK_TITLE)
+        MIL_OPINIONS.forEach { OptionRow(it.id, it.label, it.source.ref, it.id in shown, toggle) }
     }
 }
 
@@ -281,7 +274,7 @@ private fun UnitPicker(
     modifier: Modifier = Modifier,
 ) {
     ListComboBox(
-        items = LengthUnit.entries.map { stringResource(it.title) },
+        items = LengthUnit.entries.map { it.title },
         selectedIndex = unit.ordinal,
         onSelectedItemChange = { onPick(LengthUnit.entries[it]) },
         modifier = modifier,
@@ -389,26 +382,26 @@ private const val AMOS_IN_MIL = 2000.0
 
 /** The lengths, in etzbaos, with what says so. */
 internal enum class LengthUnit(
-    val title: StringResource,
-    val plural: StringResource,
+    val title: String,
+    val plural: String,
     val etzbaos: Double,
     val source: Source,
 ) {
     // "האצבע… רחב הגודל של יד. והטפח ארבע אצבעות… אמה בת ששה טפחים"
-    ETZBA(Res.string.measures_etzba, Res.string.measures_etzba_plural, 1.0, RAMBAM_SHABBOS_17_36),
-    TEFACH(Res.string.measures_tefach, Res.string.measures_tefach_plural, 4.0, RAMBAM_SHABBOS_17_36),
-    AMMA(Res.string.measures_amma, Res.string.measures_amma_plural, ETZBAOS_IN_AMMA, RAMBAM_SHABBOS_17_36),
+    ETZBA("אצבע", "אצבעות", 1.0, RAMBAM_SHABBOS_17_36),
+    TEFACH("טפח", "טפחים", 4.0, RAMBAM_SHABBOS_17_36),
+    AMMA("אמה", "אמות", ETZBAOS_IN_AMMA, RAMBAM_SHABBOS_17_36),
 
     // "ארבעה מילין שהם שמונת אלפים אמה"
-    MIL(Res.string.measures_mil, Res.string.measures_mil_plural, ETZBAOS_IN_AMMA * AMOS_IN_MIL, RAMBAM_TEFILLAH_4_2),
+    MIL("מיל", "מילין", ETZBAOS_IN_AMMA * AMOS_IN_MIL, RAMBAM_TEFILLAH_4_2),
 
     // "מיל הוא אלפים אמה ופרסה הוא ד' מילין"
-    PARSAH(Res.string.measures_parsah, Res.string.measures_parsah_plural, ETZBAOS_IN_AMMA * AMOS_IN_MIL * 4, MISHNAH_BERURAH_110_31),
+    PARSAH("פרסה", "פרסאות", ETZBAOS_IN_AMMA * AMOS_IN_MIL * 4, MISHNAH_BERURAH_110_31),
 }
 
 internal class AmmaOpinion(
     val id: String,
-    val label: StringResource,
+    val label: String,
     val cm: Double,
     val source: Source,
 )
@@ -416,24 +409,14 @@ internal class AmmaOpinion(
 internal val AMMA_OPINIONS =
     listOf(
         // "ומדת האמה 58 ס"מ" (קונטרס השיעורים)
-        AmmaOpinion(
-            "chazon_ish",
-            Res.string.measures_chazon_ish,
-            58.0,
-            Source("חזו״א, קונטרס השיעורים לט, ט", "חזון איש, אורח חיים מועד", 1533),
-        ),
+        AmmaOpinion("chazon_ish", "חזון איש", 58.0, Source("חזו״א, קונטרס השיעורים לט, ט", "חזון איש, אורח חיים מועד", 1533)),
         // "אמה של תורה שהוא כ"ד אצבעות מדת כ"א אינטשעס ורביע"
-        AmmaOpinion(
-            "igros_moshe",
-            Res.string.measures_igros_moshe,
-            21.25 * 2.54,
-            Source("אגרות משה או״ח א, קלו", "אגרות משה אורח חיים א", 1256),
-        ),
+        AmmaOpinion("igros_moshe", "אגרות משה", 21.25 * 2.54, Source("אגרות משה או״ח א, קלו", "אגרות משה אורח חיים א", 1256)),
     )
 
 internal class MilOpinion(
     val id: String,
-    val label: StringResource,
+    val label: String,
     val minutes: Double,
     val source: Source,
 )
@@ -443,45 +426,42 @@ private val BIUR_HALACHA_459_2 = Source("ביאור הלכה תנט, ב", "בי�
 internal val MIL_OPINIONS =
     listOf(
         // "ושיעור מיל הוי רביעית שעה וחלק מעשרים מן השעה"
-        MilOpinion("mil_18", Res.string.measures_mil_18, 18.0, Source("שו״ע או״ח תנט, ב", "שולחן ערוך, אורח חיים", 3402)),
+        MilOpinion("mil_18", "מיל 18 דק׳", 18.0, Source("שו״ע או״ח תנט, ב", "שולחן ערוך, אורח חיים", 3402)),
         // "שחושבין שיעור מיל לחשבון כ"ב מינוטין וחצי"
-        MilOpinion("mil_22_5", Res.string.measures_mil_22_5, 22.5, BIUR_HALACHA_459_2),
+        MilOpinion("mil_22_5", "מיל 22.5 דק׳", 22.5, BIUR_HALACHA_459_2),
         // "שליש שעה וחלק ט"ו מן השעה"
-        MilOpinion("mil_24", Res.string.measures_mil_24, 24.0, BIUR_HALACHA_459_2),
+        MilOpinion("mil_24", "מיל 24 דק׳", 24.0, BIUR_HALACHA_459_2),
     )
 
 /** [count] [unit]s, its name in the singular for one. */
-@Composable
 internal fun quantity(
     count: Double,
     unit: LengthUnit,
-): String = "${amount(count)} ${stringResource(if (count == 1.0) unit.title else unit.plural)}"
+): String = "${amount(count)} ${if (count == 1.0) unit.title else unit.plural}"
 
 /** [cm] in centimetres, metres or kilometres. */
-@Composable
 internal fun length(cm: Double): String =
     when {
-        cm < 100 -> stringResource(Res.string.measures_cm, amount(cm))
-        cm < 100_000 -> stringResource(Res.string.measures_m, amount(cm / 100))
-        else -> stringResource(Res.string.measures_km, amount(cm / 100_000))
+        cm < 100 -> "${amount(cm)} ס״מ"
+        cm < 100_000 -> "${amount(cm / 100)} מ׳"
+        else -> "${amount(cm / 100_000)} ק״מ"
     }
 
 /** [seconds] in seconds, minutes or hours. */
-@Composable
 internal fun duration(seconds: Double): String =
     when {
-        seconds < 60 -> stringResource(Res.string.measures_seconds, amount(seconds))
-        seconds < 3600 -> stringResource(Res.string.measures_minutes, amount(seconds / 60))
-        else -> stringResource(Res.string.measures_hours, amount(seconds / 3600))
+        seconds < 60 -> "${amount(seconds)} שניות"
+        seconds < 3600 -> "${amount(seconds / 60)} דקות"
+        else -> "${amount(seconds / 3600)} שעות"
     }
 
 // The same "8,000" whatever the system's language
-private val whole = ThreadLocal.withInitial { DecimalFormat("#,##0", DecimalFormatSymbols(Locale.ROOT)) }
+private val whole = DecimalFormat("#,##0", DecimalFormatSymbols(Locale.ROOT))
 
 /** Whole from 100, else three significant digits: 58, 1.74, 0.54. */
 private fun amount(x: Double): String =
     when {
-        x >= 100 -> whole.get().format(x)
+        x >= 100 -> whole.format(x)
         x == 0.0 -> "0"
         else -> BigDecimal(x).round(MathContext(3)).stripTrailingZeros().toPlainString()
     }

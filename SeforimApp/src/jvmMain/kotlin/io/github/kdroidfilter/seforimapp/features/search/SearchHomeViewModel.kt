@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
+import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.deeplink.applyDeepLinkHighlight
@@ -12,8 +13,14 @@ import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
 import io.github.kdroidfilter.seforimapp.features.search.domain.TorahReferenceSearchHelper
+import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ReferenceParser
+import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ReferenceResolver
+import io.github.kdroidfilter.seforimapp.features.search.domain.reference.RepositoryReferenceSource
+import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
+import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService.AuthorHit
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
@@ -95,6 +102,7 @@ data class BookSuggestionDto(
     val path: List<String>,
     val isPdf: Boolean = false,
     val targetToc: TocEntry? = null,
+    val exactAcronym: Boolean = false,
 )
 
 @Immutable
@@ -120,6 +128,10 @@ data class SearchHomeUiState(
     val selectedScopeBook: Book? = null,
     val selectedScopeIsPdf: Boolean = false,
     val selectedScopeToc: TocEntry? = null,
+    val jumpSuggestions: List<io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference> = emptyList(),
+    val authorSuggestions: List<LuceneLookupSearchService.AuthorHit> = emptyList(),
+    val selectedScopeAuthor: LuceneLookupSearchService.AuthorHit? = null,
+    val bookPickedByUser: Boolean = false,
     val userDisplayName: String = "",
     val userCommunityCode: String? = null,
     val tocPreviewHints: List<String> = emptyList(),
@@ -140,6 +152,11 @@ class SearchHomeViewModel(
     // Navigation events channel - UI collects and handles navigation
     private val _navigationEvents = Channel<SearchHomeNavigationEvent>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
+
+    private val referenceResolver = ReferenceResolver(RepositoryReferenceSource(repository))
+    private var authorBooks: List<BookSuggestionDto> = emptyList()
+    private var restoringAuthorId: Long? = null
+    private var cachedAuthorLookup: List<io.github.kdroidfilter.seforimlibrary.dao.repository.AuthorLookupEntry>? = null
 
     private val referenceQuery = MutableStateFlow("")
     private val tocQuery = MutableStateFlow("")
@@ -204,6 +221,37 @@ class SearchHomeViewModel(
 
     init {
         viewModelScope.launch {
+            referenceQuery.debounce(120).distinctUntilChanged().collectLatest { raw ->
+                if (_uiState.value.selectedScopeAuthor != null || _uiState.value.selectedScopeBook != null) return@collectLatest
+                if (raw.trim().length < 2) {
+                    _uiState.value = _uiState.value.copy(jumpSuggestions = emptyList(), authorSuggestions = emptyList())
+                    return@collectLatest
+                }
+                val jumps = runSuspendCatching { referenceResolver.resolve(raw) }.getOrDefault(emptyList())
+                val authors =
+                    cachedAuthorLookup ?: runSuspendCatching { repository.getAuthorsForLookup() }
+                        .getOrDefault(emptyList())
+                        .also { cachedAuthorLookup = it }
+                val normalized = ReferenceParser.normalizeName(AuthorNames.withoutHonorific(raw))
+                val fallbackHits =
+                    authors
+                        .filter { author ->
+                            (listOf(author.name) + author.aliases).any { ReferenceParser.normalizeName(it).contains(normalized) }
+                        }.take(10)
+                        .map { author ->
+                            AuthorHit(author.id, author.name, author.bookCount, AuthorNames.matchedAlias(raw, author.name, author.aliases))
+                        }
+                val indexedAuthors =
+                    runSuspendCatching { withContext(Dispatchers.IO) { lookup.suggestAuthors(raw, 10) } }
+                        .getOrDefault(emptyList())
+                val hits = indexedAuthors.ifEmpty { fallbackHits }
+                if (referenceQuery.value == raw && _uiState.value.selectedScopeAuthor == null) {
+                    _uiState.value = _uiState.value.copy(jumpSuggestions = jumps, authorSuggestions = hits)
+                }
+            }
+        }
+
+        viewModelScope.launch {
             val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
             if (ready && !modeChosen) {
                 _uiState.value = _uiState.value.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART)
@@ -240,6 +288,15 @@ class SearchHomeViewModel(
                     val q = qRaw.trim()
                     val revision = referenceRevision
                     if (referenceQuery.value != qRaw || _uiState.value.selectedScopeBook != null) return@collectLatest
+                    if (_uiState.value.selectedScopeAuthor != null) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                isReferenceLoading = false,
+                                bookSuggestions = authorBooks.filter { it.titleContains(q) },
+                                suggestionsVisible = true,
+                            )
+                        return@collectLatest
+                    }
                     val qNorm = sanitizeHebrewForAcronym(q)
                     if (q.isBlank()) {
                         _uiState.value =
@@ -320,68 +377,8 @@ class SearchHomeViewModel(
                                                     val pdfTitles =
                                                         withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
 
-                                                    // 1. Check for continuous reference candidates (e.g. "ברכות ב:", "שו\"ע או\"ח רסג")
-                                                    val splits = TorahReferenceSearchHelper.splitReferenceQuery(q)
-                                                    val combinedSuggestions = mutableListOf<BookSuggestionDto>()
-
-                                                    for ((bookPart, locPart) in splits) {
-                                                        if (bookPart.length < minBookPrefixLen || locPart.isBlank()) continue
-                                                        val bookPartNorm = sanitizeHebrewForAcronym(bookPart)
-                                                        val candidateHits =
-                                                            runCatching {
-                                                                lookup.searchBooksWithScoring(bookPartNorm, limit = 5)
-                                                            }.getOrDefault(emptyList())
-                                                        val candidateBooks =
-                                                            candidateHits
-                                                                .map { hit ->
-                                                                    Book(
-                                                                        id = hit.id,
-                                                                        categoryId = hit.categoryId,
-                                                                        sourceId = 0,
-                                                                        title = hit.title,
-                                                                        order = hit.orderIndex.toFloat(),
-                                                                        isBaseBook = hit.isBaseBook,
-                                                                    )
-                                                                }.ifEmpty {
-                                                                    runSuspendCatching {
-                                                                        repository.findBooksByTitleLikeCore("%$bookPart%", limit = 5)
-                                                                    }.getOrDefault(emptyList())
-                                                                }
-
-                                                        for (candidateBook in candidateBooks.take(3)) {
-                                                            if (TorahReferenceSearchHelper.hasUnmatchedLocationSuffix(
-                                                                    candidateBook.title,
-                                                                    bookPart,
-                                                                )
-                                                            ) {
-                                                                continue
-                                                            }
-                                                            val bookTocs = getOrLoadTocEntries(candidateBook)
-                                                            val matchingTocs =
-                                                                bookTocs.filter { tocDto ->
-                                                                    TorahReferenceSearchHelper.matchesTocLocation(tocDto, locPart)
-                                                                }
-
-                                                            for (matchedToc in matchingTocs.take(6)) {
-                                                                val catPath = buildCategoryPathTitlesCached(candidateBook.categoryId)
-                                                                val hasPdfEdition =
-                                                                    pdfTitles.contains(candidateBook.title.trim()) &&
-                                                                        TalmudPdfService.isTalmudBavliCategoryPath(catPath)
-                                                                val combinedDto =
-                                                                    BookSuggestionDto(
-                                                                        book = candidateBook,
-                                                                        path = matchedToc.path,
-                                                                        isPdf = false,
-                                                                        targetToc = matchedToc.toc,
-                                                                    )
-                                                                combinedSuggestions.add(combinedDto)
-                                                                if (hasPdfEdition) {
-                                                                    combinedSuggestions.add(combinedDto.copy(isPdf = true))
-                                                                }
-                                                            }
-                                                        }
-                                                        if (combinedSuggestions.isNotEmpty()) break
-                                                    }
+                                                    // Zayit's ReferenceResolver now supplies the separate jump rows.
+                                                    val combinedSuggestions = emptyList<BookSuggestionDto>()
 
                                                     // 2. Standard book search
                                                     val indexedDeferred =
@@ -396,8 +393,9 @@ class SearchHomeViewModel(
                                                                 repository.findBooksByTitleLikeCore(pattern, limit = maxBookPredictive)
                                                             }.getOrDefault(emptyList())
                                                         }
+                                                    val indexedHits = indexedDeferred.await()
                                                     val indexedBooks =
-                                                        indexedDeferred.await().map { hit ->
+                                                        indexedHits.map { hit ->
                                                             Book(
                                                                 id = hit.id,
                                                                 categoryId = hit.categoryId,
@@ -415,7 +413,16 @@ class SearchHomeViewModel(
                                                     val regularSuggestions =
                                                         books.flatMap { book ->
                                                             val catPath = buildCategoryPathTitlesCached(book.categoryId)
-                                                            val textSuggestion = BookSuggestionDto(book, catPath + book.title)
+                                                            val textSuggestion =
+                                                                BookSuggestionDto(
+                                                                    book,
+                                                                    catPath + book.title,
+                                                                    exactAcronym =
+                                                                        indexedHits
+                                                                            .firstOrNull { it.id == book.id }
+                                                                            ?.matchedAcronyms
+                                                                            ?.any { sanitizeHebrewForAcronym(it) == qNorm } == true,
+                                                                )
                                                             val hasPdfEdition =
                                                                 pdfTitles.contains(book.title.trim()) &&
                                                                     TalmudPdfService.isTalmudBavliCategoryPath(catPath)
@@ -594,10 +601,159 @@ class SearchHomeViewModel(
         }
     }
 
+    /** Searches in the books of [author], listed to pick one of them instead. */
+    fun onPickAuthor(author: AuthorHit) {
+        showAuthor(author, showSuggestions = true)
+        referenceQuery.value = ""
+        viewModelScope.launch {
+            val books =
+                withContext(Dispatchers.IO) {
+                    runSuspendCatching { repository.getAuthorDetails(author.id)?.books }.getOrNull().orEmpty()
+                }
+            showAuthorBooks(author.id, books)
+        }
+    }
+
+    private fun showAuthor(
+        author: AuthorHit,
+        // False to only show the author picked (a restored results tab), their books staying closed
+        showSuggestions: Boolean,
+    ) {
+        restoringAuthorId = null
+        _uiState.value =
+            _uiState.value.copy(
+                selectedScopeAuthor = author,
+                selectedScopeBook = null,
+                selectedScopeToc = null,
+                authorSuggestions = emptyList(),
+                jumpSuggestions = emptyList(),
+                bookSuggestions = emptyList(),
+                isReferenceLoading = showSuggestions,
+                suggestionsVisible = showSuggestions,
+            )
+    }
+
+    // The same books as a search scoped to the author runs in (SearchResultViewModel.authorScope)
+    private suspend fun showAuthorBooks(
+        authorId: Long,
+        books: List<Book>,
+    ) {
+        authorBooks =
+            books
+                .sortedWith(compareByDescending<Book> { it.isBaseBook }.thenBy { it.order })
+                .map { book -> BookSuggestionDto(book, buildCategoryPathTitlesCached(book.categoryId) + book.title) }
+        if (_uiState.value.selectedScopeAuthor?.id == authorId) {
+            val typed = referenceQuery.value.trim()
+            _uiState.value =
+                _uiState.value.copy(bookSuggestions = authorBooks.filter { it.titleContains(typed) }, isReferenceLoading = false)
+        }
+    }
+
+    fun onClearAuthor() {
+        restoringAuthorId = null
+        authorBooks = emptyList()
+        _uiState.value = _uiState.value.copy(selectedScopeAuthor = null, bookSuggestions = emptyList(), suggestionsVisible = false)
+    }
+
+    /** Opens [book] at its start in the current tab. */
+    suspend fun openBook(
+        book: Book,
+        currentTabId: String,
+    ) {
+        persistedStore.update(currentTabId) { current ->
+            current.copy(bookContent = current.bookContent.copy(selectedBookId = book.id))
+        }
+        _uiState.value = _uiState.value.copy(suggestionsVisible = false)
+        _navigationEvents.send(SearchHomeNavigationEvent.NavigateToBookContent(bookId = book.id, tabId = currentTabId, lineId = null))
+    }
+
+    /** Opens the page of [author] in the current tab. */
+    suspend fun openAuthor(
+        author: AuthorHit,
+        currentTabId: String,
+    ) {
+        _uiState.value = _uiState.value.copy(suggestionsVisible = false)
+        _navigationEvents.send(
+            SearchHomeNavigationEvent.NavigateToDeepLink(TabsDestination.Author(tabId = currentTabId, authorId = author.id)),
+        )
+    }
+
+    /** Opens the place a typed reference resolved to, in the current tab. */
+    suspend fun openJump(
+        jump: ResolvedReference,
+        currentTabId: String,
+    ) {
+        persistedStore.update(currentTabId) { current ->
+            current.copy(bookContent = current.bookContent.copy(selectedBookId = jump.book.id))
+        }
+        _uiState.value = _uiState.value.copy(suggestionsVisible = false)
+        _navigationEvents.send(
+            SearchHomeNavigationEvent.NavigateToBookContent(
+                bookId = jump.book.id,
+                tabId = currentTabId,
+                lineId = jump.lineId,
+            ),
+        )
+    }
+
+    suspend fun openResolvedReference(
+        reference: ResolvedReference,
+        tabId: String,
+    ) = openJump(reference, tabId)
+
+    /**
+     * Puts the bar where [scope] searched, as a results tab opens, so that what it shows is where it
+     * searches: a book (a TOC entry's whole book) or an author, shown as its chip.
+     */
+    fun showScope(scope: SearchScope) {
+        val bookId =
+            when (scope) {
+                is SearchScope.Book -> scope.bookId
+                is SearchScope.Toc -> scope.bookId
+                is SearchScope.Author -> {
+                    showAuthorScope(scope.authorId)
+                    return
+                }
+                else -> return
+            }
+        viewModelScope.launch {
+            runSuspendCatching { repository.getBookCore(bookId) }.getOrNull()?.let { onPickBook(it, showSuggestions = false) }
+        }
+    }
+
+    private fun showAuthorScope(authorId: Long) {
+        if (_uiState.value.selectedScopeAuthor?.id == authorId) return
+        restoringAuthorId = authorId
+        viewModelScope.launch {
+            val author = runSuspendCatching { repository.getAuthorDetails(authorId) }.getOrNull()
+            if (restoringAuthorId != authorId) return@launch
+            restoringAuthorId = null
+            if (author == null) return@launch
+            showAuthor(AuthorHit(author.id, author.name, author.books.size), showSuggestions = false)
+            showAuthorBooks(author.id, author.books)
+        }
+    }
+
+    /** Where the bar searches: its picked TOC entry, book or author, else everywhere. */
+    fun barScope(): SearchScope {
+        val selected = _uiState.value
+        return when {
+            selected.selectedScopeToc != null && selected.selectedScopeToc.id > 0 ->
+                SearchScope.Toc(bookId = selected.selectedScopeToc.bookId, tocId = selected.selectedScopeToc.id)
+            selected.selectedScopeToc != null -> SearchScope.Book(selected.selectedScopeToc.bookId)
+            selected.selectedScopeBook != null -> SearchScope.Book(selected.selectedScopeBook.id)
+            selected.selectedScopeAuthor != null -> SearchScope.Author(selected.selectedScopeAuthor.id)
+            else -> restoringAuthorId?.let(SearchScope::Author) ?: SearchScope.Global
+        }
+    }
+
     fun onPickBook(
         book: Book,
         isPdf: Boolean = false,
+        showSuggestions: Boolean = true,
     ) {
+        restoringAuthorId = null
+        authorBooks = emptyList()
         referenceRevision++
         referenceQuery.value = ""
         val revision = ++tocRevision
@@ -607,6 +763,8 @@ class SearchHomeViewModel(
             _uiState.value.copy(
                 selectedScopeCategory = null,
                 selectedScopeBook = book,
+                selectedScopeAuthor = null,
+                bookPickedByUser = showSuggestions,
                 globalExtended = true,
                 selectedScopeIsPdf = isPdf,
                 selectedScopeToc = null,
@@ -632,7 +790,7 @@ class SearchHomeViewModel(
                 _uiState.value.copy(
                     tocPreviewHints = preview,
                     tocSuggestions = initialSuggestions,
-                    tocSuggestionsVisible = _uiState.value.selectedScopeToc == null && initialSuggestions.isNotEmpty(),
+                    tocSuggestionsVisible = showSuggestions && _uiState.value.selectedScopeToc == null && initialSuggestions.isNotEmpty(),
                     isTocLoading = false,
                 )
         }
@@ -745,8 +903,9 @@ class SearchHomeViewModel(
             val nextSearch =
                 (current.search ?: SearchPersistedState()).copy(
                     query = query,
+                    scopeAuthorId = selected.selectedScopeAuthor?.id ?: 0L,
                     mode = selected.mode.name,
-                    globalExtended = selected.globalExtended || datasetScope != "global",
+                    globalExtended = selected.globalExtended || datasetScope != "global" || selected.selectedScopeAuthor != null,
                     datasetScope = datasetScope,
                     filterCategoryId = filterCategoryId,
                     filterBookId = filterBookId,
@@ -919,3 +1078,7 @@ class SearchHomeViewModel(
         return out
     }
 }
+
+// Original Zayit title matching for a selected author's books.
+private fun BookSuggestionDto.titleContains(typed: String): Boolean =
+    typed.isBlank() || ReferenceParser.normalizeName(book.title).contains(ReferenceParser.normalizeName(typed))

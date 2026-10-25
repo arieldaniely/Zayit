@@ -40,6 +40,6 @@ class WidgetPreferencesTest {
         windows.open("calendar")
         windows.open("unknown")
         assertEquals(listOf("calendar"), windows.open.map { it.id })
-        assertEquals(1, windows.revisions["calendar"])
+        assertEquals(1, windows.reopened["calendar"])
     }
 }

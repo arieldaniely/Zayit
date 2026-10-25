@@ -210,7 +210,7 @@ fun NucleusApplicationScope.MainAppWindow(
                             !keyEvent.isCtrlPressed &&
                             !keyEvent.isShiftPressed &&
                             !keyEvent.isMetaPressed &&
-                            keyEvent.key == Key.Home
+                            keyEvent.key == Key.MoveHome
                     ) ||
                     (
                         keyEvent.isMetaPressed &&
@@ -531,7 +531,7 @@ fun NucleusApplicationScope.MainAppWindow(
                                             !keyEvent.isCtrlPressed &&
                                             !keyEvent.isShiftPressed &&
                                             !keyEvent.isMetaPressed &&
-                                            keyEvent.key == Key.Home
+                                            keyEvent.key == Key.MoveHome
                                     ) ||
                                         (
                                             keyEvent.isMetaPressed &&

@@ -139,6 +139,22 @@ class FavoritesStore(
             rows.map { it.toEntry() }
         }
 
+    /** A bounded Home card query; no other folders' entries are loaded. */
+    suspend fun recent(
+        limit: Int,
+        folderId: Long? = null,
+    ): List<FavoriteEntry> =
+        withContext(Dispatchers.IO) {
+            require(limit in 1..100)
+            val rows =
+                if (folderId == null) {
+                    queries.selectRecentFavorites(limit.toLong()).executeAsList()
+                } else {
+                    queries.selectRecentInFolder(folderId, limit.toLong()).executeAsList()
+                }
+            rows.map { it.toEntry() }
+        }
+
     private fun Favorite.toEntry(): FavoriteEntry =
         FavoriteEntry(
             key = key,

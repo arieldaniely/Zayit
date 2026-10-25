@@ -5,6 +5,7 @@ import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 internal val SearchPersistedState.hasExplicitScope: Boolean
     get() =
         datasetScope != "global" ||
+            scopeAuthorId != 0L ||
             filterCategoryId != 0L ||
             filterBookId != 0L ||
             filterTocId != 0L ||

@@ -149,6 +149,8 @@ sealed interface BookContentEvent {
 
     data object ToggleMentions : BookContentEvent
 
+    data object ToggleBookDetails : BookContentEvent
+
     data object ToggleDiacritics : BookContentEvent
 
     data object OpenPdfEdition : BookContentEvent
@@ -211,6 +213,10 @@ sealed interface BookContentEvent {
     data class OpenCommentaryTarget(
         val bookId: Long,
         val lineId: Long?,
+    ) : BookContentEvent
+
+    data class OpenAuthor(
+        val authorId: Long,
     ) : BookContentEvent
 
     data class SelectedCommentatorsChanged(

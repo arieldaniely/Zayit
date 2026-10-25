@@ -143,6 +143,8 @@ kotlin {
             implementation(libs.hebrew.numerals)
             api(project(":jewel"))
             implementation(project(":earthwidget"))
+            implementation(project(":luach"))
+            implementation(libs.kosherkotlin)
             implementation(libs.nucleus.system.color)
             implementation(libs.nucleus.decorated.window.core)
             implementation(libs.nucleus.decorated.window.tao)
@@ -228,6 +230,14 @@ nucleus.application {
     mainClass = "io.github.kdroidfilter.seforimapp.MainKt"
 
     graalvm {
+        march.set(
+            providers
+                .gradleProperty("nativeMarch")
+                .map {
+                    dev.nucleusframework.desktop.application.dsl.NativeImageMarch
+                        .valueOf(it.uppercase())
+                }.orElse(dev.nucleusframework.desktop.application.dsl.NativeImageMarch.COMPATIBILITY),
+        )
         isEnabled = true
         javaLanguageVersion = 25
         jvmVendor = JvmVendorSpec.BELLSOFT
@@ -260,7 +270,6 @@ nucleus.application {
             // MethodHandle-based code paths are handled by substitution classes
             // in io.github.kdroidfilter.seforimapp.graalvm.
         )
-        march = providers.gradleProperty("nativeMarch").getOrElse("compatibility")
         nativeImageConfigBaseDir.set(layout.projectDirectory.dir("src/graalvm"))
     }
     nativeDistributions {
@@ -331,7 +340,7 @@ nucleus.application {
             dirChooser = false
             shortcut = true
             upgradeUuid = "8e25f9ce-1d32-49d7-b867-c9b217135d71"
-            perUserInstall = true
+            msi { perMachine = false }
 
             nsis {
                 oneClick = true // Default: true

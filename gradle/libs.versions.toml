@@ -1,4 +1,6 @@
 [versions]
+filamentKmp = "0.7.10"
+kosherkotlin = "3.0.5"
 
 commonsCompress = "1.28.0"
 composeSonner = "0.4.0"
@@ -7,7 +9,7 @@ filekitCore = "0.14.1"
 hebrewNumerals = "0.2.6"
 jsoup = "1.22.2"
 jvmToolchain = "25"
-nucleus = "2.0.0-alpha-202607050350"
+nucleus = "3.0.0-dev-202610110853"
 koalaplotCore = "0.11.2"
 kotlin = "2.3.21"
 compose = "1.10.3"
@@ -56,6 +58,8 @@ jbig2Imageio = "3.0.4"
 jaiImageioJpeg2000 = "1.4.0"
 
 [libraries]
+filament-compose = { module = "dev.nucleusframework.filament:filament-compose", version.ref = "filamentKmp" }
+kosherkotlin = { module = "io.github.kdroidfilter:kosherkotlin", version.ref = "kosherkotlin" }
 
 androidx-activityCompose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
 androidx-uitest-testManifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "androidx-uiTest" }

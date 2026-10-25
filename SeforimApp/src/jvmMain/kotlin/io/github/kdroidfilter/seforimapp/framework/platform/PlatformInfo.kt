@@ -26,4 +26,13 @@ object PlatformInfo {
      * True if running on Linux.
      */
     val isLinux: Boolean = currentOS == Platform.Linux
+
+    /** Heavy 3D widgets are disabled on machines with less than 6 GB of physical RAM. */
+    val isLowEnd: Boolean by lazy {
+        val memory =
+            java.lang.management.ManagementFactory
+                .getOperatingSystemMXBean()
+                as? com.sun.management.OperatingSystemMXBean
+        memory != null && memory.totalMemorySize < 6L * 1024 * 1024 * 1024
+    }
 }

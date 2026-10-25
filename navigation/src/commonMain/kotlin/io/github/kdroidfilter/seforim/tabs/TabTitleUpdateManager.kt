@@ -12,6 +12,7 @@ enum class TabType {
     SEARCH,
     HISTORY,
     FAVORITES,
+    AUTHOR,
 }
 
 /**

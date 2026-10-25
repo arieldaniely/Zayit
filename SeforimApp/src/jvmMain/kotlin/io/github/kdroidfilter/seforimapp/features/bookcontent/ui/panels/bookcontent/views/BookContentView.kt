@@ -60,7 +60,6 @@ import io.github.kdroidfilter.seforim.htmlparser.buildAnnotatedFromHtml
 import io.github.kdroidfilter.seforimapp.core.annotations.UserHighlight
 import io.github.kdroidfilter.seforimapp.core.annotations.UserNote
 import io.github.kdroidfilter.seforimapp.core.coroutines.EfficiencyCoreDispatcher
-import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.presentation.text.applyUserHighlights
@@ -74,8 +73,10 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.extractLookupToken
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.SafeSelectionContainer
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
+import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.BookFindMatches
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.SmartFindHighlights
 import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.SmartFindUseCase
+import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.findInBook
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyNote
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.StudyLocation
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -714,10 +715,8 @@ fun BookContentView(
     val smartModeEnabled by AppSettings.findSmartModeFlow(tabId).collectAsState()
     val findState = remember(tabId) { TextFieldState() }
     LaunchedEffect(persistedFindQuery) {
-        val current = findState.text.toString()
-        if (current != persistedFindQuery) {
-            findState.edit { replace(0, length, persistedFindQuery) }
-        }
+        io.github.kdroidfilter.seforimapp.core.presentation.components
+            .syncFindField(findState, persistedFindQuery)
     }
 
     // Smart mode: get highlight terms from search engine with dictionary expansion
@@ -826,6 +825,27 @@ fun BookContentView(
             }
     }
 
+    // One compact index for the whole book, independent of the paging window.
+    val wholeBookQuery = if (showFind && !smartModeEnabled) findState.text.toString() else ""
+    val wholeBookMatches by produceState<BookFindMatches?>(null, bookId, wholeBookQuery) {
+        value = null
+        if (wholeBookQuery.trim().length >= 2) {
+            kotlinx.coroutines.delay(180)
+            value =
+                io.github.kdroidfilter.seforimapp.core.coroutines
+                    .runSuspendCatching {
+                        findInBook(
+                            searchEngine = appGraph.searchEngine,
+                            loadLines = { appGraph.repository.getLinesByIds(it) },
+                            loadRange = { start, end -> appGraph.repository.getLines(bookId, start, end) },
+                            bookId = bookId,
+                            query = wholeBookQuery,
+                        )
+                    }.getOrNull()
+        }
+    }
+    var wholeBookCurrent by remember(bookId, wholeBookQuery) { mutableStateOf<BookFindMatches.Match?>(null) }
+
     // Navigate to next/previous line containing the query (wrap-around)
     val scope = rememberCoroutineScope()
 
@@ -835,6 +855,28 @@ fun BookContentView(
     ) {
         val query = findState.text.toString()
         if (query.length < 2) return
+        if (!smartModeEnabled) {
+            val matches = wholeBookMatches ?: return
+            val current = wholeBookCurrent?.takeIf { it in matches }
+            val lineIndex = lazyPagingItems.peek(listState.firstVisibleItemIndex)?.lineIndex ?: 0
+            val match = current?.let { matches.next(it, next) } ?: matches.nextAfterLine(lineIndex - if (next) 1 else 0, next)
+            if (match != null) {
+                wholeBookCurrent = match
+                scope.launch {
+                    val line = appGraph.repository.getLine(match.lineId) ?: return@launch
+                    val plain = withContext(Dispatchers.Default) { buildAnnotatedFromHtml(line.content, textSize).text }
+                    currentMatchLineId = match.lineId
+                    currentMatchStart = findAllMatchesOriginal(plain, query).getOrNull(match.ordinal)?.first ?: -1
+                    val loadedIndex = lazyPagingItems.itemSnapshotList.items.indexOfFirst { it.id == match.lineId }
+                    if (loadedIndex >= 0) {
+                        listState.scrollToItem(lazyPagingItems.itemSnapshotList.placeholdersBefore + loadedIndex, 24)
+                    } else {
+                        onEvent(BookContentEvent.ContentScrollToLineIndex(match.lineIndex))
+                    }
+                }
+            }
+            return
+        }
         val snapshot = lazyPagingItems.itemSnapshotList
         if (snapshot.isEmpty()) return
         val startIndex =
@@ -1257,29 +1299,6 @@ fun BookContentView(
 
         // Find-in-page bar overlay with result count badge (uniform style)
         if (showFind) {
-            // Compute total matches across currently loaded snapshot (approximate)
-            val queryText = findState.text.toString()
-            val snapshotItems = lazyPagingItems.itemSnapshotList.items
-            val matchCount by produceState(0, queryText, snapshotItems) {
-                value =
-                    if (queryText.length < 2) {
-                        0
-                    } else {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                            var total = 0
-                            for (ln in snapshotItems) {
-                                val text =
-                                    try {
-                                        buildAnnotatedFromHtml(ln.content, textSize).text
-                                    } catch (_: Throwable) {
-                                        ln.content
-                                    }
-                                total += findAllMatchesOriginal(text, queryText).size
-                            }
-                            total
-                        }
-                    }
-            }
             Row(
                 modifier =
                     Modifier
@@ -1289,22 +1308,11 @@ fun BookContentView(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (queryText.length >= 2) {
-                    // Wrap badge in a small panel background to improve border contrast,
-                    // keeping the badge's own border color (disabled) identical to the tree.
-                    Box(
-                        modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(JewelTheme.globalColors.panelBackground)
-                                .padding(2.dp),
-                    ) {
-                        CountBadge(count = matchCount)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
                 FindInPageBar(
                     state = findState,
+                    matchCount = if (smartModeEnabled) smartFind.semanticLineIds.size else wholeBookMatches?.occurrences,
+                    matchPosition = wholeBookCurrent?.position,
+                    showCounter = true,
                     onEnterNext = { navigateToMatch(true, scope) },
                     onEnterPrev = { navigateToMatch(false, scope) },
                     onClose = { AppSettings.closeFindBar(tabId) },

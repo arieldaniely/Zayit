@@ -56,3 +56,5 @@ include(":network")
 include(":sharedstudy")
 include(":releasefetcher")
 includeBuild("SeforimLibrary")
+
+include(":luach")

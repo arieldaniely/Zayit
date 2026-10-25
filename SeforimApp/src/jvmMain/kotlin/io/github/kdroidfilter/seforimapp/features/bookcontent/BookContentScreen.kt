@@ -53,6 +53,10 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentS
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.SplitDefaults
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EnhancedHorizontalSplitPane
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePane
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePaneLayout
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PanePlacement
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneSide
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
@@ -66,6 +70,7 @@ import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDia
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
+import io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Ink_pen
@@ -110,6 +115,7 @@ import seforimapp.seforimapp.generated.resources.context_menu_report_book_error
 import seforimapp.seforimapp.generated.resources.context_menu_search_selected_text
 import seforimapp.seforimapp.generated.resources.context_menu_show_word_definition
 import seforimapp.seforimapp.generated.resources.context_menu_show_word_lookup
+import seforimapp.seforimapp.generated.resources.notes_pane
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.InputEvent
@@ -124,10 +130,10 @@ private val TextSearchContextMenuIconKey = PathIconKey("icons/lucide_text_search
 private class ContextMenuItemOptionWithKeybinding(
     val icon: org.jetbrains.jewel.ui.icon.IconKey? = null,
     val keybinding: Set<String>? = null,
-    val enabled: Boolean = true,
+    enabled: Boolean = true,
     label: String,
     action: () -> Unit,
-) : ContextMenuItem(label, action)
+) : ContextMenuItem(label = label, enabled = enabled, onClick = action)
 
 /** Context-menu entry rendering a row of highlight color swatches (last item, plus a "clear"). */
 private class ContextMenuHighlightColorPicker(
@@ -466,6 +472,7 @@ fun BookContentScreen(
     isRestoringSession: Boolean = false,
     isSelected: Boolean = true,
     bookCharCounts: IntArray? = null,
+    bookDetails: SearchEntity.BookEntity? = null,
     isPdfEdition: Boolean = false,
     pdfCanZoomIn: Boolean = false,
     pdfCanZoomOut: Boolean = false,
@@ -946,11 +953,17 @@ fun BookContentScreen(
                             }
                         },
                         secondContent = {
-                            EnhancedHorizontalSplitPane(
-                                splitPaneState = uiState.layout.notesSplitState.asStable(),
-                                firstMinSize = if (uiState.notes.isVisible) SplitDefaults.MIN_NOTES else 0f,
-                                firstContent = {
-                                    if (uiState.notes.isVisible) {
+                            val notesPlacement = remember(uiState.tabId) { PanePlacement(PaneSide.Start) }
+                            val notesPane =
+                                if (uiState.notes.isVisible) {
+                                    MovablePane(
+                                        "notes",
+                                        org.jetbrains.compose.resources.stringResource(
+                                            seforimapp.seforimapp.generated.resources.Res.string.notes_pane,
+                                        ),
+                                        notesPlacement,
+                                        { onEvent(BookContentEvent.ToggleNotes) },
+                                    ) {
                                         if (isHome) {
                                             NotesLibraryPanel(
                                                 noteStore = noteStore,
@@ -974,23 +987,24 @@ fun BookContentScreen(
                                             )
                                         }
                                     }
-                                },
-                                secondContent = {
-                                    BookContentPanel(
-                                        uiState = uiState,
-                                        onEvent = onEvent,
-                                        showDiacritics = showDiacritics,
-                                        isRestoringSession = isRestoringSession,
-                                        searchUi = searchUi,
-                                        searchCallbacks = searchCallbacks,
-                                        isSelected = isSelected,
-                                        bookCharCounts = bookCharCounts,
-                                        noteDraft = noteDraft,
-                                        mainContentOverride = mainContentOverride,
-                                    )
-                                },
-                                showSplitter = uiState.notes.isVisible,
-                            )
+                                } else {
+                                    null
+                                }
+                            MovablePaneLayout(listOfNotNull(notesPane)) {
+                                BookContentPanel(
+                                    uiState = uiState,
+                                    onEvent = onEvent,
+                                    showDiacritics = showDiacritics,
+                                    isRestoringSession = isRestoringSession,
+                                    searchUi = searchUi,
+                                    searchCallbacks = searchCallbacks,
+                                    isSelected = isSelected,
+                                    bookCharCounts = bookCharCounts,
+                                    bookDetails = bookDetails,
+                                    noteDraft = noteDraft,
+                                    mainContentOverride = mainContentOverride,
+                                )
+                            }
                         },
                         showSplitter = uiState.toc.isVisible,
                     )

@@ -32,7 +32,7 @@ class SmartFindUseCaseTest {
                 release.await()
                 listOf(10)
             }
-            coEvery { engine.passagesByMeaning("חכם", listOf("הוא מבין דבר מתוך דבר")) } returns listOf("מבין דבר מתוך דבר")
+            coEvery { engine.passagesInBookByMeaning("חכם", listOf("הוא מבין דבר מתוך דבר")) } returns listOf("מבין דבר מתוך דבר")
             val updates = mutableListOf<SmartFindHighlights>()
             val job =
                 launch {
@@ -55,7 +55,7 @@ class SmartFindUseCaseTest {
             val engine = mockk<SearchEngine>()
             every { engine.buildHighlightTerms("חכם") } returns listOf("חכם", "נבון")
             coEvery { engine.semanticFind(any(), any(), any()) } returns listOf(10)
-            coEvery { engine.passagesByMeaning(any(), any()) } throws IllegalStateException("Model unavailable")
+            coEvery { engine.passagesInBookByMeaning(any(), any()) } throws IllegalStateException("Model unavailable")
             val updates =
                 SmartFindUseCase(engine)
                     .search(7, "חכם", flowOf(listOf(Line(10, 7, 1, "טקסט"))))
@@ -72,7 +72,7 @@ class SmartFindUseCaseTest {
             assertFailsWith<CancellationException> {
                 SmartFindUseCase(engine).search(7, "חכם", flowOf(emptyList())).toList()
             }
-            coVerify(exactly = 0) { engine.passagesByMeaning(any(), any()) }
+            coVerify(exactly = 0) { engine.passagesInBookByMeaning(any(), any()) }
         }
 
     @Test

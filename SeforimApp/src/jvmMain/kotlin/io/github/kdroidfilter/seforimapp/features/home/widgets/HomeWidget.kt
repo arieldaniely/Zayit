@@ -2,56 +2,109 @@ package io.github.kdroidfilter.seforimapp.features.home.widgets
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforimapp.core.settings.Setting
+import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
+import io.github.kdroidfilter.seforimapp.features.home.widgets.earth.EarthWidget
+import io.github.kdroidfilter.seforimapp.features.home.widgets.sky.SkyWidget
+import io.github.kdroidfilter.seforimapp.features.home.widgets.solarsystem.SolarSystemWidget
+import io.github.kdroidfilter.seforimapp.features.home.widgets.temple.TempleCountdownWidget
+import io.github.kdroidfilter.seforimapp.features.home.widgets.zmanim.ZmanimWidget
+import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.jewel.ui.icon.IconKey
-import java.time.LocalDate
 
-@Immutable
-data class CellSpan(
-    val w: Int,
-    val h: Int,
-)
-
-/** Shared content and preferences for standalone tools and Home cards. */
+/**
+ * A Home widget, placed by [HomeWidgetsGrid] on an area of a grid of [HOME_GRID_COLUMNS] columns, as on Android's home
+ * screen. Widgets never talk to each other: they read and write the shared [HomeWidgetsState], so any of them can be
+ * moved, resized or removed.
+ */
 interface HomeWidget {
+    /** Stable key, for persisting the user's widget order. */
     val id: String
-    val title: StringResource
-    val defaultSpan: CellSpan
-    val minSpan: CellSpan get() = defaultSpan
-    val maxSpan: CellSpan get() = defaultSpan
-    val settings: WidgetSettings? get() = null
-    val toolWindowSize: DpSize? get() = DpSize(460.dp, 560.dp)
-    val toolWindowMinSize: DpSize? get() = toolWindowSize
-    val toolSymbol: String? get() = null
 
+    /** Its name in the widget gallery. */
+    val title: StringResource
+
+    /** Its size when added, in cells. */
+    val defaultSpan: CellSpan
+
+    /** How small and how large the user can resize it, in cells (Android's minResizeWidth, maxResizeWidth…). */
+    val minSpan: CellSpan get() = defaultSpan
+    val maxSpan: CellSpan get() = CellSpan(HOME_GRID_COLUMNS, defaultSpan.h * 2)
+
+    /** The height its content needs at [width], when it decides it: it can't be made shorter. */
     fun heightAt(width: Dp): Dp? = null
 
+    /** Its own settings, read and written through [HomeWidgetsState]; reset together from its options dialog. */
+    val settings: WidgetSettings? get() = null
+
+    /**
+     * Its settings as saved, given at the start and on each change, for a widget whose size follows them (its [heightAt]):
+     * the grid reads that size where no composition is (laying out, arranging).
+     */
     fun applySettings(appSettings: WidgetPreferences) {}
 
+    val isSupported: Boolean get() = true
+
+    /**
+     * Its window's size when it's also a tool, opened alone from the app's Tools menu (see [availableTools]); null for a
+     * widget only.
+     */
+    val toolWindowSize: DpSize? get() = null
+
+    /** How small the user can make its tool window; its [toolWindowSize] by default, so its content is never cut. */
+    val toolWindowMinSize: DpSize? get() = toolWindowSize
+
+    /** Its options window's size. */
+    val optionsSize: DpSize get() = DpSize(460.dp, 560.dp)
+
+    /** Its icon in the macOS Tools menu: an SF Symbol's name. */
+    val toolSymbol: String? get() = null
+
+    /** Fills the size the host gives it through [modifier]. */
     @Composable
     fun Content(
         state: HomeWidgetsState,
         modifier: Modifier,
     )
 
+    /** Its picture in the gallery; the live content by default, a drawing for the ones a thumbnail can't run. */
+    @Composable
+    fun Preview(
+        state: HomeWidgetsState,
+        modifier: Modifier,
+    ) = Content(state, modifier)
+
+    /**
+     * Its own items atop its right-click menu: actions, check marks, submenus; none by default. Read in composition, so
+     * they follow its settings (see [HomeWidgetsState.get]).
+     */
+    @Composable
+    fun menuItems(state: HomeWidgetsState): List<WidgetMenuItem> = emptyList()
+
+    /** Its settings page, for an item of its menu to open in a dialog (see [HomeWidgetsState.optionsOpen]). */
     @Composable
     fun Options(state: HomeWidgetsState) {}
 
+    /** Its window as a tool, opened from the app's Tools menu: its [Content] alone in a window of [toolWindowSize]. */
     @Composable
-    fun menuItems(state: HomeWidgetsState): List<WidgetMenuItem> = emptyList()
+    fun ToolWindow(
+        state: HomeWidgetsState,
+        onClose: () -> Unit,
+    ) = DefaultToolWindow(this, state, onClose)
+
+    /** Composed outside the scrolling Home list, for windows that must outlive the card scrolling away. */
+    @Composable
+    fun Detached(state: HomeWidgetsState) {}
 }
 
+/**
+ * An item of a widget's own menu, with [icon]: [checked] shows a check mark instead, null a plain action; with
+ * [children], it opens them as a submenu.
+ */
 @Immutable
 data class WidgetMenuItem(
     val label: String,
@@ -61,21 +114,31 @@ data class WidgetMenuItem(
     val onClick: () -> Unit = {},
 )
 
-@Stable
-class HomeWidgetsState(
-    val preferences: WidgetPreferences,
-) {
-    var optionsOpen by mutableStateOf<HomeWidget?>(null)
-    var selectedDate by mutableStateOf(LocalDate.now())
-    var openTab: (TabsDestination) -> Unit = {}
+/** A widget on the Home grid, on [cell]. */
+@Immutable
+data class WidgetPlacement(
+    val widget: HomeWidget,
+    val cell: CellRect,
+)
 
-    @Composable
-    operator fun <T> get(setting: Setting<T>): T = preferences.flow(setting).collectAsState().value
+/**
+ * The default Home layout: the zmanim and the Earth, then the Temple, the solar system and the sky.
+ */
+val homeWidgets: List<WidgetPlacement> =
+    listOf(
+        WidgetPlacement(ZmanimWidget, CellRect(0, 0, 13, 4)),
+        WidgetPlacement(EarthWidget, CellRect(13, 0, 7, 4)),
+        WidgetPlacement(TempleCountdownWidget, CellRect(0, 4, 6, 3)),
+        WidgetPlacement(SolarSystemWidget, CellRect(6, 4, 9, 3)),
+        WidgetPlacement(SkyWidget, CellRect(15, 4, 5, 3)),
+    )
 
-    operator fun <T> set(
-        setting: Setting<T>,
-        value: T,
-    ) {
-        preferences[setting] = value
-    }
-}
+/** The default Home layout of a low-end machine, which can't run the heavy 3D widgets: the zmanim and the Temple. */
+val lowEndHomeWidgets: List<WidgetPlacement> =
+    listOf(
+        WidgetPlacement(ZmanimWidget, CellRect(0, 0, 12, 4)),
+        WidgetPlacement(TempleCountdownWidget, CellRect(12, 0, 7, 4)),
+    )
+
+/** [lowEndHomeWidgets] on a low-end machine, [homeWidgets] elsewhere. */
+internal fun defaultLayout(lowEnd: Boolean = PlatformInfo.isLowEnd): List<WidgetPlacement> = if (lowEnd) lowEndHomeWidgets else homeWidgets

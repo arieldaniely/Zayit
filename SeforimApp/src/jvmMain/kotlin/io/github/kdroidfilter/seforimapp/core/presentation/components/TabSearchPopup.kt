@@ -376,6 +376,13 @@ internal fun PopupRow(
                     modifier = Modifier.size(15.dp),
                     colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
                 )
+            TabType.AUTHOR ->
+                Image(
+                    painter = rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.Feather),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
             TabType.HISTORY ->
                 Icon(
                     key = AllIconsKeys.Vcs.History,

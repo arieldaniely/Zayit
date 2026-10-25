@@ -265,6 +265,7 @@ fun main(args: Array<String>) {
         // themeStyle is already initialized from AppSettings in MainAppState, no separate LaunchedEffect needed
 
         CompositionLocalProvider(
+            io.github.kdroidfilter.seforimapp.features.home.widgets.LocalToolApplicationScope provides this,
             LocalAppGraph provides appGraph,
             LocalMetroViewModelFactory provides appGraph.metroViewModelFactory,
             LocalLayoutDirection provides LayoutDirection.Rtl,

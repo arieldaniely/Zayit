@@ -40,6 +40,11 @@ ktlint_compose_vm-injection-check = disabled
 [**/build/**/*.{kt,kts}]
 ktlint = disabled
 
+# Local verification uses isolated build folders with the same generated sources.
+[**/.codex-*/generated/**/*.{kt,kts}]
+ktlint_standard = disabled
+ktlint_compose = disabled
+
 [*.md]
 trim_trailing_whitespace = false
 

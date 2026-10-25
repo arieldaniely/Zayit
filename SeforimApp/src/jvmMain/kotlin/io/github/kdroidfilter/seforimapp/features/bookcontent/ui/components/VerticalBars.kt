@@ -384,3 +384,41 @@ private fun isTalmudBavliBook(book: SeforimBook): Boolean {
     }
     return TalmudPdfService.isTalmudBavliCategoryPath(titles)
 }
+
+/** The text's zoom in and out, shared by the reading screens' end bars. */
+@Composable
+fun ZoomButtons() {
+    val rawTextSize by AppSettings.textSizeFlow.collectAsState()
+    val canZoomIn = rawTextSize < AppSettings.MAX_TEXT_SIZE
+    val canZoomOut = rawTextSize > AppSettings.MIN_TEXT_SIZE
+    SelectableIconButtonWithToolip(
+        toolTipText =
+            if (canZoomIn) {
+                stringResource(Res.string.zoom_in_tooltip)
+            } else {
+                stringResource(Res.string.zoom_in_tooltip) + " (${AppSettings.MAX_TEXT_SIZE.toInt()}sp max)"
+            },
+        onClick = { AppSettings.increaseTextSize() },
+        isSelected = false,
+        enabled = canZoomIn,
+        icon = ZoomIn,
+        iconDescription = stringResource(Res.string.zoom_in),
+        label = stringResource(Res.string.zoom_in),
+        shortcutHint = if (PlatformInfo.isMacOS) "+⌘" else "+Ctrl",
+    )
+    SelectableIconButtonWithToolip(
+        toolTipText =
+            if (canZoomOut) {
+                stringResource(Res.string.zoom_out_tooltip)
+            } else {
+                stringResource(Res.string.zoom_out_tooltip) + " (${AppSettings.MIN_TEXT_SIZE.toInt()}sp min)"
+            },
+        onClick = { AppSettings.decreaseTextSize() },
+        isSelected = false,
+        enabled = canZoomOut,
+        icon = ZoomOut,
+        iconDescription = stringResource(Res.string.zoom_out),
+        label = stringResource(Res.string.zoom_out),
+        shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
+    )
+}

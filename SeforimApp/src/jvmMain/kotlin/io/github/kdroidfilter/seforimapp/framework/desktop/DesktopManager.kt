@@ -75,6 +75,9 @@ class DesktopManager(
     /** Snapshots of desktops that are not currently open in any window. */
     private val dormantSnapshots = mutableMapOf<String, DesktopTabsSnapshot>()
 
+    /** A search bar state for a search results tab, independent of the window's home page bar. */
+    fun newSearchBarViewModel(): SearchHomeViewModel = searchHomeViewModelFactory()
+
     // ---- Lookups ----
 
     fun window(windowId: String): OpenWindow? = _windows.value.find { it.id == windowId }

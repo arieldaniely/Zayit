@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -67,6 +68,10 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentS
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.SplitDefaults
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EnhancedHorizontalSplitPane
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePane
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePaneLayout
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PanePlacement
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneSide
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
@@ -120,6 +125,7 @@ data class SearchShellActions(
     val onCategoryFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Category) -> Unit,
     val onBookFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Book) -> Unit,
     val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
+    val onSelectResult: (Long) -> Unit = {},
 )
 
 @Composable
@@ -154,6 +160,13 @@ private fun SearchToolbar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        androidx.compose.foundation.Image(
+            painter =
+                org.jetbrains.compose.resources
+                    .painterResource(Res.drawable.AppIcon),
+            contentDescription = stringResource(Res.string.app_name),
+            modifier = Modifier.size(36.dp),
+        )
         // Query field
         TextField(
             state = searchState,
@@ -223,6 +236,8 @@ fun SearchResultInBookShellMvi(
     bookCounts: Map<Long, Int>,
     loadBookHits: (Long) -> kotlinx.coroutines.flow.Flow<List<SearchResult>>,
     actions: SearchShellActions,
+    passagePreview: SearchResultViewModel.PassagePreview? = null,
+    bookDetails: io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity.BookEntity? = null,
 ) {
     val tabId = bookUiState.tabId
     val currentOnEvent by rememberUpdatedState(onEvent)
@@ -323,6 +338,7 @@ fun SearchResultInBookShellMvi(
                                 uiState = bookUiState,
                                 onEvent = onEvent,
                                 showDiacritics = showDiacritics,
+                                bookDetails = bookDetails,
                             )
                         } else {
                             Column(modifier = Modifier.fillMaxSize()) {
@@ -335,6 +351,7 @@ fun SearchResultInBookShellMvi(
                                         bookCounts = bookCounts,
                                         loadBookHits = loadBookHits,
                                         actions = actions,
+                                        passagePreview = passagePreview,
                                         tabId = tabId,
                                         modifier = panelCardModifier,
                                     )
@@ -381,6 +398,7 @@ private fun SearchResultContentMvi(
     actions: SearchShellActions,
     tabId: String,
     modifier: Modifier = Modifier,
+    passagePreview: SearchResultViewModel.PassagePreview? = null,
 ) {
     val listState = rememberLazyListState()
     // Group consecutive same-book results into Google-style cards. Cards are derived
@@ -577,7 +595,38 @@ private fun SearchResultContentMvi(
 
     val keyHandler = remember { { _: KeyEvent -> false } }
 
-    Box(modifier = modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
+    var preview by remember(tabId, state.query, state.mode, state.scopeBook?.id, state.scopeTocId) { mutableStateOf<SearchResult?>(null) }
+    val previewPlacement = remember(tabId) { PanePlacement(PaneSide.End, extent = 360.dp) }
+    val previewPane =
+        preview?.let { result ->
+            MovablePane("search-preview", stringResource(Res.string.search_preview_title), previewPlacement, { preview = null }) {
+                Column(Modifier.fillMaxSize()) {
+                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader(
+                        label = stringResource(Res.string.search_preview_title),
+                        onHide = { preview = null },
+                    )
+                    if (passagePreview?.hit?.lineId == result.lineId) {
+                        PassagePreview(
+                            preview = passagePreview,
+                            pieces = breadcrumbs[result.lineId],
+                            query = state.executedQuery.ifBlank { state.query },
+                            bookFontCode = bookFontCode,
+                            textSize = mainTextSize,
+                            onOpen = { actions.onOpenResult(result, true) },
+                            byMeaning = state.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART,
+                            onOpenLine = { lineId ->
+                                val line = passagePreview.lines.firstOrNull { it.id == lineId }
+                                actions.onOpenResult(result.copy(lineId = lineId, lineIndex = line?.lineIndex ?: result.lineIndex), true)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        CircularProgressIndicator()
+                    }
+                }
+            }
+        }
+    MovablePaneLayout(panes = listOfNotNull(previewPane), modifier = modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -732,6 +781,10 @@ private fun SearchResultContentMvi(
                                         BookResultCard(
                                             group = group,
                                             searchQuery = state.query,
+                                            onPreview = {
+                                                preview = it
+                                                actions.onSelectResult(it.lineId)
+                                            },
                                             textSize = mainTextSize,
                                             lineHeight = mainLineHeight,
                                             fontFamily = hebrewFontFamily,
@@ -980,6 +1033,33 @@ private val GiltDark = Color(0xFFE8B53C)
 @Composable
 private fun giltColor(): Color = if (JewelTheme.isDark) GiltDark else GiltLight
 
+@Composable
+internal fun readingSecondary(): Color =
+    JewelTheme.globalColors.text.normal
+        .copy(alpha = 0.72f)
+
+@Composable
+internal fun ResultLink(
+    text: String,
+    color: Color,
+    fontSize: TextUnit,
+    fontWeight: FontWeight? = null,
+    onClick: () -> Unit,
+) {
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    Text(
+        text = text,
+        color = color,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textDecoration = if (hovered) TextDecoration.Underline else null,
+        modifier = Modifier.hoverable(hover).pointerHoverIcon(PointerIcon.Hand).clickable(onClick = onClick),
+    )
+}
+
 /** Build the highlighted snippet, shared by primary and secondary rows. */
 @Composable
 private fun rememberSnippetDisplay(
@@ -1057,22 +1137,8 @@ internal fun BookResultCard(
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
     searchQuery: String = "",
+    onPreview: (SearchResult) -> Unit = {},
 ) {
-    var preview by remember(group.bookId, feedbackKey) { mutableStateOf<SearchResult?>(null) }
-    preview?.let { result ->
-        SearchResultPreview(
-            result = result,
-            query = searchQuery,
-            location = breadcrumbs[result.lineId].orEmpty().joinToString(" › "),
-            textSize = textSize,
-            fontFamily = fontFamily,
-            onDismiss = { preview = null },
-            onOpen = {
-                preview = null
-                onOpenResult(result)
-            },
-        )
-    }
     val collapsedCap = 3
     val loadedCount = 1 + group.secondaries.size
     val needsFetch = group.totalCount > loadedCount
@@ -1130,8 +1196,6 @@ internal fun BookResultCard(
                             .pointerHoverIcon(PointerIcon.Hand)
                             .clickable { onOpenResult(group.primary) },
                 )
-                io.github.kdroidfilter.seforimapp.features.bookcontent
-                    .BookInformationButton(group.bookId)
                 if (onOpenPdf != null) {
                     Spacer(Modifier.width(6.dp))
                     Tooltip({ Text(stringResource(Res.string.open_pdf_edition_tooltip)) }) {
@@ -1210,7 +1274,7 @@ internal fun BookResultCard(
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
-                PreviewResultButton { preview = primary }
+                PreviewResultButton { onPreview(primary) }
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1233,7 +1297,7 @@ internal fun BookResultCard(
                             pieces = breadcrumbs[sec.lineId],
                             onRequestBreadcrumb = onRequestBreadcrumb,
                             onClick = { onOpenResult(sec) },
-                            onPreview = { preview = sec },
+                            onPreview = { onPreview(sec) },
                             onFeedback = onFeedback,
                             feedbackKey = feedbackKey,
                         )

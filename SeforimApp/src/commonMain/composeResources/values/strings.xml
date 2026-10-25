@@ -453,7 +453,6 @@
     <string name="search_level_4_explanation">חיפוש רחב: מוצא מילים באותה פסקה או קטע</string>
     <string name="search_level_5_explanation">חיפוש כללי: מוצא מילים באותו הקשר או נושא</string>
 
-
     <!-- Settings -->
     <string name="close_book_tree_on_new_book">סגור אוטומטית את עץ הספרים בעת בחירת ספר חדש</string>
     <string name="close_book_tree_on_new_book_description">כאשר אפשרות זו מופעלת, עץ הניווט בצד ימין ייסגר אוטומטית לאחר בחירת ספר חדש, מה שמאפשר יותר מקום לקריאה.</string>
@@ -538,7 +537,6 @@
 
     <string name="onboarding_extracting_did_you_know">הידעת? זיתא משתמשת בפורמט הדחיסה Zstandard כדי להקטין את קובצי מסד הנתונים ולחלץ אותם במהירות.</string>
 
-
     <string name="onboarding_ready">הכול מוכן!</string>
     <string name="onboarding_finish_ready_message">ברוכים הבאים לזיתא! אנו מאחלים לכם חוויית שימוש נעימה.</string>
     <string name="onboarding_open_app">פתח את היישום</string>
@@ -584,7 +582,6 @@
     <string name="eta_minutes_unit_plural">דקות</string>
     <string name="eta_seconds_unit_singular">שנייה</string>
     <string name="eta_seconds_unit_plural">שניות</string>
-
 
     <!-- User info configuration-->
     <string name="onboarding_user_info_title">פרטים אישיים</string>
@@ -938,4 +935,236 @@
     <string name="settings_description_personal">ספרייה ספרים אישיים תיקיות יבוא אינדקס סמנטי בנייה</string>
     <string name="settings_description_about">אודות גרסה עדכונים תוכנה קשר תמיכה</string>
     <string name="settings_description_conditions">תנאי שימוש רישיון זכויות יוצרים</string>
+    <string name="pane_reset">איפוס האי למיקום ברירת המחדל</string>
+    <string name="pane_detach">שחרור האי לחלון נפרד</string>
+    <string name="pane_hide">סגירת האי</string>
+    <string name="home_unified_search">חיפוש ספרים, מחברים וטקסט</string>
+    <string name="home_clear_search">ניקוי החיפוש</string>
+    <string name="home_unified_hint">הקלידו שם ספר, מחבר או מילים לחיפוש</string>
+    <string name="home_all_books">כל הספרים</string>
+    <string name="home_author_books">מחבר · %1$d ספרים</string>
+    <string name="home_search_text">חיפוש בטקסט: %1$s</string>
+    <string name="book_information_load_failed">לא ניתן לטעון את המידע. אפשר לסגור ולפתוח שוב כדי לנסות מחדש.</string>
+    <string name="book_information_no_authors">לא צוין מחבר לספר זה במאגר.</string>
+    <string name="author_information_no_bio">לא צורפה ביוגרפיה למחבר זה במאגר.</string>
+    <string name="find_close">סגירת החיפוש</string>
+    <string name="find_next_match">התוצאה הבאה</string>
+    <string name="find_previous_match">התוצאה הקודמת</string>
+    <string name="find_smart_mode">חיפוש חכם לפי משמעות</string>
+    <string name="pane_float">פתח בחלון נפרד</string>
+    <string name="pane_dock">החזר לחלון הראשי</string>
+    <string name="search_text_row">חיפוש במאגר: %1$s</string>
+    <string name="author_books_count">%1$d ספרים</string>
+    <string name="search_text_row_in_book">חיפוש בתוך %2$s: %1$s</string>
+    <string name="search_text_row_in_author">חיפוש בספרי %2$s: %1$s</string>
+    <string name="search_in_book_placeholder">מה לחפש בספר זה? פרק, סימן או כל מילה</string>
+    <string name="row_action_open">פתיחה</string>
+    <string name="row_action_search_inside">חיפוש בתוך</string>
+    <string name="row_action_search">חיפוש</string>
+    <string name="row_action_search_base">בספרי יסוד</string>
+    <string name="row_action_search_all">בכל הספרים</string>
+    <string name="search_clear">ניקוי</string>
+    <string name="font_rashi_amiti">רשי אמיתי</string>
+    <string name="more_tabs">עוד %1$d</string>
+    <string name="tab_move_to_desktop">העבר ל%1$s</string>
+    <string name="notes_title">ההערות שלי</string>
+
+    <string name="notes_search_placeholder">חיפוש בהערות</string>
+    <string name="notes_show_all">הצג את כל ההערות</string>
+    <string name="breadcrumb_share">שתף</string>
+    <string name="drive_title">גיבוי לגוגל דרייב</string>
+    <string name="drive_description">גיבוי של ההערות, ההדגשות, המועדפים וההגדרות לחשבון Google שלך: בסגירת האפליקציה ופעם ביום.</string>
+    <string name="drive_connect">התחברות</string>
+    <string name="drive_connecting">ממתין לאישור בדפדפן…</string>
+    <string name="drive_cancel">ביטול</string>
+    <string name="drive_connected_as">מחובר כ-%1$s</string>
+    <string name="drive_connected">מחובר לגוגל דרייב</string>
+    <string name="drive_last_backup">גיבוי אחרון: %1$s</string>
+    <string name="drive_no_backup_yet">טרם בוצע גיבוי</string>
+    <string name="drive_backup_now">גיבוי עכשיו</string>
+    <string name="drive_backing_up">מגבה…</string>
+    <string name="drive_restore">שחזור</string>
+    <string name="drive_restoring">משחזר…</string>
+    <string name="drive_disconnect">ניתוק</string>
+    <string name="drive_restore_staged">הגיבוי שוחזר. האפליקציה מופעלת מחדש…</string>
+    <string name="drive_restore_warning">השחזור יחליף את הנתונים שבמחשב זה בגיבוי מגוגל דרייב, והאפליקציה תופעל מחדש.</string>
+    <string name="drive_pending_remote">נמצא בגוגל דרייב גיבוי מתאריך %1$s. שחזרו אותו, או גבו את הנתונים של מחשב זה במקומו. עד אז הגיבוי האוטומטי מושהה.</string>
+    <string name="drive_error_connect">ההתחברות לגוגל דרייב נכשלה</string>
+    <string name="drive_error_permission">לא ניתנה הרשאה לגוגל דרייב. יש לסמן אותה במסך ההרשאות של Google ולהתחבר שוב.</string>
+    <string name="drive_error_unavailable">גוגל דרייב אינו זמין בחשבון זה (ייתכן שמנהל הארגון חסם אותו). נסו חשבון Google אחר.</string>
+    <string name="drive_error_backup">הגיבוי לגוגל דרייב נכשל</string>
+    <string name="drive_error_restore">השחזור מגוגל דרייב נכשל</string>
+    <string name="drive_error_no_backup">לא נמצא גיבוי בגוגל דרייב</string>
+    <string name="drive_error_revoked">הגישה לגוגל דרייב בוטלה. יש להתחבר מחדש.</string>
+    <string name="close_hidden_tabs">סגור את הלשוניות המוסתרות</string>
+    <string name="pinned_tab">לשונית מוצמדת</string>
+    <string name="close_pinned_tab_hint">לחץ שוב על %1$s כדי לסגור את הלשונית המוצמדת</string>
+    <string name="context_menu_report_error">דווח על טעות</string>
+    <string name="shnayim_mikra_mode">שנים מקרא</string>
+    <string name="shnayim_mikra_mode_tooltip">שנים מקרא ואחד תרגום: כל פסוק פעמיים ואחריו התרגום</string>
+    <string name="hide_teamim_tooltip">הסתר טעמים</string>
+    <string name="hide_nikud_tooltip">הסתר ניקוד</string>
+    <string name="author_books">ספרים במאגר</string>
+    <string name="author_info_era">תקופה</string>
+    <string name="author_info_years">שנים</string>
+    <string name="author_info_aliases">כינויים</string>
+    <string name="author_sources">מקורות</string>
+    <string name="author_books_pane">ספרי המחבר</string>
+    <string name="author_info_pane">פרטי המחבר</string>
+    <string name="author_bio_ai_notice">שימו לב: הביוגרפיה נכתבה באופן אוטומטי בעזרת בינה מלאכותית על פי המקורות המצוינים בה, ולא עברה בדיקה אנושית. ייתכנו טעויות בתאריכים, בשמות ובפרטים; אמתו מול מקור מהימן לפני הסתמכות.</string>
+    <string name="author_bio_license">הביוגרפיה מתפרסמת ברישיון CC BY-SA 4.0, על פי המקורות המצוינים בה.</string>
+    <string name="author_not_found">המחבר לא נמצא</string>
+
+
+
+
+
+
+
+
+    <string name="home_widgets_add">הוספה</string>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <string name="settings_antialiasing">החלקת קצוות בתלת־ממד (אנטי־אליאסינג)</string>
+    <string name="settings_antialiasing_description">משפרת את מראה הקצוות בכדור הארץ ובמערכת השמש. מצבים גבוהים דורשים יותר מכרטיס המסך.</string>
+    <string name="settings_antialiasing_off">כבוי (ברירת מחדל)</string>
+    <string name="search_more_from_book">עוד %1$d תוצאות מ%2$s</string>
+    <string name="search_status_base">כ־%1$s תוצאות בספרי יסוד</string>
+    <string name="search_status_all">כ־%1$s תוצאות בכל הספרים</string>
+    <string name="search_status_in">כ־%1$s תוצאות ב%2$s</string>
+    <string name="search_status_fallback">לא נמצא בספרי יסוד · מוצגות %1$s תוצאות מכל הספרים</string>
+    <string name="search_switch_all">חיפוש בכל הספרים</string>
+    <string name="search_switch_base">רק ספרי יסוד</string>
+    <string name="search_tab_all">הכל</string>
+    <string name="search_book_details">פרטי הספר</string>
+    <string name="search_back_to_all">→ חזרה לכל התוצאות (מוצגות התוצאות מ%1$s)</string>
+    <string name="search_tabs_more">עוד</string>
+    <string name="search_tabs_less">פחות</string>
+    <string name="search_panel_author">מחבר</string>
+    <string name="search_panel_parts">חלקי הספר</string>
+    <string name="search_panel_source">מקור ורישיון</string>
+    <string name="license_public_domain">נחלת הכלל</string>
+    <string name="license_unknown">רישיון לא ידוע</string>
+    <string name="otzaria_credit">התכנים שלפניכם נאספו, מוינו, סוננו ונערכו בעמל רב ובמסירות על ידי צוות פרויקט 'אוצריא' (otzaria.org).</string>
+    <string name="search_panel_author_page">לדף המחבר</string>
+    <string name="settings_info_created_by">נוצר על ידי אליהו גמבש</string>
+    <string name="db_install_incomplete_bundle">קבצי מסד הנתונים שנבחרו אינם שלמים: חסר חלק או שאחד החלקים לא הורד עד הסוף. ודאו שכל קבצי ‎.part נמצאים באותה תיקייה ונסו שוב.</string>
+
+    <string name="siddur_title">סידור חכם</string>
+    <string name="siddur_part_shacharit">שחרית</string>
+    <string name="siddur_part_mincha">מנחה</string>
+    <string name="siddur_part_maariv">ערבית</string>
+    <string name="siddur_part_sfirat_haomer">ספירת העומר</string>
+    <string name="siddur_part_birkat_hamazon">ברכת המזון</string>
+    <string name="siddur_part_meein_shalosh">ברכה מעין שלוש</string>
+    <string name="siddur_part_tefilat_haderech">תפילת הדרך</string>
+    <string name="siddur_part_kriat_shema_al_hamita">קריאת שמע על המיטה</string>
+    <string name="siddur_part_kiddush_levana">קידוש לבנה</string>
+    <string name="siddur_part_nerot_chanuka">נרות חנוכה</string>
+    <string name="siddur_option_zimun">זימון</string>
+    <string name="siddur_option_zimun_10">בעשרה</string>
+    <string name="siddur_option_mezonot">מזונות</string>
+    <string name="siddur_option_wine">יין</string>
+    <string name="siddur_option_fruit">פירות משבעת המינים</string>
+    <string name="siddur_option_beit_avel">בבית האבל</string>
+    <string name="siddur_option_first_lulav">נטילת לולב ראשונה</string>
+    <string name="siddur_option_seudat_mila">סעודת ברית מילה</string>
+    <string name="siddur_nusach_ashkenaz">נוסח אשכנז</string>
+    <string name="siddur_nusach_sefard">נוסח ספרד</string>
+    <string name="siddur_nusach_edot">עדות המזרח</string>
+    <string name="siddur_nusach_missing">נוסח זה עדיין אינו זמין, ומוצג נוסח אשכנז</string>
+    <string name="siddur_minyan">במניין</string>
+    <string name="siddur_show_all">הצג גם את מה שאין אומרים היום</string>
+    <string name="siddur_today">היום</string>
+    <string name="siddur_previous_day">היום הקודם</string>
+    <string name="siddur_next_day">היום הבא</string>
+    <string name="siddur_night_of">ליל %1$s</string>
+    <string name="siddur_at_night">בלילה</string>
+    <string name="siddur_jump_to">מעבר אל</string>
+    <string name="siddur_omer_sefira">יום %1$d לעומר · %2$s</string>
+    <string name="siddur_levana_window">זמן קידוש לבנה: מ%1$s עד %2$s</string>
+    <string name="siddur_levana_open">אפשר לקדש את הלבנה עכשיו</string>
+    <string name="siddur_chanuka_candles">הלילה מדליקים %1$d נרות</string>
+    <string name="siddur_chanuka_candle">הלילה מדליקים נר אחד</string>
+    <string name="siddur_hl_mashiv">משיב הרוח</string>
+    <string name="siddur_hl_morid">מוריד הטל</string>
+    <string name="siddur_hl_tal_umatar">ותן טל ומטר</string>
+    <string name="siddur_hl_vten_bracha">ותן ברכה</string>
+    <string name="siddur_hl_ayt">עשרת ימי תשובה</string>
+    <string name="siddur_hl_yaale">יעלה ויבוא</string>
+    <string name="siddur_hl_al_hanisim">על הניסים</string>
+    <string name="siddur_hl_hallel_shalem">הלל שלם</string>
+    <string name="siddur_hl_chatzi_hallel">חצי הלל</string>
+    <string name="siddur_hl_musaf">מוסף</string>
+    <string name="siddur_hl_tachanun">תחנון</string>
+    <string name="siddur_hl_no_tachanun">אין תחנון</string>
+    <string name="siddur_hl_torah">קריאת התורה</string>
+    <string name="siddur_hl_avinu">אבינו מלכנו</string>
+    <string name="siddur_hl_aneinu">עננו</string>
+    <string name="siddur_hl_havdala">אתה חוננתנו</string>
+    <string name="siddur_hl_vihi_noam">ויהי נועם</string>
+    <string name="siddur_hl_omer">ספירת העומר</string>
+    <string name="siddur_hl_ledavid">לדוד ה׳ אורי</string>
+    <string name="siddur_hl_no_lamenatzeach">אין למנצח</string>
+    <string name="siddur_hl_no_mizmor_letoda">אין מזמור לתודה</string>
+    <string name="siddur_hl_retzeh">רצה והחליצנו</string>
+    <string name="siddur_part_kabbalat_shabbat">קבלת שבת</string>
+    <string name="siddur_part_maariv_shabbat">ערבית לשבת</string>
+    <string name="siddur_part_leil_shabbat">שולחן ליל שבת</string>
+    <string name="siddur_part_shacharit_shabbat">שחרית ומוסף לשבת</string>
+    <string name="siddur_part_seudat_shabbat">סעודת שבת</string>
+    <string name="siddur_part_mincha_shabbat">מנחה לשבת</string>
+    <string name="siddur_part_havdala">הבדלה</string>
+    <string name="siddur_part_maariv_yom_tov">ערבית</string>
+    <string name="siddur_part_leil_yom_tov">קידוש וסעודת הלילה</string>
+    <string name="siddur_part_shacharit_yom_tov">שחרית ומוסף</string>
+    <string name="siddur_part_seudat_yom_tov">קידושא רבא</string>
+    <string name="siddur_part_mincha_yom_tov">מנחה</string>
+    <string name="siddur_part_neila">נעילה</string>
+    <string name="siddur_occasion_rosh_hashana">ראש השנה</string>
+    <string name="siddur_occasion_yom_kippur">יום הכיפורים</string>
+    <string name="siddur_occasion_pesach">פסח</string>
+    <string name="siddur_occasion_shvii_shel_pesach">שביעי של פסח</string>
+    <string name="siddur_occasion_shavuot">שבועות</string>
+    <string name="siddur_occasion_sukkot">סוכות</string>
+    <string name="siddur_occasion_shmini_atzeret">שמיני עצרת</string>
+    <string name="siddur_occasion_simchat_torah">שמחת תורה</string>
+    <string name="siddur_occasion_shmini_atzeret_simchat_torah">שמיני עצרת ושמחת תורה</string>
+    <string name="siddur_occasion_shabbat_and">שבת ו%1$s</string>
+    <string name="siddur_part_of">%1$s · %2$s</string>
+    <string name="siddur_birkat_hachodesh">המולד: יום %1$s, %2$s ו־%3$d חלקים · ראש חודש %4$s: %5$s</string>
+    <string name="siddur_zman_shema">סוף זמן ק״ש %1$s</string>
+    <string name="siddur_zman_tefila">סוף זמן תפילה %1$s</string>
+    <string name="siddur_zman_sunset">שקיעה %1$s</string>
+    <string name="siddur_zman_tzeit">צאת הכוכבים %1$s</string>
+
 </resources>

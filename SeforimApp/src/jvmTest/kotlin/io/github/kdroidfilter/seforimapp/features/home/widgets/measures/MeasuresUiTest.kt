@@ -27,7 +27,13 @@ class MeasuresUiTest {
     fun showsHebrewUnitsAndReflectsOpinionChangesImmediately() =
         runComposeUiTest {
             val preferences = WidgetPreferences(PropertiesSettings(Properties()))
-            val state = HomeWidgetsState(preferences)
+            val state =
+                HomeWidgetsState(
+                    io.github.kdroidfilter.seforimapp.features.home.widgets.HomeUserLocation.preview,
+                    null,
+                    io.github.kdroidfilter.seforimapp.features.home.widgets
+                        .HomeWidgetsLayout(preferences),
+                )
             val graph = mockk<AppGraph>()
             val mainState = mockk<MainAppState>()
             every { graph.mainAppState } returns mainState
@@ -42,7 +48,7 @@ class MeasuresUiTest {
             onNodeWithText("= 6 טפחים").assertExists()
             onNodeWithText("58 ס״מ").assertExists()
             onNodeWithText("אגרות משה").assertExists()
-            runOnIdle { preferences[MeasuresSettings.shown] = setOf("chazon_ish") }
+            runOnIdle { state[MeasuresSettings.shown] = setOf("chazon_ish") }
             onNodeWithText("אגרות משה").assertDoesNotExist()
             onNodeWithText("58 ס״מ").assertExists()
         }

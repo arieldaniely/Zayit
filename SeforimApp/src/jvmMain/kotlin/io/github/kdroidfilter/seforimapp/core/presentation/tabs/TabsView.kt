@@ -179,6 +179,8 @@ private fun DefaultTabShowcase(
                                     val icon: Painter =
                                         if (tabItem.tabType == TabType.BOOK) {
                                             rememberVectorPainter(bookOpenTabs(JewelTheme.contentColor))
+                                        } else if (tabItem.tabType == TabType.AUTHOR) {
+                                            rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.Feather)
                                         } else if (tabItem.tabType == TabType.HISTORY) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Vcs.History)
                                             iconProvider.getPainter(Stateful(tabState)).value
@@ -258,6 +260,8 @@ private fun DefaultTabShowcase(
                                     val icon: Painter =
                                         if (tabItem.tabType == TabType.BOOK) {
                                             rememberVectorPainter(bookOpenTabs(JewelTheme.globalColors.text.normal))
+                                        } else if (tabItem.tabType == TabType.AUTHOR) {
+                                            rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.Feather)
                                         } else if (tabItem.tabType == TabType.HISTORY) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Vcs.History)
                                             iconProvider.getPainter(Stateful(tabState)).value

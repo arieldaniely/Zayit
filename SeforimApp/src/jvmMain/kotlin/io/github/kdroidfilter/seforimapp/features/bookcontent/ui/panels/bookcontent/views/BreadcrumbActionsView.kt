@@ -124,8 +124,6 @@ fun BreadcrumbActionsView(uiState: BookContentState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        io.github.kdroidfilter.seforimapp.features.bookcontent
-            .BookInformationButton(book.id)
         CopyLinkButton(
             bookId = book.id,
             lineId = lineId,

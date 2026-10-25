@@ -66,7 +66,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxRow
@@ -77,10 +76,6 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.dictionary_arukh
-import seforimapp.seforimapp.generated.resources.dictionary_haflaah
-import seforimapp.seforimapp.generated.resources.dictionary_laaz
-import seforimapp.seforimapp.generated.resources.dictionary_roots
 import seforimapp.seforimapp.generated.resources.home_dictionary_all
 import seforimapp.seforimapp.generated.resources.home_dictionary_back
 import seforimapp.seforimapp.generated.resources.home_dictionary_failed
@@ -102,12 +97,12 @@ import java.util.concurrent.ConcurrentHashMap
 /** A dictionary of the library, by its book's [bookTitle]; each one marks its words in its own way (see [parse]). */
 internal enum class Dictionary(
     val bookTitle: String,
-    val label: StringResource,
+    val label: String,
 ) {
-    ARUKH("ספר הערוך", Res.string.dictionary_arukh),
-    HAFLAAH("הפלאה שבערכין על ספר הערוך", Res.string.dictionary_haflaah),
-    LAAZEI_RASHI("אוצר לעזי רש\"י", Res.string.dictionary_laaz),
-    SHORASHIM("ספר השרשים לרדק", Res.string.dictionary_roots),
+    ARUKH("ספר הערוך", "הערוך"),
+    HAFLAAH("הפלאה שבערכין על ספר הערוך", "הפלאה שבערכין"),
+    LAAZEI_RASHI("אוצר לעזי רש\"י", "לעזי רש״י"),
+    SHORASHIM("ספר השרשים לרדק", "השרשים לרד״ק"),
 }
 
 /** A word of [dictionary], the start of its explanation, and its lines in the book, [first] to [last]. */
@@ -224,10 +219,14 @@ internal fun lookup(
 @dev.zacsweers.metro.Inject
 @dev.zacsweers.metro.SingleIn(io.github.kdroidfilter.seforimapp.framework.di.AppScope::class)
 class DictionaryIndex {
-    internal val cache = ConcurrentHashMap<Dictionary, List<DictionaryEntry>>()
+    // ponytail: each dictionary read once for the app's life (~16,000 short entries in all, a few MB); a new library DB
+    // shows after a restart. An empty list: the library has no such book.
+    private val cache = ConcurrentHashMap<Dictionary, List<DictionaryEntry>>()
 
     // Two windows showing the card read each dictionary once: the second one waits, then finds it in the cache
     private val reading = Mutex()
+
+    internal fun isMissing(dictionary: Dictionary): Boolean = cache[dictionary]?.isEmpty() == true
 
     /** [dictionaries] as read so far, or null while one of them is still to be read. */
     internal fun cached(dictionaries: List<Dictionary>): Map<Dictionary, List<DictionaryEntry>>? =
@@ -318,20 +317,19 @@ internal object DictionaryWidget : HomeWidget {
         modifier: Modifier,
     ) {
         val graph = LocalAppGraph.current
-        val index = graph.dictionaryIndex
         val options = dictionaryOptions(state)
         // null: all those ticked; one the library no longer has, all of them too rather than none
-        val picked = options.picked?.takeUnless { index.cache[it]?.isEmpty() == true }
+        val picked = options.picked?.takeUnless { graph.dictionaryIndex.isMissing(it) }
         val needed = picked?.let(::listOf) ?: options.shown
         // The one dictionary searched, picked or the only one ticked: its name is in the field, not on each word
         val searched = picked ?: options.shown.singleOrNull()
         // Read on first use (the field focused, a dictionary or a random word asked for), not as soon as the Home shows
         var wanted by remember { mutableStateOf(false) }
         var attempt by remember { mutableIntStateOf(0) }
-        val read by produceState(index.cached(needed), graph, needed, wanted, attempt) {
+        val read by produceState(graph.dictionaryIndex.cached(needed), graph, needed, wanted, attempt) {
             // Another choice's map would show this one's dictionaries as failed while they're read
-            value = index.cached(needed)
-            if (wanted || value != null) value = index.readDictionaries(graph, needed)
+            value = graph.dictionaryIndex.cached(needed)
+            if (wanted || value != null) value = graph.dictionaryIndex.readDictionaries(graph, needed)
         }
         val failed = needed.filter { read != null && it !in read.orEmpty() }
         val pool = remember(read, needed) { needed.flatMap { read?.get(it).orEmpty() } }
@@ -365,7 +363,7 @@ internal object DictionaryWidget : HomeWidget {
                     }
                 }
                 // Chips only to choose between two dictionaries at least
-                val available = options.shown.filterNot { index.cache[it]?.isEmpty() == true }
+                val available = options.shown.filterNot { graph.dictionaryIndex.isMissing(it) }
                 if (available.size > 1) {
                     DictionaryChips(available, picked, allLabel, accent) {
                         wanted = true
@@ -374,7 +372,7 @@ internal object DictionaryWidget : HomeWidget {
                 }
                 TextField(
                     state = query,
-                    placeholder = { Text(stringResource(Res.string.home_dictionary_hint, searched?.let { stringResource(it.label) } ?: allLabel)) },
+                    placeholder = { Text(stringResource(Res.string.home_dictionary_hint, searched?.label ?: allLabel)) },
                     leadingIcon = { Icon(AllIconsKeys.Actions.Find, null, Modifier.padding(end = 6.dp)) },
                     trailingIcon = {
                         if (query.text.isNotEmpty()) {
@@ -436,7 +434,7 @@ private fun DictionaryOptionsPage(state: HomeWidgetsState) {
             val ticked = dictionary in options.shown
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 CheckboxRow(
-                    text = stringResource(dictionary.label),
+                    text = dictionary.label,
                     checked = ticked,
                     onCheckedChange = { on ->
                         state[DictionarySettings.shown] = (if (on) options.shown + dictionary else options.shown - dictionary).toSet()
@@ -470,7 +468,7 @@ private fun DictionaryChips(
         (listOf<Dictionary?>(null) + available).forEach { dictionary ->
             val lit = dictionary == picked
             Text(
-                text = dictionary?.let { stringResource(it.label) } ?: allLabel,
+                text = dictionary?.label ?: allLabel,
                 fontSize = 12.sp,
                 fontWeight = if (lit) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (lit) accent else JewelTheme.globalColors.text.info,
@@ -547,7 +545,7 @@ private fun RandomWord(
                         maxLines = 1,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (showDictionary) Tag(stringResource(entry.dictionary.label))
+                    if (showDictionary) Tag(entry.dictionary.label)
                 }
                 Text(entry.gloss, fontSize = 13.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
             }
@@ -596,7 +594,7 @@ private fun EntryRow(
                     maxLines = 1,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (showDictionary) Tag(stringResource(entry.dictionary.label))
+                if (showDictionary) Tag(entry.dictionary.label)
             }
             Text(entry.gloss, fontSize = 12.sp, color = JewelTheme.globalColors.text.info, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
@@ -613,14 +611,7 @@ private fun EntryPage(
 ) {
     val graph = LocalAppGraph.current
     val lines by produceState(emptyList<Line>(), entry) {
-        value =
-            try {
-                graph.repository.getLines(entry.bookId, entry.first, entry.last)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
-            }
+        value = runCatching { graph.repository.getLines(entry.bookId, entry.first, entry.last) }.getOrDefault(emptyList())
     }
     // Back points to where reading came from: the start of the reading direction
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -633,7 +624,7 @@ private fun EntryPage(
                 )
             }
             Text(entry.word, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = accent, maxLines = 1, modifier = Modifier.weight(1f))
-            Tag(stringResource(entry.dictionary.label))
+            Tag(entry.dictionary.label)
         }
         val textColor = JewelTheme.globalColors.text.normal
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -647,7 +638,7 @@ private fun EntryPage(
             }
         }
         OutlinedButton(onClick = onOpenBook, modifier = Modifier.align(Alignment.End)) {
-            Text(stringResource(Res.string.home_dictionary_open_book, stringResource(entry.dictionary.label)))
+            Text(stringResource(Res.string.home_dictionary_open_book, entry.dictionary.label))
         }
     }
 }

@@ -18,6 +18,10 @@ Pods/
 .claude/
 
 # Local migration/audit artifacts; never ship these with Zayita.
+artifacts/
+.codex-*.log
+.codex-*-init.gradle
+**/.codex-*-build/
 legacy-brand-assets/
 .codex-brand-*.txt
 website-preview*.log

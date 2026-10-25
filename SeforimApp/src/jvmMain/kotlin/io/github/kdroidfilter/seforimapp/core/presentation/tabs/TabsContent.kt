@@ -41,6 +41,7 @@ import dev.zacsweers.metrox.viewmodel.assistedMetroViewModel
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+import io.github.kdroidfilter.seforimapp.features.author.AuthorTabContent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
@@ -87,12 +88,13 @@ private fun TabsDestination.typeKey(): String =
         is TabsDestination.BookContent -> "book"
         is TabsDestination.PdfContent -> "pdf"
         is TabsDestination.Favorites -> "favorites"
+        is TabsDestination.Author -> "author"
     }
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
 
 private fun saveableKeysFor(tabId: String): List<String> =
-    listOf("$tabId:home", "$tabId:history", "$tabId:favorites", "$tabId:search", "$tabId:book", "$tabId:pdf")
+    listOf("$tabId:home", "$tabId:history", "$tabId:favorites", "$tabId:search", "$tabId:book", "$tabId:pdf", "$tabId:author")
 
 /**
  * Simplified tab content renderer without Compose Navigation.
@@ -160,6 +162,25 @@ fun TabsContent() {
                     searchHomeViewModel.onPickBook(book, isPdf)
                 },
                 onPickToc = searchHomeViewModel::onPickToc,
+                onOpenBook = { book, isPdf ->
+                    val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
+                    if (isPdf) {
+                        searchHomeViewModel.onPickBook(book, true)
+                        launchOpenReference(scope, tabId)
+                    } else {
+                        scope.launch { searchHomeViewModel.openBook(book, tabId) }
+                    }
+                },
+                onPickAuthor = searchHomeViewModel::onPickAuthor,
+                onOpenAuthor = { author ->
+                    val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
+                    scope.launch { searchHomeViewModel.openAuthor(author, tabId) }
+                },
+                onClearAuthor = searchHomeViewModel::onClearAuthor,
+                onOpenJump = { reference ->
+                    val tabId = latestCurrentTabId ?: return@HomeSearchCallbacks
+                    scope.launch { searchHomeViewModel.openResolvedReference(reference, tabId) }
+                },
             )
         }
 
@@ -344,6 +365,10 @@ fun TabsContent() {
                                 is TabsDestination.Favorites -> {
                                     FavoritesTabContent(tabId = tabId)
                                 }
+
+                                is TabsDestination.Author -> {
+                                    AuthorTabContent(tabId = tabId, authorId = destination.authorId)
+                                }
                             }
                         }
                     }
@@ -405,6 +430,7 @@ private fun SearchTabContent(
     }
 
     val bcUiState by bookVm.uiState.collectAsState()
+    val bookDetails by bookVm.bookDetailsFlow.collectAsState()
     val showDiacritics by bookVm.showDiacritics.collectAsState()
     val searchUi by viewModel.uiState.collectAsState()
     val visibleResults by viewModel.visibleResultsFlow.collectAsState()
@@ -417,6 +443,7 @@ private fun SearchTabContent(
     val tocCounts by viewModel.tocCountsFlow.collectAsState()
     val tocTree by viewModel.tocTreeFlow.collectAsState()
     val bookCounts by viewModel.bookFacetCountsFlow.collectAsState()
+    val passagePreview by viewModel.previewFlow.collectAsState()
 
     val actions =
         remember(viewModel) {
@@ -448,6 +475,7 @@ private fun SearchTabContent(
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenPdfResult(r, newTab))
                 },
                 onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
+                onSelectResult = viewModel::selectResult,
                 onRequestBreadcrumb = { r ->
                     viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))
                 },
@@ -478,6 +506,7 @@ private fun SearchTabContent(
 
     SearchResultInBookShellMvi(
         bookUiState = bcUiState,
+        bookDetails = bookDetails,
         onEvent = bookVm::onEvent,
         showDiacritics = showDiacritics,
         searchUi = searchUi,
@@ -491,6 +520,7 @@ private fun SearchTabContent(
         tocCounts = tocCounts,
         tocTree = tocTree,
         bookCounts = bookCounts,
+        passagePreview = passagePreview,
         loadBookHits = viewModel::loadAllHitsForBook,
         actions = actions,
     )
@@ -517,6 +547,7 @@ private fun BookContentTabContent(
     val uiState by viewModel.uiState.collectAsState()
     val showDiacritics by viewModel.showDiacritics.collectAsState()
     val bookCharCounts by viewModel.bookCharCounts.collectAsState()
+    val bookDetails by viewModel.bookDetailsFlow.collectAsState()
 
     // React to destination changes when ViewModel is reused
     LaunchedEffect(destination.bookId, destination.lineId) {
@@ -539,6 +570,7 @@ private fun BookContentTabContent(
         searchCallbacks = searchCallbacks,
         isSelected = isSelected,
         bookCharCounts = bookCharCounts,
+        bookDetails = bookDetails,
     )
 }
 
@@ -561,6 +593,7 @@ private fun PdfContentTabContent(
 
     val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val uiState by viewModel.uiState.collectAsState()
+    val bookDetails by viewModel.bookDetailsFlow.collectAsState()
     val showDiacritics by viewModel.showDiacritics.collectAsState()
     val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
@@ -604,6 +637,7 @@ private fun PdfContentTabContent(
 
     BookContentScreen(
         uiState = uiState,
+        bookDetails = bookDetails,
         onEvent = viewModel::onEvent,
         showDiacritics = showDiacritics,
         isRestoringSession = isRestoringSession,

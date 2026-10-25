@@ -6,8 +6,12 @@ import com.russhwolf.settings.set
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
@@ -97,6 +101,7 @@ object AppSettings {
     private const val KEY_SHOW_HOME_WALLPAPER = "show_home_wallpaper"
 
     // Compact mode for vertical bars
+    private const val KEY_BOOK_DETAILS_PANE = "book_details_pane"
     private const val KEY_COMPACT_MODE = "compact_mode"
     private const val KEY_LINK_LOAD_LEVEL = "link_load_level"
     private const val KEY_TALMUD_PDF_INSTALL_SKIPPED = "talmud_pdf_install_skipped"
@@ -136,6 +141,7 @@ object AppSettings {
         _showZmanimWidgetsFlow.value = isShowZmanimWidgetsEnabled()
         _showTempleCountdownFlow.value = isShowTempleCountdownEnabled()
         _showHomeWallpaperFlow.value = isShowHomeWallpaperEnabled()
+        _bookDetailsPaneFlow.value = isBookDetailsPaneVisible()
         _compactModeFlow.value = isCompactModeEnabled()
         // User profile reactive values
         _userFirstNameFlow.value = getUserFirstName() ?: ""
@@ -182,6 +188,10 @@ object AppSettings {
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
     val showHomeWallpaperFlow: StateFlow<Boolean> = _showHomeWallpaperFlow.asStateFlow()
 
+    // StateFlow for book details pane visibility
+    private val _bookDetailsPaneFlow = MutableStateFlow(isBookDetailsPaneVisible())
+    val bookDetailsPaneFlow: StateFlow<Boolean> = _bookDetailsPaneFlow.asStateFlow()
+
     // StateFlow for compact mode
     private val _compactModeFlow = MutableStateFlow(isCompactModeEnabled())
     val compactModeFlow: StateFlow<Boolean> = _compactModeFlow.asStateFlow()
@@ -203,10 +213,21 @@ object AppSettings {
     val sourceFontCodeFlow: StateFlow<String> = _sourceFontCodeFlow.asStateFlow()
 
     // Find-in-page state (scoped per tab, not persisted)
+    private const val MAX_FIND_PREFILL_LENGTH = 250
+    private val WHITESPACE = Regex("\\s+")
     private val findQueryFlowByTab = mutableMapOf<String, MutableStateFlow<String>>()
     private val findBarOpenFlowByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
     private val findSmartModeByTab = mutableMapOf<String, MutableStateFlow<Boolean>>()
+    private val findFocusRequestByTab = mutableMapOf<String, MutableStateFlow<Int>>()
+    private val findStepRequestsByTab = mutableMapOf<String, MutableSharedFlow<Boolean>>()
     private val deepLinkMarkedLineByTab = mutableMapOf<String, MutableStateFlow<Long?>>()
+
+    private fun focusRequestFlowFor(tabId: String): MutableStateFlow<Int> = findFocusRequestByTab.getOrPut(tabId) { MutableStateFlow(0) }
+
+    private fun stepRequestsFor(tabId: String): MutableSharedFlow<Boolean> =
+        findStepRequestsByTab.getOrPut(tabId) {
+            MutableSharedFlow(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        }
 
     private fun queryFlowFor(tabId: String): MutableStateFlow<String> = findQueryFlowByTab.getOrPut(tabId) { MutableStateFlow("") }
 
@@ -234,6 +255,36 @@ object AppSettings {
 
     fun closeFindBar(tabId: String) {
         findOpenFlowFor(tabId).value = false
+    }
+
+    /** Bumped each time the find field must take the focus with its text selected. */
+    fun findFocusRequestFlow(tabId: String): StateFlow<Int> = focusRequestFlowFor(tabId).asStateFlow()
+
+    /** Find next (true) / previous (false) requested from outside the find field. */
+    fun findStepRequests(tabId: String): SharedFlow<Boolean> = stepRequestsFor(tabId).asSharedFlow()
+
+    /**
+     * Ctrl/Cmd+F, as in Chromium: shows the find bar, or keeps it shown, and focuses its field
+     * with the text selected. A new session starts from [selection] when it's short enough.
+     */
+    fun showFindBar(
+        tabId: String,
+        selection: String = "",
+    ) {
+        val open = findOpenFlowFor(tabId)
+        val prefill = selection.replace(WHITESPACE, " ").trim()
+        if (!open.value && prefill.length in 2..MAX_FIND_PREFILL_LENGTH) queryFlowFor(tabId).value = prefill
+        open.value = true
+        focusRequestFlowFor(tabId).value++
+    }
+
+    /** Ctrl/Cmd+G and F3, Shift going backwards, as in Chromium: shows the find bar and steps to the next match. */
+    fun findNext(
+        tabId: String,
+        forward: Boolean,
+    ) {
+        showFindBar(tabId)
+        stepRequestsFor(tabId).tryEmit(forward)
     }
 
     fun toggleFindBar(tabId: String) {
@@ -421,6 +472,13 @@ object AppSettings {
     fun setShowHomeWallpaperEnabled(enabled: Boolean) {
         settings[KEY_SHOW_HOME_WALLPAPER] = enabled
         _showHomeWallpaperFlow.value = enabled
+    }
+
+    fun isBookDetailsPaneVisible(): Boolean = settings[KEY_BOOK_DETAILS_PANE, false]
+
+    fun setBookDetailsPaneVisible(visible: Boolean) {
+        settings[KEY_BOOK_DETAILS_PANE] = visible
+        _bookDetailsPaneFlow.value = visible
     }
 
     // Compact mode for vertical bars
@@ -631,6 +689,7 @@ object AppSettings {
         _showZmanimWidgetsFlow.value = true
         _showTempleCountdownFlow.value = true
         _showHomeWallpaperFlow.value = true
+        _bookDetailsPaneFlow.value = false
         _compactModeFlow.value = false
         _linkLoadLevelFlow.value = DEFAULT_LINK_LOAD_LEVEL
         _bookFontCodeFlow.value = DEFAULT_BOOK_FONT

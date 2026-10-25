@@ -34,6 +34,22 @@ fun highlightAnnotated(
     return builder.toAnnotatedString()
 }
 
+/** A copy of this text with a [color] background over each of [ranges]. */
+fun AnnotatedString.withBackground(
+    ranges: List<IntRange>,
+    color: Color,
+): AnnotatedString {
+    if (ranges.isEmpty()) return this
+    val builder = AnnotatedString.Builder()
+    builder.append(this)
+    for (r in ranges) {
+        val start = r.first.coerceIn(0, length)
+        val end = (r.last + 1).coerceAtMost(length)
+        if (end > start) builder.addStyle(SpanStyle(background = color), start, end)
+    }
+    return builder.toAnnotatedString()
+}
+
 /**
  * Like [highlightAnnotated], but allows emphasizing a specific current match
  * range (by its start offset in original text) with a different color.

@@ -3,6 +3,7 @@ package io.github.kdroidfilter.seforimapp.features.settings.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -233,67 +234,75 @@ private fun AppHeader(
 }
 
 @Composable
-private fun UpdateStatusBanner(
+internal fun UpdateStatusBanner(
     updateState: UpdateUiState,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onCheckForUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    when (updateState) {
-        is UpdateUiState.Available -> {
-            val downloadLabel = stringResource(Res.string.update_download_action)
-            InlineInformationBanner(
-                text = stringResource(Res.string.update_available_banner, updateState.version),
-                linkActions = {
-                    action(downloadLabel, onClick = onDownloadUpdate)
-                },
-            )
-        }
-
-        is UpdateUiState.Downloading -> {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Box(modifier.fillMaxWidth()) {
+        when (updateState) {
+            is UpdateUiState.Available -> {
+                val downloadLabel = stringResource(Res.string.update_download_action)
                 InlineInformationBanner(
-                    text = "${stringResource(Res.string.update_downloading)} ${updateState.percent}%",
-                )
-                AnimatedHorizontalProgressBar(
-                    value = updateState.percent / 100f,
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.update_available_banner, updateState.version),
+                    linkActions = {
+                        action(downloadLabel, onClick = onDownloadUpdate)
+                    },
                 )
             }
-        }
 
-        is UpdateUiState.ReadyToInstall -> {
-            val installLabel = stringResource(Res.string.update_install_restart)
-            InlineInformationBanner(
-                text = stringResource(Res.string.update_available_banner, updateState.version),
-                linkActions = {
-                    action(installLabel, onClick = onInstallUpdate)
-                },
-            )
-        }
+            is UpdateUiState.Downloading -> {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    InlineInformationBanner(
+                        modifier = Modifier.fillMaxWidth(),
+                        text = "${stringResource(Res.string.update_downloading)} ${updateState.percent}%",
+                    )
+                    AnimatedHorizontalProgressBar(
+                        value = updateState.percent / 100f,
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
+                    )
+                }
+            }
 
-        UpdateUiState.UpToDate -> {
-            val checkLabel = stringResource(Res.string.update_check_action)
-            InlineSuccessBanner(
-                text = stringResource(Res.string.update_up_to_date),
-                linkActions = {
-                    action(checkLabel, onClick = onCheckForUpdate)
-                },
-            )
-        }
+            is UpdateUiState.ReadyToInstall -> {
+                val installLabel = stringResource(Res.string.update_install_restart)
+                InlineInformationBanner(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.update_available_banner, updateState.version),
+                    linkActions = {
+                        action(installLabel, onClick = onInstallUpdate)
+                    },
+                )
+            }
 
-        is UpdateUiState.Error -> {
-            val checkLabel = stringResource(Res.string.update_check_action)
-            InlineWarningBanner(
-                text = stringResource(Res.string.update_check_failed),
-                linkActions = {
-                    action(checkLabel, onClick = onCheckForUpdate)
-                },
-            )
-        }
+            UpdateUiState.UpToDate -> {
+                val checkLabel = stringResource(Res.string.update_check_action)
+                InlineSuccessBanner(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.update_up_to_date),
+                    linkActions = {
+                        action(checkLabel, onClick = onCheckForUpdate)
+                    },
+                )
+            }
 
-        UpdateUiState.Idle, UpdateUiState.Checking ->
-            InlineInformationBanner(text = stringResource(Res.string.update_checking))
+            is UpdateUiState.Error -> {
+                val checkLabel = stringResource(Res.string.update_check_action)
+                InlineWarningBanner(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(Res.string.update_check_failed),
+                    linkActions = {
+                        action(checkLabel, onClick = onCheckForUpdate)
+                    },
+                )
+            }
+
+            UpdateUiState.Idle, UpdateUiState.Checking ->
+                InlineInformationBanner(text = stringResource(Res.string.update_checking), modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 

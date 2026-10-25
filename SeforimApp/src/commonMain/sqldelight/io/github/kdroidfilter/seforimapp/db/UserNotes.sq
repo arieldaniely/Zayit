@@ -25,6 +25,9 @@ SELECT * FROM user_notes WHERE bookId = ?;
 selectAll:
 SELECT * FROM user_notes ORDER BY updatedAt DESC, id DESC;
 
+selectRecent:
+SELECT * FROM user_notes ORDER BY updatedAt DESC, id DESC LIMIT :maxRows;
+
 selectForLine:
 SELECT * FROM user_notes WHERE bookId = ? AND lineId = ?;
 

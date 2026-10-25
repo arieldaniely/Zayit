@@ -11,6 +11,7 @@ import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseCleanupUseCase
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabasePreparationUseCase
@@ -29,9 +30,10 @@ import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
  */
 @DependencyGraph(AppScope::class)
 abstract class AppGraph : ViewModelGraph {
+    abstract val shnayimMikraStore: io.github.kdroidfilter.seforimapp.core.shnayimmikra.ShnayimMikraStore
+    abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
     abstract val widgetPreferences: io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
     abstract val toolWindows: io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindows
-    abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
     abstract val personalLibraryService: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
 
     abstract val searchFeedbackService: io.github.kdroidfilter.seforimapp.features.search.SearchFeedbackService
@@ -43,6 +45,7 @@ abstract class AppGraph : ViewModelGraph {
     abstract val tabPersistedStateStore: TabPersistedStateStore
     abstract val tabTitleUpdateManager: TabTitleUpdateManager
     abstract val settings: Settings
+    val appSettings: AppSettings get() = AppSettings
     abstract val categoryDisplaySettingsStore: CategoryDisplaySettingsStore
     abstract val highlightStore: HighlightStore
     abstract val historyStore: HistoryStore

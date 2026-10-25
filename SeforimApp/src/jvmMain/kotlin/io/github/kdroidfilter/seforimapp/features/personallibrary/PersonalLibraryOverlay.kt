@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
+import io.github.kdroidfilter.seforimapp.framework.database.installAuthorMetadataCompatibility
 import java.nio.file.Path
 
 /** Installs same-name TEMP views, so existing SQLDelight queries read a zero-copy union. */
@@ -25,7 +26,10 @@ class PersonalLibraryOverlay(
                     }
                 }
             if (attached) connection.createStatement().use { it.execute("DETACH DATABASE personal") }
-            if (database == null) return
+            if (database == null) {
+                installAuthorMetadataCompatibility(connection)
+                return
+            }
             val escaped = database.toAbsolutePath().toString().replace("'", "''")
             connection.createStatement().use { it.execute("ATTACH DATABASE '$escaped' AS personal") }
             connection.createStatement().use { statement ->
@@ -55,6 +59,7 @@ class PersonalLibraryOverlay(
                     }
             }
             TABLES.forEach { table ->
+                if (table == "author") return@forEach
                 connection.createStatement().use {
                     it.execute(
                         "CREATE TEMP VIEW \"$table\" AS " +
@@ -62,6 +67,7 @@ class PersonalLibraryOverlay(
                     )
                 }
             }
+            installAuthorMetadataCompatibility(connection, personalAttached = true)
             driver.setPersonalOverlayAttached(
                 attached = true,
                 targetBookIds = targetBookIds,

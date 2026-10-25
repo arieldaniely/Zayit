@@ -184,4 +184,26 @@ class NoteStore(
                 )
             }
     }
+
+    /** Latest notes for Home without filling the full notes cache. */
+    suspend fun recent(limit: Int): List<BookUserNote> =
+        withContext(Dispatchers.IO) {
+            require(limit in 1..100)
+            queries.selectRecent(limit.toLong()).executeAsList().map { row ->
+                BookUserNote(
+                    bookId = row.bookId,
+                    note =
+                        UserNote(
+                            id = row.id,
+                            lineId = row.lineId,
+                            startOffset = row.startOffset.toInt(),
+                            endOffset = row.endOffset.toInt(),
+                            note = row.note,
+                            quote = row.quote,
+                            createdAt = row.createdAt,
+                            updatedAt = row.updatedAt,
+                        ),
+                )
+            }
+        }
 }

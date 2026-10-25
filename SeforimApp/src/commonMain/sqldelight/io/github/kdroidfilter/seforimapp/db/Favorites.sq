@@ -26,6 +26,12 @@ ON CONFLICT(key) DO UPDATE SET
 selectAllFavorites:
 SELECT * FROM favorite ORDER BY createdAt DESC;
 
+selectRecentFavorites:
+SELECT * FROM favorite ORDER BY createdAt DESC LIMIT :maxRows;
+
+selectRecentInFolder:
+SELECT * FROM favorite WHERE folderId = :folderId ORDER BY createdAt DESC LIMIT :maxRows;
+
 searchFavoritesByTitle:
 SELECT * FROM favorite
 WHERE title LIKE '%' || :query || '%' ESCAPE '\'

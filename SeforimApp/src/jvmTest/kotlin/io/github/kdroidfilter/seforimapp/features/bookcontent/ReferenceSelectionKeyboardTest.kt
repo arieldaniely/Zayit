@@ -16,7 +16,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BookSuggestion
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.SearchBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.TocSuggestion
-import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
+import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
@@ -31,12 +31,11 @@ class ReferenceSelectionKeyboardTest {
 
     private fun checkSelection(
         key: Key?,
-        referenceMode: Boolean,
-        combined: Boolean = true,
+        jump: Boolean = false,
         tocMode: Boolean = false,
     ) = runComposeUiTest {
         var picks = 0
-        var submits = 0
+        var opens = 0
         var visible by mutableStateOf(true)
         val focus = FocusRequester()
         val state = TextFieldState("ברכות ב:")
@@ -44,27 +43,33 @@ class ReferenceSelectionKeyboardTest {
             PreviewContainer {
                 SearchBar(
                     state = state,
-                    selectedFilter = SearchFilter.REFERENCE,
-                    onFilterChange = {},
-                    showToggle = false,
-                    showIcon = false,
                     focusRequester = focus,
-                    autoFocus = false,
-                    placeholderText = "",
-                    suggestionsVisible = visible,
+                    suggestionsVisible = visible && !tocMode,
                     bookSuggestions =
-                        persistentListOf(
-                            BookSuggestion(book, listOf(book.title, toc.text), targetToc = toc.takeIf { combined }),
-                        ),
+                        if (jump) {
+                            persistentListOf()
+                        } else {
+                            persistentListOf(
+                                BookSuggestion(book, listOf(book.title, toc.text)),
+                            )
+                        },
+                    jumpSuggestions = if (jump) persistentListOf(ResolvedReference(book, 3, toc.text)) else persistentListOf(),
                     selectedBook = book.takeIf { tocMode },
                     tocSuggestionsVisible = visible && tocMode,
                     tocSuggestions = listOf(TocSuggestion(toc, listOf(book.title, toc.text))),
                     onPickBook = { picks++ },
+                    onOpenBook = {
+                        picks++
+                        opens++
+                    },
+                    onPickJump = {
+                        picks++
+                        opens++
+                    },
                     onPickToc = { picks++ },
                     onDismissSuggestions = { visible = false },
-                    onSubmit = { submits++ },
-                    submitCombinedReference = referenceMode,
-                    submitOnEnterInReference = referenceMode && tocMode,
+                    onSubmit = { opens++ },
+                    submitOnEnterInReference = tocMode,
                 )
             }
         }
@@ -78,27 +83,24 @@ class ReferenceSelectionKeyboardTest {
         }
         waitForIdle()
         assertEquals(1, picks)
-        assertEquals(if (referenceMode && key != Key.Tab && (combined || tocMode)) 1 else 0, submits)
+        assertEquals(if (jump || tocMode || key != Key.Tab) 1 else 0, opens)
     }
 
     @Test
-    fun `Tab selects combined reference without opening`() = checkSelection(Key.Tab, referenceMode = true)
+    fun `Tab selects a book for searching inside`() = checkSelection(Key.Tab)
 
     @Test
-    fun `Enter opens combined reference exactly once`() = checkSelection(Key.Enter, referenceMode = true)
+    fun `Enter opens a book exactly once`() = checkSelection(Key.Enter)
 
     @Test
-    fun `scope Enter only selects combined reference`() = checkSelection(Key.Enter, referenceMode = false)
+    fun `click opens a book exactly once`() = checkSelection(null)
 
     @Test
-    fun `scope click only selects combined reference`() = checkSelection(null, referenceMode = false)
+    fun `Enter opens a resolved reference directly`() = checkSelection(Key.Enter, jump = true)
 
     @Test
-    fun `book Enter preserves staged selection`() = checkSelection(Key.Enter, referenceMode = true, combined = false)
+    fun `toc Tab opens the selected location as upstream does`() = checkSelection(Key.Tab, tocMode = true)
 
     @Test
-    fun `toc Tab only selects location`() = checkSelection(Key.Tab, referenceMode = true, tocMode = true)
-
-    @Test
-    fun `toc Enter opens exactly once`() = checkSelection(Key.Enter, referenceMode = true, tocMode = true)
+    fun `toc Enter opens exactly once`() = checkSelection(Key.Enter, tocMode = true)
 }

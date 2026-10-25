@@ -1,121 +1,165 @@
 package io.github.kdroidfilter.seforimapp.features.home.widgets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.rememberDialogState
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.window.ControlButtonsDirection
-import dev.nucleusframework.window.jewel.JewelDecoratedDialog
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
-import dev.nucleusframework.window.jewel.JewelDialogTitleBar
 import dev.nucleusframework.window.jewel.JewelTitleBar
+import dev.nucleusframework.window.newFullscreenControls
+import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import io.github.kdroidfilter.seforimapp.features.home.widgets.calendar.CalendarWidget
-import io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryWidget
-import io.github.kdroidfilter.seforimapp.features.home.widgets.measures.MeasuresWidget
+import dev.zacsweers.metrox.viewmodel.metroViewModel
+import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberWindowViewModelStoreOwner
+import io.github.kdroidfilter.seforimapp.features.home.widgets.LocalToolApplicationScope
+import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.jewel.foundation.modifier.trackActivation
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.DefaultButton
-import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
-import seforimapp.seforimapp.generated.resources.*
 
-internal val availableTools: List<HomeWidget> = listOf(CalendarWidget, DictionaryWidget, MeasuresWidget)
+/** The widgets that also open alone in a window, from the app's Tools menu (see [HomeWidget.toolWindowSize]). */
+internal val availableTools: List<HomeWidget>
+    get() = availableHomeWidgets.filter { it.toolWindowSize != null && it.isSupported }
 
-/** One app-wide window per tool; requesting an open tool brings it forward. */
+/** The tools open in their own window, app-wide: one window per tool, brought back rather than opened twice. */
 @Inject
 @SingleIn(AppScope::class)
 class ToolWindows {
     internal val open = mutableStateListOf<HomeWidget>()
-    internal val revisions = mutableStateMapOf<String, Int>()
+
+    /** How many times each open tool was asked for again: its window comes back to the front at each one. */
+    internal val reopened = mutableStateMapOf<String, Int>()
 
     fun open(id: String) {
-        val tool = availableTools.firstOrNull { it.id == id } ?: return
-        if (tool !in open) open += tool else revisions[id] = (revisions[id] ?: 0) + 1
+        availableTools.firstOrNull { it.id == id }?.let(::open)
+    }
+
+    internal fun open(tool: HomeWidget) {
+        if (tool in open) {
+            reopened[tool.id] = (reopened[tool.id] ?: 0) + 1
+        } else {
+            open += tool
+        }
     }
 }
 
+/** Every open tool's window; composed once, at the app's level. */
 @Composable
-fun NucleusApplicationScope.ToolWindowsHost() {
-    val graph = LocalAppGraph.current
-    val windows = graph.toolWindows
-    if (windows.open.isEmpty()) return
-    val state = remember(graph.widgetPreferences) { HomeWidgetsState(graph.widgetPreferences) }
+fun ToolWindowsHost() {
+    val toolWindows = LocalAppGraph.current.toolWindows
+    if (toolWindows.open.isEmpty()) return
+    val state = rememberToolsState()
+    toolWindows.open.toList().forEach { tool ->
+        key(tool.id) {
+            tool.ToolWindow(state) {
+                toolWindows.open -= tool
+                toolWindows.reopened -= tool.id
+            }
+        }
+    }
+    state.optionsOpen?.let { WidgetOptionsDialog(it, state, onClose = { state.optionsOpen = null }) }
+}
+
+/** The state the tools share, as the Home's: the user's place and community, the widgets' options. */
+@Composable
+private fun rememberToolsState(): HomeWidgetsState {
+    val appGraph = LocalAppGraph.current
+    val viewModel: HomeUserLocationViewModel = metroViewModel(viewModelStoreOwner = rememberWindowViewModelStoreOwner())
+    val userLocation by viewModel.state.collectAsState()
+    val communityCode by io.github.kdroidfilter.seforimapp.core.settings.AppSettings.userCommunityCodeFlow
+        .collectAsState()
+    val state =
+        remember(userLocation, communityCode) {
+            val community = communityCode?.let { code -> runCatching { Community.valueOf(code) }.getOrNull() }
+            HomeWidgetsState(userLocation, community, HomeWidgetsLayout(appGraph.widgetPreferences))
+        }
     SideEffect {
-        state.openTab = {
-            graph.desktopManager
+        state.openTab = { destination ->
+            appGraph.desktopManager
                 .focusedWindow()
                 ?.tabsViewModel
-                ?.openTab(it)
+                ?.openTab(destination)
         }
     }
-    for (tool in windows.open.toList()) {
-        key(tool.id) {
-            val revision = windows.revisions[tool.id] ?: 0
-            val title = stringResource(tool.title)
-            val windowState = rememberWindowState(size = tool.toolWindowSize!!)
-            JewelDecoratedWindow(
-                onCloseRequest = {
-                    windows.open -= tool
-                    windows.revisions -= tool.id
-                },
-                title = title,
-                state = windowState,
-            ) {
-                val window = nucleusWindow
-                LaunchedEffect(revision) {
-                    if (revision > 0) {
-                        window.setMinimized(false)
-                        window.toFront()
-                        window.requestFocus()
-                    }
+    return state
+}
+
+@Composable
+internal fun DefaultToolWindow(
+    tool: HomeWidget,
+    state: HomeWidgetsState,
+    onClose: () -> Unit,
+) {
+    val reopened = LocalAppGraph.current.toolWindows.reopened[tool.id] ?: 0
+    val title = stringResource(tool.title)
+    val windowState = rememberWindowState(position = WindowPosition(Alignment.Center), size = tool.toolWindowSize!!)
+    with(LocalToolApplicationScope.current) {
+        JewelDecoratedWindow(
+            onCloseRequest = onClose,
+            title = title,
+            state = windowState,
+            minimumSize = tool.toolWindowMinSize,
+        ) {
+            val window = nucleusWindow
+            LaunchedEffect(reopened) {
+                if (reopened == 0) return@LaunchedEffect
+                window.setMinimized(false)
+                window.toFront()
+                window.requestFocus()
+            }
+            // A tool whose content decides its height (its heightAt) gets just that, and follows its options
+            val titleBarHeight = LocalTitleBarStyle.current.metrics.height
+            val contentHeight = tool.heightAt(windowState.size.width - TOOL_PADDING * 2)
+            if (contentHeight != null) {
+                LaunchedEffect(contentHeight) {
+                    windowState.size = windowState.size.copy(height = contentHeight + titleBarHeight + TOOL_PADDING * 2)
                 }
-                JewelTitleBar(controlButtonsDirection = ControlButtonsDirection.SystemNative) { Text(title) }
-                tool.Content(state, Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).padding(12.dp))
             }
-        }
-    }
-    WidgetOptionsHost(state)
-}
-
-@Composable
-internal fun NucleusApplicationScope.WidgetOptionsHost(state: HomeWidgetsState) {
-    val widget = state.optionsOpen ?: return
-    val title = stringResource(Res.string.home_widgets_options)
-    JewelDecoratedDialog(
-        onCloseRequest = { state.optionsOpen = null },
-        title = title,
-        state = rememberDialogState(width = 460.dp, height = 500.dp),
-        resizable = true,
-    ) {
-        JewelDialogTitleBar(controlButtonsDirection = ControlButtonsDirection.SystemNative) { Text(title) }
-        Column(Modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground).padding(16.dp)) {
-            Box(Modifier.weight(1f)) { widget.Options(state) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    widget.settings?.let(state.preferences::reset)
-                    widget.applySettings(state.preferences)
-                }) { Text(stringResource(Res.string.home_widgets_reset)) }
-                Spacer(Modifier.weight(1f))
-                DefaultButton(onClick = { state.optionsOpen = null }) { Text(stringResource(Res.string.home_widgets_done)) }
+            JewelTitleBar(
+                modifier = Modifier.newFullscreenControls(),
+                gradientStartColor = ThemeUtils.titleBarGradientColor(),
+                controlButtonsDirection = ControlButtonsDirection.SystemNative,
+            ) {
+                Text(title)
             }
+            Box(
+                Modifier
+                    .trackActivation()
+                    .fillMaxSize()
+                    .background(JewelTheme.globalColors.panelBackground)
+                    .padding(TOOL_PADDING),
+            ) {
+                tool.Content(state, Modifier.fillMaxSize())
+            }
+            tool.Detached(state)
         }
     }
 }
 
-@Composable
-fun ToolsMenuItems(onOpen: (String) -> Unit) {
-    // Also used by the native menu; the title-bar launcher exposes these on every OS.
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (tool in availableTools) {
-            OutlinedButton(onClick = { onOpen(tool.id) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(tool.title)) }
-        }
+private val TOOL_PADDING = 8.dp
+
+/** The application receiver needed by Nucleus 2 when a card opens a separate window. */
+internal val LocalToolApplicationScope =
+    androidx.compose.runtime.staticCompositionLocalOf<dev.nucleusframework.application.NucleusApplicationScope> {
+        error("No tool application scope provided")
     }
-}

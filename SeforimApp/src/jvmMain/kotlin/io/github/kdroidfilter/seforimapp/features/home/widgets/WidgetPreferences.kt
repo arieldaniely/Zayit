@@ -17,6 +17,12 @@ import java.util.concurrent.ConcurrentHashMap
 class WidgetPreferences(
     private val settings: Settings,
 ) {
+    internal val homeWidgetsLayoutFlow get() = flow(LayoutSettings.saved)
+
+    internal fun setHomeWidgetsLayout(value: String?) {
+        this[LayoutSettings.saved] = value
+    }
+
     private val states = ConcurrentHashMap<String, MutableStateFlow<*>>()
 
     @Suppress("UNCHECKED_CAST")
@@ -46,7 +52,3 @@ class WidgetPreferences(
         state(setting).value = setting.default
     }
 }
-
-abstract class WidgetSettings(
-    widgetId: String,
-) : SettingsGroup("home_widget.$widgetId")

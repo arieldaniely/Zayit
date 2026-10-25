@@ -136,6 +136,7 @@ class SearchLatencyIntegrationTest {
                 DesktopManager(store, titles, { home }, "benchmark"),
                 HistoryStore(UserSettingsDb(settingsDriver)),
                 SearchFeedbackService(repository),
+                LuceneLookupSearchService(Path.of("$database.lookup.lucene")),
             )
         val visible = launch { model.visibleResultsFlow.collect() }
         try {

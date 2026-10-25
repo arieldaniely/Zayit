@@ -6,7 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.home.widgets.earth.EarthWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.sky.SkyWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.solarsystem.SolarSystemWidget
@@ -45,7 +45,7 @@ interface HomeWidget {
      * Its settings as saved, given at the start and on each change, for a widget whose size follows them (its [heightAt]):
      * the grid reads that size where no composition is (laying out, arranging).
      */
-    fun applySettings(appSettings: WidgetPreferences) {}
+    fun applySettings(appSettings: AppSettings) {}
 
     val isSupported: Boolean get() = true
 

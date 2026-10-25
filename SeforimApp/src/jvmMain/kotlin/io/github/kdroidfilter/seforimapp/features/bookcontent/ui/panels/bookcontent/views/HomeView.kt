@@ -386,8 +386,8 @@ private fun HomeBody(
             searchUi.userCommunityCode?.let { code -> runCatching { Community.valueOf(code) }.getOrNull() }
         }
     val layout =
-        remember(widgetGraph.widgetPreferences) {
-            HomeWidgetsLayout(widgetGraph.widgetPreferences)
+        remember(widgetGraph.appSettings) {
+            HomeWidgetsLayout(widgetGraph.appSettings)
         }
     val widgetsState =
         remember(userLocation, community, layout) {
@@ -396,7 +396,7 @@ private fun HomeBody(
     val tabs = LocalOpenWindow.current.tabsViewModel
     SideEffect { widgetsState.openTab = tabs::openTab }
     // Composed here, outside the page, so a card's window doesn't depend on the page's composition
-    val widgetsLayoutRaw by layout.saved.collectAsState()
+    val widgetsLayoutRaw by widgetGraph.appSettings.homeWidgetsLayoutFlow.collectAsState()
     val widgetsLayout = remember(widgetsLayoutRaw) { decodeLayout(widgetsLayoutRaw) }
     widgetsLayout.forEach { it.widget.Detached(widgetsState) }
 

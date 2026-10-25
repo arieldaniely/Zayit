@@ -1,10 +1,10 @@
 package io.github.kdroidfilter.seforimapp
 
 import com.russhwolf.settings.PropertiesSettings
-import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import java.util.Properties
 
-internal fun testAppSettings() = WidgetPreferences(PropertiesSettings(Properties()))
+internal fun testAppSettings() = AppSettings.also { it.initialize(PropertiesSettings(Properties())) }
 
 internal fun testAppGraph(): io.github.kdroidfilter.seforimapp.framework.di.AppGraph {
     val graph = io.mockk.mockk<io.github.kdroidfilter.seforimapp.framework.di.AppGraph>()
@@ -17,6 +17,7 @@ internal fun testAppGraph(): io.github.kdroidfilter.seforimapp.framework.di.AppG
         kotlinx.coroutines.flow.MutableStateFlow(
             io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle.Islands,
         )
+    io.mockk.every { graph.appSettings } returns AppSettings
     io.mockk.every { graph.mainAppState } returns main
     io.mockk.every { graph.dictionaryIndex } returns
         io.github.kdroidfilter.seforimapp.features.home.widgets.library

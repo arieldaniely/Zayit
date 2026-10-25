@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages application settings and preferences that persist across app restarts.
@@ -69,6 +70,8 @@ object AppSettings {
     private const val KEY_FONT_COMMENTARY = "font_commentary"
     private const val KEY_FONT_TARGUM = "font_targum"
     private const val KEY_FONT_SOURCE = "font_source"
+    private const val KEY_HOME_WIDGETS_LAYOUT = "home_widgets_layout"
+    private const val LEGACY_HOME_WIDGETS_LAYOUT = "home_widgets.saved"
     private const val KEY_SAVED_SESSION = "saved_session_json"
     private const val KEY_SAVED_SESSION_PARTS_COUNT = "saved_session_parts_count"
     private const val KEY_SAVED_SESSION_PART_PREFIX = "saved_session_part_"
@@ -111,6 +114,14 @@ object AppSettings {
     @Volatile
     private var settings: Settings = createDesktopSettings()
 
+    private fun savedHomeWidgetsLayout(): String? =
+        settings.getStringOrNull(KEY_HOME_WIDGETS_LAYOUT) ?: settings.getStringOrNull(LEGACY_HOME_WIDGETS_LAYOUT)
+
+    private val _homeWidgetsLayoutFlow = MutableStateFlow(savedHomeWidgetsLayout())
+    val homeWidgetsLayoutFlow: StateFlow<String?> = _homeWidgetsLayoutFlow.asStateFlow()
+
+    private val typedSettings = ConcurrentHashMap<String, TypedSettingState<*>>()
+
     private val _searchFeedbackEnabledFlow = MutableStateFlow(isSearchFeedbackEnabled())
     val searchFeedbackEnabledFlow: StateFlow<Boolean> = _searchFeedbackEnabledFlow.asStateFlow()
 
@@ -124,6 +135,8 @@ object AppSettings {
     // Allow optional initialization with an externally provided Settings instance
     fun initialize(settings: Settings) {
         this.settings = settings
+        _homeWidgetsLayoutFlow.value = savedHomeWidgetsLayout()
+        typedSettings.values.forEach { it.reload(settings) }
         _searchFeedbackEnabledFlow.value = isSearchFeedbackEnabled()
         // Refresh flows with current values from provided settings
         _textSizeFlow.value = getTextSize()
@@ -466,6 +479,52 @@ object AppSettings {
         _showTempleCountdownFlow.value = enabled
     }
 
+    /** Null goes back to the default layout. The old fork key is read until the first edit. */
+    fun setHomeWidgetsLayout(layout: String?) {
+        if (layout == null) settings.remove(KEY_HOME_WIDGETS_LAYOUT) else settings[KEY_HOME_WIDGETS_LAYOUT] = layout
+        settings.remove(LEGACY_HOME_WIDGETS_LAYOUT)
+        _homeWidgetsLayoutFlow.value = layout
+    }
+
+    operator fun <T> get(setting: Setting<T>): T = stateOf(setting).flow.value
+
+    fun <T> flow(setting: Setting<T>): StateFlow<T> = stateOf(setting).flow.asStateFlow()
+
+    operator fun <T> set(
+        setting: Setting<T>,
+        value: T,
+    ) {
+        settings[setting.key] = setting.codec.encode(value)
+        stateOf(setting).flow.value = value
+    }
+
+    /** Back to the defaults of every setting of [group]. */
+    fun reset(group: SettingsGroup) =
+        group.all.forEach {
+            settings.remove(it.key)
+            stateOf(it).reset()
+        }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> stateOf(setting: Setting<T>): TypedSettingState<T> =
+        typedSettings.getOrPut(setting.key) {
+            val saved = settings.getStringOrNull(setting.key)?.let(setting.codec.decode)
+            TypedSettingState(setting, MutableStateFlow(saved ?: setting.default))
+        } as TypedSettingState<T>
+
+    private class TypedSettingState<T>(
+        val setting: Setting<T>,
+        val flow: MutableStateFlow<T>,
+    ) {
+        fun reload(storage: Settings) {
+            flow.value = storage.getStringOrNull(setting.key)?.let(setting.codec.decode) ?: setting.default
+        }
+
+        fun reset() {
+            flow.value = setting.default
+        }
+    }
+
     // Homepage wallpaper visibility
     fun isShowHomeWallpaperEnabled(): Boolean = settings[KEY_SHOW_HOME_WALLPAPER, true]
 
@@ -680,6 +739,8 @@ object AppSettings {
     // Clears all persisted settings and resets in-memory flows to defaults
     fun clearAll() {
         settings.clear()
+        _homeWidgetsLayoutFlow.value = null
+        typedSettings.values.forEach { it.reset() }
         _textSizeFlow.value = DEFAULT_TEXT_SIZE
         _lineHeightFlow.value = DEFAULT_LINE_HEIGHT
         _maxCommentatorsPerPageFlow.value = DEFAULT_MAX_COMMENTATORS_PER_PAGE

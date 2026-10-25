@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.earthwidget.computeZmanimTimes
 import io.github.kdroidfilter.seforimapp.features.home.widgets.CellSpan
 import io.github.kdroidfilter.seforimapp.features.home.widgets.FitColumn
@@ -51,7 +52,6 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.HoverBox
 import io.github.kdroidfilter.seforimapp.features.home.widgets.PanelCard
 import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetCardLoading
 import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetMenuItem
-import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
 import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetSettings
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberAccentColor
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberOffMain
@@ -129,7 +129,7 @@ internal object LimudWidget : HomeWidget {
     // The limudim shown, as saved: read by the grid for the card's height as well as by the card
     private var shown by mutableStateOf(LimudSettings.shown.default)
 
-    override fun applySettings(appSettings: WidgetPreferences) {
+    override fun applySettings(appSettings: AppSettings) {
         shown = appSettings[LimudSettings.shown]
     }
 

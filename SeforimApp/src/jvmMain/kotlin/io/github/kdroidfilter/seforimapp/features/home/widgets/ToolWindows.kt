@@ -91,7 +91,7 @@ private fun rememberToolsState(): HomeWidgetsState {
     val state =
         remember(userLocation, communityCode) {
             val community = communityCode?.let { code -> runCatching { Community.valueOf(code) }.getOrNull() }
-            HomeWidgetsState(userLocation, community, HomeWidgetsLayout(appGraph.widgetPreferences))
+            HomeWidgetsState(userLocation, community, HomeWidgetsLayout(appGraph.appSettings))
         }
     SideEffect {
         state.openTab = { destination ->

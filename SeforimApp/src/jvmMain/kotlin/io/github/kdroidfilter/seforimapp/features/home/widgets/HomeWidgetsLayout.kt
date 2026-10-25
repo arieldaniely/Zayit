@@ -1,7 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.home.widgets
 
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.Setting
-import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -61,19 +61,15 @@ internal fun encodeLayout(layout: List<WidgetPlacement>): String =
 
 /** The edits the Home offers on its layout, each saved at once. */
 internal class HomeWidgetsLayout(
-    private val appSettings: WidgetPreferences,
+    private val appSettings: AppSettings,
 ) {
     init {
         availableHomeWidgets.forEach { it.applySettings(appSettings) }
     }
 
-    val saved get() = appSettings.flow(LayoutSettings.saved)
+    fun current(): List<WidgetPlacement> = decodeLayout(appSettings.homeWidgetsLayoutFlow.value)
 
-    fun current(): List<WidgetPlacement> = decodeLayout(appSettings.flow(LayoutSettings.saved).value)
-
-    fun save(layout: List<WidgetPlacement>) {
-        appSettings[LayoutSettings.saved] = encodeLayout(layout)
-    }
+    fun save(layout: List<WidgetPlacement>) = appSettings.setHomeWidgetsLayout(encodeLayout(layout))
 
     /** The widgets shown, and the ones this platform can't show: those take no cells here, but stay in the save. */
     private fun edit(change: (List<WidgetPlacement>) -> List<WidgetPlacement>) {
@@ -137,7 +133,7 @@ internal class HomeWidgetsLayout(
         }
     }
 
-    fun reset() = run { appSettings[LayoutSettings.saved] = null }
+    fun reset() = appSettings.setHomeWidgetsLayout(null)
 
     fun <T> flow(setting: Setting<T>): StateFlow<T> = appSettings.flow(setting)
 
@@ -164,11 +160,3 @@ internal class HomeWidgetsLayout(
 internal data class RemovedWidget(
     val placement: WidgetPlacement,
 )
-
-internal object LayoutSettings : io.github.kdroidfilter.seforimapp.core.settings.SettingsGroup("home_widgets") {
-    val saved by setting<String?>(
-        null,
-        io.github.kdroidfilter.seforimapp.core.settings
-            .SettingCodec({ it.orEmpty() }, { it }),
-    )
-}

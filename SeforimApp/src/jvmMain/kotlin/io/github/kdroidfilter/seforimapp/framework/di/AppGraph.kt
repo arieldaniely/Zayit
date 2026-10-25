@@ -32,7 +32,6 @@ import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
 abstract class AppGraph : ViewModelGraph {
     abstract val shnayimMikraStore: io.github.kdroidfilter.seforimapp.core.shnayimmikra.ShnayimMikraStore
     abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
-    abstract val widgetPreferences: io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
     abstract val toolWindows: io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindows
     abstract val personalLibraryService: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
 

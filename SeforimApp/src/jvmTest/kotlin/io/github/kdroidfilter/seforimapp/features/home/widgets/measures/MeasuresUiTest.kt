@@ -10,8 +10,8 @@ import androidx.compose.ui.unit.dp
 import com.russhwolf.settings.PropertiesSettings
 import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsState
-import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetPreferences
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.mockk.every
@@ -26,7 +26,7 @@ class MeasuresUiTest {
     @Test
     fun showsHebrewUnitsAndReflectsOpinionChangesImmediately() =
         runComposeUiTest {
-            val preferences = WidgetPreferences(PropertiesSettings(Properties()))
+            val preferences = AppSettings.also { it.initialize(PropertiesSettings(Properties())) }
             val state =
                 HomeWidgetsState(
                     io.github.kdroidfilter.seforimapp.features.home.widgets.HomeUserLocation.preview,

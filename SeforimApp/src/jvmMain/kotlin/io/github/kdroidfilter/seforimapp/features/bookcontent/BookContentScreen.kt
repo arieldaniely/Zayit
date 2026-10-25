@@ -46,31 +46,17 @@ import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.resolveHighlightRangesForSelection
 import io.github.kdroidfilter.seforimapp.core.buildCopyWithSourcePayload
 import io.github.kdroidfilter.seforimapp.core.deeplink.bookShareLink
-import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.resolveLineRangeFromSelection
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
-import io.github.kdroidfilter.seforimapp.features.bookcontent.state.SplitDefaults
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EnhancedHorizontalSplitPane
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePane
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePaneLayout
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PanePlacement
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneSide
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.BookTocPanel
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryPanel
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorReportDraft
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
-import io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.Ink_pen
@@ -78,14 +64,10 @@ import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
-import org.jetbrains.compose.splitpane.SplitPaneState
 import org.jetbrains.jewel.foundation.InternalJewelApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.ContextMenuItemOption
@@ -115,12 +97,10 @@ import seforimapp.seforimapp.generated.resources.context_menu_report_book_error
 import seforimapp.seforimapp.generated.resources.context_menu_search_selected_text
 import seforimapp.seforimapp.generated.resources.context_menu_show_word_definition
 import seforimapp.seforimapp.generated.resources.context_menu_show_word_lookup
-import seforimapp.seforimapp.generated.resources.notes_pane
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.InputEvent
 import javax.swing.KeyStroke
-import kotlin.math.roundToInt
 import androidx.compose.foundation.ContextMenuRepresentation as ComposeContextMenuRepresentation
 import org.jetbrains.jewel.ui.component.ContextMenuRepresentation as JewelContextMenuRepresentation
 import org.jetbrains.jewel.ui.component.TextContextMenu as JewelTextContextMenu
@@ -463,22 +443,12 @@ private fun composeKeyEventToSwingKeyStroke(event: KeyEvent): KeyStroke? {
  */
 @OptIn(ExperimentalSplitPaneApi::class, FlowPreview::class, ExperimentalFoundationApi::class)
 @Composable
-fun BookContentScreen(
+fun BookTextMenus(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
-    searchUi: SearchHomeUiState,
-    searchCallbacks: HomeSearchCallbacks,
-    isRestoringSession: Boolean = false,
-    isSelected: Boolean = true,
-    bookCharCounts: IntArray? = null,
-    bookDetails: SearchEntity.BookEntity? = null,
-    isPdfEdition: Boolean = false,
-    pdfCanZoomIn: Boolean = false,
-    pdfCanZoomOut: Boolean = false,
-    onPdfZoomIn: () -> Unit = {},
-    onPdfZoomOut: () -> Unit = {},
-    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
+    tabUi: BookTabUi,
+    content: @Composable () -> Unit,
 ) {
     val currentOnEvent by rememberUpdatedState(onEvent)
     val searchSelectedLabel = stringResource(Res.string.context_menu_search_selected_text)
@@ -509,7 +479,6 @@ fun BookContentScreen(
     // User notes: a pending draft (anchored, not yet saved) opened from the context menu and
     // edited inline in the notes pane (Google-Docs style).
     val noteStore = LocalAppGraph.current.noteStore
-    var noteDraft by remember { mutableStateOf<NoteDraftAnchor?>(null) }
     var errorReportDraft by remember { mutableStateOf<BookErrorReportDraft?>(null) }
     var wordLookupResult by remember { mutableStateOf<WordLookupResult?>(null) }
     LaunchedEffect(Unit) {
@@ -518,27 +487,10 @@ fun BookContentScreen(
     }
     // Primary line captured when the draft was opened. Selecting a different line drops the unsaved
     // explicit draft so the editor reflects the newly selected line instead of the stale anchor.
-    var noteDraftBaselineLine by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(uiState.content.primaryLine?.id) {
-        if (noteDraft != null && uiState.content.primaryLine?.id != noteDraftBaselineLine) {
-            noteDraft = null
+        if (tabUi.noteDraft != null && uiState.content.primaryLine?.id != tabUi.noteDraftBaselineLine) {
+            tabUi.noteDraft = null
         }
-    }
-
-    // Publish the active book + its root category to the SelectionContext so the Ctrl+Alt+C
-    // dispatcher and the context-menu action can apply per-tradition formatting. Lifecycle
-    // clears are tabId-scoped so a backgrounded or disposed tab cannot wipe the foreground
-    // tab's published book — even when both tabs happen to reference the same book.
-    LaunchedEffect(selectedBook, isSelected, tabId, selectionContext) {
-        if (isSelected) {
-            val rootTitle = selectedBook?.let { CatalogCache.getRootForBook(it)?.title }
-            selectionContext.setActiveBook(tabId, selectedBook, rootTitle)
-        } else {
-            selectionContext.clearActiveBookIfOwnedBy(tabId)
-        }
-    }
-    DisposableEffect(tabId, selectionContext) {
-        onDispose { selectionContext.clearActiveBookIfOwnedBy(tabId) }
     }
 
     val textContextMenu =
@@ -727,8 +679,8 @@ fun BookContentScreen(
                                                     resolveWholeLineNoteDraft(selectionContext.currentLineId.value, lines)
                                                 }
                                             if (draft != null) {
-                                                noteDraft = draft
-                                                noteDraftBaselineLine = currentPrimaryLineId
+                                                tabUi.noteDraft = draft
+                                                tabUi.noteDraftBaselineLine = currentPrimaryLineId
                                                 if (!currentNotesVisible) onEvent(BookContentEvent.ToggleNotes)
                                             }
                                         },
@@ -806,54 +758,6 @@ fun BookContentScreen(
         WordLookupDialog(result = result, onDismiss = { wordLookupResult = null })
     }
 
-    // Configuration of split panes to monitor
-    val splitPaneConfigs =
-        listOf(
-            SplitPaneConfig(
-                splitState = uiState.layout.mainSplitState,
-                isVisible = uiState.navigation.isVisible,
-                positionFilter = { it > 0 },
-            ),
-            SplitPaneConfig(
-                splitState = uiState.layout.tocSplitState,
-                isVisible = uiState.toc.isVisible,
-                positionFilter = { it > 0 },
-            ),
-            SplitPaneConfig(
-                splitState = uiState.layout.notesSplitState,
-                isVisible = uiState.notes.isVisible,
-                positionFilter = { it > 0 },
-            ),
-            SplitPaneConfig(
-                splitState = uiState.layout.contentSplitState,
-                isVisible = uiState.content.showCommentaries,
-                positionFilter = { it > 0 && it < 1 },
-            ),
-            SplitPaneConfig(
-                splitState = uiState.layout.targumSplitState,
-                isVisible = uiState.content.showTargum || uiState.content.showMentions,
-                positionFilter = { it > 0 && it < 1 },
-            ),
-        )
-
-    // Monitor all split panes with the same logic
-    splitPaneConfigs.forEach { config ->
-        LaunchedEffect(config.splitState, config.isVisible) {
-            if (config.isVisible) {
-                snapshotFlow { config.splitState.positionPercentage }
-                    .map { ((it * 100).roundToInt() / 100f) }
-                    .distinctUntilChanged()
-                    .debounce(300)
-                    .filter(config.positionFilter)
-                    .collect { currentOnEvent(BookContentEvent.SaveState) }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { currentOnEvent(BookContentEvent.SaveState) }
-    }
-
     CompositionLocalProvider(
         LocalTextContextMenu provides textContextMenu,
         LocalContextMenuRepresentation provides BookContentContextMenuRepresentationWithKeybindings,
@@ -900,8 +804,8 @@ fun BookContentScreen(
                                                 null
                                             }
                                         if (draft != null) {
-                                            noteDraft = draft
-                                            noteDraftBaselineLine = currentPrimaryLineId
+                                            tabUi.noteDraft = draft
+                                            tabUi.noteDraftBaselineLine = currentPrimaryLineId
                                             if (!currentNotesVisible) onEvent(BookContentEvent.ToggleNotes)
                                         } else {
                                             onEvent(BookContentEvent.ToggleNotes)
@@ -916,133 +820,61 @@ fun BookContentScreen(
                         }
                     },
         ) {
-            StartVerticalBar(
-                uiState = uiState,
-                onEvent = onEvent,
-            )
-
-            val isHome = uiState.navigation.selectedBook == null
-            val isIslands = ThemeUtils.isIslandsStyle()
-            val panelCardModifier =
-                if (isIslands) {
-                    Modifier
-                        .fillMaxSize()
-                        .padding(vertical = 6.dp, horizontal = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(JewelTheme.globalColors.panelBackground)
-                } else {
-                    Modifier
-                }
-
-            EnhancedHorizontalSplitPane(
-                splitPaneState = uiState.layout.mainSplitState.asStable(),
-                modifier = Modifier.weight(1f),
-                firstMinSize = if (uiState.navigation.isVisible) SplitDefaults.MIN_MAIN else 0f,
-                firstContent = {
-                    if (uiState.navigation.isVisible) {
-                        CategoryTreePanel(uiState = uiState, onEvent = onEvent, isPdfEdition = isPdfEdition, modifier = panelCardModifier)
-                    }
-                },
-                secondContent = {
-                    EnhancedHorizontalSplitPane(
-                        splitPaneState = uiState.layout.tocSplitState.asStable(),
-                        firstMinSize = if (uiState.toc.isVisible) SplitDefaults.MIN_TOC else 0f,
-                        firstContent = {
-                            if (uiState.toc.isVisible) {
-                                BookTocPanel(uiState = uiState, onEvent = onEvent, modifier = panelCardModifier)
-                            }
-                        },
-                        secondContent = {
-                            val notesPlacement = remember(uiState.tabId) { PanePlacement(PaneSide.Start) }
-                            val notesPane =
-                                if (uiState.notes.isVisible) {
-                                    MovablePane(
-                                        "notes",
-                                        org.jetbrains.compose.resources.stringResource(
-                                            seforimapp.seforimapp.generated.resources.Res.string.notes_pane,
-                                        ),
-                                        notesPlacement,
-                                        { onEvent(BookContentEvent.ToggleNotes) },
-                                    ) {
-                                        if (isHome) {
-                                            NotesLibraryPanel(
-                                                noteStore = noteStore,
-                                                onOpenNote = { bId, lId ->
-                                                    onEvent(BookContentEvent.OpenBookAtLine(bId, lId))
-                                                },
-                                                onHide = { onEvent(BookContentEvent.ToggleNotes) },
-                                                modifier = panelCardModifier,
-                                            )
-                                        } else {
-                                            NotesPanel(
-                                                uiState = uiState,
-                                                onEvent = onEvent,
-                                                bookId = bookId,
-                                                noteStore = noteStore,
-                                                selectedLineIds = uiState.content.selectedLineIds,
-                                                primarySelectedLine = uiState.content.primaryLine,
-                                                draft = noteDraft,
-                                                onConsumeDraft = { noteDraft = null },
-                                                modifier = panelCardModifier,
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    null
-                                }
-                            MovablePaneLayout(listOfNotNull(notesPane)) {
-                                BookContentPanel(
-                                    uiState = uiState,
-                                    onEvent = onEvent,
-                                    showDiacritics = showDiacritics,
-                                    isRestoringSession = isRestoringSession,
-                                    searchUi = searchUi,
-                                    searchCallbacks = searchCallbacks,
-                                    isSelected = isSelected,
-                                    bookCharCounts = bookCharCounts,
-                                    bookDetails = bookDetails,
-                                    noteDraft = noteDraft,
-                                    mainContentOverride = mainContentOverride,
-                                )
-                            }
-                        },
-                        showSplitter = uiState.toc.isVisible,
-                    )
-                },
-                showSplitter = uiState.navigation.isVisible,
-            )
-
-            if (!isHome) {
-                EndVerticalBar(
-                    uiState = uiState,
-                    onEvent = onEvent,
-                    showDiacritics = showDiacritics,
-                    isPdfEdition = isPdfEdition,
-                    pdfCanZoomIn = pdfCanZoomIn,
-                    pdfCanZoomOut = pdfCanZoomOut,
-                    onPdfZoomIn = onPdfZoomIn,
-                    onPdfZoomOut = onPdfZoomOut,
-                )
-            }
+            content()
         }
     }
 }
 
-/**
- * Represents the configuration used to manage the state and behavior of a split-pane component.
- *
- * @property splitState The state object representing the current split position and related properties.
- * @property isVisible Indicates whether the split-pane is visible or not.
- * @property positionFilter A filter function applied to the split position value to determine its validity.
- */
-@Stable
-private data class SplitPaneConfig
-    @OptIn(ExperimentalSplitPaneApi::class)
-    constructor(
-        val splitState: SplitPaneState,
-        val isVisible: Boolean,
-        val positionFilter: (Float) -> Boolean,
-    )
+@Composable
+fun BookContentScreen(
+    tabUi: BookTabUi,
+    uiState: BookContentState,
+    onEvent: (BookContentEvent) -> Unit,
+    showDiacritics: Boolean,
+    searchUi: SearchHomeUiState,
+    searchCallbacks: HomeSearchCallbacks,
+    isRestoringSession: Boolean = false,
+    isSelected: Boolean = true,
+    bookCharCounts: IntArray? = null,
+    mainContentOverride: (@Composable (Modifier) -> Unit)? = null,
+) {
+    val selectionContext = LocalAppGraph.current.selectionContext
+    val tabId = uiState.tabId
+    val selectedBook = uiState.navigation.selectedBook
+    // Publish the active book + its root category to the SelectionContext so the Ctrl+Alt+C
+    // dispatcher and the context-menu action can apply per-tradition formatting. Lifecycle
+    // clears are tabId-scoped so a backgrounded or disposed tab cannot wipe the foreground
+    // tab's published book — even when both tabs happen to reference the same book.
+    LaunchedEffect(selectedBook, isSelected, tabId, selectionContext) {
+        if (isSelected) {
+            val rootTitle = selectedBook?.let { CatalogCache.getRootForBook(it)?.title }
+            selectionContext.setActiveBook(tabId, selectedBook, rootTitle)
+        } else {
+            selectionContext.clearActiveBookIfOwnedBy(tabId)
+        }
+    }
+    DisposableEffect(tabId, selectionContext) {
+        onDispose { selectionContext.clearActiveBookIfOwnedBy(tabId) }
+    }
+
+    val currentOnEvent by rememberUpdatedState(onEvent)
+    DisposableEffect(Unit) { onDispose { currentOnEvent(BookContentEvent.SaveState) } }
+    BookTextMenus(uiState, onEvent, showDiacritics, tabUi) {
+        BookContentPanel(
+            uiState = uiState,
+            onEvent = onEvent,
+            showDiacritics = showDiacritics,
+            tabUi = tabUi,
+            isRestoringSession = isRestoringSession,
+            searchUi = searchUi,
+            searchCallbacks = searchCallbacks,
+            isSelected = isSelected,
+            bookCharCounts = bookCharCounts,
+            noteDraft = tabUi.noteDraft,
+            mainContentOverride = mainContentOverride,
+        )
+    }
+}
 
 private fun normalizeSearchQuery(text: String): String {
     val normalizedLineBreaks = text.replace('\n', ' ').replace('\r', ' ')
@@ -1062,4 +894,27 @@ fun PlainTextMenus(content: @Composable () -> Unit) {
         LocalContextMenuRepresentation provides JewelContextMenuRepresentation,
         content = content,
     )
+}
+
+fun handleBookShortcut(
+    keyEvent: KeyEvent,
+    onEvent: (BookContentEvent) -> Unit,
+): Boolean {
+    if (keyEvent.type != KeyEventType.KeyDown) return false
+    val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
+    if (!isCtrlOrCmd) return false
+    val event =
+        when (keyEvent.key) {
+            Key.B -> if (keyEvent.isShiftPressed) BookContentEvent.ToggleToc else BookContentEvent.ToggleBookTree
+            Key.K ->
+                when {
+                    keyEvent.isAltPressed -> BookContentEvent.ToggleSources
+                    keyEvent.isShiftPressed -> BookContentEvent.ToggleTargum
+                    else -> BookContentEvent.ToggleCommentaries
+                }
+            Key.J -> BookContentEvent.ToggleDiacritics
+            else -> return false
+        }
+    onEvent(event)
+    return true
 }

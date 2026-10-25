@@ -65,16 +65,6 @@ import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalo
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
-import io.github.kdroidfilter.seforimapp.features.bookcontent.state.SplitDefaults
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EndVerticalBar
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.EnhancedHorizontalSplitPane
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePane
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.MovablePaneLayout
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PanePlacement
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneSide
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.StartVerticalBar
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.asStable
-import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.ContentAwareScrollbarShell
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
@@ -88,7 +78,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -96,7 +85,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
-import org.jetbrains.compose.splitpane.SplitPaneState
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.*
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -219,6 +207,7 @@ private fun SearchToolbar(
 @OptIn(ExperimentalSplitPaneApi::class, FlowPreview::class)
 @Composable
 fun SearchResultInBookShellMvi(
+    tabUi: io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi,
     bookUiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
@@ -236,156 +225,53 @@ fun SearchResultInBookShellMvi(
     bookCounts: Map<Long, Int>,
     loadBookHits: (Long) -> kotlinx.coroutines.flow.Flow<List<SearchResult>>,
     actions: SearchShellActions,
-    passagePreview: SearchResultViewModel.PassagePreview? = null,
-    bookDetails: io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity.BookEntity? = null,
 ) {
     val tabId = bookUiState.tabId
-    val currentOnEvent by rememberUpdatedState(onEvent)
-    val splitPaneConfigs =
-        listOf(
-            SplitPaneConfig(
-                splitState = bookUiState.layout.mainSplitState,
-                isVisible = bookUiState.navigation.isVisible,
-                positionFilter = { it > 0 },
-            ),
-            SplitPaneConfig(
-                splitState = bookUiState.layout.tocSplitState,
-                isVisible = bookUiState.toc.isVisible,
-                positionFilter = { it > 0 },
-            ),
-        )
-
-    splitPaneConfigs.forEach { config ->
-        LaunchedEffect(config.splitState, config.isVisible) {
-            if (config.isVisible) {
-                snapshotFlow { config.splitState.positionPercentage }
-                    .map { ((it * 100).toInt() / 100f) }
-                    .distinctUntilChanged()
-                    .debounce(300)
-                    .filter(config.positionFilter)
-                    .collect { currentOnEvent(BookContentEvent.SaveState) }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { currentOnEvent(BookContentEvent.SaveState) }
-    }
-
     val isIslands = ThemeUtils.isIslandsStyle()
-    val panelCardModifier =
-        if (isIslands) {
-            Modifier
-                .fillMaxSize()
-                .padding(vertical = 6.dp, horizontal = 4.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(JewelTheme.globalColors.panelBackground)
-        } else {
-            Modifier
-        }
-
-    Row(modifier = Modifier.fillMaxSize()) {
-        StartVerticalBar(
+    if (bookUiState.navigation.selectedBook != null) {
+        io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen(
+            tabUi = tabUi,
             uiState = bookUiState,
             onEvent = onEvent,
-            showNotes = false,
+            showDiacritics = showDiacritics,
+            isSelected = LocalTabSelected.current,
+            searchUi = SearchHomeUiState(),
+            searchCallbacks =
+                io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks(
+                    onReferenceQueryChanged = {},
+                    onTocQueryChanged = {},
+                    onGlobalExtendedChange = {},
+                    onSubmitTextSearch = {},
+                    onOpenReference = {},
+                    onPickBook = { _, _ -> },
+                    onPickToc = {},
+                ),
         )
-
-        EnhancedHorizontalSplitPane(
-            splitPaneState = bookUiState.layout.mainSplitState.asStable(),
-            modifier = Modifier.weight(1f),
-            firstMinSize = if (bookUiState.navigation.isVisible) SplitDefaults.MIN_MAIN else 0f,
-            firstContent = {
-                if (bookUiState.navigation.isVisible) {
-                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.SearchCategoryTreePanel(
-                        uiState = bookUiState,
-                        onEvent = onEvent,
-                        searchTree = searchTree,
-                        isFiltering = isFiltering,
-                        selectedCategoryIds = selectedCategoryIds,
-                        selectedBookIds = selectedBookIds,
-                        onCategoryCheckedChange = actions.onCategoryCheckedChange,
-                        onBookCheckedChange = actions.onBookCheckedChange,
-                        onEnsureScopeBookForToc = actions.onEnsureScopeBookForToc,
-                        modifier = panelCardModifier,
-                    )
-                }
-            },
-            secondContent = {
-                EnhancedHorizontalSplitPane(
-                    splitPaneState = bookUiState.layout.tocSplitState.asStable(),
-                    firstMinSize = if (bookUiState.toc.isVisible) SplitDefaults.MIN_TOC else 0f,
-                    firstContent = {
-                        if (bookUiState.toc.isVisible) {
-                            io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.SearchBookTocPanel(
-                                uiState = bookUiState,
-                                onEvent = onEvent,
-                                searchUi = searchUi,
-                                tocTree = tocTree,
-                                tocCounts = tocCounts,
-                                selectedTocIds = selectedTocIds,
-                                onToggle = actions.onTocToggle,
-                                onTocFilter = actions.onTocFilter,
-                                modifier = panelCardModifier,
-                            )
-                        }
-                    },
-                    secondContent = {
-                        val showBookContent =
-                            bookUiState.navigation.selectedBook != null && bookUiState.providers != null
-                        if (showBookContent) {
-                            BookContentPanel(
-                                uiState = bookUiState,
-                                onEvent = onEvent,
-                                showDiacritics = showDiacritics,
-                                bookDetails = bookDetails,
-                            )
-                        } else {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    SearchResultContentMvi(
-                                        state = searchUi,
-                                        visibleResults = visibleResults,
-                                        isFiltering = isFiltering,
-                                        breadcrumbs = breadcrumbs,
-                                        bookCounts = bookCounts,
-                                        loadBookHits = loadBookHits,
-                                        actions = actions,
-                                        passagePreview = passagePreview,
-                                        tabId = tabId,
-                                        modifier = panelCardModifier,
-                                    )
-                                }
-                                SearchScopeBreadcrumbBar(
-                                    state = searchUi,
-                                    navigation = bookUiState.navigation,
-                                    tocTree = tocTree,
-                                    onCategorySelect = actions.onCategoryFilter,
-                                    onBookSelect = actions.onBookFilter,
-                                    onTocSelect = actions.onTocFilter,
-                                    isIslands = isIslands,
-                                )
-                            }
-                        }
-                    },
-                    showSplitter = bookUiState.toc.isVisible,
-                )
-            },
-            showSplitter = bookUiState.navigation.isVisible,
-        )
-
-        EndVerticalBar(uiState = bookUiState, onEvent = onEvent, showDiacritics = showDiacritics)
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            SearchResultContentMvi(
+                state = searchUi,
+                visibleResults = visibleResults,
+                isFiltering = isFiltering,
+                breadcrumbs = breadcrumbs,
+                bookCounts = bookCounts,
+                loadBookHits = loadBookHits,
+                actions = actions,
+                tabId = tabId,
+                modifier = Modifier.weight(1f),
+            )
+            SearchScopeBreadcrumbBar(
+                state = searchUi,
+                navigation = bookUiState.navigation,
+                tocTree = tocTree,
+                onCategorySelect = actions.onCategoryFilter,
+                onBookSelect = actions.onBookFilter,
+                onTocSelect = actions.onTocFilter,
+                isIslands = isIslands,
+            )
+        }
     }
 }
-
-@Stable
-private data class SplitPaneConfig
-    @OptIn(ExperimentalSplitPaneApi::class)
-    constructor(
-        val splitState: SplitPaneState,
-        val isVisible: Boolean,
-        val positionFilter: (Float) -> Boolean,
-    )
 
 @Composable
 private fun SearchResultContentMvi(
@@ -398,7 +284,6 @@ private fun SearchResultContentMvi(
     actions: SearchShellActions,
     tabId: String,
     modifier: Modifier = Modifier,
-    passagePreview: SearchResultViewModel.PassagePreview? = null,
 ) {
     val listState = rememberLazyListState()
     // Group consecutive same-book results into Google-style cards. Cards are derived
@@ -595,38 +480,7 @@ private fun SearchResultContentMvi(
 
     val keyHandler = remember { { _: KeyEvent -> false } }
 
-    var preview by remember(tabId, state.query, state.mode, state.scopeBook?.id, state.scopeTocId) { mutableStateOf<SearchResult?>(null) }
-    val previewPlacement = remember(tabId) { PanePlacement(PaneSide.End, extent = 360.dp) }
-    val previewPane =
-        preview?.let { result ->
-            MovablePane("search-preview", stringResource(Res.string.search_preview_title), previewPlacement, { preview = null }) {
-                Column(Modifier.fillMaxSize()) {
-                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader(
-                        label = stringResource(Res.string.search_preview_title),
-                        onHide = { preview = null },
-                    )
-                    if (passagePreview?.hit?.lineId == result.lineId) {
-                        PassagePreview(
-                            preview = passagePreview,
-                            pieces = breadcrumbs[result.lineId],
-                            query = state.executedQuery.ifBlank { state.query },
-                            bookFontCode = bookFontCode,
-                            textSize = mainTextSize,
-                            onOpen = { actions.onOpenResult(result, true) },
-                            byMeaning = state.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART,
-                            onOpenLine = { lineId ->
-                                val line = passagePreview.lines.firstOrNull { it.id == lineId }
-                                actions.onOpenResult(result.copy(lineId = lineId, lineIndex = line?.lineIndex ?: result.lineIndex), true)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
-        }
-    MovablePaneLayout(panes = listOfNotNull(previewPane), modifier = modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
+    Box(modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -781,10 +635,7 @@ private fun SearchResultContentMvi(
                                         BookResultCard(
                                             group = group,
                                             searchQuery = state.query,
-                                            onPreview = {
-                                                preview = it
-                                                actions.onSelectResult(it.lineId)
-                                            },
+                                            onPreview = { actions.onSelectResult(it.lineId) },
                                             textSize = mainTextSize,
                                             lineHeight = mainLineHeight,
                                             fontFamily = hebrewFontFamily,

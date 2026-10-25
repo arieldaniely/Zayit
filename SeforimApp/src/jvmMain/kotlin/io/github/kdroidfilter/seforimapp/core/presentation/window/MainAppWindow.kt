@@ -41,7 +41,6 @@ import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
-import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsContent
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
@@ -597,7 +596,9 @@ fun NucleusApplicationScope.MainAppWindow(
                         },
             ) {
                 CompositionLocalProvider(LocalIsTouchMode provides isTouchMode) {
-                    TabsContent()
+                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes
+                        .WindowPanes(openWindow)
+                    WindowBody(openWindow)
                 }
             }
         }

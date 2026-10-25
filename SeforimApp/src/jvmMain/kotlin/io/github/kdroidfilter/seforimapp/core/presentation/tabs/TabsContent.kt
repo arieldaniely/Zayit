@@ -32,6 +32,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.enableSavedStateHandles
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.MutableCreationExtras
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.savedstate.SavedState
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
@@ -45,6 +46,7 @@ import io.github.kdroidfilter.seforimapp.features.author.AuthorTabContent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentScreen
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentViewModel
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.favorites.FavoritesTabContent
@@ -232,7 +234,7 @@ fun TabsContent() {
 
     // ViewModel owners per tab - manages lifecycle and state. Owners survive while the
     // tab is open so re-selecting a tab needs no DB refetch (data is hot in the ViewModel).
-    val tabOwners = remember { mutableMapOf<String, SimpleTabViewModelOwner>() }
+    val tabOwners = openWindow.tabOwners
     val knownTabIds = remember { mutableSetOf<String>() }
     // Holds per-tab saveable UI state across the teardown/rebuild that happens on switch.
     val saveableStateHolder = rememberSaveableStateHolder()
@@ -394,6 +396,7 @@ private fun HomeTabContent(
     val bookCharCounts by viewModel.bookCharCounts.collectAsState()
 
     BookContentScreen(
+        tabUi = tabUi(tabOwner),
         uiState = uiState,
         onEvent = viewModel::onEvent,
         showDiacritics = showDiacritics,
@@ -430,7 +433,6 @@ private fun SearchTabContent(
     }
 
     val bcUiState by bookVm.uiState.collectAsState()
-    val bookDetails by bookVm.bookDetailsFlow.collectAsState()
     val showDiacritics by bookVm.showDiacritics.collectAsState()
     val searchUi by viewModel.uiState.collectAsState()
     val visibleResults by viewModel.visibleResultsFlow.collectAsState()
@@ -443,70 +445,12 @@ private fun SearchTabContent(
     val tocCounts by viewModel.tocCountsFlow.collectAsState()
     val tocTree by viewModel.tocTreeFlow.collectAsState()
     val bookCounts by viewModel.bookFacetCountsFlow.collectAsState()
-    val passagePreview by viewModel.previewFlow.collectAsState()
 
-    val actions =
-        remember(viewModel) {
-            SearchShellActions(
-                onSubmit = { q ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetQuery(q))
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)
-                },
-                onQueryChange = { q -> viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetQuery(q)) },
-                onModeChange = { mode ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetMode(mode))
-                },
-                onGlobalExtendedChange = { extended ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetGlobalExtended(extended))
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)
-                },
-                onScroll = { anchorId, anchorIndex, index, offset ->
-                    viewModel.onEvent(
-                        SearchResultViewModel.SearchResultEvents.OnScroll(anchorId, anchorIndex, index, offset),
-                    )
-                },
-                onCancelSearch = {
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.CancelSearch)
-                },
-                onOpenResult = { r, newTab ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenResult(r, newTab))
-                },
-                onOpenPdfResult = { r, newTab ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenPdfResult(r, newTab))
-                },
-                onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
-                onSelectResult = viewModel::selectResult,
-                onRequestBreadcrumb = { r ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))
-                },
-                onLoadMore = { viewModel.loadMore() },
-                onCategoryCheckedChange = { id, checked ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetCategoryChecked(id, checked))
-                },
-                onBookCheckedChange = { id, checked ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetBookChecked(id, checked))
-                },
-                onEnsureScopeBookForToc = { id ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.EnsureScopeBookForToc(id))
-                },
-                onTocToggle = { entry, checked ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetTocChecked(entry.id, checked))
-                },
-                onTocFilter = { entry ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByTocId(entry.id))
-                },
-                onCategoryFilter = { category ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByCategoryId(category.id))
-                },
-                onBookFilter = { book ->
-                    viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByBookId(book.id))
-                },
-            )
-        }
+    val actions = rememberSearchShellActions(viewModel)
 
     SearchResultInBookShellMvi(
+        tabUi = tabUi(tabOwner),
         bookUiState = bcUiState,
-        bookDetails = bookDetails,
         onEvent = bookVm::onEvent,
         showDiacritics = showDiacritics,
         searchUi = searchUi,
@@ -520,7 +464,6 @@ private fun SearchTabContent(
         tocCounts = tocCounts,
         tocTree = tocTree,
         bookCounts = bookCounts,
-        passagePreview = passagePreview,
         loadBookHits = viewModel::loadAllHitsForBook,
         actions = actions,
     )
@@ -547,7 +490,6 @@ private fun BookContentTabContent(
     val uiState by viewModel.uiState.collectAsState()
     val showDiacritics by viewModel.showDiacritics.collectAsState()
     val bookCharCounts by viewModel.bookCharCounts.collectAsState()
-    val bookDetails by viewModel.bookDetailsFlow.collectAsState()
 
     // React to destination changes when ViewModel is reused
     LaunchedEffect(destination.bookId, destination.lineId) {
@@ -562,6 +504,7 @@ private fun BookContentTabContent(
     }
 
     BookContentScreen(
+        tabUi = tabUi(tabOwner),
         uiState = uiState,
         onEvent = viewModel::onEvent,
         showDiacritics = showDiacritics,
@@ -570,7 +513,6 @@ private fun BookContentTabContent(
         searchCallbacks = searchCallbacks,
         isSelected = isSelected,
         bookCharCounts = bookCharCounts,
-        bookDetails = bookDetails,
     )
 }
 
@@ -593,7 +535,6 @@ private fun PdfContentTabContent(
 
     val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val uiState by viewModel.uiState.collectAsState()
-    val bookDetails by viewModel.bookDetailsFlow.collectAsState()
     val showDiacritics by viewModel.showDiacritics.collectAsState()
     val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
@@ -602,6 +543,8 @@ private fun PdfContentTabContent(
             PdfZoomController(
                 zoomIn = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomIn) },
                 zoomOut = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomOut) },
+                canZoomIn = { pdfZoom < PDF_ZOOM_MAX },
+                canZoomOut = { pdfZoom > PDF_ZOOM_MIN },
             )
         PdfZoomControllerRegistry.register(destination.tabId, controller)
         onDispose { PdfZoomControllerRegistry.unregister(destination.tabId, controller) }
@@ -636,19 +579,14 @@ private fun PdfContentTabContent(
         }
 
     BookContentScreen(
+        tabUi = tabUi(tabOwner),
         uiState = uiState,
-        bookDetails = bookDetails,
         onEvent = viewModel::onEvent,
         showDiacritics = showDiacritics,
         isRestoringSession = isRestoringSession,
         searchUi = searchUi,
         searchCallbacks = searchCallbacks,
         isSelected = isSelected,
-        isPdfEdition = true,
-        pdfCanZoomIn = pdfZoom < PDF_ZOOM_MAX,
-        pdfCanZoomOut = pdfZoom > PDF_ZOOM_MIN,
-        onPdfZoomIn = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomIn) },
-        onPdfZoomOut = { pdfZoom = applyPdfZoomCommand(pdfZoom, PdfZoomCommand.ZoomOut) },
         mainContentOverride = { contentModifier ->
             PdfContentView(
                 file = pdfFile,
@@ -711,3 +649,105 @@ internal class SimpleTabViewModelOwner(
         viewModelStore.clear()
     }
 }
+
+@Composable
+internal fun rememberSearchShellActions(viewModel: SearchResultViewModel): SearchShellActions =
+    remember(viewModel) {
+        SearchShellActions(
+            onSubmit = { q ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetQuery(q))
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)
+            },
+            onQueryChange = { q -> viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetQuery(q)) },
+            onModeChange = { mode ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetMode(mode))
+            },
+            onGlobalExtendedChange = { extended ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetGlobalExtended(extended))
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ExecuteSearch)
+            },
+            onScroll = { anchorId, anchorIndex, index, offset ->
+                viewModel.onEvent(
+                    SearchResultViewModel.SearchResultEvents.OnScroll(anchorId, anchorIndex, index, offset),
+                )
+            },
+            onCancelSearch = {
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.CancelSearch)
+            },
+            onOpenResult = { r, newTab ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenResult(r, newTab))
+            },
+            onOpenPdfResult = { r, newTab ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.OpenPdfResult(r, newTab))
+            },
+            onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
+            onSelectResult = viewModel::selectResult,
+            onRequestBreadcrumb = { r ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))
+            },
+            onLoadMore = { viewModel.loadMore() },
+            onCategoryCheckedChange = { id, checked ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetCategoryChecked(id, checked))
+            },
+            onBookCheckedChange = { id, checked ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetBookChecked(id, checked))
+            },
+            onEnsureScopeBookForToc = { id ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.EnsureScopeBookForToc(id))
+            },
+            onTocToggle = { entry, checked ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.SetTocChecked(entry.id, checked))
+            },
+            onTocFilter = { entry ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByTocId(entry.id))
+            },
+            onCategoryFilter = { category ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByCategoryId(category.id))
+            },
+            onBookFilter = { book ->
+                viewModel.onEvent(SearchResultViewModel.SearchResultEvents.FilterByBookId(book.id))
+            },
+        )
+    }
+
+@Composable
+internal fun tabBookViewModel(
+    owner: SimpleTabViewModelOwner,
+    destination: TabsDestination,
+): BookContentViewModel {
+    owner.setDefaultArgs(
+        savedState {
+            putString(StateKeys.TAB_ID, destination.tabId)
+            when (destination) {
+                is TabsDestination.BookContent -> {
+                    if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+                    destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+                }
+                is TabsDestination.PdfContent -> {
+                    if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
+                    destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+                }
+                is TabsDestination.Search -> putString("searchQuery", destination.searchQuery)
+                else -> Unit
+            }
+        },
+    )
+    return assistedMetroViewModel(viewModelStoreOwner = owner)
+}
+
+@Composable
+internal fun tabSearchViewModel(
+    owner: SimpleTabViewModelOwner,
+    destination: TabsDestination.Search,
+): SearchResultViewModel {
+    owner.setDefaultArgs(
+        savedState {
+            putString(StateKeys.TAB_ID, destination.tabId)
+            putString("searchQuery", destination.searchQuery)
+        },
+    )
+    return assistedMetroViewModel(viewModelStoreOwner = owner)
+}
+
+@Composable
+internal fun tabUi(owner: SimpleTabViewModelOwner): BookTabUi = viewModel(viewModelStoreOwner = owner) { BookTabUi() }

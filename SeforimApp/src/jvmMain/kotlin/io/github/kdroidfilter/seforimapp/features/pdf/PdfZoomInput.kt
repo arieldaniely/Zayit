@@ -81,11 +81,13 @@ internal fun pdfPageWidthFraction(zoom: Float): Float = (zoom / pdfContentWidthS
 internal data class PdfZoomController(
     val zoomIn: () -> Unit,
     val zoomOut: () -> Unit,
+    val canZoomIn: () -> Boolean = { true },
+    val canZoomOut: () -> Boolean = { true },
 )
 
 /** Routes window-level shortcuts to the saveable zoom state owned by each composed PDF tab. */
 internal object PdfZoomControllerRegistry {
-    private val controllers = mutableMapOf<String, PdfZoomController>()
+    private val controllers = androidx.compose.runtime.mutableStateMapOf<String, PdfZoomController>()
 
     fun register(
         tabId: String,
@@ -100,6 +102,11 @@ internal object PdfZoomControllerRegistry {
     ) {
         controllers.remove(tabId, controller)
     }
+
+    fun canZoom(
+        tabId: String,
+        command: PdfZoomCommand,
+    ): Boolean = controllers[tabId]?.let { if (command == PdfZoomCommand.ZoomIn) it.canZoomIn() else it.canZoomOut() } == true
 
     fun dispatch(
         tabId: String,

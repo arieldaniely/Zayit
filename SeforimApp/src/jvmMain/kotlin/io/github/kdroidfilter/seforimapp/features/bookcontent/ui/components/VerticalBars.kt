@@ -71,6 +71,7 @@ fun EndVerticalBar(
     onEvent: (BookContentEvent) -> Unit,
     showDiacritics: Boolean,
     isPdfEdition: Boolean = false,
+    showBookDetailsAction: Boolean = false,
     pdfCanZoomIn: Boolean = false,
     pdfCanZoomOut: Boolean = false,
     onPdfZoomIn: () -> Unit = {},
@@ -235,6 +236,18 @@ fun EndVerticalBar(
 //            )
         },
         bottomContent = {
+            if (showBookDetailsAction) {
+                val visible by AppSettings.bookDetailsPaneFlow.collectAsState()
+                val label = stringResource(Res.string.search_book_details)
+                SelectableIconButtonWithToolip(
+                    toolTipText = label,
+                    onClick = { onEvent(BookContentEvent.ToggleBookDetails) },
+                    isSelected = visible,
+                    icon = TablerInfoSquare,
+                    iconDescription = label,
+                    label = label,
+                )
+            }
             val targumEnabled = selectedBook?.hasTargumConnection == true || lineAvailability.targumAvailable == true
             val commentaryEnabled =
                 selectedBook?.hasCommentaryConnection == true || lineAvailability.commentariesAvailable == true

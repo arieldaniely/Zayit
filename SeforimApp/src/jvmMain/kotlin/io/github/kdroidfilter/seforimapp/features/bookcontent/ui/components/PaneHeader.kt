@@ -54,6 +54,10 @@ import seforimapp.seforimapp.generated.resources.pane_reset
 val LocalPaneSatellite = staticCompositionLocalOf<SatelliteScope?> { null }
 
 @OptIn(ExperimentalNucleusApi::class)
+internal val LocalPaneHome = staticCompositionLocalOf<dev.nucleusframework.window.tao.SatellitePlacement.Docked?> { null }
+internal val LocalPaneReset = staticCompositionLocalOf<(() -> Unit)?> { null }
+
+@OptIn(ExperimentalNucleusApi::class)
 @Composable
 fun PaneHeader(
     label: String,

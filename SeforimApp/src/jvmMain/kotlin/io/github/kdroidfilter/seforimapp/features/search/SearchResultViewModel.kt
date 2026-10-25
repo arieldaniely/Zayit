@@ -607,10 +607,17 @@ class SearchResultViewModel(
 
     // The result picked in the list; the first one until one is
     private val selectedLineId = MutableStateFlow<Long?>(null)
+    private val _previewVisible = MutableStateFlow(false)
+    val previewVisible = _previewVisible.asStateFlow()
+
+    fun hidePreview() {
+        _previewVisible.value = false
+    }
 
     /** Shows a result in the preview beside the list. */
     fun selectResult(lineId: Long) {
         selectedLineId.value = lineId
+        _previewVisible.value = true
     }
 
     /** The selected result, read in place: its lines around it and its book's details, loaded together. */

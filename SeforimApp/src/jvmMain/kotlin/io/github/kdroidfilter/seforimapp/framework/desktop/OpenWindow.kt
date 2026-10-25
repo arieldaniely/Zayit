@@ -1,12 +1,18 @@
 package io.github.kdroidfilter.seforimapp.framework.desktop
 
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.window.WindowState
 import androidx.lifecycle.viewModelScope
 import dev.nucleusframework.application.NucleusWindow
 import dev.nucleusframework.application.NucleusWindowBounds
+import dev.nucleusframework.window.ExperimentalNucleusApi
+import dev.nucleusframework.window.tao.SatelliteWorkspace
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
+import io.github.kdroidfilter.seforimapp.core.presentation.tabs.SimpleTabViewModelOwner
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * several windows. Window-scoped ViewModels ([tabsViewModel], [searchHomeViewModel]) live and die
  * with the window — per-tab state stays in the app-wide TabPersistedStateStore, keyed by tabId.
  */
+@OptIn(ExperimentalNucleusApi::class)
 @Stable
 class OpenWindow internal constructor(
     val id: String,
@@ -26,6 +33,17 @@ class OpenWindow internal constructor(
     val searchHomeViewModel: SearchHomeViewModel,
     val windowState: WindowState,
 ) {
+    private val navigationPanes = SatelliteWorkspace()
+    private val linePanes = SatelliteWorkspace()
+    internal val tabOwners = mutableMapOf<String, SimpleTabViewModelOwner>()
+
+    internal fun ownerOf(tabId: String) = tabOwners.getOrPut(tabId) { SimpleTabViewModelOwner(tabId) }
+
+    internal fun panesOf(navigation: Boolean) = if (navigation) navigationPanes else linePanes
+
+    internal var dockSizes by mutableStateOf<DockSizes?>(null)
+    internal var panesReadyFor by mutableStateOf<String?>(null)
+
     private val _desktopId = MutableStateFlow(desktopId)
     val desktopId: StateFlow<String> = _desktopId.asStateFlow()
 

@@ -347,7 +347,7 @@ internal object NextZmanWidget : HomeWidget {
                             }
                         }
                     }
-                    FitColumn(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp)) {
+                    FitColumn(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), spread = true) {
                         zmanim.drop(1).forEach { zman ->
                             HoverBox(onClick = { state.targetTime = zman.time }, modifier = Modifier.fillMaxWidth()) {
                                 TimeRow(

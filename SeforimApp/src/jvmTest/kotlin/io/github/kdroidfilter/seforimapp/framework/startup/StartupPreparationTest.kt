@@ -10,9 +10,10 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertSame
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class StartupPreparationTest {
@@ -43,7 +44,9 @@ class StartupPreparationTest {
     fun failedPreparationCanBeRetried() =
         runBlocking {
             val failure = IllegalStateException("Database is locked")
-            assertSame(failure, prepareStartup { throw failure }.exceptionOrNull())
+            // Coroutine stack-trace recovery may copy the exception when crossing dispatchers.
+            val reported = assertIs<IllegalStateException>(prepareStartup { throw failure }.exceptionOrNull())
+            assertEquals(failure.message, reported.message)
             assertTrue(prepareStartup {}.isSuccess)
         }
 

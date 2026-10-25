@@ -33,6 +33,7 @@ import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindow
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.features.update.UpdateDialog
+import io.github.kdroidfilter.seforimapp.framework.backup.PendingUserDataRestore
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
@@ -156,6 +157,7 @@ fun main(args: Array<String>) {
         aotTraining(duration = AOT_TRAINING_DURATION)
 
         FileKit.init(appId)
+        remember { PendingUserDataRestore.runOnce() }
 
         // Retry any database cleanup a previous run could not finish (e.g. a file locked
         // by antivirus/Windows Search). Runs once, before the SQLDelight repository opens
@@ -332,8 +334,17 @@ fun main(args: Array<String>) {
                         // installPendingOnClose() launches the installer and exits the process
                         // itself when a silent (Win/Mac PATCH) update is ready.
                         SessionManager.saveIfEnabled(appGraph)
+                        appGraph.googleDriveSync.backupOnQuit()
                         appGraph.appUpdateService.installPendingOnClose()
                         exitApplication()
+                    }
+                    // The stores and desktop exist only after onboarding and database setup.
+                    LaunchedEffect(appGraph) { appGraph.googleDriveSync.runAutoBackup() }
+                    DisposableEffect(appGraph) {
+                        onDispose {
+                            SessionManager.saveIfEnabled(appGraph)
+                            appGraph.googleDriveSync.backupOnQuit()
+                        }
                     }
                     // App-level launcher integrations follow the focused window's tabs. key() forces
                     // their internal effects (dock/jumplist listeners) to re-register on the new

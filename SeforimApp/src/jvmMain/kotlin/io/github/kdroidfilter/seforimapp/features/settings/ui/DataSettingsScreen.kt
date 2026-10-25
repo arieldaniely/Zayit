@@ -125,6 +125,18 @@ fun DataSettingsScreen() {
                 onClearSelection = viewModel::clearSelectedBooksDatabaseDirectory,
             )
 
+            if (viewModel.isDriveAvailable) {
+                val driveState by viewModel.driveState.collectAsState()
+                DriveSyncCard(
+                    state = driveState,
+                    onConnect = viewModel::connectDrive,
+                    onCancelConnect = viewModel::cancelDriveConnect,
+                    onDisconnect = viewModel::disconnectDrive,
+                    onBackup = viewModel::backupToDrive,
+                    onRestore = viewModel::restoreFromDrive,
+                )
+            }
+
             DataActionCard(
                 title = Res.string.data_export_title,
                 description = Res.string.data_export_description,
@@ -152,7 +164,16 @@ fun DataSettingsScreen() {
                         // Same rationale as the export picker: keep the Tao GTK event loop free.
                         val file =
                             withContext(Dispatchers.IO) {
-                                FileKit.openFilePicker(type = FileKitType.File(extensions = listOf("db")))
+                                FileKit.openFilePicker(
+                                    type =
+                                        FileKitType.File(
+                                            extensions =
+                                                listOf(
+                                                    DataSettingsViewModel.BACKUP_EXTENSION,
+                                                    DataSettingsViewModel.LEGACY_BACKUP_EXTENSION,
+                                                ),
+                                        ),
+                                )
                             }
                         file?.let { viewModel.importFromFile(File(it.path)) }
                     }

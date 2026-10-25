@@ -22,6 +22,59 @@ import java.util.concurrent.ConcurrentHashMap
  * Single, global settings instance (no interface, no delegation).
  */
 object AppSettings {
+    const val HOME_WIDGET_SETTINGS_PREFIX = "home_widget."
+
+    fun exportPortablePreferences(): Map<String, String> = exportPortablePreferences(settings)
+
+    private val PORTABLE_KEYS =
+        setOf(
+            KEY_TEXT_SIZE,
+            KEY_LINE_HEIGHT,
+            KEY_MAX_COMMENTATORS_PER_PAGE,
+            KEY_CLOSE_TREE_ON_NEW_BOOK,
+            KEY_PERSIST_SESSION,
+            KEY_KEEP_SCREEN_AWAKE_ON_BOOK,
+            KEY_FONT_BOOK,
+            KEY_FONT_COMMENTARY,
+            KEY_FONT_TARGUM,
+            KEY_FONT_SOURCE,
+            KEY_REGION_COUNTRY,
+            KEY_REGION_CITY,
+            KEY_USER_FIRST_NAME,
+            KEY_USER_LAST_NAME,
+            KEY_USER_COMMUNITY,
+            KEY_THEME_MODE,
+            KEY_THEME_STYLE,
+            KEY_LINK_LOAD_LEVEL,
+            KEY_ACCENT_COLOR,
+            KEY_HOME_WIDGETS_LAYOUT,
+            KEY_SHOW_HOME_WALLPAPER,
+            KEY_COMPACT_MODE,
+        )
+
+    private fun isPortableKey(key: String): Boolean = key in PORTABLE_KEYS || key.startsWith(HOME_WIDGET_SETTINGS_PREFIX)
+
+    /**
+     * The portable preferences of [settings] as their stored strings: Java Preferences keeps
+     * every value as a string, so they round-trip whatever their type.
+     */
+    fun exportPortablePreferences(settings: Settings): Map<String, String> =
+        buildMap {
+            putAll(settings.keys.filter(::isPortableKey).associateWith { settings.getString(it, "") })
+            val layout = settings.getStringOrNull(KEY_HOME_WIDGETS_LAYOUT) ?: settings.getStringOrNull(LEGACY_HOME_WIDGETS_LAYOUT)
+            if (layout != null) put(KEY_HOME_WIDGETS_LAYOUT, layout)
+        }
+
+    /** Replaces the portable preferences of [settings] with [preferences], leaving the others alone. */
+    fun importPortablePreferences(
+        settings: Settings,
+        preferences: Map<String, String>,
+    ) {
+        settings.keys.filter(::isPortableKey).forEach(settings::remove)
+        settings.remove(LEGACY_HOME_WIDGETS_LAYOUT)
+        preferences.filterKeys(::isPortableKey).forEach { (key, value) -> settings.putString(key, value) }
+    }
+
     // Text size constants
     const val DEFAULT_TEXT_SIZE = 16f
     const val MIN_TEXT_SIZE = 14f

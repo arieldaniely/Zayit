@@ -60,7 +60,7 @@ jobs:
         uses: kdroidFilter/Nucleus/.github/actions/setup-nucleus@789704a9b63c5b2a0ff4d6e1cd85711ab2e4286b
 
       - name: Run tests with coverage
-        run: ./gradlew :SeforimApp:jvmTest :SeforimApp:koverXmlReport :SeforimApp:koverHtmlReport --no-daemon
+        run: ./gradlew :backup:jvmTest :backup-drive:jvmTest :SeforimApp:jvmTest :SeforimApp:koverXmlReport :SeforimApp:koverHtmlReport --no-daemon
 
       - name: Upload test reports
         if: always()

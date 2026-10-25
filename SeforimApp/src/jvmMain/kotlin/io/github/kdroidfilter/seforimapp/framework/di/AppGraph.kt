@@ -30,6 +30,7 @@ import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
  */
 @DependencyGraph(AppScope::class)
 abstract class AppGraph : ViewModelGraph {
+    abstract val googleDriveSync: io.github.kdroidfilter.seforimapp.backup.drive.GoogleDriveSync
     abstract val shnayimMikraStore: io.github.kdroidfilter.seforimapp.core.shnayimmikra.ShnayimMikraStore
     abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
     abstract val toolWindows: io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindows

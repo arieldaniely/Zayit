@@ -1,12 +1,19 @@
 package io.github.kdroidfilter.seforimapp.framework.di.modules
 
+import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.russhwolf.settings.Settings
+import dev.nucleusframework.core.runtime.AppRestarter.restartApplication
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.ContributesTo
+import dev.zacsweers.metro.Named
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
 import io.github.kdroidfilter.seforim.tabs.TabTitleUpdateManager
+import io.github.kdroidfilter.seforimapp.BuildConfig
+import io.github.kdroidfilter.seforimapp.backup.BackupManager
+import io.github.kdroidfilter.seforimapp.backup.drive.DriveSyncConfig
+import io.github.kdroidfilter.seforimapp.backup.drive.GoogleDriveSync
 import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
@@ -14,6 +21,7 @@ import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.UrlOpener
 import io.github.kdroidfilter.seforimapp.core.selection.DefaultSelectionContext
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -31,8 +39,10 @@ import io.github.kdroidfilter.seforimapp.features.sharedstudy.LocalNetworkTransp
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.PacketizedBleTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.createDesktopBlePlatformBridge
+import io.github.kdroidfilter.seforimapp.framework.backup.UserDataBackup
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
+import io.github.kdroidfilter.seforimapp.framework.database.USER_SETTINGS_DRIVER
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.database.getUserSettingsDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
@@ -46,17 +56,33 @@ import io.github.kdroidfilter.seforimapp.framework.search.RepositorySnippetSourc
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimapp.framework.update.AppUpdateService
+import io.github.kdroidfilter.seforimapp.network.KtorConfig
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.HybridSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.LineHit
 import io.github.kdroidfilter.seforimlibrary.search.LuceneSearchEngine
 import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
+import io.ktor.client.HttpClient
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.compose.resources.getString
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.app_name
+import seforimapp.seforimapp.generated.resources.drive_sign_in_browser_close
+import seforimapp.seforimapp.generated.resources.drive_sign_in_browser_failure
+import seforimapp.seforimapp.generated.resources.drive_sign_in_browser_success
+import java.io.File
 import java.nio.file.Paths
+import java.util.Properties
 
 @ContributesTo(AppScope::class)
 @BindingContainer
 object AppCoreBindings {
+    /** The app's single HTTP client, trusting the OS certificate stores. */
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideHttpClient(): HttpClient = KtorConfig.createHttpClient()
+
     @Provides
     @SingleIn(AppScope::class)
     fun provideMainAppState(): MainAppState = MainAppState()
@@ -106,13 +132,57 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideUserSettingsDb(): UserSettingsDb {
+    fun provideAppSettings(settings: Settings): AppSettings = AppSettings.also { it.initialize(settings) }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    @Named(USER_SETTINGS_DRIVER)
+    fun provideUserSettingsDriver(): SqlDriver {
         // Single shared connection to the local user database (separate from the
         // read-only books DB). All user stores inject this instance instead of
         // opening their own driver. New tables are added transparently for
         // existing users via CREATE TABLE IF NOT EXISTS in Schema.create().
-        val driver = JdbcSqliteDriver("jdbc:sqlite:${getUserSettingsDatabasePath()}")
+        // Wait for a concurrent writer instead of failing: the backup snapshot (VACUUM INTO) runs
+        // on its own thread, hence its own connection, while the stores keep writing.
+        val driver =
+            JdbcSqliteDriver(
+                "jdbc:sqlite:${getUserSettingsDatabasePath()}",
+                Properties().apply { setProperty("busy_timeout", USER_DB_BUSY_TIMEOUT_MS.toString()) },
+            )
         UserSettingsDb.Schema.create(driver)
+        return driver
+    }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideBackupManager(source: UserDataBackup): BackupManager = BackupManager(source)
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideGoogleDriveSync(
+        httpClient: HttpClient,
+        backupManager: BackupManager,
+    ): GoogleDriveSync =
+        GoogleDriveSync(
+            httpClient = httpClient,
+            backupManager = backupManager,
+            config =
+                DriveSyncConfig(
+                    clientId = BuildConfig.GOOGLE_DRIVE_CLIENT_ID,
+                    clientSecret = BuildConfig.GOOGLE_DRIVE_CLIENT_SECRET,
+                    backupFileName = "zayita-backup.zip",
+                    storageDirectory = { File(File(getUserSettingsDatabasePath()).parentFile, "sync") },
+                    openUrl = UrlOpener::open,
+                    onRestoreStaged = { restartApplication() },
+                    signInPage = ::driveSignInPage,
+                ),
+        )
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideUserSettingsDb(
+        @Named(USER_SETTINGS_DRIVER) driver: SqlDriver,
+    ): UserSettingsDb {
         upgradeHistorySchema(driver)
         return UserSettingsDb(driver)
     }
@@ -289,4 +359,21 @@ object AppCoreBindings {
     @Provides
     @SingleIn(AppScope::class)
     fun provideTabDockManager(desktopManager: DesktopManager): TabDockManager = TabDockManager(desktopManager)
+}
+
+private const val USER_DB_BUSY_TIMEOUT_MS = 5_000
+
+private fun driveSignInPage(success: Boolean): String {
+    val message =
+        runBlocking {
+            getString(if (success) Res.string.drive_sign_in_browser_success else Res.string.drive_sign_in_browser_failure)
+        }
+    val title = runBlocking { getString(Res.string.app_name) }
+    val close = runBlocking { getString(Res.string.drive_sign_in_browser_close) }
+    return """
+        <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>$title</title>
+        <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;
+        min-height:100vh;margin:0;color-scheme:light dark}main{text-align:center}</style></head>
+        <body><main><h1>$message</h1><p>$close</p></main></body></html>
+        """.trimIndent()
 }

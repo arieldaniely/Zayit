@@ -59,3 +59,5 @@ includeBuild("SeforimLibrary")
 include(":luach")
 
 include(":widgetprocessor")
+
+include(":backup", ":backup-drive")

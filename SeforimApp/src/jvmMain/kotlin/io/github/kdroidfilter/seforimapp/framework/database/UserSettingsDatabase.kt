@@ -16,3 +16,5 @@ fun getUserSettingsDatabasePath(): String {
 
 private fun portableDatabasesDirPath(): String =
     if (PortablePaths.isPortable) PortablePaths.databasesDir.absolutePath else FileKit.databasesDir.path
+
+const val USER_SETTINGS_DRIVER = "userSettingsDriver"

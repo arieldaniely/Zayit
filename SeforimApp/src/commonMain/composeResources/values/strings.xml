@@ -1173,4 +1173,7 @@
     <string name="search_in_folder_placeholder">חיפוש בכל הספרים בתיקייה…</string>
     <string name="search_text_row_in_folder">חיפוש ״%1$s״ בתיקייה ״%2$s״</string>
     <string name="remove_selected_folder">הסרת התיקייה שנבחרה</string>
+    <string name="drive_sign_in_browser_success">התחברת ל־Google Drive.</string>
+    <string name="drive_sign_in_browser_failure">החיבור ל־Google Drive נכשל.</string>
+    <string name="drive_sign_in_browser_close">אפשר לסגור את הלשונית ולחזור לזיתא.</string>
 </resources>

@@ -1,6 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.core.models.BookMetadata
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
@@ -93,7 +93,7 @@ class PersonalLibraryImporter(
     }
 
     private fun createSchema(database: Path) {
-        val driver = JdbcSqliteDriver("jdbc:sqlite:$database")
+        val driver = PersistentSqliteDriver("jdbc:sqlite:$database")
         try {
             SeforimDb.Schema.create(driver)
         } finally {

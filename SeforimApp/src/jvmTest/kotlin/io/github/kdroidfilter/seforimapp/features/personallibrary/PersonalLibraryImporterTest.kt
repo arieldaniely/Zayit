@@ -1,6 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
 import java.nio.file.Files
 import java.sql.DriverManager
@@ -17,7 +17,7 @@ class PersonalLibraryImporterTest {
         val temp = Files.createTempDirectory("personal-library-mixed")
         try {
             val baseDatabase = temp.resolve("base.db")
-            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
             val books = Files.createDirectory(temp.resolve("books"))
             books.resolve("01-valid.txt").writeText("טקסט ראשון")
             Files.write(books.resolve("02-broken.txt"), byteArrayOf(0xC3.toByte(), 0x28))
@@ -69,7 +69,7 @@ class PersonalLibraryImporterTest {
         val temp = Files.createTempDirectory("personal-library-import")
         try {
             val baseDatabase = temp.resolve("base.db")
-            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
 
             val books = Files.createDirectory(temp.resolve("books"))
             books.resolve("ספר בדיקה.txt").writeText("שורה ראשונה\nשורה שנייה")
@@ -120,7 +120,7 @@ class PersonalLibraryImporterTest {
         val temp = Files.createTempDirectory("personal-library-progress")
         try {
             val baseDatabase = temp.resolve("base.db")
-            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
 
             val books = Files.createDirectory(temp.resolve("books"))
             books.resolve("ספר בדיקה.txt").writeText("שורה ראשונה")
@@ -155,7 +155,7 @@ class PersonalLibraryImporterTest {
         val temp = Files.createTempDirectory("personal-library-heading-order")
         try {
             val baseDatabase = temp.resolve("base.db")
-            JdbcSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$baseDatabase").use(SeforimDb.Schema::create)
 
             val books = Files.createDirectory(temp.resolve("books"))
             val content =

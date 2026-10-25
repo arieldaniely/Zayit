@@ -327,7 +327,7 @@ internal object NextZmanWidget : HomeWidget {
             val next = zmanim.firstOrNull() ?: return@PanelCard
             BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 8.dp)) {
                 // The coming zman takes up to half the card, the ones after it the rest
-                val heroHeight = (maxHeight * 0.5f).coerceIn(44.dp, 96.dp)
+                val heroHeight = (maxHeight * 0.5f).coerceIn(44.dp, 84.dp)
                 // A narrow card leaves the name its room
                 val clockSize = if (maxWidth < 220.dp) 28.sp else 44.sp
                 Column(Modifier.fillMaxSize()) {

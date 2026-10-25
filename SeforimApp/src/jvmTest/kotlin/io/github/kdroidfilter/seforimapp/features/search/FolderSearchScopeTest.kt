@@ -8,7 +8,10 @@ import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedState
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.search.SearchMode
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -35,6 +38,8 @@ class FolderSearchScopeTest {
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(main)
+        mockkObject(SemanticAssetsManager)
+        every { SemanticAssetsManager.validatedReady() } returns false
         persisted = TabPersistedStateStore()
         viewModel = SearchHomeViewModel(persisted, mockk(relaxed = true), mockk(relaxed = true), PropertiesSettings(Properties()))
     }
@@ -42,6 +47,7 @@ class FolderSearchScopeTest {
     @AfterTest
     fun cleanup() {
         viewModel.viewModelScope.cancel()
+        unmockkObject(SemanticAssetsManager)
         Dispatchers.resetMain()
     }
 

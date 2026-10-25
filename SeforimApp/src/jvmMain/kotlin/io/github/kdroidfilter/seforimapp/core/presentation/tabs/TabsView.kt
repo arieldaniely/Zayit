@@ -90,6 +90,7 @@ import org.jetbrains.jewel.ui.theme.defaultTabStyle
 import org.jetbrains.jewel.ui.theme.menuStyle
 import org.jetbrains.jewel.ui.theme.tooltipStyle
 import seforimapp.seforimapp.generated.resources.*
+import seforimapp.seforimapp.generated.resources.notes_title
 import sh.calvin.reorderable.ReorderableRow
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -184,6 +185,8 @@ private fun DefaultTabShowcase(
                                         } else if (tabItem.tabType == TabType.HISTORY) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Vcs.History)
                                             iconProvider.getPainter(Stateful(tabState)).value
+                                        } else if (tabItem.tabType == TabType.NOTES) {
+                                            rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen)
                                         } else if (tabItem.tabType == TabType.FAVORITES) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Nodes.Favorite)
                                             iconProvider.getPainter(Stateful(tabState)).value
@@ -202,6 +205,7 @@ private fun DefaultTabShowcase(
                                     val appTitle = stringResource(Res.string.app_name)
                                     val label =
                                         when {
+                                            tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
                                             tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                             else -> tabItem.title
                                         }
@@ -220,6 +224,7 @@ private fun DefaultTabShowcase(
                         val labelProvider: @Composable () -> String = {
                             val appTitle = stringResource(Res.string.app_name)
                             when {
+                                tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
                                 tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                 else -> tabItem.title
                             }
@@ -265,6 +270,8 @@ private fun DefaultTabShowcase(
                                         } else if (tabItem.tabType == TabType.HISTORY) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Vcs.History)
                                             iconProvider.getPainter(Stateful(tabState)).value
+                                        } else if (tabItem.tabType == TabType.NOTES) {
+                                            rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen)
                                         } else if (tabItem.tabType == TabType.FAVORITES) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Nodes.Favorite)
                                             iconProvider.getPainter(Stateful(tabState)).value
@@ -283,6 +290,7 @@ private fun DefaultTabShowcase(
                                     val appTitle = stringResource(Res.string.app_name)
                                     val label =
                                         when {
+                                            tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
                                             tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                             else -> tabItem.title
                                         }
@@ -301,6 +309,7 @@ private fun DefaultTabShowcase(
                         val labelProvider: @Composable () -> String = {
                             val appTitle = stringResource(Res.string.app_name)
                             when {
+                                tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
                                 tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                 else -> tabItem.title
                             }

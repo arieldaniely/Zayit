@@ -49,9 +49,9 @@ fun DecoratedWindowScope.MainTitleBar() {
         BoxWithConstraints(modifier = Modifier.align(Alignment.Start)) {
             val windowWidth = maxWidth
             // Non-macOS gets the extra Favorites button (macOS uses the native menus).
-            // TitleBarActionsButtonsView contains: SharedStudy, Home, Find, and on non-macOS also Favorites, Theme, Settings.
+            // TitleBarActionsButtonsView contains SharedStudy, Tools, Home, Find, and on non-macOS Favorites, Notes, Theme, Settings.
             // Tab Search lives at the leading edge of the tabs area and is accounted for there.
-            val actionButtonCount = (if (PlatformInfo.isMacOS) 3 else 6) + if (updateIconVisible) 1 else 0
+            val actionButtonCount = (if (PlatformInfo.isMacOS) 4 else 8) + if (updateIconVisible) 1 else 0
             val iconWidth: Dp = 36.dp
             val desktopSwitcherWidth: Dp = DESKTOP_SWITCHER_WIDTH
             val actionButtonsWidth = iconWidth * actionButtonCount + desktopSwitcherWidth

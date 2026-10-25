@@ -668,26 +668,17 @@ private fun BookPaneBody(
                     BookTocPanel(uiState = uiState, onEvent = onEvent, modifier = modifier)
                 }
             ReaderPane.Notes ->
-                if (uiState.navigation.selectedBook == null) {
-                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesLibraryPanel(
-                        noteStore = LocalAppGraph.current.noteStore,
-                        onOpenNote = { bookId, lineId -> onEvent(BookContentEvent.OpenBookAtLine(bookId, lineId)) },
-                        onHide = { onEvent(BookContentEvent.ToggleNotes) },
-                        modifier = modifier,
-                    )
-                } else {
-                    NotesPanel(
-                        uiState = uiState,
-                        onEvent = onEvent,
-                        bookId = uiState.navigation.selectedBook?.id ?: 0L,
-                        noteStore = LocalAppGraph.current.noteStore,
-                        selectedLineIds = uiState.content.selectedLineIds,
-                        primarySelectedLine = uiState.content.primaryLine,
-                        draft = tabUi.noteDraft,
-                        onConsumeDraft = { tabUi.noteDraft = null },
-                        modifier = modifier,
-                    )
-                }
+                NotesPanel(
+                    uiState = uiState,
+                    onEvent = onEvent,
+                    bookId = uiState.navigation.selectedBook?.id ?: 0L,
+                    noteStore = LocalAppGraph.current.noteStore,
+                    selectedLineIds = uiState.content.selectedLineIds,
+                    primarySelectedLine = uiState.content.primaryLine,
+                    draft = tabUi.noteDraft,
+                    onConsumeDraft = { tabUi.noteDraft = null },
+                    modifier = modifier,
+                )
             ReaderPane.BookDetails -> {
                 // In a search's results, the selected result's book; else the tab's book
                 val details =

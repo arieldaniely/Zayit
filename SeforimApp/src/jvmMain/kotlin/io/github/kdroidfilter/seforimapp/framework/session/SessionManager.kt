@@ -264,6 +264,8 @@ object SessionManager {
                     // No-op: the Favorites screen localizes its own title.
                 }
 
+                is TabsDestination.Notes -> Unit
+
                 is TabsDestination.Author -> {
                     // No-op: the Author screen sets its title once loaded.
                 }

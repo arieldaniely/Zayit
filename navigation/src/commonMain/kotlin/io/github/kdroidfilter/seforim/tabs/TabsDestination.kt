@@ -61,6 +61,13 @@ sealed interface TabsDestination {
         override val tabId: String,
     ) : TabsDestination
 
+    /** The user's notes, across all books. */
+    @Serializable
+    @Immutable
+    data class Notes(
+        override val tabId: String,
+    ) : TabsDestination
+
     /** An author's page: biography and books. */
     @Serializable
     @Immutable

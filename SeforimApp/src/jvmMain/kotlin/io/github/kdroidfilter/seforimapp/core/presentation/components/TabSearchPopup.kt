@@ -383,6 +383,13 @@ internal fun PopupRow(
                     modifier = Modifier.size(15.dp),
                     colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
                 )
+            TabType.NOTES ->
+                Image(
+                    painter = rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
             TabType.HISTORY ->
                 Icon(
                     key = AllIconsKeys.Vcs.History,
@@ -453,7 +460,7 @@ internal fun PopupRow(
 @Composable
 internal fun PopupFooterRow(
     label: String,
-    shortcutHint: String,
+    shortcutHint: String?,
     icon: IconKey = AllIconsKeys.Vcs.History,
     onClick: () -> Unit,
 ) {
@@ -485,11 +492,13 @@ internal fun PopupFooterRow(
             modifier = Modifier.weight(1f),
         )
         // Same convention as the title-bar buttons: dimmed shortcut hint next to the label
-        Text(
-            text = shortcutHint,
-            fontSize = 12.sp,
-            color = JewelTheme.globalColors.text.disabled,
-        )
+        if (shortcutHint != null) {
+            Text(
+                text = shortcutHint,
+                fontSize = 12.sp,
+                color = JewelTheme.globalColors.text.disabled,
+            )
+        }
     }
 }
 

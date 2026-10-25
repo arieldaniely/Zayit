@@ -7,7 +7,6 @@ import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class DashboardQueriesTest {
     @Test
@@ -25,7 +24,7 @@ class DashboardQueriesTest {
                     favorites.add(id, "book $id", id, folderId = if (id <= 10) folder else null)
                 }
                 assertEquals((60L downTo 54L).toList(), notes.recent(7).map { it.note.lineId })
-                assertTrue(notes.allNotes.value.isEmpty(), "Home filled the full notes cache")
+                assertEquals(60, notes.all().size)
                 assertEquals((60L downTo 54L).toList(), favorites.recent(7).map { it.bookId })
                 assertEquals((10L downTo 4L).toList(), favorites.recent(7, folder).map { it.bookId })
             } finally {

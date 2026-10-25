@@ -131,12 +131,12 @@ class AnnotationStoresTest {
             store.addNote(BOOK, 42, 0, 4, "older", timestamp = 1)
             store.addNote(OTHER_BOOK, 84, 2, 7, "newer", timestamp = 2)
 
-            store.loadAll()
-            assertEquals(listOf(OTHER_BOOK, BOOK), store.allNotes.value.map { it.bookId })
+            store.all()
+            assertEquals(listOf(OTHER_BOOK, BOOK), store.all().map { it.bookId })
 
-            val older = store.allNotes.value.single { it.bookId == BOOK }
+            val older = store.all().single { it.bookId == BOOK }
             store.updateNote(BOOK, older.note.id, "edited", timestamp = 3)
-            val updated = store.allNotes.value.first()
+            val updated = store.all().first()
             assertEquals("edited", updated.note.note)
             assertEquals(BOOK, updated.bookId)
         }

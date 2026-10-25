@@ -52,6 +52,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
 import io.github.kdroidfilter.seforimapp.features.favorites.FavoritesTabContent
 import io.github.kdroidfilter.seforimapp.features.history.HistoryTabContent
+import io.github.kdroidfilter.seforimapp.features.notes.NotesTabContent
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_DEFAULT_ZOOM
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MAX
 import io.github.kdroidfilter.seforimapp.features.pdf.PDF_ZOOM_MIN
@@ -92,13 +93,23 @@ private fun TabsDestination.typeKey(): String =
         is TabsDestination.BookContent -> "book"
         is TabsDestination.PdfContent -> "pdf"
         is TabsDestination.Favorites -> "favorites"
+        is TabsDestination.Notes -> "notes"
         is TabsDestination.Author -> "author"
     }
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
 
 private fun saveableKeysFor(tabId: String): List<String> =
-    listOf("$tabId:home", "$tabId:history", "$tabId:favorites", "$tabId:search", "$tabId:book", "$tabId:pdf", "$tabId:author")
+    listOf(
+        "$tabId:home",
+        "$tabId:history",
+        "$tabId:favorites",
+        "$tabId:search",
+        "$tabId:book",
+        "$tabId:pdf",
+        "$tabId:author",
+        "$tabId:notes",
+    )
 
 /**
  * Simplified tab content renderer without Compose Navigation.
@@ -369,6 +380,10 @@ fun TabsContent() {
 
                                 is TabsDestination.Favorites -> {
                                     FavoritesTabContent(tabId = tabId)
+                                }
+
+                                is TabsDestination.Notes -> {
+                                    NotesTabContent(tabId = tabId)
                                 }
 
                                 is TabsDestination.Author -> {

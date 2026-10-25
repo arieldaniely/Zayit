@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
-import io.github.kdroidfilter.seforimapp.core.annotations.BookUserNote
+import io.github.kdroidfilter.seforimapp.core.annotations.BookNote
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteEntry
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteFolder
 import io.github.kdroidfilter.seforimapp.core.history.VisitEntry
@@ -51,6 +51,7 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.HoverBox
 import io.github.kdroidfilter.seforimapp.features.home.widgets.PanelCard
 import io.github.kdroidfilter.seforimapp.features.home.widgets.WidgetTitle
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberAccentColor
+import io.github.kdroidfilter.seforimapp.features.notes.noteDestination
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.icons.BookmarkFilled
 import io.github.kdroidfilter.seforimapp.icons.NotebookPen
@@ -74,6 +75,7 @@ import seforimapp.seforimapp.generated.resources.home_widget_name_history
 import seforimapp.seforimapp.generated.resources.home_widget_name_notes
 import seforimapp.seforimapp.generated.resources.home_widgets_all_folders
 import seforimapp.seforimapp.generated.resources.notes_empty
+import seforimapp.seforimapp.generated.resources.notes_show_all
 import seforimapp.seforimapp.generated.resources.tab_search_show_all_history
 import java.time.Instant
 import java.time.LocalDate
@@ -230,7 +232,7 @@ internal object NotesWidget : HomeWidget {
         val graph = LocalAppGraph.current
         // Its per-book cache changes on every write: the cue to read the latest again
         val written by graph.noteStore.notesByBook.collectAsState()
-        val notes by produceState(emptyList<Pair<BookUserNote, String>>(), written) {
+        val notes by produceState(emptyList<Pair<BookNote, String>>(), written) {
             // One hop off the UI thread for the notes and all their books, not one per book
             value =
                 withContext(Dispatchers.IO) {
@@ -255,19 +257,15 @@ internal object NotesWidget : HomeWidget {
         val accent = rememberAccentColor(JewelTheme.isDark)
         ListCard(
             title = stringResource(Res.string.home_widget_name_notes),
+            onShowAll = { state.openTab(TabsDestination.Notes(UUID.randomUUID().toString())) },
+            showAllLabel = stringResource(Res.string.notes_show_all),
             empty = stringResource(Res.string.notes_empty).takeIf { notes.isEmpty() },
             modifier = modifier,
         ) {
             notes.forEach { (bookNote, bookTitle) ->
                 HoverBox(
                     onClick = {
-                        state.openTab(
-                            TabsDestination.BookContent(
-                                bookId = bookNote.bookId,
-                                tabId = UUID.randomUUID().toString(),
-                                lineId = bookNote.note.lineId,
-                            ),
-                        )
+                        state.openTab(noteDestination(bookNote))
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {

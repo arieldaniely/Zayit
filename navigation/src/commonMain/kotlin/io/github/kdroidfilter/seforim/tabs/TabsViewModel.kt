@@ -47,6 +47,7 @@ class TabsViewModel(
                 is TabsDestination.Home -> false
                 is TabsDestination.History -> false
                 is TabsDestination.Favorites -> false
+                is TabsDestination.Notes -> false
                 is TabsDestination.Author -> dest.authorId != 0L && dest.authorId != -1L
                 is TabsDestination.Search -> dest.searchQuery.isNotBlank()
                 is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
@@ -230,16 +231,7 @@ class TabsViewModel(
 
     private fun addTabWithDestination(destination: TabsDestination) {
         val destination = destination.availableDestination()
-        val newDestination =
-            when (destination) {
-                is TabsDestination.Home -> TabsDestination.Home(destination.tabId, destination.version)
-                is TabsDestination.Search -> TabsDestination.Search(destination.searchQuery, destination.tabId)
-                is TabsDestination.BookContent -> TabsDestination.BookContent(destination.bookId, destination.tabId, destination.lineId)
-                is TabsDestination.PdfContent -> TabsDestination.PdfContent(destination.bookId, destination.tabId, destination.lineId)
-                is TabsDestination.History -> TabsDestination.History(destination.tabId)
-                is TabsDestination.Favorites -> TabsDestination.Favorites(destination.tabId)
-                is TabsDestination.Author -> TabsDestination.Author(destination.tabId, destination.authorId)
-            }
+        val newDestination = destination.withTabId(destination.tabId)
 
         val newTab =
             TabItem(
@@ -366,41 +358,7 @@ class TabsViewModel(
             if (index !in 0..current.tabs.lastIndex) return@update current
 
             val tab = current.tabs[index]
-            val newDestination =
-                when (destination) {
-                    is TabsDestination.Home ->
-                        TabsDestination.Home(
-                            tabId = tab.destination.tabId,
-                            version = System.currentTimeMillis(),
-                        )
-                    is TabsDestination.Search ->
-                        TabsDestination.Search(
-                            searchQuery = destination.searchQuery,
-                            tabId = tab.destination.tabId,
-                        )
-                    is TabsDestination.BookContent ->
-                        TabsDestination.BookContent(
-                            bookId = destination.bookId,
-                            tabId = tab.destination.tabId,
-                            lineId = destination.lineId,
-                        )
-                    is TabsDestination.PdfContent ->
-                        TabsDestination.PdfContent(
-                            bookId = destination.bookId,
-                            tabId = tab.destination.tabId,
-                            lineId = destination.lineId,
-                        )
-                    is TabsDestination.History ->
-                        TabsDestination.History(
-                            tabId = tab.destination.tabId,
-                        )
-                    is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = tab.destination.tabId)
-                    is TabsDestination.Author ->
-                        TabsDestination.Author(
-                            tabId = tab.destination.tabId,
-                            authorId = destination.authorId,
-                        )
-                }
+            val newDestination = destination.withTabId(tab.destination.tabId)
 
             val isEditionSwitchForSameBook =
                 when {
@@ -443,41 +401,7 @@ class TabsViewModel(
             val index = current.selectedTabIndex
             if (index !in 0..current.tabs.lastIndex) return@update current
 
-            val newDestination =
-                when (destination) {
-                    is TabsDestination.Home ->
-                        TabsDestination.Home(
-                            tabId = newTabId,
-                            version = System.currentTimeMillis(),
-                        )
-                    is TabsDestination.Search ->
-                        TabsDestination.Search(
-                            searchQuery = destination.searchQuery,
-                            tabId = newTabId,
-                        )
-                    is TabsDestination.BookContent ->
-                        TabsDestination.BookContent(
-                            bookId = destination.bookId,
-                            tabId = newTabId,
-                            lineId = destination.lineId,
-                        )
-                    is TabsDestination.PdfContent ->
-                        TabsDestination.PdfContent(
-                            bookId = destination.bookId,
-                            tabId = newTabId,
-                            lineId = destination.lineId,
-                        )
-                    is TabsDestination.History ->
-                        TabsDestination.History(
-                            tabId = newTabId,
-                        )
-                    is TabsDestination.Favorites -> TabsDestination.Favorites(tabId = newTabId)
-                    is TabsDestination.Author ->
-                        TabsDestination.Author(
-                            tabId = newTabId,
-                            authorId = destination.authorId,
-                        )
-                }
+            val newDestination = destination.withTabId(newTabId)
 
             val updated =
                 current.tabs[index].copy(
@@ -589,6 +513,7 @@ class TabsViewModel(
             is TabsDestination.Home -> TabType.SEARCH
             is TabsDestination.History -> TabType.HISTORY
             is TabsDestination.Favorites -> TabType.FAVORITES
+            is TabsDestination.Notes -> TabType.NOTES
             is TabsDestination.Author -> TabType.AUTHOR
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
@@ -600,6 +525,7 @@ class TabsViewModel(
             is TabsDestination.Home -> ""
             is TabsDestination.History -> ""
             is TabsDestination.Favorites -> ""
+            is TabsDestination.Notes -> ""
             is TabsDestination.Author -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
@@ -631,3 +557,15 @@ class TabsViewModel(
 
 /** Zero and -1 are legacy empty sentinels; personal-library IDs are valid negative values. */
 private fun Long.isDatabaseId(): Boolean = this != 0L && this != -1L
+
+internal fun TabsDestination.withTabId(tabId: String): TabsDestination =
+    when (this) {
+        is TabsDestination.Home -> TabsDestination.Home(tabId = tabId, version = System.currentTimeMillis())
+        is TabsDestination.Search -> copy(tabId = tabId)
+        is TabsDestination.BookContent -> copy(tabId = tabId)
+        is TabsDestination.PdfContent -> copy(tabId = tabId)
+        is TabsDestination.History -> copy(tabId = tabId)
+        is TabsDestination.Favorites -> copy(tabId = tabId)
+        is TabsDestination.Notes -> copy(tabId = tabId)
+        is TabsDestination.Author -> copy(tabId = tabId)
+    }

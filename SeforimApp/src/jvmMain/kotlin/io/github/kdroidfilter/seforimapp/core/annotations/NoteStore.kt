@@ -2,6 +2,7 @@ package io.github.kdroidfilter.seforimapp.core.annotations
 
 import androidx.compose.runtime.Stable
 import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
+import io.github.kdroidfilter.seforimapp.db.User_notes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,9 +35,9 @@ data class UserNote(
     val updatedAt: Long = 0L,
 )
 
-/** A note together with the book it belongs to, for the library-wide notes browser. */
+/** A note with the book it is in. */
 @Stable
-data class BookUserNote(
+data class BookNote(
     val bookId: Long,
     val note: UserNote,
 )
@@ -54,11 +55,7 @@ class NoteStore(
     private val _notesByBook = MutableStateFlow<Map<Long, List<UserNote>>>(emptyMap())
     val notesByBook: StateFlow<Map<Long, List<UserNote>>> = _notesByBook.asStateFlow()
 
-    private val _allNotes = MutableStateFlow<List<BookUserNote>>(emptyList())
-    val allNotes: StateFlow<List<BookUserNote>> = _allNotes.asStateFlow()
-
     private val loadedBooks = mutableSetOf<Long>()
-    private var allNotesLoaded = false
 
     /** Loads a book's notes into the cache once. Subsequent calls are no-ops. */
     suspend fun loadBook(bookId: Long): Unit =
@@ -68,11 +65,15 @@ class NoteStore(
             loadedBooks += bookId
         }
 
-    /** Loads every saved note for the home-screen notes browser. */
-    suspend fun loadAll(): Unit =
+    /** Every note of every book, the most recently written first. */
+    suspend fun all(): List<BookNote> = recent(limit = -1) // SQLite: a negative LIMIT is none
+
+    /** The [limit] most recently written notes, of every book. */
+    suspend fun recent(limit: Int): List<BookNote> =
         withContext(Dispatchers.IO) {
-            refreshAll()
-            allNotesLoaded = true
+            queries.selectRecent(limit.toLong()).executeAsList().map { row ->
+                BookNote(bookId = row.bookId, note = row.toNote())
+            }
         }
 
     /** Notes of a single line; safe to call from composition (cache lookup). */
@@ -111,7 +112,6 @@ class NoteStore(
                     queries.lastInsertRowId().executeAsOne()
                 }
             refreshBook(bookId)
-            refreshAllIfLoaded()
             id
         }
 
@@ -129,7 +129,6 @@ class NoteStore(
                 queries.updateNote(note = note, updatedAt = timestamp, id = noteId)
             }
             refreshBook(bookId)
-            refreshAllIfLoaded()
         }
 
     /** Removes a note. */
@@ -140,70 +139,24 @@ class NoteStore(
         withContext(Dispatchers.IO) {
             queries.deleteById(noteId)
             refreshBook(bookId)
-            refreshAllIfLoaded()
         }
+
+    private fun User_notes.toNote() =
+        UserNote(
+            id = id,
+            lineId = lineId,
+            startOffset = startOffset.toInt(),
+            endOffset = endOffset.toInt(),
+            note = note,
+            quote = quote,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+        )
 
     /** Re-reads the book's notes from SQLite and replaces the cache entry. */
     private fun refreshBook(bookId: Long) {
         val list =
-            queries.selectAllForBook(bookId).executeAsList().map { row ->
-                UserNote(
-                    id = row.id,
-                    lineId = row.lineId,
-                    startOffset = row.startOffset.toInt(),
-                    endOffset = row.endOffset.toInt(),
-                    note = row.note,
-                    quote = row.quote,
-                    createdAt = row.createdAt,
-                    updatedAt = row.updatedAt,
-                )
-            }
+            queries.selectAllForBook(bookId).executeAsList().map { it.toNote() }
         _notesByBook.update { it + (bookId to list) }
     }
-
-    private fun refreshAllIfLoaded() {
-        if (allNotesLoaded) refreshAll()
-    }
-
-    private fun refreshAll() {
-        _allNotes.value =
-            queries.selectAll().executeAsList().map { row ->
-                BookUserNote(
-                    bookId = row.bookId,
-                    note =
-                        UserNote(
-                            id = row.id,
-                            lineId = row.lineId,
-                            startOffset = row.startOffset.toInt(),
-                            endOffset = row.endOffset.toInt(),
-                            note = row.note,
-                            quote = row.quote,
-                            createdAt = row.createdAt,
-                            updatedAt = row.updatedAt,
-                        ),
-                )
-            }
-    }
-
-    /** Latest notes for Home without filling the full notes cache. */
-    suspend fun recent(limit: Int): List<BookUserNote> =
-        withContext(Dispatchers.IO) {
-            require(limit in 1..100)
-            queries.selectRecent(limit.toLong()).executeAsList().map { row ->
-                BookUserNote(
-                    bookId = row.bookId,
-                    note =
-                        UserNote(
-                            id = row.id,
-                            lineId = row.lineId,
-                            startOffset = row.startOffset.toInt(),
-                            endOffset = row.endOffset.toInt(),
-                            note = row.note,
-                            quote = row.quote,
-                            createdAt = row.createdAt,
-                            updatedAt = row.updatedAt,
-                        ),
-                )
-            }
-        }
 }

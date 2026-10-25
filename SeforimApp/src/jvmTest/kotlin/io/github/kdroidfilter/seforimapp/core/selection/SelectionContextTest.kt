@@ -47,15 +47,15 @@ class SelectionContextTest {
     @Test
     fun `selectedText starts empty and round-trips updates`() {
         assertEquals("", context.selectedText.value)
-        context.setSelectedText("שלום")
+        context.setSelectedText("tab", "שלום")
         assertEquals("שלום", context.selectedText.value)
-        context.setSelectedText("")
+        context.setSelectedText("tab", "")
         assertEquals("", context.selectedText.value)
     }
 
     @Test
     fun `clearSelectedText resets value`() {
-        context.setSelectedText("hello")
+        context.setSelectedText("tab", "hello")
         context.clearSelectedText()
         assertEquals("", context.selectedText.value)
     }

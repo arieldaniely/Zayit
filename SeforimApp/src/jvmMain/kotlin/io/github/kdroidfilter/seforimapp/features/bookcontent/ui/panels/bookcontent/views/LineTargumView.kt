@@ -49,6 +49,7 @@ import io.github.kdroidfilter.seforim.htmlparser.SkiaHtmlImageBuilder
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalDivider
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
@@ -61,7 +62,6 @@ import io.github.kdroidfilter.seforimapp.icons.Filter
 import io.github.kdroidfilter.seforimapp.icons.FilterFilled
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
-import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.kdroidfilter.seforimlibrary.dao.repository.CommentaryWithText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -103,7 +103,7 @@ private fun SingleLineTargumView(
     getAvailableLinksForLine: suspend (Long) -> Map<String, Long>,
     getLinkCharCountsForLine: suspend (Long, Long, ConnectionType) -> List<Int>,
     getLinePath: suspend (Long) -> String,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     commentariesScrollIndex: Int = 0,
     commentariesScrollOffset: Int = 0,
     initiallySelectedSourceIds: Set<Long> = emptySet(),
@@ -478,7 +478,7 @@ private fun SingleLineTargumView(
                                                                     expandedItemIds + id
                                                                 }
                                                         },
-                                                        showDiacritics = showDiacritics,
+                                                        diacritics = diacritics,
                                                         annotationCache = annotationCache,
                                                         onLayoutWidthMeasure = { width ->
                                                             if (textLayoutWidthPx == 0 && width > 0) {
@@ -538,7 +538,7 @@ private fun SingleLineTargumView(
 fun LineTargumView(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     lineConnections: Map<Long, LineConnectionsSnapshot> = emptyMap(),
     availabilityType: ConnectionType = ConnectionType.TARGUM,
 ) {
@@ -649,7 +649,7 @@ fun LineTargumView(
             selectedLineIds = selectedLineIds,
             uiState = uiState,
             onEvent = onEvent,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
             availabilityType = availabilityType,
             highlightQuery = activeQuery,
             onHide = onHide,
@@ -676,7 +676,7 @@ fun LineTargumView(
             titleRes = titleRes,
             selectLineRes = selectLineRes,
             emptyRes = emptyRes,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -690,7 +690,7 @@ private fun MultiLineTargumView(
     selectedLineIds: List<Long>,
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     availabilityType: ConnectionType,
     highlightQuery: String,
     onHide: () -> Unit,
@@ -1034,7 +1034,7 @@ private fun MultiLineTargumView(
                                                             expandedItemIds + id
                                                         }
                                                 },
-                                                showDiacritics = showDiacritics,
+                                                diacritics = diacritics,
                                                 annotationCache = annotationCache,
                                                 onLayoutWidthMeasure = { width ->
                                                     if (textLayoutWidthPx == 0 && width > 0) {
@@ -1121,7 +1121,7 @@ private fun LinkItem(
     fontFamily: FontFamily,
     highlightQuery: String,
     onClick: () -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     annotationCache: StableAnnotatedCache,
     boldScale: Float = 1.0f,
     isExpanded: Boolean = false,
@@ -1147,8 +1147,8 @@ private fun LinkItem(
                 },
     ) {
         val processedText =
-            remember(linkId, targetText, showDiacritics) {
-                if (showDiacritics) targetText else HebrewTextUtils.removeAllDiacritics(targetText)
+            remember(linkId, targetText, diacritics) {
+                diacritics.apply(targetText)
             }
         val shouldCollapse =
             remember(processedText) {

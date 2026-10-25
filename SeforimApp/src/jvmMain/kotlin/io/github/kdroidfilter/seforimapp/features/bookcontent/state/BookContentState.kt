@@ -190,6 +190,14 @@ data class HistoryState(
     val scrollOffset: Int = 0,
 )
 
+/** Lines [first] to [last] of the book [bookId], by their index: a passage marked to be read. */
+@Immutable
+data class MarkedRange(
+    val bookId: Long,
+    val first: Int,
+    val last: Int,
+)
+
 @Immutable
 data class ContentState(
     // Data
@@ -204,6 +212,9 @@ data class ContentState(
     val showTargum: Boolean = false,
     val showSources: Boolean = false,
     val showMentions: Boolean = false,
+    val shnayimMikra: Boolean = false,
+    val markedRange: MarkedRange? = null,
+    val focusRequest: Int = 0,
     // Scroll positions
     val paragraphScrollPosition: Int = 0,
     val chapterScrollPosition: Int = 0,

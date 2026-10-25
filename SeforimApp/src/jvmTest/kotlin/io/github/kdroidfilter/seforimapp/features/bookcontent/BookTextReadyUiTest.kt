@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runComposeUiTest
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
@@ -49,7 +50,7 @@ class BookTextReadyUiTest {
                                     providers = providers,
                                 ),
                             onEvent = {},
-                            showDiacritics = true,
+                            diacritics = DiacriticsMode.All,
                             tabUi = tabUi,
                             mainContentOverride = {
                                 remember { created++ }

@@ -59,6 +59,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.CustomTogg
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
 import io.github.kdroidfilter.seforimapp.core.presentation.components.verticalEdgeFade
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.presentation.text.highlightAnnotatedWithCurrent
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
@@ -210,7 +211,7 @@ fun SearchResultInBookShellMvi(
     tabUi: io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi,
     bookUiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     // Search state
     searchUi: SearchUiState,
     visibleResults: ImmutableList<SearchResult>,
@@ -233,7 +234,7 @@ fun SearchResultInBookShellMvi(
             tabUi = tabUi,
             uiState = bookUiState,
             onEvent = onEvent,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
             isSelected = LocalTabSelected.current,
             searchUi = SearchHomeUiState(),
             searchCallbacks =
@@ -947,8 +948,6 @@ private fun rememberSnippetDisplay(
         highlightAnnotatedWithCurrent(
             annotated = annotated,
             query = findQuery,
-            currentStart = null,
-            currentLength = findQuery?.length,
             baseColor = baseHl,
             currentColor = currentHl,
         )
@@ -1459,8 +1458,6 @@ internal fun LegacySearchResultItem(
             highlightAnnotatedWithCurrent(
                 annotated = annotated,
                 query = findQuery,
-                currentStart = currentMatchStart?.takeIf { it >= 0 },
-                currentLength = findQuery?.length,
                 baseColor = baseHl,
                 currentColor = currentHl,
             )

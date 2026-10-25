@@ -24,6 +24,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
@@ -41,6 +42,7 @@ import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsEvents
 import io.github.kdroidfilter.seforimapp.core.presentation.components.MainTitleBar
+import io.github.kdroidfilter.seforimapp.core.presentation.text.rememberRefLinkUriHandler
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
@@ -595,7 +597,10 @@ fun NucleusApplicationScope.MainAppWindow(
                             }
                         },
             ) {
-                CompositionLocalProvider(LocalIsTouchMode provides isTouchMode) {
+                CompositionLocalProvider(
+                    LocalIsTouchMode provides isTouchMode,
+                    LocalUriHandler provides rememberRefLinkUriHandler(openWindow.tabsViewModel),
+                ) {
                     io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes
                         .WindowPanes(openWindow)
                     WindowBody(openWindow)

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
@@ -38,6 +39,11 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.No
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity
 import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filterNotNull
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -45,13 +51,14 @@ import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.IconActionButton
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.*
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalSplitPaneApi::class)
 @Composable
 fun BookContentPanel(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     modifier: Modifier = Modifier,
     isRestoringSession: Boolean = false,
     searchUi: SearchHomeUiState = SearchHomeUiState(),
@@ -114,7 +121,7 @@ fun BookContentPanel(
                 BookContentPanelContent(
                     uiState = uiState,
                     onEvent = onEvent,
-                    showDiacritics = showDiacritics,
+                    diacritics = diacritics,
                     isSelected = isSelected,
                     bookCharCounts = bookCharCounts,
                     tabUi = tabUi ?: viewModel { BookTabUi() },
@@ -131,12 +138,12 @@ val LocalBookTextReady = staticCompositionLocalOf<(String) -> Boolean> { { true 
 fun isBookTextShown(uiState: BookContentState): Boolean =
     uiState.navigation.selectedBook != null && uiState.providers != null && !uiState.isLoading
 
-@OptIn(ExperimentalSplitPaneApi::class)
+@OptIn(ExperimentalSplitPaneApi::class, FlowPreview::class)
 @Composable
 private fun BookContentPanelContent(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     tabUi: BookTabUi,
     isSelected: Boolean,
     bookCharCounts: IntArray?,
@@ -189,6 +196,21 @@ private fun BookContentPanelContent(
         providers.prefetchCommentaries(lineId, openCommentatorIds)
     }
 
+    // A hovered line is likely the next one clicked: load its commentaries (the book's commentators, which a newly
+    // selected line shows) once the pointer rests on it, so they show in the frame of the click.
+    val hoveredLine = remember(selectedBook.id) { MutableStateFlow<Long?>(null) }
+    val bookCommentatorIds =
+        uiState.content.selectedCommentatorsByBook[selectedBook.id]
+            .orEmpty()
+            .ifEmpty { openCommentatorIds }
+    LaunchedEffect(hoveredLine, bookCommentatorIds, uiState.content.showCommentaries) {
+        if (!uiState.content.showCommentaries || bookCommentatorIds.isEmpty()) return@LaunchedEffect
+        hoveredLine
+            .filterNotNull()
+            .debounce(HOVER_PREFETCH_DELAY)
+            .collectLatest { lineId -> providers.prefetchCommentaries(lineId, bookCommentatorIds) }
+    }
+
     val isIslands = ThemeUtils.isIslandsStyle()
     val hasBottomPane = uiState.content.showCommentaries || uiState.content.showSources
     val panelBackground = JewelTheme.globalColors.panelBackground
@@ -229,7 +251,12 @@ private fun BookContentPanelContent(
                         },
                         onEvent = onEvent,
                         tabId = uiState.tabId,
-                        showDiacritics = showDiacritics,
+                        diacritics = diacritics,
+                        markedLines =
+                            uiState.content.markedRange
+                                ?.takeIf { it.bookId == selectedBook.id }
+                                ?.let { it.first..it.last },
+                        shnayimMikra = uiState.content.shnayimMikra && selectedBook.isChumash,
                         draftNote = noteDraft,
                         modifier = topPaneCardModifier,
                         preservedListState = bookListState,
@@ -240,9 +267,10 @@ private fun BookContentPanelContent(
                         anchorIndex = uiState.content.anchorIndex,
                         topAnchorLineId = uiState.content.topAnchorLineId,
                         topAnchorTimestamp = uiState.content.topAnchorRequestTimestamp,
-                        onScroll = { anchorId, anchorIndex, scrollIndex, scrollOffset ->
+                        onScroll = { bookId, anchorId, anchorIndex, scrollIndex, scrollOffset ->
                             onEvent(
                                 BookContentEvent.ContentScrolled(
+                                    bookId = bookId,
                                     anchorId = anchorId,
                                     anchorIndex = anchorIndex,
                                     scrollIndex = scrollIndex,
@@ -253,6 +281,7 @@ private fun BookContentPanelContent(
                         altHeadingsByLineId = uiState.altToc.lineHeadingsByLineId.asStableAltHeadings(),
                         lineConnections = connectionsCache,
                         onPrefetchLineConnections = prefetchConnections,
+                        onLineHover = { hoveredLine.value = it },
                         isSelected = isSelected,
                         bookCharCounts = bookCharCounts,
                         onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
@@ -280,7 +309,7 @@ internal fun CommentsPane(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     lineConnections: Map<Long, LineConnectionsSnapshot>,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -288,7 +317,7 @@ internal fun CommentsPane(
             uiState = uiState,
             onEvent = onEvent,
             lineConnections = lineConnections,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -298,7 +327,7 @@ internal fun SourcesPane(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     lineConnections: Map<Long, LineConnectionsSnapshot>,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -307,7 +336,7 @@ internal fun SourcesPane(
             onEvent = onEvent,
             lineConnections = lineConnections,
             availabilityType = ConnectionType.SOURCE,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -317,7 +346,7 @@ internal fun MentionsPane(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     lineConnections: Map<Long, LineConnectionsSnapshot>,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -326,7 +355,7 @@ internal fun MentionsPane(
             onEvent = onEvent,
             lineConnections = lineConnections,
             availabilityType = ConnectionType.MENTION,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -336,7 +365,7 @@ internal fun TargumPane(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
     lineConnections: Map<Long, LineConnectionsSnapshot>,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -344,7 +373,7 @@ internal fun TargumPane(
             uiState = uiState,
             onEvent = onEvent,
             lineConnections = lineConnections,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
         )
     }
 }
@@ -427,3 +456,5 @@ private fun islandsCardModifier(
     } else {
         Modifier
     }
+
+private val HOVER_PREFETCH_DELAY = 60.milliseconds

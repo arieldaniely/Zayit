@@ -219,6 +219,7 @@ fun main(args: Array<String>) {
                                     active.book,
                                     active.rootTitle,
                                     selectionContext.visibleLines.value.lines,
+                                    lineRange = selectionContext.selectedLineRange.value,
                                 )
                             Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(payload), null)
                             true

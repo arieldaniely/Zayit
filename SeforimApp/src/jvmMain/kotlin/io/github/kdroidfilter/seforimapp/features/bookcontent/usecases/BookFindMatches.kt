@@ -1,7 +1,8 @@
 package io.github.kdroidfilter.seforimapp.features.bookcontent.usecases
 
 import androidx.compose.runtime.Immutable
-import io.github.kdroidfilter.seforimapp.core.presentation.text.findAllMatchesOriginal
+import io.github.kdroidfilter.seforim.htmlparser.plainTextFromHtml
+import io.github.kdroidfilter.seforimapp.core.presentation.text.findAllMatchesNormalized
 import io.github.kdroidfilter.seforimapp.core.presentation.text.normalizeQueryForHebrew
 import io.github.kdroidfilter.seforimapp.logger.debugln
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
@@ -9,7 +10,6 @@ import io.github.kdroidfilter.seforimlibrary.search.SearchEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import org.jsoup.Jsoup
 import java.io.IOException
 
 /**
@@ -139,7 +139,7 @@ suspend fun findInBook(
             for (line in lines) {
                 ensureActive()
                 // The displayed text, without building its styles
-                val count = findAllMatchesOriginal(Jsoup.parse(line.content).text(), normalizedQuery).size
+                val count = findAllMatchesNormalized(plainTextFromHtml(line.content), normalizedQuery).size
                 if (count > 0) found += Triple(line.lineIndex, line.id, count)
             }
         }

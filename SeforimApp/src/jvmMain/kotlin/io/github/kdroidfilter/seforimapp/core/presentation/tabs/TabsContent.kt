@@ -39,6 +39,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.savedState
 import dev.zacsweers.metrox.viewmodel.assistedMetroViewModel
+import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
@@ -70,6 +71,7 @@ import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import org.jetbrains.jewel.foundation.modifier.trackActivation
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 
@@ -392,14 +394,14 @@ private fun HomeTabContent(
     tabOwner.setDefaultArgs(savedState { putString(StateKeys.TAB_ID, tabId) })
     val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val uiState by viewModel.uiState.collectAsState()
-    val showDiacritics by viewModel.showDiacritics.collectAsState()
+    val diacritics by viewModel.diacritics.collectAsState()
     val bookCharCounts by viewModel.bookCharCounts.collectAsState()
 
     BookContentScreen(
         tabUi = tabUi(tabOwner),
         uiState = uiState,
         onEvent = viewModel::onEvent,
-        showDiacritics = showDiacritics,
+        diacritics = diacritics,
         isRestoringSession = isRestoringSession,
         searchUi = searchUi,
         searchCallbacks = searchCallbacks,
@@ -414,12 +416,7 @@ private fun SearchTabContent(
     destination: TabsDestination.Search,
     isSelected: Boolean,
 ) {
-    tabOwner.setDefaultArgs(
-        savedState {
-            putString(StateKeys.TAB_ID, destination.tabId)
-            putString("searchQuery", destination.searchQuery)
-        },
-    )
+    tabOwner.prepare(destination)
 
     val viewModel: SearchResultViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val bookVm: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
@@ -433,7 +430,7 @@ private fun SearchTabContent(
     }
 
     val bcUiState by bookVm.uiState.collectAsState()
-    val showDiacritics by bookVm.showDiacritics.collectAsState()
+    val diacritics by bookVm.diacritics.collectAsState()
     val searchUi by viewModel.uiState.collectAsState()
     val visibleResults by viewModel.visibleResultsFlow.collectAsState()
     val isFiltering by viewModel.isFilteringFlow.collectAsState()
@@ -452,7 +449,7 @@ private fun SearchTabContent(
         tabUi = tabUi(tabOwner),
         bookUiState = bcUiState,
         onEvent = bookVm::onEvent,
-        showDiacritics = showDiacritics,
+        diacritics = diacritics,
         searchUi = searchUi,
         visibleResults = visibleResults,
         isFiltering = isFiltering,
@@ -478,36 +475,23 @@ private fun BookContentTabContent(
     searchUi: io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState,
     searchCallbacks: HomeSearchCallbacks,
 ) {
-    tabOwner.setDefaultArgs(
-        savedState {
-            putString(StateKeys.TAB_ID, destination.tabId)
-            if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
-            destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
-        },
-    )
+    tabOwner.prepare(destination)
 
     val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val uiState by viewModel.uiState.collectAsState()
-    val showDiacritics by viewModel.showDiacritics.collectAsState()
+    val diacritics by viewModel.diacritics.collectAsState()
     val bookCharCounts by viewModel.bookCharCounts.collectAsState()
 
     // React to destination changes when ViewModel is reused
-    LaunchedEffect(destination.bookId, destination.lineId) {
-        if (destination.bookId != 0L && destination.bookId != -1L) {
-            val lineId = destination.lineId
-            if (lineId != null && lineId != 0L && lineId != -1L) {
-                viewModel.onEvent(BookContentEvent.OpenBookAtLine(destination.bookId, lineId))
-            } else {
-                viewModel.onEvent(BookContentEvent.OpenBookById(destination.bookId))
-            }
-        }
+    LaunchedEffect(destination.bookId, destination.lineId, destination.endLineId) {
+        viewModel.openDestination(destination.bookId, destination.lineId, destination.endLineId)
     }
 
     BookContentScreen(
         tabUi = tabUi(tabOwner),
         uiState = uiState,
         onEvent = viewModel::onEvent,
-        showDiacritics = showDiacritics,
+        diacritics = diacritics,
         isRestoringSession = isRestoringSession,
         searchUi = searchUi,
         searchCallbacks = searchCallbacks,
@@ -525,17 +509,11 @@ private fun PdfContentTabContent(
     searchUi: io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState,
     searchCallbacks: HomeSearchCallbacks,
 ) {
-    tabOwner.setDefaultArgs(
-        savedState {
-            putString(StateKeys.TAB_ID, destination.tabId)
-            if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
-            destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
-        },
-    )
+    tabOwner.prepare(destination)
 
     val viewModel: BookContentViewModel = assistedMetroViewModel(viewModelStoreOwner = tabOwner)
     val uiState by viewModel.uiState.collectAsState()
-    val showDiacritics by viewModel.showDiacritics.collectAsState()
+    val diacritics by viewModel.diacritics.collectAsState()
     val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
     var pdfZoom by rememberSaveable(destination.bookId) { mutableFloatStateOf(PDF_DEFAULT_ZOOM) }
     DisposableEffect(destination.tabId) {
@@ -582,7 +560,7 @@ private fun PdfContentTabContent(
         tabUi = tabUi(tabOwner),
         uiState = uiState,
         onEvent = viewModel::onEvent,
-        showDiacritics = showDiacritics,
+        diacritics = diacritics,
         isRestoringSession = isRestoringSession,
         searchUi = searchUi,
         searchCallbacks = searchCallbacks,
@@ -641,6 +619,33 @@ internal class SimpleTabViewModelOwner(
 
     fun setDefaultArgs(defaultArgs: SavedState) {
         creationExtras[DEFAULT_ARGS_KEY] = defaultArgs
+    }
+
+    fun prepare(destination: TabsDestination) {
+        setDefaultArgs(
+            savedState {
+                putString(StateKeys.TAB_ID, destination.tabId)
+                when (destination) {
+                    is TabsDestination.Search -> {
+                        putString("searchQuery", destination.searchQuery)
+                        putString(StateKeys.SEARCH_SCOPE, Json.encodeToString<SearchScope>(destination.scope))
+                        if (destination.globalExtended) putBoolean(StateKeys.SEARCH_GLOBAL_EXTENDED, true)
+                    }
+                    is TabsDestination.BookContent -> {
+                        if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
+                        destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+                        destination.endLineId?.let { putLong(StateKeys.MARK_END_LINE_ID, it) }
+                        if (destination.openNotes) putBoolean(StateKeys.OPEN_NOTES, true)
+                        if (destination.shnayimMikra) putBoolean(StateKeys.SHNAYIM_MIKRA, true)
+                    }
+                    is TabsDestination.PdfContent -> {
+                        if (destination.bookId != 0L && destination.bookId != -1L) putLong(StateKeys.BOOK_ID, destination.bookId)
+                        destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
+                    }
+                    else -> Unit
+                }
+            },
+        )
     }
 
     fun clear() {
@@ -715,23 +720,7 @@ internal fun tabBookViewModel(
     owner: SimpleTabViewModelOwner,
     destination: TabsDestination,
 ): BookContentViewModel {
-    owner.setDefaultArgs(
-        savedState {
-            putString(StateKeys.TAB_ID, destination.tabId)
-            when (destination) {
-                is TabsDestination.BookContent -> {
-                    if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
-                    destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
-                }
-                is TabsDestination.PdfContent -> {
-                    if (destination.bookId > 0) putLong(StateKeys.BOOK_ID, destination.bookId)
-                    destination.lineId?.let { putLong(StateKeys.LINE_ID, it) }
-                }
-                is TabsDestination.Search -> putString("searchQuery", destination.searchQuery)
-                else -> Unit
-            }
-        },
-    )
+    owner.prepare(destination)
     return assistedMetroViewModel(viewModelStoreOwner = owner)
 }
 
@@ -740,12 +729,7 @@ internal fun tabSearchViewModel(
     owner: SimpleTabViewModelOwner,
     destination: TabsDestination.Search,
 ): SearchResultViewModel {
-    owner.setDefaultArgs(
-        savedState {
-            putString(StateKeys.TAB_ID, destination.tabId)
-            putString("searchQuery", destination.searchQuery)
-        },
-    )
+    owner.prepare(destination)
     return assistedMetroViewModel(viewModelStoreOwner = owner)
 }
 

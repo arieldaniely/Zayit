@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
@@ -39,6 +40,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforim.htmlparser.buildAnnotatedFromHtml
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightColors
@@ -46,12 +48,18 @@ import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.resolveHighlightRangesForSelection
 import io.github.kdroidfilter.seforimapp.core.buildCopyWithSourcePayload
 import io.github.kdroidfilter.seforimapp.core.deeplink.bookShareLink
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
+import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberCopyToClipboard
 import io.github.kdroidfilter.seforimapp.core.resolveLineRangeFromSelection
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.BookContentPanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.LocalBookSelection
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.highlightRangesOf
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.resolveComposeSelection
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.resolveRange
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDialog
 import io.github.kdroidfilter.seforimapp.features.errorreport.BookErrorReportDraft
@@ -63,9 +71,12 @@ import io.github.kdroidfilter.seforimapp.icons.Ink_pen
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 import org.jetbrains.jewel.foundation.InternalJewelApi
@@ -303,7 +314,7 @@ private fun applyHighlightFromSelection(
     bookId: Long,
     commentaryColumn: List<io.github.kdroidfilter.seforimapp.core.selection.CommentaryLineRef>,
     color: Color,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     store: HighlightStore,
     @StructuredScope scope: CoroutineScope,
 ) {
@@ -312,7 +323,7 @@ private fun applyHighlightFromSelection(
     if (commentaryColumn.isNotEmpty()) {
         val commentaryBookId = commentaryColumn.first().bookId
         val sorted = commentaryColumn.map { it.lineId to buildAnnotatedFromHtml(it.content, baseTextSize = 16f, boldScale = 1f).text }
-        val ranges = resolveHighlightRangesForSelection(sorted, selectedText, showDiacritics)
+        val ranges = resolveHighlightRangesForSelection(sorted, selectedText, diacritics)
         persistHighlights(commentaryBookId, ranges, color, store, scope)
         return
     }
@@ -323,7 +334,7 @@ private fun applyHighlightFromSelection(
         lines
             .sortedBy { it.lineIndex }
             .map { it.id to buildAnnotatedFromHtml(it.content, baseTextSize = 16f, boldScale = 1f).text }
-    val mainRanges = resolveHighlightRangesForSelection(mainSorted, selectedText, showDiacritics)
+    val mainRanges = resolveHighlightRangesForSelection(mainSorted, selectedText, diacritics)
     persistHighlights(bookId, mainRanges, color, store, scope)
 }
 
@@ -354,13 +365,13 @@ private fun persistHighlights(
 private fun resolveNoteDraft(
     selectedText: String,
     lines: List<io.github.kdroidfilter.seforimlibrary.core.models.Line>,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
 ): NoteDraftAnchor? {
     val sorted =
         lines
             .sortedBy { it.lineIndex }
             .map { it.id to buildAnnotatedFromHtml(it.content, baseTextSize = 16f, boldScale = 1f).text }
-    val range = resolveHighlightRangesForSelection(sorted, selectedText, showDiacritics).firstOrNull() ?: return null
+    val range = resolveHighlightRangesForSelection(sorted, selectedText, diacritics).firstOrNull() ?: return null
     return NoteDraftAnchor(
         lineId = range.lineId,
         startOffset = range.range.first,
@@ -439,14 +450,14 @@ private fun composeKeyEventToSwingKeyStroke(event: KeyEvent): KeyStroke? {
  *
  * @param uiState The complete UI state used for rendering the book content screen, capturing navigation, TOC, content display, layout management, and more.
  * @param onEvent Function that handles various user-driven events or state updates within the book content view.
- * @param showDiacritics Whether to render Hebrew diacritics for the current root category.
+ * @param diacritics Whether to render Hebrew diacritics for the current root category.
  */
 @OptIn(ExperimentalSplitPaneApi::class, FlowPreview::class, ExperimentalFoundationApi::class)
 @Composable
 fun BookTextMenus(
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     tabUi: BookTabUi,
     content: @Composable () -> Unit,
 ) {
@@ -507,7 +518,7 @@ fun BookTextMenus(
             showWordDefinitionLabel,
             expandAcronymLabel,
             showWordLookupLabel,
-            showDiacritics,
+            diacritics,
             bookHasDiacritics,
             bookId,
         ) {
@@ -519,20 +530,62 @@ fun BookTextMenus(
                     state: ContextMenuState,
                     content: @Composable () -> Unit,
                 ) {
+                    val appSettings = LocalAppGraph.current.appSettings
+                    val repository = LocalAppGraph.current.repository
+                    val copyToClipboard = rememberCopyToClipboard()
+                    // The book view's selection located in the book (Compose's from the press it started at, or the
+                    // Shift+click one read from the database): what the copies, highlights and sources take, the AWT
+                    // shortcuts included through the SelectionContext
+                    val bookSelection = LocalBookSelection.current
+                    val shiftRange = bookSelection?.range
+                    val rawText = textManager.selectedText.text
                     // Mirror the current selection into the SelectionContext so the AWT
                     // keyboard dispatcher can read it without touching Compose state directly.
-                    LaunchedEffect(textManager.selectedText.text) {
-                        selectionContext.setSelectedText(textManager.selectedText.text)
+                    // A new Compose selection (a drag) replaces the Shift+click one; a Shift+click leaves Compose's as is
+                    LaunchedEffect(rawText) { if (rawText.isNotEmpty()) bookSelection?.clear() }
+                    LaunchedEffect(rawText, shiftRange, diacritics) {
+                        bookSelection?.resolved = null
+                        // A Shift+click selection is not Compose's, still drawn from an earlier drag: nothing until read
+                        selectionContext.setSelectedText(tabId, if (shiftRange != null) "" else rawText)
+                        val pressedAt = bookSelection?.pressedAt
+                        val resolved =
+                            when {
+                                bookSelection == null || bookId <= 0 -> null
+                                shiftRange != null -> resolveRange(shiftRange, bookId, repository, diacritics)
+                                rawText.isNotEmpty() && pressedAt != null -> {
+                                    // Across lines, once the drag rests rather than on each of its moves; within a line (a
+                                    // double click, a word) at once, a single line to read, before the menu opens
+                                    if ('\n' in rawText) delay(SELECTION_SETTLE_MS)
+                                    resolveComposeSelection(rawText, pressedAt, bookId, repository, diacritics)
+                                }
+                                else -> null
+                            }
+                        if (resolved != null) {
+                            bookSelection?.resolved = resolved
+                            selectionContext.setSelectedText(tabId, resolved.text, resolved.first to resolved.last)
+                        }
                     }
+                    val resolved = bookSelection?.resolved
+                    val owned = resolved?.takeIf { it.owned }
+                    val menuTextManager =
+                        owned?.let { selection ->
+                            object : TextContextMenu.TextManager by textManager {
+                                override val selectedText = AnnotatedString(selection.text)
+                                override val copy = TextContextMenu.Action(enabled = true) { copyToClipboard(selection.text) }
+
+                                // A right-click keeps the Shift+click selection rather than selecting a word
+                                override fun selectWordAtPositionIfNotAlreadySelected(offset: Offset) = Unit
+                            }
+                        } ?: textManager
 
                     ContextMenuDataProvider(
                         items = {
                             val query = normalizeSearchQuery(textManager.selectedText.text)
-                            val selectedText = textManager.selectedText.text
+                            val selectedText = owned?.text ?: textManager.selectedText.text
                             buildList {
                                 // Copy without nikud option - first position, only show when book has diacritics and they are enabled
                                 if (bookHasDiacritics &&
-                                    showDiacritics &&
+                                    diacritics != DiacriticsMode.None &&
                                     selectedText.isNotBlank() &&
                                     (HebrewTextUtils.containsNikud(selectedText) || HebrewTextUtils.containsTeamim(selectedText))
                                 ) {
@@ -573,6 +626,7 @@ fun BookTextMenus(
                                                     bookForCopy,
                                                     selectionContext.activeBook.value?.rootTitle,
                                                     selectionContext.visibleLines.value.lines,
+                                                    lineRange = resolved?.let { it.first to it.last },
                                                 )
                                             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
                                             clipboard.setContents(StringSelection(payload), null)
@@ -674,7 +728,18 @@ fun BookTextMenus(
                                             val lines = selectionContext.visibleLines.value.lines
                                             val draft =
                                                 if (selectedText.isNotBlank()) {
-                                                    resolveNoteDraft(selectedText, lines, showDiacritics)
+                                                    resolved?.let { selected ->
+                                                        highlightRangesOf(selected.range, selected.lines, diacritics)
+                                                            ?.firstOrNull()
+                                                            ?.let { range ->
+                                                                NoteDraftAnchor(
+                                                                    range.lineId,
+                                                                    range.range.first,
+                                                                    range.range.last + 1,
+                                                                    selected.text,
+                                                                )
+                                                            }
+                                                    } ?: resolveNoteDraft(selectedText, lines, diacritics)
                                                 } else {
                                                     resolveWholeLineNoteDraft(selectionContext.currentLineId.value, lines)
                                                 }
@@ -718,16 +783,41 @@ fun BookTextMenus(
                                         ContextMenuHighlightColorPicker(
                                             colors = HighlightColors.allWithClear,
                                             onColorSelected = { color ->
-                                                applyHighlightFromSelection(
-                                                    selectedText = selectedText,
-                                                    lines = selectionContext.visibleLines.value.lines,
-                                                    bookId = bookId,
-                                                    commentaryColumn = selectionContext.activeCommentaryColumn.value,
-                                                    color = color,
-                                                    showDiacritics = showDiacritics,
-                                                    store = highlightStore,
-                                                    scope = highlightScope,
-                                                )
+                                                // Located in the book: exactly the selected characters, computed off the UI thread
+                                                val selection = resolved
+                                                if (selection != null) {
+                                                    highlightScope.launch {
+                                                        val located =
+                                                            withContext(Dispatchers.Default) {
+                                                                highlightRangesOf(selection.range, selection.lines, diacritics)
+                                                            }
+                                                        if (located != null) {
+                                                            persistHighlights(bookId, located, color, highlightStore, highlightScope)
+                                                        } else {
+                                                            applyHighlightFromSelection(
+                                                                selectedText = selectedText,
+                                                                lines = selection.lines,
+                                                                bookId = bookId,
+                                                                commentaryColumn = selectionContext.activeCommentaryColumn.value,
+                                                                color = color,
+                                                                diacritics = diacritics,
+                                                                store = highlightStore,
+                                                                scope = highlightScope,
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    applyHighlightFromSelection(
+                                                        selectedText = selectedText,
+                                                        lines = selectionContext.visibleLines.value.lines,
+                                                        bookId = bookId,
+                                                        commentaryColumn = selectionContext.activeCommentaryColumn.value,
+                                                        color = color,
+                                                        diacritics = diacritics,
+                                                        store = highlightStore,
+                                                        scope = highlightScope,
+                                                    )
+                                                }
                                             },
                                             onDismiss = { state.status = ContextMenuState.Status.Closed },
                                         ),
@@ -737,7 +827,7 @@ fun BookTextMenus(
                         },
                     ) {
                         baseTextContextMenu.Area(
-                            textManager = textManager,
+                            textManager = menuTextManager,
                             state = state,
                             content = content,
                         )
@@ -787,7 +877,7 @@ fun BookTextMenus(
                                     true
                                 }
                                 isCtrlOrCmd && keyEvent.key == Key.J -> {
-                                    onEvent(BookContentEvent.ToggleDiacritics)
+                                    onEvent(BookContentEvent.CycleDiacritics)
                                     true
                                 }
                                 isCtrlOrCmd && keyEvent.key == Key.E -> {
@@ -795,11 +885,11 @@ fun BookTextMenus(
                                     if (isHome) {
                                         onEvent(BookContentEvent.ToggleNotes)
                                     } else {
-                                        val selectedText = selectionContext.selectedText.value
+                                        val selectedText = selectionContext.selectedTextIn(tabId)
                                         val lines = selectionContext.visibleLines.value.lines
                                         val draft =
                                             if (selectedText.isNotBlank() && lines.isNotEmpty()) {
-                                                resolveNoteDraft(selectedText, lines, showDiacritics)
+                                                resolveNoteDraft(selectedText, lines, diacritics)
                                             } else {
                                                 null
                                             }
@@ -830,7 +920,7 @@ fun BookContentScreen(
     tabUi: BookTabUi,
     uiState: BookContentState,
     onEvent: (BookContentEvent) -> Unit,
-    showDiacritics: Boolean,
+    diacritics: DiacriticsMode,
     searchUi: SearchHomeUiState,
     searchCallbacks: HomeSearchCallbacks,
     isRestoringSession: Boolean = false,
@@ -859,11 +949,11 @@ fun BookContentScreen(
 
     val currentOnEvent by rememberUpdatedState(onEvent)
     DisposableEffect(Unit) { onDispose { currentOnEvent(BookContentEvent.SaveState) } }
-    BookTextMenus(uiState, onEvent, showDiacritics, tabUi) {
+    BookTextMenus(uiState, onEvent, diacritics, tabUi) {
         BookContentPanel(
             uiState = uiState,
             onEvent = onEvent,
-            showDiacritics = showDiacritics,
+            diacritics = diacritics,
             tabUi = tabUi,
             isRestoringSession = isRestoringSession,
             searchUi = searchUi,
@@ -912,9 +1002,11 @@ fun handleBookShortcut(
                     keyEvent.isShiftPressed -> BookContentEvent.ToggleTargum
                     else -> BookContentEvent.ToggleCommentaries
                 }
-            Key.J -> BookContentEvent.ToggleDiacritics
+            Key.J -> BookContentEvent.CycleDiacritics
             else -> return false
         }
     onEvent(event)
     return true
 }
+
+private const val SELECTION_SETTLE_MS = 120L

@@ -119,6 +119,7 @@ sealed interface BookContentEvent {
     data class OpenBookAtLine(
         val bookId: Long,
         val lineId: Long,
+        val endLineId: Long? = null,
     ) : BookContentEvent
 
     // Open a book by its id (VM resolves Book)
@@ -143,6 +144,8 @@ sealed interface BookContentEvent {
 
     data object ToggleCommentaries : BookContentEvent
 
+    data object ToggleShnayimMikra : BookContentEvent
+
     data object ToggleTargum : BookContentEvent
 
     data object ToggleSources : BookContentEvent
@@ -151,7 +154,7 @@ sealed interface BookContentEvent {
 
     data object ToggleBookDetails : BookContentEvent
 
-    data object ToggleDiacritics : BookContentEvent
+    data object CycleDiacritics : BookContentEvent
 
     data object OpenPdfEdition : BookContentEvent
 
@@ -162,6 +165,7 @@ sealed interface BookContentEvent {
     ) : BookContentEvent
 
     data class ContentScrolled(
+        val bookId: Long,
         val anchorId: Long,
         val anchorIndex: Int,
         val scrollIndex: Int,

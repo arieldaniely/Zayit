@@ -636,12 +636,12 @@ private fun BookPaneBody(
     val owner = window.ownerOf(destination.tabId)
     val viewModel = tabBookViewModel(owner, destination)
     val uiState by viewModel.uiState.collectAsState()
-    val diacritics by viewModel.showDiacritics.collectAsState()
+    val diacritics by viewModel.diacritics.collectAsState()
     val onEvent = viewModel::onEvent
     val tabUi = tabUi(owner)
     val modifier = Modifier.fillMaxSize()
 
-    BookTextMenus(uiState = uiState, onEvent = onEvent, showDiacritics = diacritics, tabUi = tabUi) {
+    BookTextMenus(uiState = uiState, onEvent = onEvent, diacritics = diacritics, tabUi = tabUi) {
         when (pane) {
             ReaderPane.Tree ->
                 if (search != null) {

@@ -175,7 +175,7 @@ private fun ReaderBar(
 ) {
     val viewModel = tabBookViewModel(openWindow.ownerOf(destination.tabId), destination)
     val uiState by viewModel.uiState.collectAsState()
-    val diacritics by viewModel.showDiacritics.collectAsState()
+    val diacritics by viewModel.diacritics.collectAsState()
     // A search's results have no navigation bar (their tabs filter); the end bar keeps the zoom for the preview
     Box(Modifier.fillMaxHeight()) {
         if (start) {
@@ -184,7 +184,7 @@ private fun ReaderBar(
             EndVerticalBar(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
-                showDiacritics = diacritics,
+                diacritics = diacritics,
                 isPdfEdition = destination is TabsDestination.PdfContent,
                 showBookDetailsAction = destination is TabsDestination.Search && !isBookTextShown(uiState),
                 pdfCanZoomIn =

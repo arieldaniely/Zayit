@@ -16,9 +16,11 @@ import dev.zacsweers.metrox.viewmodel.ViewModelAssistedFactoryKey
 import io.github.kdroidfilter.seforim.tabs.*
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
+import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
+import io.github.kdroidfilter.seforimapp.features.bookcontent.state.MarkedRange
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.Providers
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.StateKeys
@@ -109,8 +111,8 @@ class BookContentViewModel(
             .flatMapLatest { it }
             .cachedIn(viewModelScope)
 
-    private val _showDiacritics = MutableStateFlow(true)
-    val showDiacritics: StateFlow<Boolean> = _showDiacritics.asStateFlow()
+    private val _diacritics = MutableStateFlow(DiacriticsMode.All)
+    val diacritics: StateFlow<DiacriticsMode> = _diacritics.asStateFlow()
     private var currentRootCategoryId: Long? = null
 
     // Per-line `charCount` vector for the current book, ordered by lineIndex. Feeds the
@@ -274,6 +276,29 @@ class BookContentViewModel(
             .flowOn(Dispatchers.IO)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    private var openedDestination: Triple<Long, Long?, Long?>? =
+        savedStateHandle.get<Long>(StateKeys.BOOK_ID)?.takeIf { it != 0L && it != -1L }?.let { bookId ->
+            Triple(
+                bookId,
+                savedStateHandle.get<Long>(StateKeys.LINE_ID)?.takeIf { it != 0L && it != -1L },
+                savedStateHandle.get<Long>(StateKeys.MARK_END_LINE_ID),
+            )
+        }
+
+    /** Opens the tab's destination when it changes while this ViewModel is reused. */
+    fun openDestination(
+        bookId: Long,
+        lineId: Long?,
+        endLineId: Long?,
+    ) {
+        if (bookId == 0L || bookId == -1L) return
+        val destination = Triple(bookId, lineId?.takeIf { it != 0L && it != -1L }, endLineId)
+        if (destination == openedDestination) return
+        openedDestination = destination
+        val line = destination.second
+        onEvent(if (line != null) BookContentEvent.OpenBookAtLine(bookId, line, endLineId) else BookContentEvent.OpenBookById(bookId))
+    }
+
     init {
         initialize(savedStateHandle)
         observeCatalogChanges()
@@ -315,6 +340,15 @@ class BookContentViewModel(
                 // Explicit line navigation wins (e.g., search result / deep link)
                 if (requestedLineId != null) {
                     loadBookById(bookIdToOpen, requestedLineId, triggerScroll = true)
+                    markRange(bookIdToOpen, requestedLineId, savedStateHandle.get<Long>(StateKeys.MARK_END_LINE_ID))
+                    // An aliya opened from the Shnayim Mikra widget
+                    if (savedStateHandle.get<Boolean>(StateKeys.SHNAYIM_MIKRA) == true) {
+                        stateManager.updateContent { copy(shnayimMikra = true) }
+                    }
+                    // A note opened from the notes page or widget: its pane, on its line
+                    if (savedStateHandle.get<Boolean>(StateKeys.OPEN_NOTES) == true && !stateManager.state.value.notes.isVisible) {
+                        notesUseCase.toggleNotes()
+                    }
                 } else {
                     // Restore from persisted state: build the pager around the persisted anchor/selection.
                     // This provides a stable starting window for Paging3 so scroll restoration can be exact.
@@ -408,10 +442,10 @@ class BookContentViewModel(
             categoryDisplaySettingsUseCase.categoryChanges.collectLatest { categoryId ->
                 if (categoryId == currentRootCategoryId) {
                     val nav = stateManager.state.value.navigation
-                    _showDiacritics.value =
+                    _diacritics.value =
                         categoryDisplaySettingsUseCase
-                            .getShowDiacriticsForCategory(categoryId, nav)
-                            .showDiacritics
+                            .getDiacriticsForCategory(categoryId, nav)
+                            .diacritics
                 }
             }
         }
@@ -421,13 +455,13 @@ class BookContentViewModel(
         val categoryId = nav.selectedBook?.categoryId
         if (categoryId == null || categoryId == 0L || categoryId == -1L) {
             currentRootCategoryId = null
-            _showDiacritics.value = true
+            _diacritics.value = DiacriticsMode.All
             return
         }
 
-        val setting = categoryDisplaySettingsUseCase.getShowDiacriticsForCategory(categoryId, nav)
+        val setting = categoryDisplaySettingsUseCase.getDiacriticsForCategory(categoryId, nav)
         currentRootCategoryId = setting.rootCategoryId
-        _showDiacritics.value = setting.showDiacritics
+        _diacritics.value = setting.diacritics
     }
 
     /** Event handling */
@@ -533,6 +567,7 @@ class BookContentViewModel(
                     loadAndSelectLine(event.lineId)
 
                 is BookContentEvent.OpenBookAtLine -> {
+                    markRange(event.bookId, event.lineId, event.endLineId)
                     // If already on the target book, just jump to the line
                     val currentBookId =
                         stateManager.state.value.navigation.selectedBook
@@ -614,6 +649,9 @@ class BookContentViewModel(
                 BookContentEvent.ToggleCommentaries ->
                     contentUseCase.toggleCommentaries()
 
+                BookContentEvent.ToggleShnayimMikra ->
+                    stateManager.updateContent { copy(shnayimMikra = !shnayimMikra) }
+
                 BookContentEvent.ToggleTargum ->
                     contentUseCase.toggleTargum()
 
@@ -626,8 +664,8 @@ class BookContentViewModel(
                 BookContentEvent.ToggleBookDetails ->
                     AppSettings.setBookDetailsPaneVisible(!AppSettings.isBookDetailsPaneVisible())
 
-                BookContentEvent.ToggleDiacritics ->
-                    toggleShowDiacriticsForCurrentCategory()
+                BookContentEvent.CycleDiacritics ->
+                    cycleDiacriticsForCurrentCategory()
 
                 BookContentEvent.OpenPdfEdition ->
                     openPdfEdition()
@@ -640,6 +678,7 @@ class BookContentViewModel(
 
                 is BookContentEvent.ContentScrolled ->
                     contentUseCase.updateContentScrollPosition(
+                        event.bookId,
                         event.anchorId,
                         event.anchorIndex,
                         event.scrollIndex,
@@ -763,12 +802,29 @@ class BookContentViewModel(
         loadBook(book)
     }
 
-    private suspend fun toggleShowDiacriticsForCurrentCategory() {
+    private suspend fun cycleDiacriticsForCurrentCategory() {
         val nav = stateManager.state.value.navigation
         val selectedCategoryId = nav.selectedBook?.categoryId ?: return
-        val setting = categoryDisplaySettingsUseCase.toggleShowDiacriticsForCategory(selectedCategoryId, nav) ?: return
+        val setting =
+            categoryDisplaySettingsUseCase.cycleDiacriticsForCategory(selectedCategoryId, nav, nav.selectedBook?.hasTeamim == true)
+                ?: return
         currentRootCategoryId = setting.rootCategoryId
-        _showDiacritics.value = setting.showDiacritics
+        _diacritics.value = setting.diacritics
+    }
+
+    /** Marks the lines from [startLineId] to [endLineId] of [bookId], or nothing without an end. */
+    private suspend fun markRange(
+        bookId: Long,
+        startLineId: Long,
+        endLineId: Long?,
+    ) {
+        val range =
+            endLineId?.let {
+                val first = repository.getLine(startLineId)?.lineIndex
+                val last = repository.getLine(it)?.lineIndex
+                if (first != null && last != null && last >= first) MarkedRange(bookId, first, last) else null
+            }
+        stateManager.updateContent { copy(markedRange = range) }
     }
 
     /** Loads a book by ID */

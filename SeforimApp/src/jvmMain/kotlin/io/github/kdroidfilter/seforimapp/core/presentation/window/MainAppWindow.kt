@@ -601,8 +601,6 @@ fun NucleusApplicationScope.MainAppWindow(
                     LocalIsTouchMode provides isTouchMode,
                     LocalUriHandler provides rememberRefLinkUriHandler(openWindow.tabsViewModel),
                 ) {
-                    io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes
-                        .WindowPanes(openWindow)
                     WindowBody(openWindow)
                 }
             }

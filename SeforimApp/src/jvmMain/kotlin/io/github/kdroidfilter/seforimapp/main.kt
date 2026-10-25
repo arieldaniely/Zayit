@@ -25,6 +25,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.window.MainAppWindow
 import io.github.kdroidfilter.seforimapp.core.presentation.window.StartupWindow
 import io.github.kdroidfilter.seforimapp.core.presentation.window.TabDragGhostWindow
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes.WindowPanes
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseUpdateWindow
 import io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindowsHost
 import io.github.kdroidfilter.seforimapp.features.onboarding.OnBoardingWindow
@@ -35,6 +36,7 @@ import io.github.kdroidfilter.seforimapp.features.update.UpdateDialog
 import io.github.kdroidfilter.seforimapp.framework.database.DatabaseVersionManager
 import io.github.kdroidfilter.seforimapp.framework.database.PendingDbCleanup
 import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
+import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
@@ -462,6 +464,10 @@ fun main(args: Array<String>) {
                     // The windows themselves — one per open desktop window.
                     windows.forEach { w ->
                         key(w.id) {
+                            // Satellites belong to the application composition, alongside their host window.
+                            CompositionLocalProvider(LocalOpenWindow provides w) {
+                                WindowPanes(w)
+                            }
                             MainAppWindow(
                                 openWindow = w,
                                 settingsWindowViewModel = settingsWindowViewModel,

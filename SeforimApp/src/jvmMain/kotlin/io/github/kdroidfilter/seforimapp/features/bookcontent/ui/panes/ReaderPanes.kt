@@ -38,9 +38,11 @@ import dev.nucleusframework.window.ControlButtonsDirection
 import dev.nucleusframework.window.ExperimentalNucleusApi
 import dev.nucleusframework.window.tao.DockSide
 import dev.nucleusframework.window.tao.DockSplitterScope
+import dev.nucleusframework.window.tao.JoinSatelliteWorkspace
 import dev.nucleusframework.window.tao.SatellitePlacement
 import dev.nucleusframework.window.tao.SatelliteScope
 import dev.nucleusframework.window.tao.SatelliteWorkspace
+import dev.nucleusframework.window.tao.TaoWindow
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.rememberSearchShellActions
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.tabBookViewModel
@@ -227,6 +229,16 @@ fun WindowPanes(window: OpenWindow) {
             }
         }
     }
+}
+
+/** Attaches both docks to their native host; releasing the host leaves both workspaces. */
+@Composable
+internal fun JoinReaderPanes(
+    window: OpenWindow,
+    host: TaoWindow?,
+) {
+    JoinSatelliteWorkspace(window.panesOf(navigation = true), host)
+    JoinSatelliteWorkspace(window.panesOf(navigation = false), host)
 }
 
 /** What the selected tab wants shown, and where its toggles go. */

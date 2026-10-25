@@ -36,6 +36,7 @@ import dev.nucleusframework.energymanager.EnergyManager
 import dev.nucleusframework.taskbarprogress.tao.hideTaskbarProgress
 import dev.nucleusframework.taskbarprogress.tao.showTaskbarIndeterminate
 import dev.nucleusframework.taskbarprogress.tao.showTaskbarProgress
+import dev.nucleusframework.window.ExperimentalNucleusApi
 import dev.nucleusframework.window.jewel.JewelDecoratedWindow
 import io.github.kdroidfilter.seforim.tabs.HISTORY_FAVORITES_ENABLED
 import io.github.kdroidfilter.seforim.tabs.TabType
@@ -48,6 +49,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.detectTouchMode
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.processKeyShortcuts
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes.JoinReaderPanes
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfZoomControllerRegistry
 import io.github.kdroidfilter.seforimapp.features.pdf.pdfZoomCommand
 import io.github.kdroidfilter.seforimapp.features.search.SemanticAssetsManager
@@ -75,6 +77,7 @@ import java.util.UUID
  * be open at once (each on its own desktop, or several windows of the same desktop). Everything
  * window-scoped comes from [openWindow]; app-wide dialogs (settings, updates) live in main.kt.
  */
+@OptIn(ExperimentalNucleusApi::class)
 @Composable
 fun NucleusApplicationScope.MainAppWindow(
     openWindow: OpenWindow,
@@ -276,6 +279,7 @@ fun NucleusApplicationScope.MainAppWindow(
         // Hook up the native window: focus tracking feeds DesktopManager (dock menu, deep links
         // and desktop actions target the focused window), and toFront() needs the handle.
         val nucleusWin = nucleusWindow
+        JoinReaderPanes(openWindow, nucleusWin.unsafe.taoWindow)
         val semanticProgress by SemanticAssetsManager.installationProgress.collectAsState()
         val semanticAvailability by SemanticAssetsManager.availability.collectAsState()
         LaunchedEffect(nucleusWin, semanticProgress, semanticAvailability) {

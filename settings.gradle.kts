@@ -48,7 +48,6 @@ include((":htmlparser"))
 include(":navigation")
 include(":icons")
 include(":earthwidget")
-include(":hebrewcalendar")
 include(":pagination")
 include(":logger")
 include(":texteffects")
@@ -58,3 +57,5 @@ include(":releasefetcher")
 includeBuild("SeforimLibrary")
 
 include(":luach")
+
+include(":widgetprocessor")

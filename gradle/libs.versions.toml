@@ -1,4 +1,5 @@
 [versions]
+ksp = "2.3.12"
 filamentKmp = "0.7.10"
 kosherkotlin = "3.0.5"
 
@@ -58,6 +59,7 @@ jbig2Imageio = "3.0.4"
 jaiImageioJpeg2000 = "1.4.0"
 
 [libraries]
+ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
 filament-compose = { module = "dev.nucleusframework.filament:filament-compose", version.ref = "filamentKmp" }
 kosherkotlin = { module = "io.github.kdroidfilter:kosherkotlin", version.ref = "kosherkotlin" }
 
@@ -183,6 +185,7 @@ metro-runtime = { module = "dev.zacsweers.metro:runtime", version.ref = "metro" 
 metrox-viewmodel-compose = { module = "dev.zacsweers.metro:metrox-viewmodel-compose", version.ref = "metro" }
 
 [plugins]
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
 multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

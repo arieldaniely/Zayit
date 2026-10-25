@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.maven.publish).apply(false)
     alias(libs.plugins.sqlDelight).apply(false)
     alias(libs.plugins.metro).apply(false)
+    alias(libs.plugins.ksp).apply(false)
     alias(libs.plugins.caupain)
     alias(libs.plugins.stability.analyzer) apply false
     alias(libs.plugins.ktlint)

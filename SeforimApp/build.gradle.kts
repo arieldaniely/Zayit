@@ -13,6 +13,7 @@ plugins {
     alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.buildConfig)
     alias(libs.plugins.metro)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.stability.analyzer)
     alias(libs.plugins.sqlDelight)
     alias(libs.plugins.kover)
@@ -425,4 +426,9 @@ tasks.matching { it.name == "stabilityCheck" }.configureEach {
 
 tasks.matching { it.name == "createDistributable" }.configureEach {
     dependsOn(tasks.matching { task -> task.name == "createRuntimeImage" })
+}
+
+dependencies {
+    // Generates availableHomeWidgets from every HomeWidget object (see :widgetprocessor).
+    add("kspJvm", project(":widgetprocessor"))
 }

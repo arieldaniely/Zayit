@@ -242,6 +242,8 @@ nucleus.application {
         javaLanguageVersion = 25
         jvmVendor = JvmVendorSpec.BELLSOFT
         imageName = "zayita"
+        garbageCollector.set(dev.nucleusframework.desktop.application.dsl.NativeImageGarbageCollector.SERIAL)
+        maxHeapSize.set("2g")
         buildArgs.addAll(
             // Enable native access for classpath (unnamed-module) code at IMAGE BUILD TIME so the
             // generated binary never emits the JDK "restricted method ... System::load" warnings
@@ -255,10 +257,6 @@ nucleus.application {
             "-H:-IncludeMethodData",
             // Enable shared arenas for Lucene's memory-mapped I/O (MemorySegmentIndexInput)
             "-H:+SharedArenaSupport",
-            // Parallel GC for better throughput with large heaps
-            "--gc=parallel",
-            // Default max heap 2 GB
-            "-R:MaxHeapSize=2147483648",
             // Exclude sqlite-jdbc's native-image.properties which references
             // SqliteJdbcFeature (lives in META-INF/versions/9/ of the multi-release
             // JAR, stripped by ProGuard shrinking). Equivalent metadata is already

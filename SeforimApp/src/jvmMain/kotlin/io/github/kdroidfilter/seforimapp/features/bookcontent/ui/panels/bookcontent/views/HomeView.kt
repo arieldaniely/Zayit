@@ -87,6 +87,7 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsState
 import io.github.kdroidfilter.seforimapp.features.home.widgets.decodeLayout
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
+import io.github.kdroidfilter.seforimapp.features.search.CategorySuggestionDto
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
@@ -149,6 +150,10 @@ private sealed interface CatBookRow {
         val reference: ResolvedReference,
     ) : CatBookRow
 
+    data class Category(
+        val suggestion: CategorySuggestionDto,
+    ) : CatBookRow
+
     data object TextSearch : CatBookRow
 
     data class Author(
@@ -172,8 +177,10 @@ private fun catBookRows(
     textSearch: Boolean,
     authors: List<AuthorHit>,
     books: List<BookSuggestion>,
+    categories: List<CategorySuggestionDto> = emptyList(),
 ): ImmutableList<CatBookRow> {
     val key = query.searchKey()
+    val (exactCategories, otherCategories) = categories.partition { it.category.title.searchKey() == key }
     val (exactAuthors, otherAuthors) =
         authors.partition { author ->
             listOfNotNull(author.name, AuthorNames.display(author.name), author.alias).any { it.searchKey() == key }
@@ -192,7 +199,9 @@ private fun catBookRows(
         jumps.mapTo(this) { CatBookRow.Jump(it) }
         exactBooks.mapTo(this) { CatBookRow.Book(it) }
         exactAuthors.mapTo(this) { CatBookRow.Author(it) }
+        exactCategories.mapTo(this) { CatBookRow.Category(it) }
         if (textSearch) add(CatBookRow.TextSearch)
+        otherCategories.mapTo(this) { CatBookRow.Category(it) }
         otherAuthors.mapTo(this) { CatBookRow.Author(it) }
         otherBooks.filter { it !== typedTitle }.mapTo(this) { CatBookRow.Book(it) }
     }.toImmutableList()
@@ -224,6 +233,7 @@ data class HomeSearchCallbacks(
     val onSubmitTextSearch: (String) -> Unit,
     val onOpenReference: () -> Unit,
     val onPickCategory: (Category) -> Unit = {},
+    val onClearCategory: () -> Unit = {},
     val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
     val onOpenJump: (ResolvedReference) -> Unit = {},
@@ -567,6 +577,19 @@ internal fun UnifiedSearchBar(
         textSearchEnabled = searchUi.selectedScopeToc == null,
         textSearchInBook = searchUi.selectedScopeBook?.title,
         textSearchInAuthor = searchUi.selectedScopeAuthor?.name?.let(AuthorNames::display),
+        textSearchInCategory = searchUi.selectedScopeCategory?.title,
+        categorySuggestions = if (!isTocInTopBar) searchUi.categorySuggestions.toImmutableList() else persistentListOf(),
+        selectedCategory = searchUi.selectedScopeCategory,
+        onPickCategory = { picked ->
+            searchCallbacks.onPickCategory(picked.category)
+            skipNextReferenceQuery = true
+            referenceSearchState.edit { replace(0, length, "") }
+            focusAfterDelay(scope, 80, mainSearchFocusRequester)
+        },
+        onClearCategory = {
+            searchCallbacks.onClearCategory()
+            referenceSearchState.edit { replace(0, length, "") }
+        },
         onTextSearch = ::searchText,
         // Before a book is picked: go-to rows, the text search and books; after: its TOC
         suggestionsVisible = if (!isTocInTopBar) searchUi.suggestionsVisible else false,
@@ -593,6 +616,8 @@ internal fun UnifiedSearchBar(
                 stringResource(
                     Res.string.search_in_book_placeholder,
                 )
+            } else if (searchUi.selectedScopeCategory != null) {
+                stringResource(Res.string.search_in_folder_placeholder)
             } else {
                 null
             },
@@ -842,6 +867,19 @@ private fun SuggestionsPanel(
                                 actions = listOf(open, searchInside),
                             )
 
+                        is CatBookRow.Category ->
+                            SuggestionRow(
+                                parts = dedupAdjacent(row.suggestion.path),
+                                onClick = searchInside.onClick,
+                                kind = SuggestionKind.CATEGORY,
+                                highlighted = focused,
+                                detail = stringResource(Res.string.search_folder_contents),
+                                actions =
+                                    listOf(
+                                        RowAction(KEY_ENTER, stringResource(Res.string.row_action_search_inside)) { onRow(row, false) },
+                                    ),
+                            )
+
                         is CatBookRow.Book ->
                             SuggestionRow(
                                 parts = dedupAdjacent(row.suggestion.path),
@@ -977,9 +1015,11 @@ private fun textSearchLabel(
     query: String,
     inBook: String?,
     inAuthor: String? = null,
+    inCategory: String? = null,
 ): String =
     when {
         inBook != null -> stringResource(Res.string.search_text_row_in_book, query, inBook)
+        inCategory != null -> stringResource(Res.string.search_text_row_in_folder, query, inCategory)
         inAuthor != null -> stringResource(Res.string.search_text_row_in_author, query, inAuthor)
         else -> stringResource(Res.string.search_text_row, query)
     }
@@ -1079,7 +1119,7 @@ private fun String.withBold(part: String?): AnnotatedString {
 }
 
 /** What a suggestion row leads to, shown by its icon. */
-private enum class SuggestionKind { PLACE, TEXT_SEARCH, AUTHOR, BOOK }
+private enum class SuggestionKind { PLACE, TEXT_SEARCH, AUTHOR, BOOK, CATEGORY }
 
 @Composable
 private fun SuggestionIcon(kind: SuggestionKind) {
@@ -1090,6 +1130,7 @@ private fun SuggestionIcon(kind: SuggestionKind) {
             Image(rememberVectorPainter(JournalBookmark), null, iconModifier, colorFilter = ColorFilter.tint(tint))
         SuggestionKind.BOOK ->
             Image(rememberVectorPainter(bookOpenTabs(tint)), null, iconModifier, colorFilter = ColorFilter.tint(tint))
+        SuggestionKind.CATEGORY -> Icon(AllIconsKeys.Nodes.Folder, null, iconModifier, tint = tint)
         SuggestionKind.TEXT_SEARCH -> Icon(AllIconsKeys.Actions.Find, null, iconModifier, tint = tint)
         SuggestionKind.AUTHOR ->
             Image(rememberVectorPainter(Feather), null, iconModifier, colorFilter = ColorFilter.tint(tint))
@@ -1229,6 +1270,10 @@ internal fun SearchBar(
     // Enter or a click opens a book / an author's page; Tab picks it to search inside (onPickBook / onPickAuthor)
     onOpenBook: (BookSuggestion) -> Unit = {},
     onOpenAuthor: (AuthorHit) -> Unit = {},
+    categorySuggestions: ImmutableList<CategorySuggestionDto> = persistentListOf(),
+    onPickCategory: (CategorySuggestionDto) -> Unit = {},
+    selectedCategory: Category? = null,
+    onClearCategory: () -> Unit = {},
     selectedAuthor: String? = null,
     onClearAuthor: () -> Unit = {},
     // The "search this text" row: offered while text is typed, Ctrl+Enter runs it from anywhere
@@ -1236,6 +1281,7 @@ internal fun SearchBar(
     textSearchInBook: String? = null,
     // Once an author is picked, the text is searched in all their books
     textSearchInAuthor: String? = null,
+    textSearchInCategory: String? = null,
     onTextSearch: (String) -> Unit = {},
     // TOC suggestions (for the second field)
     tocSuggestionsVisible: Boolean = false,
@@ -1315,13 +1361,14 @@ internal fun SearchBar(
     // Rows of the book-stage list, in display order
     val query = state.text.toString().trim()
     val catBookRows =
-        remember(query, jumpSuggestions, textSearchEnabled, authorSuggestions, bookSuggestions) {
+        remember(query, jumpSuggestions, textSearchEnabled, authorSuggestions, bookSuggestions, categorySuggestions) {
             catBookRows(
                 query,
                 jumpSuggestions,
                 textSearchEnabled && query.isNotEmpty(),
                 authorSuggestions,
                 bookSuggestions,
+                categorySuggestions,
             )
         }
     val totalCatBook = catBookRows.size
@@ -1362,6 +1409,7 @@ internal fun SearchBar(
         bookSuggestions,
         jumpSuggestions,
         authorSuggestions,
+        categorySuggestions,
         textRow,
         tocSuggestions,
         isTocMode,
@@ -1445,6 +1493,10 @@ internal fun SearchBar(
                 is CatBookRow.Jump -> handlePickJump(row.reference)
                 CatBookRow.TextSearch -> handleTextSearch()
                 is CatBookRow.Author -> if (open) handleOpenAuthor(row.hit) else handlePickAuthor(row.hit)
+                is CatBookRow.Category -> {
+                    onPickCategory(row.suggestion)
+                    dismissPopup()
+                }
                 is CatBookRow.Book -> if (open) handleOpenBook(row.suggestion) else handlePickBook(row.suggestion)
             }
         }
@@ -1497,7 +1549,7 @@ internal fun SearchBar(
                                 )
                         }.onPreviewKeyEvent { ev ->
                             when {
-                                ev.key == Key.Backspace && !isTocMode && selectedAuthor != null -> {
+                                ev.key == Key.Backspace && !isTocMode && (selectedAuthor != null || selectedCategory != null) -> {
                                     when (ev.type) {
                                         KeyEventType.KeyDown -> {
                                             backspaceStartedEmpty = state.text.isEmpty()
@@ -1507,7 +1559,9 @@ internal fun SearchBar(
                                         KeyEventType.KeyUp -> {
                                             val shouldClear = backspaceStartedEmpty && state.text.isEmpty()
                                             backspaceStartedEmpty = false
-                                            if (shouldClear) onClearAuthor()
+                                            if (shouldClear) {
+                                                if (selectedCategory != null) onClearCategory() else onClearAuthor()
+                                            }
                                             shouldClear
                                         }
 
@@ -1545,7 +1599,7 @@ internal fun SearchBar(
                                     (ev.key == Key.Enter || ev.key == Key.NumPadEnter) &&
                                     ev.type == KeyEventType.KeyUp -> {
                                     // An author's books are all searched already: Ctrl+Enter is Enter there
-                                    handleTextSearch(extended = textSearchInAuthor == null)
+                                    handleTextSearch(extended = textSearchInAuthor == null && textSearchInCategory == null)
                                     true
                                 }
 
@@ -1700,6 +1754,16 @@ internal fun SearchBar(
                                     effectiveFocusRequester.requestFocus()
                                 },
                             )
+                        } else if (selectedCategory != null) {
+                            SelectedBookChip(
+                                title = selectedCategory.title,
+                                kind = SuggestionKind.CATEGORY,
+                                clearDescription = stringResource(Res.string.remove_selected_folder),
+                                onClear = {
+                                    onClearCategory()
+                                    effectiveFocusRequester.requestFocus()
+                                },
+                            )
                         } else if (selectedAuthor != null) {
                             SelectedBookChip(
                                 title = AuthorNames.display(selectedAuthor),
@@ -1790,12 +1854,19 @@ internal fun SearchBar(
                             rows = catBookRows,
                             onRow = { row, open -> runCatBookRow(row, open) },
                             // An author's books are all searched: no base books to choose
-                            onTextSearchAll = if (textSearchInAuthor == null) ({ handleTextSearch(extended = true) }) else null,
+                            onTextSearchAll =
+                                if (textSearchInAuthor == null &&
+                                    textSearchInCategory == null
+                                ) {
+                                    ({ handleTextSearch(extended = true) })
+                                } else {
+                                    null
+                                },
                             textSearchLabel =
                                 if (textSearchEnabled &&
                                     state.text.isNotBlank()
                                 ) {
-                                    textSearchLabel(state.text.toString().trim(), null, textSearchInAuthor)
+                                    textSearchLabel(state.text.toString().trim(), null, textSearchInAuthor, textSearchInCategory)
                                 } else {
                                     null
                                 },
@@ -1861,6 +1932,8 @@ private fun SelectedBookChip(
     title: String,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    kind: SuggestionKind? = null,
+    clearDescription: String? = null,
 ) {
     Row(
         modifier =
@@ -1872,6 +1945,10 @@ private fun SelectedBookChip(
                 .pointerHoverIcon(PointerIcon.Hand),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (kind != null) {
+            SuggestionIcon(kind)
+            Spacer(Modifier.width(6.dp))
+        }
         Text(
             text = title,
             maxLines = 1,
@@ -1882,7 +1959,7 @@ private fun SelectedBookChip(
         Spacer(Modifier.width(8.dp))
         Icon(
             key = AllIconsKeys.Windows.Close,
-            contentDescription = stringResource(Res.string.remove_selected_book),
+            contentDescription = clearDescription ?: stringResource(Res.string.remove_selected_book),
             modifier = Modifier.size(12.dp).clickable(onClick = onClear).pointerHoverIcon(PointerIcon.Hand),
             tint = JewelTheme.globalColors.text.disabled,
         )

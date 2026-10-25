@@ -16,9 +16,11 @@ import androidx.compose.ui.test.runComposeUiTest
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BookSuggestion
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.SearchBar
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.TocSuggestion
+import io.github.kdroidfilter.seforimapp.features.search.CategorySuggestionDto
 import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
+import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
 import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
@@ -103,4 +105,43 @@ class ReferenceSelectionKeyboardTest {
 
     @Test
     fun `toc Enter opens exactly once`() = checkSelection(Key.Enter, tocMode = true)
+
+    private fun checkFolderSelection(key: Key) =
+        runComposeUiTest {
+            val folder = Category(id = 7, title = "תלמוד")
+            val state = TextFieldState(folder.title)
+            val focus = FocusRequester()
+            var selected by mutableStateOf<Category?>(null)
+            var picks = 0
+            setContent {
+                PreviewContainer {
+                    SearchBar(
+                        state = state,
+                        focusRequester = focus,
+                        suggestionsVisible = selected == null,
+                        categorySuggestions = persistentListOf(CategorySuggestionDto(folder, listOf(folder.title))),
+                        selectedCategory = selected,
+                        onPickCategory = {
+                            selected = it.category
+                            picks++
+                            state.edit { replace(0, length, "") }
+                        },
+                        onSubmit = {},
+                    )
+                }
+            }
+            waitForIdle()
+            runOnIdle { focus.requestFocus() }
+            onNode(hasSetTextAction()).performKeyInput { pressKey(key) }
+            waitForIdle()
+            assertEquals(1, picks)
+            assertEquals(folder, selected)
+            onNodeWithText(folder.title).assertExists()
+        }
+
+    @Test
+    fun `Enter selects a folder as a search scope`() = checkFolderSelection(Key.Enter)
+
+    @Test
+    fun `Tab selects a folder as a search scope`() = checkFolderSelection(Key.Tab)
 }

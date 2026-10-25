@@ -162,6 +162,7 @@ fun TabsContent() {
                     launchOpenReference(scope, tabId)
                 },
                 onPickCategory = searchHomeViewModel::onPickCategory,
+                onClearCategory = searchHomeViewModel::onClearCategory,
                 onPickBook = { book, isPdf ->
                     searchHomeViewModel.onPickBook(book, isPdf)
                 },

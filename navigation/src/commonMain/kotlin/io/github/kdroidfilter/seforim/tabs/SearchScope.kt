@@ -10,10 +10,7 @@ sealed interface SearchScope {
     @Serializable
     data object Global : SearchScope
 
-    /**
-     * Read back only, from tabs and sessions saved when a search could be scoped to a category: it
-     * runs everywhere now, the category tabs above the results narrowing it.
-     */
+    /** All books in a category and every descendant category. */
     @Serializable
     data class Category(
         val categoryId: Long,

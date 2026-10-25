@@ -156,6 +156,7 @@ class SearchHomeViewModel(
     private val referenceResolver = ReferenceResolver(RepositoryReferenceSource(repository))
     private var authorBooks: List<BookSuggestionDto> = emptyList()
     private var restoringAuthorId: Long? = null
+    private var restoringCategoryId: Long? = null
     private var cachedAuthorLookup: List<io.github.kdroidfilter.seforimlibrary.dao.repository.AuthorLookupEntry>? = null
 
     private val referenceQuery = MutableStateFlow("")
@@ -530,7 +531,6 @@ class SearchHomeViewModel(
         if (query.isBlank()) {
             _uiState.value =
                 _uiState.value.copy(
-                    selectedScopeCategory = null,
                     selectedScopeBook = null,
                     selectedScopeIsPdf = false,
                     selectedScopeToc = null,
@@ -560,12 +560,18 @@ class SearchHomeViewModel(
     }
 
     fun onPickCategory(category: Category) {
+        restoringAuthorId = null
+        restoringCategoryId = null
+        authorBooks = emptyList()
         referenceRevision++
         referenceQuery.value = ""
         tocRevision++
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = category,
+                selectedScopeAuthor = null,
+                authorSuggestions = emptyList(),
+                jumpSuggestions = emptyList(),
                 globalExtended = true,
                 selectedScopeBook = null,
                 selectedScopeIsPdf = false,
@@ -577,6 +583,12 @@ class SearchHomeViewModel(
                 isReferenceLoading = false,
                 isTocLoading = false,
             )
+    }
+
+    fun onClearCategory() {
+        restoringCategoryId = null
+        _uiState.value = _uiState.value.copy(selectedScopeCategory = null)
+        onReferenceQueryChanged("")
     }
 
     private suspend fun getOrLoadTocEntries(book: Book): List<TocSuggestionDto> {
@@ -603,6 +615,7 @@ class SearchHomeViewModel(
 
     /** Searches in the books of [author], listed to pick one of them instead. */
     fun onPickAuthor(author: AuthorHit) {
+        restoringCategoryId = null
         showAuthor(author, showSuggestions = true)
         referenceQuery.value = ""
         viewModelScope.launch {
@@ -620,9 +633,11 @@ class SearchHomeViewModel(
         showSuggestions: Boolean,
     ) {
         restoringAuthorId = null
+        restoringCategoryId = null
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeAuthor = author,
+                selectedScopeCategory = null,
                 selectedScopeBook = null,
                 selectedScopeToc = null,
                 authorSuggestions = emptyList(),
@@ -651,6 +666,7 @@ class SearchHomeViewModel(
 
     fun onClearAuthor() {
         restoringAuthorId = null
+        restoringCategoryId = null
         authorBooks = emptyList()
         _uiState.value = _uiState.value.copy(selectedScopeAuthor = null, bookSuggestions = emptyList(), suggestionsVisible = false)
     }
@@ -710,7 +726,19 @@ class SearchHomeViewModel(
             when (scope) {
                 is SearchScope.Book -> scope.bookId
                 is SearchScope.Toc -> scope.bookId
+                is SearchScope.Category -> {
+                    if (_uiState.value.selectedScopeCategory?.id == scope.categoryId) return
+                    restoringCategoryId = scope.categoryId
+                    viewModelScope.launch {
+                        val category = runSuspendCatching { repository.getCategory(scope.categoryId) }.getOrNull()
+                        if (restoringCategoryId != scope.categoryId) return@launch
+                        restoringCategoryId = null
+                        category?.let(::onPickCategory)
+                    }
+                    return
+                }
                 is SearchScope.Author -> {
+                    restoringCategoryId = null
                     showAuthorScope(scope.authorId)
                     return
                 }
@@ -728,6 +756,7 @@ class SearchHomeViewModel(
             val author = runSuspendCatching { repository.getAuthorDetails(authorId) }.getOrNull()
             if (restoringAuthorId != authorId) return@launch
             restoringAuthorId = null
+            restoringCategoryId = null
             if (author == null) return@launch
             showAuthor(AuthorHit(author.id, author.name, author.books.size), showSuggestions = false)
             showAuthorBooks(author.id, author.books)
@@ -742,8 +771,9 @@ class SearchHomeViewModel(
                 SearchScope.Toc(bookId = selected.selectedScopeToc.bookId, tocId = selected.selectedScopeToc.id)
             selected.selectedScopeToc != null -> SearchScope.Book(selected.selectedScopeToc.bookId)
             selected.selectedScopeBook != null -> SearchScope.Book(selected.selectedScopeBook.id)
+            selected.selectedScopeCategory != null -> SearchScope.Category(selected.selectedScopeCategory.id)
             selected.selectedScopeAuthor != null -> SearchScope.Author(selected.selectedScopeAuthor.id)
-            else -> restoringAuthorId?.let(SearchScope::Author) ?: SearchScope.Global
+            else -> restoringCategoryId?.let(SearchScope::Category) ?: restoringAuthorId?.let(SearchScope::Author) ?: SearchScope.Global
         }
     }
 
@@ -753,6 +783,7 @@ class SearchHomeViewModel(
         showSuggestions: Boolean = true,
     ) {
         restoringAuthorId = null
+        restoringCategoryId = null
         authorBooks = emptyList()
         referenceRevision++
         referenceQuery.value = ""
@@ -904,6 +935,7 @@ class SearchHomeViewModel(
                 (current.search ?: SearchPersistedState()).copy(
                     query = query,
                     scopeAuthorId = selected.selectedScopeAuthor?.id ?: 0L,
+                    fetchAuthorId = selected.selectedScopeAuthor?.id ?: 0L,
                     mode = selected.mode.name,
                     globalExtended = selected.globalExtended || datasetScope != "global" || selected.selectedScopeAuthor != null,
                     datasetScope = datasetScope,

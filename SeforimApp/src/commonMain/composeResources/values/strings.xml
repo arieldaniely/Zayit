@@ -1169,4 +1169,8 @@
 
     <string name="reader_end_reading">סוף הקריאה</string>
     <string name="reader_end_study">סוף הלימוד</string>
+    <string name="search_folder_contents">כל הספרים בתיקייה ובתיקיות המשנה</string>
+    <string name="search_in_folder_placeholder">חיפוש בכל הספרים בתיקייה…</string>
+    <string name="search_text_row_in_folder">חיפוש ״%1$s״ בתיקייה ״%2$s״</string>
+    <string name="remove_selected_folder">הסרת התיקייה שנבחרה</string>
 </resources>

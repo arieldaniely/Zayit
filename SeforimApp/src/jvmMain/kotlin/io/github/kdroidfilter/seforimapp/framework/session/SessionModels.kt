@@ -211,15 +211,17 @@ data class SearchPersistedState(
             val bookId = fetchBookId.takeIf { it > 0 } ?: filterBookId.takeIf { it > 0 }
             val tocId = fetchTocId.takeIf { it > 0 } ?: filterTocId.takeIf { it > 0 }
             val authorId = fetchAuthorId.takeIf { it > 0 } ?: scopeAuthorId.takeIf { it > 0 }
+            val categoryId = fetchCategoryId.takeIf { it != 0L } ?: filterCategoryId.takeIf { it != 0L }
             return when {
                 tocId != null && bookId != null -> SearchScope.Toc(bookId = bookId, tocId = tocId)
                 bookId != null -> SearchScope.Book(bookId)
                 authorId != null -> SearchScope.Author(authorId)
+                categoryId != null -> SearchScope.Category(categoryId)
                 else -> SearchScope.Global
             }
         }
 
-    /** Runs the search in [scope]: both its fetch scope and its view filter (a legacy category: everywhere). */
+    /** Runs the search in [scope], covering every descendant of a selected category. */
     fun withScope(scope: SearchScope): SearchPersistedState {
         val bookId =
             when (scope) {
@@ -229,19 +231,21 @@ data class SearchPersistedState(
             }
         val tocId = (scope as? SearchScope.Toc)?.tocId ?: 0L
         val authorId = (scope as? SearchScope.Author)?.authorId ?: 0L
+        val categoryId = (scope as? SearchScope.Category)?.categoryId ?: 0L
         return copy(
             datasetScope =
                 when (scope) {
-                    SearchScope.Global, is SearchScope.Category -> "global"
+                    SearchScope.Global -> "global"
+                    is SearchScope.Category -> "category"
                     is SearchScope.Book -> "book"
                     is SearchScope.Toc -> "toc"
                     is SearchScope.Author -> "author"
                 },
             scopeAuthorId = authorId,
-            filterCategoryId = 0L,
+            filterCategoryId = categoryId,
             filterBookId = bookId,
             filterTocId = tocId,
-            fetchCategoryId = 0L,
+            fetchCategoryId = categoryId,
             fetchBookId = bookId,
             fetchTocId = tocId,
             fetchAuthorId = authorId,

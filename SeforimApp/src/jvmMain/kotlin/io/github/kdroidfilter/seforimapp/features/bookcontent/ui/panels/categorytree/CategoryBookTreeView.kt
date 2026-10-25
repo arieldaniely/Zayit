@@ -73,6 +73,7 @@ fun CategoryBookTreeView(
     booksForCategoryOverride: Map<Long, List<Book>> = emptyMap(),
     // Scroll to the selected book only when out of view (moving through search results)
     revealSelectionOnly: Boolean = false,
+    onCategoryRevealComplete: () -> Unit = {},
 ) {
     /* ---------------------------------------------------------------------
      * Build the flat hierarchical list to display.
@@ -82,6 +83,7 @@ fun CategoryBookTreeView(
         value = withContext(Dispatchers.IO) { TalmudPdfService.availablePdfTitles() }
     }
 
+    val booksByCategory = remember(navigationState.booksInCategory) { navigationState.booksInCategory.groupBy { it.categoryId } }
     val treeItems =
         remember(
             navigationState.rootCategories,
@@ -105,7 +107,7 @@ fun CategoryBookTreeView(
                 rootCategories = navigationState.rootCategories,
                 expandedCategories = navigationState.expandedCategories,
                 categoryChildren = navigationState.categoryChildren,
-                booksInCategory = navigationState.booksInCategory,
+                booksByCategory = booksByCategory,
                 selectedCategory = navigationState.selectedCategory,
                 selectedBook = navigationState.selectedBook,
                 isPdfEdition = isPdfEdition,
@@ -154,6 +156,17 @@ fun CategoryBookTreeView(
                 .debounce(250)
                 .collect { (i, o) -> currentOnScroll(i, o) }
         }
+    }
+
+    // 3) A category revealed from elsewhere (the breadcrumb) is scrolled into view, then the request consumed
+    val currentOnCategoryRevealComplete by rememberUpdatedState(onCategoryRevealComplete)
+    LaunchedEffect(navigationState.categoryReveal, treeItems, hasRestored) {
+        val reveal = navigationState.categoryReveal ?: return@LaunchedEffect
+        if (!hasRestored) return@LaunchedEffect
+        val idx = treeItems.indexOfFirst { it.id == "category_$reveal" }
+        if (idx >= 0) listState.revealItem(idx)
+        // Consumed even when missing, so that it never fires later out of the blue
+        currentOnCategoryRevealComplete()
     }
 
     // 3) After restoration, if a book is selected, ensure it's brought into view once.
@@ -353,7 +366,7 @@ private fun buildTreeItems(
     rootCategories: List<Category>,
     expandedCategories: Set<Long>,
     categoryChildren: Map<Long, List<Category>>,
-    booksInCategory: Set<Book>,
+    booksByCategory: Map<Long, List<Book>>,
     selectedCategory: Category?,
     selectedBook: Book?,
     isPdfEdition: Boolean,
@@ -410,7 +423,7 @@ private fun buildTreeItems(
                     if (showCounts) {
                         booksForCategoryOverride[category.id].orEmpty().asSequence()
                     } else {
-                        booksInCategory.asSequence().filter { it.categoryId == category.id }
+                        booksByCategory[category.id].orEmpty().asSequence()
                     }
                 booksSeq
                     .distinctBy { it.id }

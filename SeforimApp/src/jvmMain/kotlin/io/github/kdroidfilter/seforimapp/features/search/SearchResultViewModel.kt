@@ -57,6 +57,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.collections.ArrayDeque
 
@@ -791,7 +792,19 @@ class SearchResultViewModel(
     private var tocParentById: Map<Long, Long?> = emptyMap()
     private val tocBookCache: MutableMap<Long, Long> = mutableMapOf()
 
+    private fun seedNavigationScope(savedStateHandle: SavedStateHandle) {
+        val scope =
+            savedStateHandle
+                .get<String>(StateKeys.SEARCH_SCOPE)
+                ?.let { runCatching { Json.decodeFromString<SearchScope>(it) }.getOrNull() }
+                ?: SearchScope.Global
+        val globalExtended = savedStateHandle.get<Boolean>(StateKeys.SEARCH_GLOBAL_EXTENDED) ?: false
+        if (scope == SearchScope.Global && !globalExtended) return
+        updatePersistedSearch { it.withScope(scope).copy(globalExtended = globalExtended) }
+    }
+
     init {
+        if (persistedSearchState().query.isBlank()) seedNavigationScope(savedStateHandle)
         val persisted = persistedSearchState()
         val navQuery = savedStateHandle.get<String>("searchQuery") ?: ""
         val initialQuery = persisted.query.takeIf { it.isNotBlank() } ?: navQuery

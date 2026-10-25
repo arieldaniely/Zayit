@@ -70,6 +70,7 @@ fun CategoryTreePanel(
                             booksInCategory = result.books,
                             expandedCategories = result.categoryIds,
                             selectedCategory = null,
+                            categoryReveal = null,
                             // Lets the tree scroll to the active match
                             selectedBook = result.books.firstOrNull { it.id == activeId },
                             scrollIndex = 0,
@@ -101,6 +102,7 @@ private fun NavigationTree(
         onCategoryClick = { onEvent(BookContentEvent.CategorySelected(it)) },
         onBookClick = bookClick(onEvent) { onEvent(BookContentEvent.BookSelected(it)) },
         onScroll = { index, offset -> onEvent(BookContentEvent.BookTreeScrolled(index, offset)) },
+        onCategoryRevealComplete = { onEvent(BookContentEvent.CategoryRevealed) },
     )
 }
 

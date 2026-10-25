@@ -39,6 +39,8 @@ data class Providers(
     val buildMentionsPagerForLines: (List<Long>, Long?) -> Flow<PagingData<CommentaryWithText>>,
     val getAvailableMentionsForLines: suspend (List<Long>) -> Map<String, Long>,
     val getLinePath: suspend (Long) -> String,
+    val loadTocChildren: suspend (Long) -> List<TocEntry> = { emptyList() },
+    val loadRootToc: suspend (Long) -> List<TocEntry> = { emptyList() },
     // Char-count vectors used by the commentary scrollbar to derive visual-line metrics.
     // Mirror the pager ordering above; failures fold to an empty list.
     val getCommentaryCharCountsForLine: suspend (Long, Long) -> List<Int>,
@@ -98,7 +100,8 @@ data class BookContentState
 
 @Immutable
 data class NavigationState(
-    // Business
+    val categoriesById: Map<Long, Category> = emptyMap(),
+    val categoryReveal: Long? = null, // Business
     val rootCategories: List<Category> = emptyList(),
     val expandedCategories: Set<Long> = emptySet(),
     val categoryChildren: Map<Long, List<Category>> = emptyMap(),
@@ -214,7 +217,7 @@ data class ContentState(
     val showMentions: Boolean = false,
     val shnayimMikra: Boolean = false,
     val markedRange: MarkedRange? = null,
-    val focusRequest: Int = 0,
+    val focusTextRequest: Int = 0,
     // Scroll positions
     val paragraphScrollPosition: Int = 0,
     val chapterScrollPosition: Int = 0,
@@ -290,3 +293,5 @@ data class PreviousPositions(
     val sources: Float = SplitDefaults.SOURCES,
     val links: Float = 0.8f,
 )
+
+const val ROOT_TOC_KEY = -1L

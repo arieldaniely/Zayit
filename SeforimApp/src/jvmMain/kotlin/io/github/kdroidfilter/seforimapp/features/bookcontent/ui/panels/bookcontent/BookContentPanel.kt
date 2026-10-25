@@ -285,6 +285,7 @@ private fun BookContentPanelContent(
                         isSelected = isSelected,
                         bookCharCounts = bookCharCounts,
                         onPointerZoomInProgressChange = { isBookContentZoomInProgress = it },
+                        focusRequest = uiState.content.focusTextRequest,
                     )
                 }
             }
@@ -410,7 +411,7 @@ internal fun BreadcrumbSection(
                 onClick = { onEvent(BookContentEvent.ToggleBookDetails) },
             )
             Spacer(Modifier.width(8.dp))
-            NavigableBreadcrumbView(
+            BreadcrumbView(
                 uiState = uiState,
                 onEvent = onEvent,
                 modifier = Modifier.weight(1f),

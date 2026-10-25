@@ -158,6 +158,8 @@ class BookContentViewModel(
                     providers =
                         Providers(
                             linesPagingData = linesPagingData,
+                            loadTocChildren = tocUseCase::tocChildren,
+                            loadRootToc = tocUseCase::rootToc,
                             buildCommentariesPagerFor = commentariesUseCase::buildCommentariesPager,
                             getAvailableCommentatorsForLine = commentariesUseCase::getAvailableCommentators,
                             getCommentatorGroupsForLine = commentariesUseCase::getCommentatorGroups,
@@ -471,6 +473,10 @@ class BookContentViewModel(
                 // Navigation
                 is BookContentEvent.CategorySelected ->
                     navigationUseCase.selectCategory(event.category)
+
+                is BookContentEvent.RevealCategory -> navigationUseCase.revealCategory(event.category)
+                BookContentEvent.CategoryRevealed -> navigationUseCase.clearCategoryReveal()
+                BookContentEvent.FocusText -> stateManager.updateContent { copy(focusTextRequest = focusTextRequest + 1) }
 
                 is BookContentEvent.BookSelected ->
                     openSelectedBookAsText(event.book)

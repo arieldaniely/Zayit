@@ -196,8 +196,15 @@ private fun AnimatedTempleBackground(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         val player = TemplePlayer()
         try {
-            withContext(Dispatchers.Default) { player.open() }
+            // Even a paused card needs its background: only advancing beyond the first frame requires focus.
+            val initialFrame =
+                withContext(Dispatchers.Default) {
+                    player.open()
+                    player.decode()
+                }
+            frame = player.show(initialFrame)
             while (true) {
+                delay(player.duration)
                 snapshotFlow { playing }.first { it }
                 // Waits for a frame first: none come while the window can't be seen (minimized, hidden, covered), so the
                 // animation stops decoding there instead of burning the battery behind other windows.
@@ -207,8 +214,6 @@ private fun AnimatedTempleBackground(modifier: Modifier = Modifier) {
                 // (a bitmap freed under the drawing would crash). Cancelled, the decoding finishes before the close.
                 val decoded = withContext(Dispatchers.Default) { player.decode() }
                 frame = player.show(decoded)
-                delay(player.duration)
-                snapshotFlow { playing }.first { it }
             }
         } finally {
             player.close()

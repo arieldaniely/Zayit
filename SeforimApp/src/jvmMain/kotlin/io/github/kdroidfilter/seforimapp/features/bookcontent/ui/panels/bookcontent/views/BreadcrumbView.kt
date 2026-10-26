@@ -66,6 +66,7 @@ fun BreadcrumbView(
     val currentChildrenProvider by rememberUpdatedState(childrenProvider)
     val currentOnEvent by rememberUpdatedState(onEvent)
     val currentBookId by rememberUpdatedState(book.id)
+    val currentRoots by rememberUpdatedState(navigation.rootCategories)
 
     val scope = rememberCoroutineScope()
     val navigator =
@@ -74,6 +75,7 @@ fun BreadcrumbView(
                 scope = scope,
                 childrenProvider = { currentChildrenProvider.children(it) },
                 initialPath = path,
+                rootSiblings = { currentRoots.map(BreadcrumbNode::CategoryNode) },
                 // The popup took the keyboard focus: the text gets it back
                 onReturnFocus = { currentOnEvent(BookContentEvent.FocusText) },
                 onNavigate = { node ->

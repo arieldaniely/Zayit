@@ -19,6 +19,7 @@ import dev.zacsweers.metro.createGraph
 import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.features.settings.ui.DataSettingsScreen
 import io.github.kdroidfilter.seforimapp.features.settings.ui.DisplaySettingsScreen
 import io.github.kdroidfilter.seforimapp.features.settings.ui.FontsSettingsScreen
 import io.github.kdroidfilter.seforimapp.features.settings.ui.ProfileSettingsScreen
@@ -33,6 +34,9 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SettingsScreensUiTest {
+    @Test
+    fun `data settings remains usable before a books database is installed`() = assertScreenRenders("מקום ההתקנה") { DataSettingsScreen() }
+
     @Test
     fun `display settings renders with Jewel combo boxes`() = assertScreenRenders("סגנון ערכת נושא") { DisplaySettingsScreen() }
 

@@ -4,8 +4,8 @@ import androidx.compose.runtime.Immutable
 
 @Immutable
 data class DisplaySettingsState(
-    val showZmanimWidgets: Boolean = true,
-    val showTempleCountdown: Boolean = true,
+    val antiAliasing: io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing =
+        io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing.OFF,
     val showHomeWallpaper: Boolean = true,
     val compactMode: Boolean = false,
     val maxCommentatorsPerPage: Int = 0,
@@ -14,7 +14,6 @@ data class DisplaySettingsState(
     companion object {
         val preview =
             DisplaySettingsState(
-                showZmanimWidgets = true,
                 showHomeWallpaper = true,
                 compactMode = false,
                 maxCommentatorsPerPage = 0,

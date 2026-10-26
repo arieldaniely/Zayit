@@ -77,7 +77,10 @@ import sh.calvin.reorderable.ReorderableColumn
 import sh.calvin.reorderable.ReorderableItem
 
 @Composable
-fun DesktopSwitcher(modifier: Modifier = Modifier) {
+fun DesktopSwitcher(
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     val appGraph = LocalAppGraph.current
     val desktopManager = appGraph.desktopManager
     val openWindow = LocalOpenWindow.current
@@ -104,6 +107,7 @@ fun DesktopSwitcher(modifier: Modifier = Modifier) {
     ) {
         DesktopSwitcherTrigger(
             desktopName = activeDesktop?.name ?: "1",
+            compact = compact,
             onClick = { showDropdown = !showDropdown },
         )
 
@@ -133,6 +137,7 @@ fun DesktopSwitcher(modifier: Modifier = Modifier) {
 @Composable
 private fun DesktopSwitcherTrigger(
     desktopName: String,
+    compact: Boolean,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -145,7 +150,7 @@ private fun DesktopSwitcherTrigger(
     Row(
         modifier =
             Modifier
-                .width(DESKTOP_SWITCHER_WIDTH)
+                .width(if (compact) 44.dp else DESKTOP_SWITCHER_WIDTH)
                 .fillMaxHeight()
                 .then(
                     if (isIslands) {
@@ -166,12 +171,14 @@ private fun DesktopSwitcherTrigger(
             modifier = Modifier.size(16.dp),
             colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
         )
-        Text(
-            text = desktopName,
-            color = JewelTheme.globalColors.text.normal,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
+        if (!compact) {
+            Text(
+                text = desktopName,
+                color = JewelTheme.globalColors.text.normal,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+        }
         Icon(
             key = AllIconsKeys.General.ChevronDown,
             contentDescription = null,

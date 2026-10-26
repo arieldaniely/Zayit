@@ -2,9 +2,13 @@ package io.github.kdroidfilter.seforimapp.features.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -99,6 +103,8 @@ private fun NucleusApplicationScope.SettingsWindowView(
                 }
                 // IntelliJ-like layout: sidebar + content with header and bottom action bar
                 val navController = rememberNavController()
+                val search = rememberTextFieldState()
+                val query = search.text.toString().trim()
                 LaunchedEffect(initialDestination) {
                     if (initialDestination != null) {
                         navController.navigate(initialDestination) {
@@ -121,6 +127,7 @@ private fun NucleusApplicationScope.SettingsWindowView(
                                     .fillMaxHeight()
                                     .width(220.dp),
                             navController = navController,
+                            searchState = search,
                         )
 
                         // Vertical separator between the menu and content
@@ -141,7 +148,17 @@ private fun NucleusApplicationScope.SettingsWindowView(
                                     .padding(start = 16.dp),
                         ) {
                             Box(modifier = Modifier.weight(1f)) {
-                                SettingsNavHost(navController = navController)
+                                Box(Modifier.fillMaxSize()) {
+                                    SettingsNavHost(navController = navController)
+                                }
+                                if (query.isNotBlank()) {
+                                    Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)) {
+                                        io.github.kdroidfilter.seforimapp.features.settings.ui.SettingsSearchResults(query) { destination ->
+                                            navController.navigate(destination) { launchSingleTop = true }
+                                            search.clearText()
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

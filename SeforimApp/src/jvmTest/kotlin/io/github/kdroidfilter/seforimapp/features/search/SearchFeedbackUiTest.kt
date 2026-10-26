@@ -33,6 +33,7 @@ class SearchFeedbackUiTest {
             val secondary = SearchResult(1, "ספר לבדיקה", 3, 1, "תוצאה משנית", 0.8)
             var opens = 0
             val votes = mutableListOf<Pair<Long, SearchFeedbackType>>()
+            val previews = mutableListOf<Long>()
             setContent {
                 IntUiTheme(isDark = false) {
                     Box(Modifier.width(700.dp)) {
@@ -52,12 +53,16 @@ class SearchFeedbackUiTest {
                             onToggleExpand = {},
                             onFeedback = { hit, type -> votes += hit.lineId to type },
                             feedbackKey = "search-1",
+                            onPreview = { previews += it.lineId },
                         )
                     }
                 }
             }
             onNodeWithContentDescription("התוצאה מועילה").assertDoesNotExist()
+            onNodeWithContentDescription("תצוגה מקדימה בהקשר").assertDoesNotExist()
             onNodeWithText("תוצאה ראשית").performMouseInput { enter(center) }
+            onNodeWithContentDescription("תצוגה מקדימה בהקשר").performMouseInput { click() }
+            assertEquals(listOf(2L), previews)
             onNodeWithContentDescription("התוצאה מועילה").performMouseInput { click() }
             onNodeWithContentDescription("התוצאה מועילה").performMouseInput { click() }
             onNodeWithText("תוצאה משנית").performMouseInput { moveTo(center) }

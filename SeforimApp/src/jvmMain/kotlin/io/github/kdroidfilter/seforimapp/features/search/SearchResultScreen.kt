@@ -149,12 +149,8 @@ private fun SearchToolbar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        androidx.compose.foundation.Image(
-            painter =
-                org.jetbrains.compose.resources
-                    .painterResource(Res.drawable.AppIcon),
-            contentDescription = stringResource(Res.string.app_name),
-            modifier = Modifier.size(36.dp),
+        io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.LogoImage(
+            modifier = Modifier.width(110.dp).height(36.dp),
         )
         // Query field
         TextField(
@@ -588,7 +584,13 @@ private fun SearchResultContentMvi(
 
                 // Results list
                 Box(
-                    modifier = Modifier.fillMaxWidth().weight(1f).background(JewelTheme.globalColors.panelBackground),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(JewelTheme.globalColors.panelBackground)
+                            .padding(vertical = 12.dp),
                 ) {
                     if (visibleResults.isEmpty()) {
                         if (state.isLoading) {
@@ -1124,7 +1126,7 @@ internal fun BookResultCard(
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
-                PreviewResultButton { onPreview(primary) }
+                PreviewResultButton(visible = primaryHovered) { onPreview(primary) }
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1348,17 +1350,24 @@ private fun SecondaryResultRow(
             modifier = Modifier.weight(1f),
         )
         ResultFeedback(result, feedbackKey, hovered, onFeedback)
-        PreviewResultButton(onPreview)
+        PreviewResultButton(visible = hovered, onClick = onPreview)
     }
 }
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun PreviewResultButton(onClick: () -> Unit) {
+private fun PreviewResultButton(
+    visible: Boolean,
+    onClick: () -> Unit,
+) {
     val label = stringResource(Res.string.search_preview_title)
-    Tooltip({ Text(label) }) {
-        IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
-            Icon(AllIconsKeys.Actions.Find, contentDescription = label, modifier = Modifier.size(16.dp))
+    Box(Modifier.size(28.dp)) {
+        if (visible || io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode.current) {
+            Tooltip({ Text(label) }) {
+                IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
+                    Icon(AllIconsKeys.Actions.Preview, contentDescription = label, modifier = Modifier.size(16.dp))
+                }
+            }
         }
     }
 }

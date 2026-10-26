@@ -9,6 +9,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CornerSize
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -54,6 +56,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import io.github.kdroidfilter.seforim.tabs.*
 import io.github.kdroidfilter.seforimapp.core.deeplink.toShareLink
+import io.github.kdroidfilter.seforimapp.core.presentation.components.BelowAnchorEndPositionProvider
 import io.github.kdroidfilter.seforimapp.core.presentation.components.TitleBarActionButton
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
@@ -96,7 +99,6 @@ import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import kotlin.math.roundToInt
 import kotlin.ranges.coerceAtLeast
-import kotlin.ranges.coerceAtMost
 import kotlin.time.Duration.Companion.milliseconds
 
 // Carry both TabData and its label for tooltips anchored on the whole tab container
@@ -118,7 +120,6 @@ private data class TabEntry(
     val onDetach: (() -> Unit)?,
 )
 
-private val TabTooltipWidthThreshold = 140.dp
 private val CompactTabWidthThreshold = 50.dp
 private val HideCloseTabWidthThreshold = 80.dp
 
@@ -392,6 +393,7 @@ private fun RtlAwareTabStripContent(
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val interactionSource = remember { MutableInteractionSource() }
+    val stripHovered by interactionSource.collectIsHoveredAsState()
     var isActive by remember { mutableStateOf(false) }
 
     // Keep track of tabs that are animating out before we notify the ViewModel
@@ -402,6 +404,7 @@ private fun RtlAwareTabStripContent(
 
     // Track which tabs already existed to avoid double width + expand animation on new entries
     val openWindow = LocalOpenWindow.current
+    SideEffect { openWindow.pointerOnStrip = stripHovered }
     val tabsViewModel = openWindow.tabsViewModel
     val dockManager = LocalAppGraph.current.tabDockManager
     val density = LocalDensity.current
@@ -435,17 +438,33 @@ private fun RtlAwareTabStripContent(
 
     BoxWithConstraints(modifier = modifier) {
         val maxWidthDp = this.maxWidth
-        // Reserve a non-interactive draggable area at the trailing edge to allow window move
-        val reservedDragArea = 40.dp
-        // + button (36.dp) + divider (1.dp) + divider padding (8.dp) + reserved drag area
-        val extrasWidth = 36.dp + 1.dp + 8.dp + reservedDragArea
-        val availableForTabs = (maxWidthDp - extrasWidth).coerceAtLeast(0.dp)
-        val tabsCount = tabs.size.coerceAtLeast(1)
-        // Chrome-like: tabs shrink to fill available width, capped by a max width
+        val chipWidth = rememberTabOverflowChipWidth(tabs.size)
+        val overflowMemory = remember { mutableStateOf(false) }
+        val layout =
+            computeTabStripLayout(
+                stripWidth = maxWidthDp,
+                tabCount = tabs.size,
+                pinnedCount = 0,
+                pinnedWidth = 0.dp,
+                chipWidth = chipWidth,
+                ghostWidth = 0.dp,
+                maxTabWidth = AppSettings.TAB_FIXED_WIDTH_DP.dp,
+                wasTooNarrow = overflowMemory.value,
+            )
+        SideEffect { overflowMemory.value = layout.tooNarrow }
+        val reservedDragArea = layout.reservedDragArea
+        val naturalTabWidth = layout.naturalTabWidth
         val maxTabWidth = AppSettings.TAB_FIXED_WIDTH_DP.dp
-        val naturalTabWidth = (availableForTabs / tabsCount)
-        val computedTabWidthTarget = naturalTabWidth.coerceAtMost(maxTabWidth)
-        val tabWidth = computedTabWidthTarget
+        val tabWidth = layout.tabWidth
+        val tabWindow = remember { TabWindow() }
+        val shown =
+            when {
+                tabs.size == 1 && maxWidthDp - AddButtonWithDividerWidth - reservedDragArea < PinnedTabWidth -> emptyList()
+                !layout.overflowing -> tabs
+                else -> tabWindow.follow(tabs, layout.visibleCount.coerceAtLeast(1), tabs.indexOfFirst { it.data.selected })
+            }
+        val visibleKeys = shown.map { it.key }.toSet()
+        val visibleTabKeys = currentKeys.filter { it in visibleKeys }
 
         // Register this strip as a cross-window drop target (logical screen-coordinate
         // hit-testing, IntelliJ DockManager style, backend-agnostic through Nucleus).
@@ -455,6 +474,8 @@ private fun RtlAwareTabStripContent(
             stripGeometry.density = density.density
             stripGeometry.tabWidthPx = with(density) { tabWidth.toPx() }
             stripGeometry.tabCount = tabs.size
+            stripGeometry.visibleStart = currentKeys.indexOf(visibleTabKeys.firstOrNull()).coerceAtLeast(0)
+            stripGeometry.visibleCount = visibleTabKeys.size
             stripGeometry.isRtl = isRtl
         }
         DisposableEffect(openWindow.id) {
@@ -517,14 +538,14 @@ private fun RtlAwareTabStripContent(
             // Helper to render all tab items with animations and reordering support
             val tabsOnly: @Composable RowScope.() -> Unit = {
                 val reorderingEnabled = closingKeys.isEmpty()
-                val rowModifier = if (shrinkToFitActive) Modifier.fillMaxWidth() else Modifier
+                val rowModifier = if (shrinkToFitActive && !layout.overflowing) Modifier.fillMaxWidth() else Modifier
                 val tabEntriesByKey = remember(tabs) { tabs.associateBy { it.key } }
 
                 ReorderableRow(
-                    list = currentKeys,
+                    list = visibleTabKeys,
                     onSettle = { fromIdx, toIdx ->
                         if (!reorderingEnabled) return@ReorderableRow
-                        onReorder(fromIdx, toIdx)
+                        onReorder(currentKeys.indexOf(visibleTabKeys[fromIdx]), currentKeys.indexOf(visibleTabKeys[toIdx]))
                     },
                     horizontalArrangement = Arrangement.spacedBy(0.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -566,7 +587,8 @@ private fun RtlAwareTabStripContent(
                                             isActive = isActive,
                                             tabData = tabEntry.data,
                                             tabStyle = style,
-                                            tabIndex = index,
+                                            tabIndex = currentKeys.indexOf(key),
+                                            tabKey = key,
                                             tabCount = tabs.size,
                                             tabWidth = tabWidth,
                                             labelProvider = tabEntry.labelProvider,
@@ -609,7 +631,7 @@ private fun RtlAwareTabStripContent(
                 modifier =
                     Modifier
                         .let { baseModifier ->
-                            if (shrinkToFitActive) {
+                            if (shrinkToFitActive || layout.overflowing) {
                                 baseModifier.weight(1f)
                             } else {
                                 baseModifier
@@ -643,25 +665,35 @@ private fun RtlAwareTabStripContent(
                 tabsOnly()
             }
 
-            Divider(
-                orientation = Orientation.Vertical,
-                modifier =
-                    Modifier
-                        .fillMaxHeight(0.8f)
-                        .padding(horizontal = 4.dp)
-                        .width(1.dp),
-                color = JewelTheme.globalColors.borders.disabled,
-            )
+            if (layout.overflowing && tabs.size > 1) {
+                TabOverflowMenuButton(
+                    hidden = tabs.filter { it.key !in visibleKeys },
+                    width = if (layout.chipShowsCount) chipWidth else TabOverflowChevronWidth,
+                    showCount = layout.chipShowsCount,
+                    onAdd = if (layout.showAddButton) null else onAddClick,
+                )
+            }
 
-            val shortcutHint = if (PlatformInfo.isMacOS) "⌘+T" else "Ctrl+T"
-            TitleBarActionButton(
-                onClick = onAddClick,
-                key = AllIconsKeys.General.Add,
-                contentDescription = stringResource(Res.string.add_tab),
-                tooltipText = stringResource(Res.string.add_tab),
-                shortcutHint = shortcutHint,
-            )
+            if (layout.showAddButton) {
+                Divider(
+                    orientation = Orientation.Vertical,
+                    modifier =
+                        Modifier
+                            .fillMaxHeight(0.8f)
+                            .padding(horizontal = 4.dp)
+                            .width(1.dp),
+                    color = JewelTheme.globalColors.borders.disabled,
+                )
 
+                val shortcutHint = if (PlatformInfo.isMacOS) "⌘+T" else "Ctrl+T"
+                TitleBarActionButton(
+                    onClick = onAddClick,
+                    key = AllIconsKeys.General.Add,
+                    contentDescription = stringResource(Res.string.add_tab),
+                    tooltipText = stringResource(Res.string.add_tab),
+                    shortcutHint = shortcutHint,
+                )
+            }
             // Reserved draggable area — intentionally empty/non-interactive
             Spacer(modifier = Modifier.width(reservedDragArea).fillMaxHeight())
         }
@@ -669,6 +701,7 @@ private fun RtlAwareTabStripContent(
 
     // Update known keys after composition so new tabs are only flagged once
     LaunchedEffect(currentKeys) {
+        openWindow.tabThumbnails.keys.retainAll(currentKeys.toSet())
         val incoming = currentKeys.toSet()
         // If there are newly added keys, keep them marked as new long enough to finish the enter animation
         val hasNew = !knownKeys.containsAll(incoming)
@@ -685,6 +718,7 @@ private fun RtlAwareTab(
     tabData: TabData,
     tabStyle: TabStyle,
     tabIndex: Int,
+    tabKey: String,
     tabCount: Int,
     tabWidth: Dp,
     labelProvider: @Composable () -> String,
@@ -846,7 +880,7 @@ private fun RtlAwareTab(
                 val isSelected = tabData.selected
                 // Hide close for non-selected tabs when space is tight, always show for selected
                 val showCloseIcon =
-                    !isPinned && tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
+                    !isCompact && !isPinned && tabData.closable && (isSelected || tabWidth >= HideCloseTabWidthThreshold)
 
                 val closeIconComposable: @Composable () -> Unit = {
                     if (showCloseIcon) {
@@ -880,27 +914,18 @@ private fun RtlAwareTab(
                     }
                 }
 
-                // In compact mode, selected tab shows only close icon (centered)
-                if (isCompact && isSelected) {
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        closeIconComposable()
+                Box(Modifier.weight(1f)) {
+                    CompositionLocalProvider(LocalCompactIconOnly provides isCompact) {
+                        tabData.content(TabContentScopeContainer(), tabState)
                     }
-                } else {
-                    val iconOnly = isCompact
-                    Box(Modifier.weight(1f)) {
-                        CompositionLocalProvider(LocalCompactIconOnly provides iconOnly) {
-                            tabData.content(TabContentScopeContainer(), tabState)
-                        }
-                    }
-                    closeIconComposable()
                 }
+                closeIconComposable()
             }
         }
 
         val label = labelProvider()
-        val showTooltip =
-            label.isNotBlank() &&
-                (label.length > AppSettings.MAX_TAB_TITLE_LENGTH || tabWidth < TabTooltipWidthThreshold)
+        val thumbnail = LocalOpenWindow.current.tabThumbnails[tabKey]
+        val showTooltip = label.isNotBlank() && !isDragging
 
         // Read theme colors outside remember so they act as a cache key.
         val tooltipColors = JewelTheme.tooltipStyle.colors
@@ -945,11 +970,12 @@ private fun RtlAwareTab(
 
         Tooltip(
             tooltip = {
-                Text(
-                    text = label,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.widthIn(max = 360.dp),
-                )
+                Column(Modifier.width(280.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = label, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (thumbnail != null) {
+                        Image(thumbnail, contentDescription = null, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)))
+                    }
+                }
             },
             enabled = showTooltip,
             style = chromeTooltipStyle,
@@ -1195,6 +1221,10 @@ private class StripGeometry(
 
     @Volatile var tabCount: Int = 0
 
+    @Volatile var visibleStart: Int = 0
+
+    @Volatile var visibleCount: Int = 0
+
     @Volatile var isRtl: Boolean = false
 
     private fun safeDensity(): Float = density.takeIf { it > 0f } ?: 1f
@@ -1230,7 +1260,8 @@ private class StripGeometry(
         val bounds = tabsBoundsOnScreen() ?: return tabCount
         val tabWidth = tabWidthPx / safeDensity()
         if (tabWidth <= 0f) return tabCount
-        val visualIndex = ((screenX - bounds.left) / tabWidth).roundToInt().coerceIn(0, tabCount)
+        val distance = if (isRtl) bounds.right - screenX else screenX - bounds.left
+        val visualIndex = visibleStart + (distance / tabWidth).roundToInt().coerceIn(0, visibleCount)
         return if (isRtl) tabCount - visualIndex else visualIndex
     }
 
@@ -1252,7 +1283,8 @@ private class StripGeometry(
     fun dropIndexForWindowPx(xPx: Float): Int {
         val bounds = tabsBoundsInWindow ?: return tabCount
         if (tabWidthPx <= 0f) return tabCount
-        val visualIndex = ((xPx - bounds.left) / tabWidthPx).roundToInt().coerceIn(0, tabCount)
+        val distance = if (isRtl) bounds.right - xPx else xPx - bounds.left
+        val visualIndex = visibleStart + (distance / tabWidthPx).roundToInt().coerceIn(0, visibleCount)
         return if (isRtl) tabCount - visualIndex else visualIndex
     }
 
@@ -1313,6 +1345,106 @@ private fun MenuScope.tabContextMenuItem(
                         .tint(JewelTheme.globalColors.text.normal),
             )
             Text(label)
+        }
+    }
+}
+
+/** Tabs outside the readable strip remain selectable and closable without squeezing their neighbors. */
+@Composable
+private fun rememberTabOverflowChipWidth(count: Int): Dp {
+    val label = stringResource(Res.string.more_tabs, count)
+    val measurer = rememberTextMeasurer()
+    val textStyle = JewelTheme.defaultTextStyle
+    val density = LocalDensity.current
+    return remember(label, textStyle, density) {
+        with(density) {
+            measurer
+                .measure(label, textStyle, maxLines = 1)
+                .size.width
+                .toDp()
+        } + 44.dp
+    }
+}
+
+@Composable
+private fun TabOverflowMenuButton(
+    hidden: List<TabEntry>,
+    width: Dp,
+    showCount: Boolean,
+    onAdd: (() -> Unit)?,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.width(width)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { open = !open }
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (showCount) {
+                Text(stringResource(Res.string.more_tabs, hidden.size), modifier = Modifier.weight(1f), maxLines = 1)
+            }
+            Icon(
+                AllIconsKeys.General.ChevronDown,
+                contentDescription = stringResource(Res.string.open_tabs),
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        if (open) {
+            androidx.compose.ui.window.Popup(
+                popupPositionProvider = BelowAnchorEndPositionProvider,
+                onDismissRequest = { open = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Column(
+                    Modifier
+                        .width(280.dp)
+                        .heightIn(max = 480.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(JewelTheme.globalColors.panelBackground)
+                        .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(10.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(6.dp),
+                ) {
+                    if (onAdd != null) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    open = false
+                                    onAdd()
+                                }.padding(8.dp),
+                        ) { Text(stringResource(Res.string.add_tab)) }
+                    }
+                    hidden.forEach { tab ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    tab.onClick()
+                                    open = false
+                                }.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(tab.labelProvider(), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (!tab.isPinned) {
+                                IconButton(onClick = tab.onClose, modifier = Modifier.size(24.dp)) {
+                                    Icon(
+                                        AllIconsKeys.Windows.Close,
+                                        contentDescription = stringResource(Res.string.close_tab),
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

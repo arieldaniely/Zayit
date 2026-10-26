@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -189,16 +190,19 @@ private const val MIN_FRAME_MS = 20L
  */
 @Composable
 private fun AnimatedTempleBackground(modifier: Modifier = Modifier) {
-    val playing by rememberUpdatedState(LocalTabSelected.current)
+    val windowInfo = LocalWindowInfo.current
+    val playing by rememberUpdatedState(LocalTabSelected.current && windowInfo.isWindowFocused)
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(Unit) {
         val player = TemplePlayer()
         try {
             withContext(Dispatchers.Default) { player.open() }
             while (true) {
+                snapshotFlow { playing }.first { it }
                 // Waits for a frame first: none come while the window can't be seen (minimized, hidden, covered), so the
                 // animation stops decoding there instead of burning the battery behind other windows.
                 withFrameNanos { }
+                if (!playing) continue
                 // Decoded off the UI thread; shown, and the old frames freed, back on it, between two frames drawn
                 // (a bitmap freed under the drawing would crash). Cancelled, the decoding finishes before the close.
                 val decoded = withContext(Dispatchers.Default) { player.decode() }

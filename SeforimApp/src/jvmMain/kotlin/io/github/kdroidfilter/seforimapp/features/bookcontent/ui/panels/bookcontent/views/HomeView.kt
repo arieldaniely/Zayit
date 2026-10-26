@@ -254,18 +254,13 @@ fun HomeView(
     searchCallbacks: HomeSearchCallbacks,
     modifier: Modifier = Modifier,
     homeUserLocation: HomeUserLocation? = null,
-    homeCelestialWidgetsState: HomeCelestialWidgetsState? = null,
 ) {
     val appSettings = LocalAppGraph.current.appSettings
 
     val panelBackground = JewelTheme.globalColors.panelBackground
     val showWallpaper by appSettings.showHomeWallpaperFlow.collectAsState()
 
-    val resolvedLocation =
-        homeUserLocation
-            ?: homeCelestialWidgetsState?.let {
-                HomeUserLocation(it.userPlace, it.userCityLabel, it.inIsrael)
-            }
+    val resolvedLocation = homeUserLocation
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         if (showWallpaper) {

@@ -48,13 +48,20 @@ fun AppNativeMenuBar(
     val theme by mainAppState.theme.collectAsState()
     val themeStyle by mainAppState.themeStyle.collectAsState()
     val accentColor by mainAppState.accentColor.collectAsState()
-    val showZmanim by AppSettings.showZmanimWidgetsFlow.collectAsState()
-    val showTempleCountdown by AppSettings.showTempleCountdownFlow.collectAsState()
     val compactMode by AppSettings.compactModeFlow.collectAsState()
     val persistSession by AppSettings.persistSessionFlow.collectAsState()
     val closeTreeOnNewBook by AppSettings.closeBookTreeOnNewBookSelectedFlow.collectAsState()
     val tabsState by tabsViewModel.state.collectAsState()
     val toolsTitle = stringResource(Res.string.menu_tools)
+    val sharedStudyLabel = stringResource(Res.string.shared_study)
+    var sharedStudyVisible by remember { mutableStateOf(false) }
+    val coordinator = LocalAppGraph.current.sharedStudyCoordinator
+    if (sharedStudyVisible) {
+        io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog(
+            coordinator = coordinator,
+            onDismiss = { sharedStudyVisible = false },
+        )
+    }
     val tools = availableTools.map { it.id to stringResource(it.title) }
     val toolWindows = LocalAppGraph.current.toolWindows
 
@@ -146,8 +153,6 @@ fun AppNativeMenuBar(
     val themeClassic = stringResource(Res.string.settings_theme_style_classic)
     val themeIslands = stringResource(Res.string.settings_theme_style_islands)
     val menuAppearance = stringResource(Res.string.menu_appearance)
-    val showZmanimLabel = stringResource(Res.string.settings_show_zmanim_widgets)
-    val showTempleCountdownLabel = stringResource(Res.string.settings_show_temple_countdown)
     val compactModeLabel = stringResource(Res.string.settings_compact_mode)
     val menuZoomIn = stringResource(Res.string.menu_zoom_in)
     val menuZoomOut = stringResource(Res.string.menu_zoom_out)
@@ -287,18 +292,6 @@ fun AppNativeMenuBar(
             SectionHeader(menuAppearance)
 
             CheckboxItem(
-                text = showZmanimLabel,
-                checked = showZmanim,
-                onCheckedChange = { AppSettings.setShowZmanimWidgetsEnabled(it) },
-            )
-
-            CheckboxItem(
-                text = showTempleCountdownLabel,
-                checked = showTempleCountdown,
-                onCheckedChange = { AppSettings.setShowTempleCountdownEnabled(it) },
-            )
-
-            CheckboxItem(
                 text = compactModeLabel,
                 checked = compactMode,
                 onCheckedChange = { AppSettings.setCompactModeEnabled(it) },
@@ -345,6 +338,7 @@ fun AppNativeMenuBar(
         }
 
         Menu(toolsTitle) {
+            Item(text = sharedStudyLabel) { sharedStudyVisible = true }
             tools.forEach { (id, title) ->
                 Item(text = title) { toolWindows.open(id) }
             }

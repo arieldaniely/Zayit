@@ -403,9 +403,10 @@ fun NucleusApplicationScope.MainAppWindow(
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).
             val keepAwakeEnabled by AppSettings.keepScreenAwakeOnBookFlow.collectAsState()
+            val windowFocused by nucleusWin.focusFlow.collectAsState()
             val shouldKeepScreenAwake =
                 keepAwakeEnabled &&
-                    state.isActive &&
+                    windowFocused &&
                     selectedTab?.destination is TabsDestination.BookContent
             LaunchedEffect(shouldKeepScreenAwake) {
                 if (shouldKeepScreenAwake) {
@@ -425,6 +426,7 @@ fun NucleusApplicationScope.MainAppWindow(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .then(rememberTabThumbnails(openWindow))
                         .detectTouchMode { isTouchMode = it }
                         // Wayland pending-drop resolution: while a cross-window tab drop is
                         // awaiting its target, the first pointer sample this window receives

@@ -314,7 +314,7 @@ private fun SmartModeGlow(
 }
 
 @Composable
-private fun SemanticInstallDialog(
+internal fun SemanticInstallDialog(
     onDismiss: () -> Unit,
     onReady: () -> Unit,
 ) {

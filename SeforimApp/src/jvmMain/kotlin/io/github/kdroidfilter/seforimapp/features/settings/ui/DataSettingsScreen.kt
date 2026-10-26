@@ -74,7 +74,6 @@ import seforimapp.seforimapp.generated.resources.database_location_ready
 import seforimapp.seforimapp.generated.resources.database_location_selected
 import seforimapp.seforimapp.generated.resources.database_location_title
 import seforimapp.seforimapp.generated.resources.database_location_update_required
-import seforimapp.seforimapp.generated.resources.optional_install_failed
 import seforimapp.seforimapp.generated.resources.optional_vectors
 import seforimapp.seforimapp.generated.resources.optional_vectors_install
 import seforimapp.seforimapp.generated.resources.optional_vectors_ready
@@ -87,6 +86,9 @@ import seforimapp.seforimapp.generated.resources.pdf_remove_failed
 import seforimapp.seforimapp.generated.resources.pdf_remove_library
 import seforimapp.seforimapp.generated.resources.pdf_remove_success
 import seforimapp.seforimapp.generated.resources.pdf_removing_library
+import seforimapp.seforimapp.generated.resources.semantic_import_bundle
+import seforimapp.seforimapp.generated.resources.semantic_install_body
+import seforimapp.seforimapp.generated.resources.semantic_invalid_bundle
 import seforimapp.seforimapp.generated.resources.settings_cancel
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
@@ -346,7 +348,7 @@ private fun DataActionCard(
 private fun PdfLibrarySettingsCard() {
     val scope = rememberCoroutineScope()
     val libraryVersion by TalmudPdfService.libraryVersion.collectAsState()
-    val installed = remember(libraryVersion) { TalmudPdfService.isInstalled() }
+    val installed = remember(libraryVersion) { runCatching { TalmudPdfService.isInstalled() }.getOrDefault(false) }
     var working by remember { mutableStateOf(false) }
     var successMessage by remember { mutableStateOf<StringResource?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -515,39 +517,54 @@ private fun ResetCard(
 
 @Composable
 private fun VectorLibrarySettingsCard() {
-    val scope = rememberCoroutineScope()
-    var installed by remember { mutableStateOf(false) }
-    var working by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
+    val availability by SemanticAssetsManager.availability.collectAsState()
+    val progress by SemanticAssetsManager.installationProgress.collectAsState()
+    var checking by remember { mutableStateOf(true) }
+    var libraryUnavailable by remember { mutableStateOf(false) }
+    var showInstall by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        installed = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(Res.string.optional_vectors))
-        if (installed) {
-            Text(stringResource(Res.string.optional_vectors_ready))
-        } else {
-            DefaultButton(
-                enabled = !working,
-                onClick = {
-                    working = true
-                    failed = false
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) { SemanticAssetsManager.downloadBundle() }
-                            installed = true
-                        } catch (failure: kotlinx.coroutines.CancellationException) {
-                            throw failure
-                        } catch (_: Exception) {
-                            failed = true
-                        } finally {
-                            working = false
-                        }
-                    }
-                },
-            ) { Text(stringResource(if (working) Res.string.pdf_installing else Res.string.optional_vectors_install)) }
+        try {
+            withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
+        } catch (failure: kotlinx.coroutines.CancellationException) {
+            throw failure
+        } catch (_: Exception) {
+            libraryUnavailable = true
+        } finally {
+            checking = false
         }
-        if (working) SemanticInstallationProgressView()
-        if (failed) InlineErrorBanner(text = stringResource(Res.string.optional_install_failed))
+    }
+    val ready = availability == SemanticAssetsManager.Availability.READY
+    val busy = checking || progress != null || availability == SemanticAssetsManager.Availability.VALIDATING
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
+            .background(JewelTheme.globalColors.panelBackground)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(stringResource(Res.string.optional_vectors), fontSize = 15.sp)
+        Text(
+            stringResource(seforimapp.seforimapp.generated.resources.Res.string.semantic_install_body),
+            color = JewelTheme.globalColors.text.info,
+            fontSize = 12.sp,
+        )
+        if (ready) InlineSuccessBanner(stringResource(Res.string.optional_vectors_ready))
+        if (busy) SemanticInstallationProgressView()
+        if (libraryUnavailable) InlineErrorBanner(stringResource(Res.string.database_location_missing))
+        if (availability == SemanticAssetsManager.Availability.INVALID) {
+            InlineErrorBanner(stringResource(seforimapp.seforimapp.generated.resources.Res.string.semantic_invalid_bundle))
+        }
+        OutlinedButton(enabled = !busy && !libraryUnavailable, onClick = { showInstall = true }) {
+            Text(stringResource(if (ready) Res.string.semantic_import_bundle else Res.string.optional_vectors_install))
+        }
+    }
+    if (showInstall) {
+        io.github.kdroidfilter.seforimapp.features.search.SemanticInstallDialog(
+            onDismiss = { showInstall = false },
+            onReady = { showInstall = false },
+        )
     }
 }

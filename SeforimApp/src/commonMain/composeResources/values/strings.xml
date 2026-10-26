@@ -1176,4 +1176,10 @@
     <string name="drive_sign_in_browser_success">התחברת ל־Google Drive.</string>
     <string name="drive_sign_in_browser_failure">החיבור ל־Google Drive נכשל.</string>
     <string name="drive_sign_in_browser_close">אפשר לסגור את הלשונית ולחזור לזיתא.</string>
+    <string name="settings_search_vectors_keywords">וקטורים וקטור ווקטורים ווקטור סמנטי משמעות מודל אינדקס ONNX embeddings vectors semantic model</string>
+    <string name="settings_antialiasing_fxaa">FXAA</string>
+    <string name="settings_antialiasing_msaa_2">MSAA ×2</string>
+    <string name="settings_antialiasing_msaa_4">MSAA ×4</string>
+    <string name="settings_antialiasing_msaa_8">MSAA ×8</string>
+    <string name="settings_antialiasing_taa">TAA</string>
 </resources>

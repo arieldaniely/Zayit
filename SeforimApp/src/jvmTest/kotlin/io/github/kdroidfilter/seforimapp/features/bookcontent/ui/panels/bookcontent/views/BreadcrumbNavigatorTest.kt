@@ -48,6 +48,51 @@ class BreadcrumbNavigatorTest {
     ) = BreadcrumbNavigator(backgroundScope, children, clock = { now }) { navigated += it }.apply { updatePath(path) }
 
     @Test
+    fun `clicking a chapter lists sibling chapters even when it has children`() =
+        runTest {
+            val child = TocNode(TocEntry(id = 102, bookId = 10, text = "משנה א", level = 2, lineId = 1002))
+            val nav =
+                navigator(mutableListOf(), children = { node ->
+                    if (node.key == perek1.key) listOf(child) else tree[node.key].orEmpty()
+                })
+            nav.onSegmentClick(perek1.key)
+            runCurrent()
+
+            assertEquals(3, nav.popup!!.anchorIndex)
+            assertEquals(listOf<BreadcrumbNode>(perek1, perek2), nav.popup!!.items)
+            assertEquals(0, nav.popup!!.initialSelectedIndex)
+        }
+
+    @Test
+    fun `clicking the book offers neighboring books and selecting one navigates`() =
+        runTest {
+            val navigated = mutableListOf<BreadcrumbNode>()
+            val nav = navigator(navigated)
+            nav.onSegmentClick(brachot.key)
+            runCurrent()
+
+            assertEquals(listOf<BreadcrumbNode>(brachot, peah), nav.popup!!.items)
+            assertEquals(2, nav.popup!!.anchorIndex)
+            nav.choose(peah)
+            runCurrent()
+            assertEquals(listOf<BreadcrumbNode>(peah), navigated)
+            assertNull(nav.popup)
+        }
+
+    @Test
+    fun `sibling category traversal replaces the clicked segment before drilling into children`() =
+        runTest {
+            val nav = navigator(mutableListOf())
+            nav.onSegmentClick(zeraim.key)
+            runCurrent()
+            assertEquals(listOf<BreadcrumbNode>(zeraim, kodashim), nav.popup!!.items)
+            nav.choose(kodashim)
+            runCurrent()
+            assertEquals(listOf<BreadcrumbNode>(mishna, kodashim, single), nav.items)
+            assertEquals(listOf<BreadcrumbNode>(tamid), nav.popup!!.items)
+        }
+
+    @Test
     fun `clicking a segment shows its children with the next segment preselected`() =
         runTest {
             val nav = navigator(mutableListOf())
@@ -404,16 +449,16 @@ class BreadcrumbNavigatorTest {
         }
 
     @Test
-    fun `the parent anchoring a leaf's popup closes it on a click too`() =
+    fun `a leaf anchors its sibling popup and closes it when clicked again`() =
         runTest {
             var returns = 0
             val nav = BreadcrumbNavigator(backgroundScope, provider, initialPath = path, onReturnFocus = { returns++ }, clock = { now }) {}
             nav.onSegmentClick(perek1.key)
             runCurrent()
-            assertEquals(2, nav.popup!!.anchorIndex)
+            assertEquals(3, nav.popup!!.anchorIndex)
 
             nav.dismiss()
-            nav.onSegmentClick(brachot.key)
+            nav.onSegmentClick(perek1.key)
             runCurrent()
             assertNull(nav.popup)
             // Closed from its segment: the focus goes back to the text, as with Escape

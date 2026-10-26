@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -78,8 +79,7 @@ fun PaneHeader(
             Modifier
                 .fillMaxWidth()
                 .background(headerBackground)
-                .hoverable(headerHoverSource)
-                .then(if (satellite?.isDocked == true) Modifier.satelliteDragHandle(satellite) else Modifier),
+                .hoverable(headerHoverSource),
     ) {
         Row(
             modifier =
@@ -90,7 +90,15 @@ fun PaneHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .then(if (satellite != null) Modifier.satelliteDragHandle(satellite) else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
                     text = label,
                     fontWeight = FontWeight.Bold,
@@ -143,7 +151,6 @@ private fun PaneDockButton(satellite: SatelliteScope) {
                 AllIconsKeys.Actions.Rollback,
                 stringResource(Res.string.pane_reset),
                 { reset?.invoke() },
-                modifier = Modifier.satelliteDragHandle(satellite),
             )
         satellite.isDocked && entry.isFloatable ->
             PaneHeaderAction(AllIconsKeys.Actions.MoveToWindow, stringResource(Res.string.pane_float), satellite::undock)
@@ -153,7 +160,6 @@ private fun PaneDockButton(satellite: SatelliteScope) {
                 key = DockToWindowIcon,
                 text = stringResource(Res.string.pane_dock),
                 onClick = { satellite.dock() },
-                modifier = Modifier.satelliteDragHandle(satellite),
             )
     }
 }

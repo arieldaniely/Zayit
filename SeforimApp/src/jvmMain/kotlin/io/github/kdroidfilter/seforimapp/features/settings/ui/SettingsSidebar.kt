@@ -15,10 +15,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -82,6 +85,7 @@ private data class SettingsItem(
 fun SettingsSidebar(
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    searchState: TextFieldState = rememberTextFieldState(),
 ) {
     val backStack = navController.currentBackStackEntryAsState()
     val currentRoute =
@@ -91,12 +95,13 @@ fun SettingsSidebar(
             .orEmpty()
 
     SettingsSidebarView(currentRoute, onSelect = { destination ->
+        searchState.clearText()
         navController.navigate(destination) {
             launchSingleTop = true
             popUpTo(SettingsDestination.General) { saveState = true }
             restoreState = true
         }
-    }, modifier = modifier)
+    }, modifier = modifier, searchState = searchState)
 }
 
 @Composable
@@ -104,6 +109,7 @@ internal fun SettingsSidebarView(
     currentRoute: String,
     onSelect: (SettingsDestination) -> Unit,
     modifier: Modifier = Modifier,
+    searchState: TextFieldState = rememberTextFieldState(),
 ) {
     val allItems =
         listOf(
@@ -165,14 +171,16 @@ internal fun SettingsSidebarView(
             ),
         )
 
-    val search = rememberTextFieldState()
+    val search = searchState
     val focus = remember { FocusRequester() }
     val query = search.text.toString().trim()
+    val searchEntries = settingsSearchEntries()
     val visible =
         allItems.filter { item ->
             query.split(Regex("\\s+")).all { word ->
                 item.label.contains(word, ignoreCase = true) || item.description.contains(word, ignoreCase = true)
-            }
+            } ||
+                searchEntries.any { it.destination == item.destination && it.matches(query) }
         }
     val groups =
         listOf(
@@ -231,7 +239,7 @@ internal fun SettingsSidebarView(
                         icon = item.icon,
                         selected = selected,
                         onClick = {
-                            if (!selected) {
+                            if (!selected || query.isNotBlank()) {
                                 onSelect(item.destination)
                             }
                         },

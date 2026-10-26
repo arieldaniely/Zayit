@@ -17,6 +17,7 @@ import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.menu_tools
+import seforimapp.seforimapp.generated.resources.shared_study
 
 /**
  * The app's Tools menu in the title bar, where there's no native menu bar (macOS has its own Tools menu): the siddur,
@@ -24,7 +25,16 @@ import seforimapp.seforimapp.generated.resources.menu_tools
  */
 @Composable
 fun ToolsMenuButton() {
-    val toolWindows = LocalAppGraph.current.toolWindows
+    val appGraph = LocalAppGraph.current
+    val toolWindows = appGraph.toolWindows
+    var sharedStudyVisible by remember { mutableStateOf(false) }
+    val sharedStudyLabel = stringResource(seforimapp.seforimapp.generated.resources.Res.string.shared_study)
+    if (sharedStudyVisible) {
+        io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyDialog(
+            coordinator = appGraph.sharedStudyCoordinator,
+            onDismiss = { sharedStudyVisible = false },
+        )
+    }
     var visible by remember { mutableStateOf(false) }
     val label = stringResource(Res.string.menu_tools)
     val tools = availableTools.map { it to stringResource(it.title) }
@@ -44,6 +54,13 @@ fun ToolsMenuButton() {
                 },
                 popupPositionProvider = BelowAnchorEndPositionProvider,
             ) {
+                selectableItem(
+                    selected = false,
+                    onClick = {
+                        visible = false
+                        sharedStudyVisible = true
+                    },
+                ) { Text(sharedStudyLabel) }
                 tools.forEach { (tool, title) ->
                     selectableItem(
                         selected = false,

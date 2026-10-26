@@ -53,6 +53,7 @@ data class BreadcrumbPopupModel(
     val anchorIndex: Int,
     val items: List<BreadcrumbNode>,
     val initialSelectedIndex: Int,
+    val pathPrefixSize: Int = anchorIndex + 1,
 )
 
 /**
@@ -69,6 +70,7 @@ class BreadcrumbNavigator(
     // Not on an outside click, which gives the focus to whatever it clicked.
     private val onReturnFocus: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
+    private val rootSiblings: (() -> List<BreadcrumbNode>)? = null,
     private val onNavigate: (BreadcrumbNode) -> Unit,
 ) {
     private var contextItems: List<BreadcrumbNode> = initialPath
@@ -112,7 +114,33 @@ class BreadcrumbNavigator(
             return
         }
         val index = items.indexOfFirst { it.key == key }
-        if (index >= 0) showPopup(index)
+        if (index >= 0) showSiblings(index)
+    }
+
+    /** The popup stays anchored to the clicked segment, with that segment selected among its peers. */
+    private fun showSiblings(index: Int) {
+        val node = items.getOrNull(index) ?: return
+        val parent = items.getOrNull(index - 1)
+        if (parent == null && rootSiblings == null) {
+            showPopup(index)
+            return
+        }
+        launch {
+            val siblings = if (parent == null) rootSiblings?.invoke().orEmpty() else childrenProvider.children(parent)
+            val anchor = items.indexOfFirst { it.key == node.key }
+            if (siblings.isEmpty() || anchor < 0) {
+                reset(returnFocus = false)
+            } else {
+                openedByKeys = setOf(node.key)
+                popup =
+                    BreadcrumbPopupModel(
+                        anchorIndex = anchor,
+                        items = siblings,
+                        initialSelectedIndex = siblings.indexOfFirst { it.key == node.key }.coerceAtLeast(0),
+                        pathPrefixSize = anchor,
+                    )
+            }
+        }
     }
 
     /** A double click on a segment navigates to it. */
@@ -142,7 +170,12 @@ class BreadcrumbNavigator(
 
     /** Moves the open popup to the neighboring segment, skipping leaves; stops at both ends of the bar. */
     fun shiftPopup(delta: Int) {
-        val from = popup?.anchorIndex ?: return
+        val current = popup ?: return
+        val from = current.anchorIndex
+        if (current.pathPrefixSize == from) {
+            if (from + delta in items.indices) showSiblings(from + delta)
+            return
+        }
         launch {
             var target = from + delta
             while (target in items.indices) {
@@ -158,12 +191,12 @@ class BreadcrumbNavigator(
 
     /** Handles a choice in the popup. */
     fun choose(node: BreadcrumbNode) {
-        val anchorIndex = popup?.anchorIndex ?: return
+        val prefixSize = popup?.pathPrefixSize ?: return
         launch {
             when (val result = autoExpand(node, childrenProvider)) {
                 is ExpandResult.NavigateTo -> navigate(result.target)
                 is ExpandResult.NextPopup -> {
-                    val newItems = items.take(anchorIndex + 1) + result.expanded
+                    val newItems = items.take(prefixSize) + result.expanded
                     items = newItems
                     openedByKeys = setOf(newItems.last().key)
                     popup = BreadcrumbPopupModel(newItems.lastIndex, result.children, initialSelectedIndex = 0)

@@ -1,28 +1,28 @@
 package io.github.kdroidfilter.seforimapp.core.presentation.components
 
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.dp
-import dev.nucleusframework.core.runtime.Platform
 import dev.nucleusframework.window.ControlButtonsDirection
 import dev.nucleusframework.window.DecoratedWindowScope
+import dev.nucleusframework.window.TitleBarLayoutPolicy
 import dev.nucleusframework.window.jewel.JewelTitleBar
 import dev.nucleusframework.window.macOSLargeCornerRadius
 import dev.nucleusframework.window.newFullscreenControls
-import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.TabsView
+import io.github.kdroidfilter.seforimapp.core.presentation.tabs.tabStripMinWidth
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
-import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
-import io.github.kdroidfilter.seforimapp.framework.update.showTitleBarIcon
+
+private enum class TitleBarSlot { Tabs, Switcher, Buttons }
 
 @Composable
 fun DecoratedWindowScope.MainTitleBar() {
@@ -30,61 +30,45 @@ fun DecoratedWindowScope.MainTitleBar() {
         modifier = Modifier.newFullscreenControls().macOSLargeCornerRadius(),
         gradientStartColor = if (ThemeUtils.isIslandsStyle()) ThemeUtils.titleBarGradientColor() else Color.Unspecified,
         controlButtonsDirection = ControlButtonsDirection.SystemNative,
+        layoutPolicy = TitleBarLayoutPolicy.FillCenter,
     ) {
-        // Window control buttons (close/maximize/minimize) are Compose-based on Linux and
-        // Windows-fallback. Their total width must be subtracted from the available width so
-        // that the BoxWithConstraints content doesn't push them outside the window boundary.
-        val windowControlButtonWidth = LocalTitleBarStyle.current.metrics.titlePaneButtonSize.width
-        val windowControlCount =
-            when (PlatformInfo.currentOS) {
-                Platform.MacOS -> 0 // native traffic lights, not in Compose layout
-                else -> 3 // close + maximize/restore + minimize
-            }
-        // The update badge is an extra action button shown only for PROMPT updates; it must be
-        // counted so the reserved icons-area width (and thus tabsAreaWidth) stays correct.
-        val updateIconVisible =
-            LocalAppGraph.current.appUpdateService.state
+        val tabCount =
+            LocalOpenWindow.current.tabsViewModel.state
                 .collectAsState()
-                .value.showTitleBarIcon
-        BoxWithConstraints(modifier = Modifier.align(Alignment.Start)) {
-            val windowWidth = maxWidth
-            // Non-macOS gets the extra Favorites button (macOS uses the native menus).
-            // TitleBarActionsButtonsView contains SharedStudy, Tools, Home, Find, and on non-macOS Favorites, Notes, Theme, Settings.
-            // Tab Search lives at the leading edge of the tabs area and is accounted for there.
-            val actionButtonCount = (if (PlatformInfo.isMacOS) 4 else 8) + if (updateIconVisible) 1 else 0
-            val iconWidth: Dp = 36.dp
-            val desktopSwitcherWidth: Dp = DESKTOP_SWITCHER_WIDTH
-            val actionButtonsWidth = iconWidth * actionButtonCount + desktopSwitcherWidth
-            val macOsTrafficLightsWidth: Dp = 80.dp
-            val windowsControlsWidth: Dp = 140.dp
-            val iconsAreaWidth: Dp =
-                when (PlatformInfo.currentOS) {
-                    Platform.MacOS -> actionButtonsWidth + macOsTrafficLightsWidth // traffic lights space
-                    Platform.Windows -> actionButtonsWidth + windowsControlsWidth // window controls
-                    else -> actionButtonsWidth + windowControlButtonWidth * windowControlCount
-                }
-            val tabsAreaWidth: Dp = (windowWidth - iconsAreaWidth).coerceAtLeast(0.dp)
-            Row {
-                Row(
-                    modifier =
-                        Modifier
-                            .align(Alignment.Start)
-                            .width(tabsAreaWidth),
-                ) {
-                    if (!PlatformInfo.isMacOS) {
-                        TabSearchButton()
+                .value.tabs.size
+        // The title bar supplies the room left by the native window controls. Measure actions first;
+        // future buttons automatically give the tab strip less room, without another manual count.
+        SubcomposeLayout(Modifier.align(Alignment.CenterHorizontally)) { constraints ->
+            val loose = constraints.copy(minWidth = 0)
+            val buttons =
+                subcompose(TitleBarSlot.Buttons) {
+                    Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                        TitleBarActionsButtonsView()
                     }
-                    TabsView()
-                }
-                Row(
-                    modifier =
-                        Modifier
-                            .align(Alignment.End)
-                            .fillMaxHeight(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DesktopSwitcher()
-                    TitleBarActionsButtonsView()
+                }.map { it.measure(loose) }
+            val buttonsWidth = buttons.sumOf { it.width }
+            val searchWidth = if (PlatformInfo.isMacOS) 0.dp else 40.dp
+            val compact =
+                constraints.maxWidth - buttonsWidth - DESKTOP_SWITCHER_WIDTH.roundToPx() <
+                    (tabStripMinWidth(tabCount) + searchWidth).roundToPx()
+            val switcher =
+                subcompose(TitleBarSlot.Switcher) {
+                    DesktopSwitcher(compact = compact)
+                }.map { it.measure(loose) }
+            val tabsWidth = (constraints.maxWidth - buttonsWidth - switcher.sumOf { it.width }).coerceAtLeast(0)
+            val tabs =
+                subcompose(TitleBarSlot.Tabs) {
+                    Row {
+                        if (!PlatformInfo.isMacOS) TabSearchButton()
+                        Box(Modifier.weight(1f)) { TabsView() }
+                    }
+                }.map { it.measure(constraints.copy(minWidth = tabsWidth, maxWidth = tabsWidth)) }
+            val height = (tabs + switcher + buttons).maxOfOrNull { it.height } ?: constraints.minHeight
+            layout(constraints.maxWidth, height) {
+                var x = 0
+                for (child in tabs + switcher + buttons) {
+                    child.placeRelative(x, (height - child.height) / 2)
+                    x += child.width
                 }
             }
         }

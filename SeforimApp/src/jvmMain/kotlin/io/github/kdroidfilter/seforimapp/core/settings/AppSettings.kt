@@ -6,6 +6,8 @@ import com.russhwolf.settings.set
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle
+import io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing
+import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +47,7 @@ object AppSettings {
             KEY_USER_COMMUNITY,
             KEY_THEME_MODE,
             KEY_THEME_STYLE,
+            KEY_ANTI_ALIASING,
             KEY_LINK_LOAD_LEVEL,
             KEY_ACCENT_COLOR,
             KEY_HOME_WIDGETS_LAYOUT,
@@ -147,11 +150,8 @@ object AppSettings {
     // Theme configuration
     private const val KEY_THEME_MODE = "theme_mode"
     private const val KEY_THEME_STYLE = "theme_style"
+    private const val KEY_ANTI_ALIASING = "widget_anti_aliasing"
     private const val KEY_ACCENT_COLOR = "accent_color"
-
-    // Zmanim widgets visibility
-    private const val KEY_SHOW_ZMANIM_WIDGETS = "show_zmanim_widgets"
-    private const val KEY_SHOW_TEMPLE_COUNTDOWN = "show_temple_countdown"
 
     // Homepage wallpaper visibility
     private const val KEY_SHOW_HOME_WALLPAPER = "show_home_wallpaper"
@@ -204,9 +204,8 @@ object AppSettings {
         _targumFontCodeFlow.value = getTargumFontCode()
         _sourceFontCodeFlow.value = getSourceFontCode()
         _linkLoadLevelFlow.value = getLinkLoadLevel()
-        _showZmanimWidgetsFlow.value = isShowZmanimWidgetsEnabled()
-        _showTempleCountdownFlow.value = isShowTempleCountdownEnabled()
         _showHomeWallpaperFlow.value = isShowHomeWallpaperEnabled()
+        _antiAliasingFlow.value = getAntiAliasing()
         _bookDetailsPaneFlow.value = isBookDetailsPaneVisible()
         _compactModeFlow.value = isCompactModeEnabled()
         // User profile reactive values
@@ -243,12 +242,22 @@ object AppSettings {
     private val _keepScreenAwakeOnBookFlow = MutableStateFlow(isKeepScreenAwakeOnBookEnabled())
     val keepScreenAwakeOnBookFlow: StateFlow<Boolean> = _keepScreenAwakeOnBookFlow.asStateFlow()
 
-    // StateFlow for zmanim widgets visibility
-    private val _showZmanimWidgetsFlow = MutableStateFlow(isShowZmanimWidgetsEnabled())
-    val showZmanimWidgetsFlow: StateFlow<Boolean> = _showZmanimWidgetsFlow.asStateFlow()
+    private val _antiAliasingFlow = MutableStateFlow(getAntiAliasing())
+    val antiAliasingFlow: StateFlow<WidgetAntiAliasing> = _antiAliasingFlow.asStateFlow()
+    val AVAILABLE_ANTI_ALIASING: List<WidgetAntiAliasing> =
+        WidgetAntiAliasing.entries.filter { it != WidgetAntiAliasing.TAA || !PlatformInfo.isLinux }
 
-    private val _showTempleCountdownFlow = MutableStateFlow(isShowTempleCountdownEnabled())
-    val showTempleCountdownFlow: StateFlow<Boolean> = _showTempleCountdownFlow.asStateFlow()
+    fun getAntiAliasing(): WidgetAntiAliasing =
+        WidgetAntiAliasing.entries
+            .firstOrNull { it.name == settings.getStringOrNull(KEY_ANTI_ALIASING) }
+            ?.takeIf { it != WidgetAntiAliasing.TAA || !PlatformInfo.isLinux }
+            ?: WidgetAntiAliasing.OFF
+
+    fun setAntiAliasing(mode: WidgetAntiAliasing) {
+        val supported = mode.takeIf { it in AVAILABLE_ANTI_ALIASING } ?: WidgetAntiAliasing.OFF
+        settings[KEY_ANTI_ALIASING] = supported.name
+        _antiAliasingFlow.value = supported
+    }
 
     // StateFlow for homepage wallpaper visibility
     private val _showHomeWallpaperFlow = MutableStateFlow(isShowHomeWallpaperEnabled())
@@ -514,22 +523,6 @@ object AppSettings {
     fun setKeepScreenAwakeOnBookEnabled(enabled: Boolean) {
         settings[KEY_KEEP_SCREEN_AWAKE_ON_BOOK] = enabled
         _keepScreenAwakeOnBookFlow.value = enabled
-    }
-
-    // Zmanim widgets visibility
-    fun isShowZmanimWidgetsEnabled(): Boolean = settings[KEY_SHOW_ZMANIM_WIDGETS, true]
-
-    fun setShowZmanimWidgetsEnabled(enabled: Boolean) {
-        settings[KEY_SHOW_ZMANIM_WIDGETS] = enabled
-        _showZmanimWidgetsFlow.value = enabled
-    }
-
-    // Temple destruction countdown visibility; inherit the legacy combined setting on first use.
-    fun isShowTempleCountdownEnabled(): Boolean = settings[KEY_SHOW_TEMPLE_COUNTDOWN, isShowZmanimWidgetsEnabled()]
-
-    fun setShowTempleCountdownEnabled(enabled: Boolean) {
-        settings[KEY_SHOW_TEMPLE_COUNTDOWN] = enabled
-        _showTempleCountdownFlow.value = enabled
     }
 
     /** Null goes back to the default layout. The old fork key is read until the first edit. */
@@ -800,9 +793,8 @@ object AppSettings {
         _closeTreeOnNewBookFlow.value = false
         _databasePathFlow.value = null
         _persistSessionFlow.value = true
-        _showZmanimWidgetsFlow.value = true
-        _showTempleCountdownFlow.value = true
         _showHomeWallpaperFlow.value = true
+        _antiAliasingFlow.value = WidgetAntiAliasing.OFF
         _bookDetailsPaneFlow.value = false
         _compactModeFlow.value = false
         _linkLoadLevelFlow.value = DEFAULT_LINK_LOAD_LEVEL

@@ -247,6 +247,7 @@ class DesktopManager(
         val from = window(fromWindowId) ?: return
         val to = window(toWindowId) ?: return
         val item = from.tabsViewModel.takeTab(tabId) ?: return
+        from.tabThumbnails.remove(tabId)?.let { to.tabThumbnails[tabId] = it }
         to.tabsViewModel.insertTab(item.destination, item.title, item.tabType, index, select = true)
         to.requestFocus()
         _focusedWindowId.value = to.id
@@ -299,6 +300,7 @@ class DesktopManager(
                 geometry = geometry,
             )
         val spawned = spawnWindow(desktopId, snapshot)
+        from.tabThumbnails.remove(tabId)?.let { spawned.tabThumbnails[tabId] = it }
         _focusedWindowId.value = spawned.id
         refreshActiveDesktop()
         return spawned

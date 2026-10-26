@@ -224,7 +224,19 @@ fun WindowPanes(window: OpenWindow) {
                     LocalPaneHome provides pane.home,
                     LocalPaneReset provides { pane.workspaceIn(window, groupId).dock(pane.idIn(groupId), pane.home.side, pane.home.order) },
                 ) {
-                    PaneBody(window, groupId, pane)
+                    val definition =
+                        io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+                            .buildThemeDefinition()
+                    org.jetbrains.jewel.intui.standalone.theme.IntUiTheme(
+                        theme = definition,
+                        styling =
+                            io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
+                                .buildComponentStyling(),
+                    ) {
+                        Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)) {
+                            PaneBody(window, groupId, pane)
+                        }
+                    }
                 }
             }
         }

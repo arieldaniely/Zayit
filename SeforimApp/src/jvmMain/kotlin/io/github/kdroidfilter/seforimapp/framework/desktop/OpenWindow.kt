@@ -36,6 +36,8 @@ class OpenWindow internal constructor(
     private val navigationPanes = SatelliteWorkspace()
     private val linePanes = SatelliteWorkspace()
     internal val tabOwners = mutableMapOf<String, SimpleTabViewModelOwner>()
+    internal val tabThumbnails = androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
+    internal var pointerOnStrip by mutableStateOf(false)
 
     internal fun ownerOf(tabId: String) = tabOwners.getOrPut(tabId) { SimpleTabViewModelOwner(tabId) }
 

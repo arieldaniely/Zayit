@@ -1,12 +1,8 @@
 package io.github.kdroidfilter.seforimapp.features.settings.display
 
 sealed interface DisplaySettingsEvents {
-    data class SetShowZmanimWidgets(
-        val value: Boolean,
-    ) : DisplaySettingsEvents
-
-    data class SetShowTempleCountdown(
-        val value: Boolean,
+    data class SetAntiAliasing(
+        val value: io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing,
     ) : DisplaySettingsEvents
 
     data class SetShowHomeWallpaper(

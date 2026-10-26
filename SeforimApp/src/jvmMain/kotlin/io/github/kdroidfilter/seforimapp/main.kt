@@ -269,7 +269,11 @@ fun main(args: Array<String>) {
 
         // themeStyle is already initialized from AppSettings in MainAppState, no separate LaunchedEffect needed
 
+        val savedAntiAliasing by AppSettings.antiAliasingFlow.collectAsState()
+        val antiAliasing =
+            if (PlatformInfo.isLowEnd) io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing.OFF else savedAntiAliasing
         CompositionLocalProvider(
+            io.github.kdroidfilter.seforimapp.earthwidget.LocalWidgetAntiAliasing provides antiAliasing,
             io.github.kdroidfilter.seforimapp.features.home.widgets.LocalToolApplicationScope provides this,
             LocalAppGraph provides appGraph,
             LocalMetroViewModelFactory provides appGraph.metroViewModelFactory,

@@ -233,10 +233,10 @@ fun WindowPanes(window: OpenWindow) {
                             io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
                                 .buildComponentStyling(),
                     ) {
-                        Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)) {
-                            if (satellite.placement is SatellitePlacement.Docked) {
-                                PaneBody(window, groupId, pane)
-                            } else {
+                        if (satellite.placement is SatellitePlacement.Docked) {
+                            PaneBody(window, groupId, pane)
+                        } else {
+                            Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)) {
                                 PaneCard { PaneBody(window, groupId, pane) }
                             }
                         }

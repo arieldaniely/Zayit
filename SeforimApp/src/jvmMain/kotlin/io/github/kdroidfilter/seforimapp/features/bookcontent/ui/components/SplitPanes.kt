@@ -30,13 +30,13 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
 
-private enum class ResizeAxis {
+internal enum class ResizeAxis {
     Horizontal,
     Vertical,
 }
 
 @Composable
-private fun ResizeGlow(
+internal fun ResizeGlow(
     axis: ResizeAxis,
     enabled: Boolean,
     highlighted: Boolean,

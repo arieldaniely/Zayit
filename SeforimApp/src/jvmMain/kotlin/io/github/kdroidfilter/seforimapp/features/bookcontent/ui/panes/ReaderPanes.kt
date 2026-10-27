@@ -4,17 +4,12 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -23,16 +18,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import dev.nucleusframework.application.Satellite
 import dev.nucleusframework.window.ControlButtonsDirection
 import dev.nucleusframework.window.ExperimentalNucleusApi
@@ -56,6 +54,8 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.SplitDefault
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.LocalPaneHome
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.LocalPaneReset
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.LocalPaneSatellite
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.ResizeAxis
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.ResizeGlow
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.CommentsPane
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.SourcesPane
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.TargumPane
@@ -806,39 +806,36 @@ private fun SearchTocPane(
 }
 
 /**
- * The reader's splitter: no visible line (the cards' gaps are the dividers), just a 5 dp grip.
+ * The reader's splitter: a measured 7 dp handle with the same glow as the other split panes.
  */
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 fun DockSplitterScope.ReaderSplitter() {
-    val hover = remember { MutableInteractionSource() }
-    val hovered by hover.collectIsHoveredAsState()
-    val accent = JewelTheme.globalColors.outlines.focused
+    var hovered by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    var pointerPosition by remember { mutableStateOf(Float.NaN) }
     val horizontal = orientation == Orientation.Horizontal
-    val line = if (horizontal) Modifier.fillMaxHeight().width(0.dp) else Modifier.fillMaxWidth().height(0.dp)
-    Box(line, contentAlignment = Alignment.Center) {
-        val grip =
-            if (horizontal) {
-                Modifier
-                    .requiredWidth(
-                        GRIP_DP.dp,
-                    ).fillMaxHeight()
-            } else {
-                Modifier.requiredHeight(GRIP_DP.dp).fillMaxWidth()
-            }
-        Box(
+    val grip = if (horizontal) Modifier.width(7.dp).fillMaxHeight() else Modifier.height(7.dp).fillMaxWidth()
+    ResizeGlow(
+        axis = if (horizontal) ResizeAxis.Horizontal else ResizeAxis.Vertical,
+        enabled = true,
+        highlighted = hovered || dragging,
+        dragging = dragging,
+        pointerPosition = pointerPosition,
+        modifier =
             grip
-                .hoverable(hover)
-                .drawBehind {
-                    if (hovered) {
-                        val start = if (horizontal) Offset(center.x, 0f) else Offset(0f, center.y)
-                        val end = if (horizontal) Offset(center.x, size.height) else Offset(size.width, center.y)
-                        listOf(14f to 0.06f, 6f to 0.15f, 2f to 0.65f).forEach { (width, alpha) ->
-                            drawLine(accent.copy(alpha = alpha), start, end, strokeWidth = width.dp.toPx())
-                        }
-                    }
-                }.dockSplitterHandle(),
-        )
-    }
+                .zIndex(1f)
+                .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                .onPointerEvent(PointerEventType.Move) { event ->
+                    event.changes
+                        .firstOrNull()
+                        ?.position
+                        ?.let { pointerPosition = if (horizontal) it.y else it.x }
+                }.onPointerEvent(PointerEventType.Exit) { hovered = false }
+                .onPointerEvent(PointerEventType.Press) { dragging = true }
+                .onPointerEvent(PointerEventType.Release) { dragging = false }
+                .dockSplitterHandle(),
+    )
 }
 
 /**
@@ -873,8 +870,6 @@ fun SatelliteScope.DockedPaneCard(
         else -> PaneCard(content = content)
     }
 }
-
-private const val GRIP_DP = 5
 
 @Composable
 private fun SearchPreviewPane(

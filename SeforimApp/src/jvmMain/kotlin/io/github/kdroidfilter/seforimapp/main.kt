@@ -10,6 +10,9 @@ import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.core.runtime.NucleusApp
 import dev.nucleusframework.energymanager.EnergyManager
+import dev.nucleusframework.window.NucleusDecoratedWindowTheme
+import dev.nucleusframework.window.jewel.rememberJewelTitleBarStyle
+import dev.nucleusframework.window.jewel.rememberJewelWindowStyle
 import dev.zacsweers.metro.createGraph
 import dev.zacsweers.metrox.viewmodel.LocalMetroViewModelFactory
 import dev.zacsweers.metrox.viewmodel.metroViewModel
@@ -59,6 +62,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import seforimapp.seforimapp.generated.resources.*
 import java.awt.*
@@ -481,7 +485,13 @@ fun main(args: Array<String>) {
                         key(w.id) {
                             // Satellites belong to the application composition, alongside their host window.
                             CompositionLocalProvider(LocalOpenWindow provides w) {
-                                WindowPanes(w)
+                                NucleusDecoratedWindowTheme(
+                                    isDark = JewelTheme.isDark,
+                                    windowStyle = rememberJewelWindowStyle(),
+                                    titleBarStyle = rememberJewelTitleBarStyle(),
+                                ) {
+                                    WindowPanes(w)
+                                }
                             }
                             MainAppWindow(
                                 openWindow = w,

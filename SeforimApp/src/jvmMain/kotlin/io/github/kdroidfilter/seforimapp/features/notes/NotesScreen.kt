@@ -89,7 +89,7 @@ fun NotesTabContent(tabId: String) {
 }
 
 @Composable
-private fun BookNotesCard(
+internal fun BookNotesCard(
     title: String,
     notes: List<BookNote>,
     onOpen: (BookNote) -> Unit,

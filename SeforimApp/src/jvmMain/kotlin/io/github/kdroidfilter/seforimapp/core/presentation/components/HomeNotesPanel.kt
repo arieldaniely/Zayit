@@ -11,18 +11,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.kdroidfilter.seforim.tabs.TabType
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.PaneHeader
+import io.github.kdroidfilter.seforimapp.features.notes.BookNotesCard
 import io.github.kdroidfilter.seforimapp.features.notes.noteDestination
 import io.github.kdroidfilter.seforimapp.features.notes.openNotesTab
 import io.github.kdroidfilter.seforimapp.features.notes.rememberUserNotes
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
@@ -44,6 +47,8 @@ internal fun HomeNotesPanel(
     onHide: () -> Unit,
 ) {
     val userNotes = rememberUserNotes()
+    val noteStore = LocalAppGraph.current.noteStore
+    val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     val byBook = remember(userNotes, query) { userNotes.matching(query).groupBy { it.bookId }.toList() }
     val focusRequester = remember { FocusRequester() }
@@ -59,16 +64,13 @@ internal fun HomeNotesPanel(
             )
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp)) {
-            byBook.forEach { (bookId, notes) ->
-                item(key = "book-$bookId") { PopupSectionHeader(userNotes.bookTitles[bookId].orEmpty()) }
-                items(notes, key = { "note-" + it.note.id }) { bookNote ->
-                    PopupRow(
-                        label = bookNote.note.note,
-                        tabType = TabType.NOTES,
-                        onClick = { tabsViewModel.openTab(noteDestination(bookNote)) },
-                        onClose = null,
-                    )
-                }
+            items(byBook, key = { it.first }) { (bookId, notes) ->
+                BookNotesCard(
+                    title = userNotes.bookTitles[bookId].orEmpty(),
+                    notes = notes.sortedByDescending { it.note.updatedAt },
+                    onOpen = { tabsViewModel.openTab(noteDestination(it)) },
+                    onDelete = { scope.launch { noteStore.removeNote(it.bookId, it.note.id) } },
+                )
             }
             if (byBook.isEmpty()) {
                 item(key = "empty") {

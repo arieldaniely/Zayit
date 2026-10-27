@@ -684,7 +684,7 @@ private fun BookPaneBody(
                     BookTocPanel(uiState = uiState, onEvent = onEvent, modifier = modifier)
                 }
             ReaderPane.Notes ->
-                if (destination is TabsDestination.Home) {
+                if (!isBookTextShown(uiState)) {
                     io.github.kdroidfilter.seforimapp.core.presentation.components.HomeNotesPanel(
                         tabsViewModel = window.tabsViewModel,
                         onHide = { onEvent(BookContentEvent.ToggleNotes) },

@@ -480,7 +480,7 @@ private fun SearchResultContentMvi(
     Box(modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 // Top persistent search toolbar
@@ -540,35 +540,33 @@ private fun SearchResultContentMvi(
                         maxLines = 1,
                     )
 
-                    Box(
-                        modifier =
-                            Modifier
-                                .height(4.dp)
-                                .weight(1f)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(
-                                    JewelTheme.globalColors.borders.disabled
-                                        .copy(alpha = 0.6f),
-                                ),
-                    ) {
-                        if (showProgress && progressFraction > 0f) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxHeight()
-                                        .fillMaxWidth(progressFraction)
-                                        .background(JewelTheme.globalColors.outlines.focused),
-                            )
+                    if (showProgress) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .height(4.dp)
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(percent = 50))
+                                    .background(
+                                        JewelTheme.globalColors.borders.disabled
+                                            .copy(alpha = 0.6f),
+                                    ),
+                        ) {
+                            if (progressFraction > 0f) {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(progressFraction)
+                                            .background(JewelTheme.globalColors.outlines.focused),
+                                )
+                            }
                         }
-                    }
 
-                    // Reserve space for the cancel button to prevent width jumps
-                    Box(
-                        modifier = Modifier.width(40.dp).height(28.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // Only show cancel during initial search, not lazy loading
-                        if (state.isLoading) {
+                        Box(
+                            modifier = Modifier.width(40.dp).height(28.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             IconActionButton(
                                 key = AllIconsKeys.Windows.Close,
                                 onClick = actions.onCancelSearch,
@@ -590,7 +588,7 @@ private fun SearchResultContentMvi(
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
                             .background(JewelTheme.globalColors.panelBackground)
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = 8.dp),
                 ) {
                     if (visibleResults.isEmpty()) {
                         if (state.isLoading) {
@@ -610,7 +608,7 @@ private fun SearchResultContentMvi(
                                     modifier =
                                         Modifier
                                             .fillMaxSize()
-                                            .padding(start = 18.dp, end = 14.dp)
+                                            .padding(horizontal = 8.dp)
                                             .verticalEdgeFade(
                                                 showTop = listState.canScrollBackward,
                                                 showBottom = listState.canScrollForward,
@@ -698,7 +696,7 @@ private fun SearchResultContentMvi(
                             LazyColumn(
                                 state = listState,
                                 modifier =
-                                    Modifier.fillMaxSize().padding(horizontal = 32.dp).verticalEdgeFade(
+                                    Modifier.fillMaxSize().padding(horizontal = 8.dp).verticalEdgeFade(
                                         showTop = listState.canScrollBackward,
                                         showBottom = listState.canScrollForward,
                                     ),
@@ -1018,7 +1016,7 @@ internal fun BookResultCard(
 
     val accent = JewelTheme.globalColors.outlines.focused
     val cardShape = RoundedCornerShape(14.dp)
-    val referenceColumnWidth = (textSize * 4.4f).dp
+    val referenceColumnWidth = (textSize * 3.2f).dp
 
     Box(
         modifier =
@@ -1029,7 +1027,7 @@ internal fun BookResultCard(
                 .background(JewelTheme.globalColors.panelBackground)
                 .border(1.dp, JewelTheme.globalColors.borders.normal, cardShape),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
             // Header: book title (sans, bold) + filled count chip
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1115,14 +1113,14 @@ internal fun BookResultCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(referenceColumnWidth).padding(top = (textSize * 0.22f).dp),
                 )
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = primaryDisplay,
                     color = JewelTheme.globalColors.text.normal,
                     fontFamily = fontFamily,
                     lineHeight = (textSize * lineHeight).sp,
                     fontSize = textSize.sp,
-                    textAlign = TextAlign.Justify,
+                    textAlign = TextAlign.Start,
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
@@ -1338,7 +1336,7 @@ private fun SecondaryResultRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(referenceColumnWidth).padding(top = (textSize * 0.18f).dp),
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(8.dp))
         Text(
             text = display,
             color = JewelTheme.globalColors.text.normal,

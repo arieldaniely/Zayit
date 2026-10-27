@@ -234,7 +234,11 @@ fun WindowPanes(window: OpenWindow) {
                                 .buildComponentStyling(),
                     ) {
                         Box(Modifier.fillMaxSize().background(JewelTheme.globalColors.toolwindowBackground)) {
-                            PaneBody(window, groupId, pane)
+                            if (satellite.placement is SatellitePlacement.Docked) {
+                                PaneBody(window, groupId, pane)
+                            } else {
+                                PaneCard { PaneBody(window, groupId, pane) }
+                            }
                         }
                     }
                 }

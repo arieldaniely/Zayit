@@ -55,9 +55,6 @@ import kotlin.math.sqrt
 
 private const val DEFAULT_PITCH_DEG = 12f
 
-/** Field of view when facing the Moon: close enough for it to fill about 40% of the card's height. */
-private const val MOON_FOCUS_FOV_DEG = 24f
-
 /** Where the view looks, and how wide. */
 private data class SkyAim(
     val yawDeg: Float,
@@ -416,7 +413,7 @@ private fun DrawScope.drawPass(
  * The sky over [latitude]/[longitude] as seen from the ground, in 3D: the Sun and Moon where they really are
  * (the Moon lit by the Sun, so its phase is real), the stars turning with the night, and a sky whose colours
  * tell dawn, midday, sunset and night apart; the day's path of the Sun with its rise, highest point and set.
- * A fixed view (the Sun while any daylight is left; in full night the Moon close in if it is up), that glides along
+ * A wide view of the sky (toward the Sun by day and the Moon by night), that glides along
  * when the moment changes.
  */
 @Composable
@@ -493,7 +490,7 @@ fun SkyWidgetView(
     val clock = remember(timeZone) { SimpleDateFormat("HH:mm").apply { this.timeZone = timeZone } }
 
     // The Sun while any of its light is left in the sky (down to 18° under: alos, netz, shkia, tzeis all look at
-    // its side); in full night the Moon if it is up, close in so its phase reads; else the south
+    // its side); in full night face the Moon if it is up, keeping the same wide sky view; else the south
     fun facing(
         sunPos: SolarPosition,
         moonPos: HorizontalPosition,
@@ -504,9 +501,8 @@ fun SkyWidgetView(
                 SkyAim(sunPos.azimuthDegreesFromNorth.toFloat(), (el - 18f).coerceIn(DEFAULT_PITCH_DEG, 60f), SKY_VFOV_DEG)
             }
             moonPos.elevationDeg > 0.0 -> {
-                // Low, it keeps a strip of skyline under it
                 val el = moonPos.elevationDeg.toFloat()
-                SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), el.coerceAtLeast(MOON_FOCUS_FOV_DEG * 0.3f), MOON_FOCUS_FOV_DEG)
+                SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), (el - 18f).coerceIn(DEFAULT_PITCH_DEG, 60f), SKY_VFOV_DEG)
             }
             else -> SkyAim(if (latitude >= 0) 180f else 0f, DEFAULT_PITCH_DEG, SKY_VFOV_DEG)
         }

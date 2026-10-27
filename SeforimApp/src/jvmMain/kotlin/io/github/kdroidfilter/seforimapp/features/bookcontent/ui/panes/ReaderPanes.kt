@@ -684,17 +684,24 @@ private fun BookPaneBody(
                     BookTocPanel(uiState = uiState, onEvent = onEvent, modifier = modifier)
                 }
             ReaderPane.Notes ->
-                NotesPanel(
-                    uiState = uiState,
-                    onEvent = onEvent,
-                    bookId = uiState.navigation.selectedBook?.id ?: 0L,
-                    noteStore = LocalAppGraph.current.noteStore,
-                    selectedLineIds = uiState.content.selectedLineIds,
-                    primarySelectedLine = uiState.content.primaryLine,
-                    draft = tabUi.noteDraft,
-                    onConsumeDraft = { tabUi.noteDraft = null },
-                    modifier = modifier,
-                )
+                if (destination is TabsDestination.Home) {
+                    io.github.kdroidfilter.seforimapp.core.presentation.components.HomeNotesPanel(
+                        tabsViewModel = window.tabsViewModel,
+                        onHide = { onEvent(BookContentEvent.ToggleNotes) },
+                    )
+                } else {
+                    NotesPanel(
+                        uiState = uiState,
+                        onEvent = onEvent,
+                        bookId = uiState.navigation.selectedBook?.id ?: 0L,
+                        noteStore = LocalAppGraph.current.noteStore,
+                        selectedLineIds = uiState.content.selectedLineIds,
+                        primarySelectedLine = uiState.content.primaryLine,
+                        draft = tabUi.noteDraft,
+                        onConsumeDraft = { tabUi.noteDraft = null },
+                        modifier = modifier,
+                    )
+                }
             ReaderPane.BookDetails -> {
                 // In a search's results, the selected result's book; else the tab's book
                 val details =

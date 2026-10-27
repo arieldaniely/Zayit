@@ -156,7 +156,6 @@ fun TitleBarActionsButtonsView() {
     // Tab Search is placed immediately before the tabs in MainTitleBar.
     if (!PlatformInfo.isMacOS) {
         FavoritesMenuButton()
-        NotesMenuButton()
     }
     // On macOS, theme toggle and settings are handled by the native menu bar
     if (!PlatformInfo.isMacOS) {

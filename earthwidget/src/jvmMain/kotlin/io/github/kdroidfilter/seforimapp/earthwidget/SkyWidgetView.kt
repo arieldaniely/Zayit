@@ -521,7 +521,8 @@ fun SkyWidgetView(
     }
     // Turned toward whatever is up at the new place or moment, gliding there with the time
     // Not glided, the view holds still: re-aimed at every frame it would swing about
-    val aim = remember(latitude, longitude, if (glide) timeMillis else Unit) { facingAt(timeMillis ?: System.currentTimeMillis()) }
+    val aimTime = if (glide) target else null
+    val aim = remember(latitude, longitude, aimTime) { facingAt(aimTime ?: target) }
     var yaw by remember { mutableFloatStateOf(aim.yawDeg) }
     var pitch by remember { mutableFloatStateOf(aim.pitchDeg) }
     var fov by remember { mutableFloatStateOf(aim.fovDeg) }

@@ -1809,8 +1809,8 @@ internal fun SearchBar(
                         ): IntOffset {
                             // Base position under the TextField using measured bounds (already in window coords)
                             val padding = 8
-                            var x = anchorBounds.left
-                            var y = anchorBounds.bottom + padding
+                            var x = a.windowOffset.x
+                            var y = a.windowOffset.y + a.size.height + padding
                             // Clamp horizontally inside window
                             if (x + popupContentSize.width > windowSize.width) {
                                 x = (windowSize.width - popupContentSize.width).coerceAtLeast(0)

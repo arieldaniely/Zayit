@@ -49,6 +49,13 @@ internal fun settingsSearchEntries(): List<SettingsSearchEntry> =
         SettingsSearchEntry(
             SettingsDestination.General,
             stringResource(Res.string.settings_category_general),
+            stringResource(Res.string.semantic_search_settings),
+            stringResource(Res.string.semantic_search_description),
+            key = Res.string.semantic_search_settings,
+        ),
+        SettingsSearchEntry(
+            SettingsDestination.General,
+            stringResource(Res.string.settings_category_general),
             stringResource(Res.string.close_book_tree_on_new_book),
             stringResource(Res.string.close_book_tree_on_new_book_description),
             key = Res.string.close_book_tree_on_new_book,

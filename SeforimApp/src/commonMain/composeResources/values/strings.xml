@@ -1182,4 +1182,15 @@
     <string name="settings_antialiasing_msaa_4">MSAA ×4</string>
     <string name="settings_antialiasing_msaa_8">MSAA ×8</string>
     <string name="settings_antialiasing_taa">TAA</string>
+    <string name="semantic_search_settings">אפשרויות חיפוש חכם — ניסיוני</string>
+    <string name="semantic_search_description">חל על חיפושים חדשים במצב חכם, גם בספרייה האישית. ברירת המחדל נשארת כפי שהייתה. סף הדמיון הוא ציון בין 0 ל־1 ולא הסתברות מכוילת. מצב סף בודק את כל הווקטורים בתחום החיפוש ועשוי להימשך יותר; בלי תקרה כל ההתאמות זמינות בעימוד. כשאין מנוע סמנטי זמין או שהסינון אינו נתמך, החיפוש חוזר למצב גמיש.</string>
+    <string name="semantic_search_topk_mode">מספר מועמדים קבוע</string>
+    <string name="semantic_search_threshold_mode">כל התוצאות שעוברות סף דמיון</string>
+    <string name="semantic_search_threshold">סף דמיון מינימלי (0–1)</string>
+    <string name="semantic_search_candidates">מועמדים לכל מסלול (במצב סף: לדירוג המילולי בלבד)</string>
+    <string name="semantic_search_limit">תקרה אופציונלית במצב סף (0 = ללא תקרה)</string>
+    <string name="semantic_search_cache">שמירת קידודי שאילתות בזיכרון לחיפוש חוזר מהיר</string>
+    <string name="semantic_search_exact">אחזור מלא במקום מקורב — כיסוי מדויק יותר, עשוי להיות איטי יותר</string>
+    <string name="semantic_search_prefer_meaning">דירוג ניסיוני: הגדלת משקל המשמעות פי 1.5</string>
+    <string name="semantic_search_number_invalid">הערך אינו בטווח המותר. החיפוש ישתמש בערך התקין האחרון.</string>
 </resources>

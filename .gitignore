@@ -37,3 +37,5 @@ DATABASE_LICENSING_REVIEW_HE.md
 **/.codex-distribution-validation-build/
 **/.codex-local-project-cache/
 __pycache__/
+**/.codex-semantic-build/
+.codex-semantic-lint-files.txt

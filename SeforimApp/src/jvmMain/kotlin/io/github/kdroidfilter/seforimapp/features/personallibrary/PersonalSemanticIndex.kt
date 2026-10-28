@@ -151,6 +151,7 @@ internal fun personalSearchEngine(
         indexDir = semantic,
         dbPath = artifacts.databasePath,
         sharedEmbedderProvider = embedder,
+        optionsProvider = io.github.kdroidfilter.seforimapp.features.search.SemanticSearchSettings::currentOptions,
         resolveLine = { lineId, bookId, query ->
             val line = repository.getLine(lineId)
             val book = repository.getBookCore(bookId)

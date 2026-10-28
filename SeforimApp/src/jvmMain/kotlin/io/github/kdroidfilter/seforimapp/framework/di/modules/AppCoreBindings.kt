@@ -249,6 +249,7 @@ object AppCoreBindings {
                 modelDir = Paths.get("$dbPath.semantic/model"),
                 indexDir = Paths.get("$dbPath.semantic/index"),
                 dbPath = Paths.get(dbPath),
+                optionsProvider = io.github.kdroidfilter.seforimapp.features.search.SemanticSearchSettings::currentOptions,
                 resolveLine = { lineId, bookId, query ->
                     val line = repository.getLine(lineId)
                     val book = repository.getBookCore(bookId)

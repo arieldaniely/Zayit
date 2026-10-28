@@ -36,6 +36,12 @@
 
 ## מה אי אפשר להסיק
 
+עדות נוספת מהמחולל הציבורי: [LuceneTextIndexWriter](https://github.com/kdroidFilter/SeforimLibrary/blob/fb2af88e1f043a43998a094f87244aff8abb0b7a/generator/searchindex/src/jvmMain/kotlin/io/github/kdroidfilter/seforimlibrary/searchindex/lucene/LuceneTextIndexWriter.kt)
+משתמש ב־`KnnByteVectorField` עם COSINE, כימות לפי max-absolute-value,
+ו־`Lucene99HnswVectorsFormat(16, 100, ...)`. הוא בונה שדה וקטורי נפרד לספרי יסוד
+כדי להימנע מסינון גרף של הקורפוס כולו. אלה עובדות על **כותב האינדקס הפתוח**;
+הן עדיין אינן חושפות את אלגוריתם האחזור בחבילה הפרטית.
+
 הקוד הפתוח אינו חושף את מימוש החבילה הפרטית, נתוני האימון, פונקציית ההפסד,
 ארכיטקטורת המקודד, כיול הציונים, או מדדי דיוק וזמן אמינים. שם fp32 מעיד על
 וריאנט אריזה; הוא אינו מוכיח שיפור איכות. אין כאן שחזור של קוד פרטי או של משקלים.

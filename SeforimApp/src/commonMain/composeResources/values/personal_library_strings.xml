@@ -4,7 +4,7 @@
     <string name="personal_library_description">הוסיפו תיקיות עם ספרים בפורמט TXT או DOCX, או תיקיות בפורמט אוצריא. כל תיקייה נשמרת ומאונדקסת בנפרד מספריית הבסיס.</string>
     <string name="personal_library_add_folder">הוספת תיקייה</string>
     <string name="personal_library_reindex">אינדוקס מחדש</string>
-    <string name="personal_library_working">מייבא ומאנדקס ספרים…</string>
+    <string name="personal_library_working">מייבא ספרים ומכין חיפוש רגיל…</string>
     <string name="personal_library_success">הספרייה האישית עודכנה בהצלחה</string>
     <string name="personal_library_remove">הסרה</string>
     <string name="personal_library_personal_mode">תחת ״ספרים אישיים״</string>

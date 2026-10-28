@@ -1,15 +1,47 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import com.russhwolf.settings.PropertiesSettings
+import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
+import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class PersonalLibraryManagerTest {
+    @Test
+    fun retriesSkippedFilesEvenWhenTheirSizeAndModificationTimeHaveNotChanged() {
+        val temporary = Files.createTempDirectory("personal-retry-")
+        val previousDatabase = PersonalLibraryRuntime.activeDatabase
+        try {
+            val base = temporary.resolve("base.db")
+            PersistentSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
+            val books = Files.createDirectory(temporary.resolve("books"))
+            val file = Files.write(books.resolve("book.txt"), byteArrayOf(0xC3.toByte(), 0x28))
+            val modified = Files.getLastModifiedTime(file)
+            val manager = PersonalLibraryManager(PropertiesSettings(Properties()), base, temporary.resolve("library"))
+            val requested = PersonalLibraryConfiguration(listOf(PersonalBookFolder("books", books.toString(), "Books")))
+            val failed = manager.synchronize(requested).first
+            assertEquals(0, failed.folders.single().lastBookCount)
+            assertNotNull(failed.folders.single().lastError)
+
+            Files.writeString(file, "ok")
+            Files.setLastModifiedTime(file, modified)
+            val retried = manager.synchronize(failed).first
+            assertEquals(failed.synchronizedFingerprint, retried.synchronizedFingerprint)
+            assertNotEquals(failed.activeGeneration, retried.activeGeneration)
+            assertEquals(1, retried.folders.single().lastBookCount)
+            assertNull(retried.folders.single().lastError)
+        } finally {
+            PersonalLibraryRuntime.activeDatabase = previousDatabase
+            temporary.toFile().deleteRecursively()
+        }
+    }
+
     @Test
     fun startupReusesCompatibleBooksEvenWhenTheSourceFolderIsOffline() =
         withLibrary { manager, _, folder, _ ->

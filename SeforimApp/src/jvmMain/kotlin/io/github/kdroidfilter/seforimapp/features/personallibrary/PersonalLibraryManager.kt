@@ -72,12 +72,13 @@ class PersonalLibraryManager(
         }
         val fingerprint = importer.fingerprint(enabled)
         val current = requested.activeGeneration?.let { artifacts(it) }
-        if (!force && requested.synchronizedFingerprint == fingerprint && current?.isComplete() == true) {
+        val retryFailedFiles = enabled.any { !it.lastError.isNullOrBlank() }
+        if (!force && !retryFailedFiles && requested.synchronizedFingerprint == fingerprint && current?.isComplete() == true) {
             rememberBase(current)
             PersonalLibraryRuntime.activeDatabase = current.databasePath
             return requested to current
         }
-        val generation = if (force) "$fingerprint-${System.currentTimeMillis()}" else fingerprint
+        val generation = if (force || retryFailedFiles) "$fingerprint-${System.currentTimeMillis()}" else fingerprint
         val (artifacts, summaries) = importer.build(enabled, generation, onProgress)
         val now = System.currentTimeMillis()
         val folders =

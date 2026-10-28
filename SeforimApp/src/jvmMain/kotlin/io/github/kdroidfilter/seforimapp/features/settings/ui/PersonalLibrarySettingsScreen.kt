@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.components.AnimatedHorizontalProgressBar
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
+import io.github.kdroidfilter.seforimapp.features.personallibrary.PERSONAL_FILES_UNAVAILABLE
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalFolderPlacement
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryViewModel
 import io.github.vinceglb.filekit.FileKit
@@ -44,6 +45,7 @@ import seforimapp.seforimapp.generated.resources.personal_library_change_to_merg
 import seforimapp.seforimapp.generated.resources.personal_library_change_to_personal
 import seforimapp.seforimapp.generated.resources.personal_library_description
 import seforimapp.seforimapp.generated.resources.personal_library_empty
+import seforimapp.seforimapp.generated.resources.personal_library_files_unavailable
 import seforimapp.seforimapp.generated.resources.personal_library_merge_mode
 import seforimapp.seforimapp.generated.resources.personal_library_personal_mode
 import seforimapp.seforimapp.generated.resources.personal_library_reindex
@@ -61,6 +63,7 @@ import seforimapp.seforimapp.generated.resources.personal_semantic_model_require
 import seforimapp.seforimapp.generated.resources.personal_semantic_pending
 import seforimapp.seforimapp.generated.resources.personal_semantic_ready
 import seforimapp.seforimapp.generated.resources.personal_semantic_title
+import seforimapp.seforimapp.generated.resources.personal_semantic_working
 import java.io.File
 
 @Composable
@@ -201,7 +204,11 @@ fun PersonalLibrarySettingsScreen() {
             }
             if (state.isWorking) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stringResource(Res.string.personal_library_working))
+                    Text(
+                        stringResource(
+                            if (state.semanticWorking) Res.string.personal_semantic_working else Res.string.personal_library_working,
+                        ),
+                    )
                     AnimatedHorizontalProgressBar(
                         value = state.progress.coerceIn(0f, 1f),
                         modifier = Modifier.fillMaxWidth(),
@@ -211,7 +218,12 @@ fun PersonalLibrarySettingsScreen() {
             if (state.success) InlineSuccessBanner(stringResource(Res.string.personal_library_success), Modifier.fillMaxWidth())
             state.error?.let {
                 InlineErrorBanner(
-                    if (it == "SEMANTIC_MODEL_REQUIRED") stringResource(Res.string.personal_semantic_model_required) else it,
+                    when {
+                        it == "SEMANTIC_MODEL_REQUIRED" -> stringResource(Res.string.personal_semantic_model_required)
+                        it.startsWith("$PERSONAL_FILES_UNAVAILABLE\n") ->
+                            stringResource(Res.string.personal_library_files_unavailable, it.substringAfter('\n'))
+                        else -> it
+                    },
                     Modifier.fillMaxWidth(),
                 )
             }

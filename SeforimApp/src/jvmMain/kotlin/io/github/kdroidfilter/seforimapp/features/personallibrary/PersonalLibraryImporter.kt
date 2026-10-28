@@ -74,6 +74,7 @@ class PersonalLibraryImporter(
             progress.report(1f)
             return PersonalLibraryArtifacts(generation, database, index) to emptyMap()
         }
+        requireLocalPersonalFiles(folders.filter { it.enabled })
         Files.createDirectories(generationDir)
         val stagingDb = generationDir.resolve("personal.db.building")
         Files.deleteIfExists(stagingDb)

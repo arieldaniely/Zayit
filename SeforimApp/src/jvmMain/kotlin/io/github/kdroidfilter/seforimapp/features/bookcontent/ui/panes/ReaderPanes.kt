@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -30,7 +30,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import dev.nucleusframework.application.Satellite
 import dev.nucleusframework.window.ControlButtonsDirection
 import dev.nucleusframework.window.ExperimentalNucleusApi
@@ -56,6 +55,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.Loca
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.LocalPaneSatellite
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.ResizeAxis
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.ResizeGlow
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.ResizeHandleOverlay
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.CommentsPane
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.SourcesPane
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.TargumPane
@@ -806,7 +806,7 @@ private fun SearchTocPane(
 }
 
 /**
- * The reader's splitter: a measured 7 dp handle with the same glow as the other split panes.
+ * The reader's splitter overlays its grip on the existing card gap without widening it.
  */
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
@@ -815,27 +815,29 @@ fun DockSplitterScope.ReaderSplitter() {
     var dragging by remember { mutableStateOf(false) }
     var pointerPosition by remember { mutableStateOf(Float.NaN) }
     val horizontal = orientation == Orientation.Horizontal
-    val grip = if (horizontal) Modifier.width(7.dp).fillMaxHeight() else Modifier.height(7.dp).fillMaxWidth()
-    ResizeGlow(
-        axis = if (horizontal) ResizeAxis.Horizontal else ResizeAxis.Vertical,
-        enabled = true,
-        highlighted = hovered || dragging,
-        dragging = dragging,
-        pointerPosition = pointerPosition,
-        modifier =
-            grip
-                .zIndex(1f)
-                .onPointerEvent(PointerEventType.Enter) { hovered = true }
-                .onPointerEvent(PointerEventType.Move) { event ->
-                    event.changes
-                        .firstOrNull()
-                        ?.position
-                        ?.let { pointerPosition = if (horizontal) it.y else it.x }
-                }.onPointerEvent(PointerEventType.Exit) { hovered = false }
-                .onPointerEvent(PointerEventType.Press) { dragging = true }
-                .onPointerEvent(PointerEventType.Release) { dragging = false }
-                .dockSplitterHandle(),
-    )
+    val axis = if (horizontal) ResizeAxis.Horizontal else ResizeAxis.Vertical
+    val grip = if (horizontal) Modifier.requiredWidth(7.dp).fillMaxHeight() else Modifier.requiredHeight(7.dp).fillMaxWidth()
+    ResizeHandleOverlay(axis) {
+        ResizeGlow(
+            axis = if (horizontal) ResizeAxis.Horizontal else ResizeAxis.Vertical,
+            enabled = true,
+            highlighted = hovered || dragging,
+            dragging = dragging,
+            pointerPosition = pointerPosition,
+            modifier =
+                grip
+                    .onPointerEvent(PointerEventType.Enter) { hovered = true }
+                    .onPointerEvent(PointerEventType.Move) { event ->
+                        event.changes
+                            .firstOrNull()
+                            ?.position
+                            ?.let { pointerPosition = if (horizontal) it.y else it.x }
+                    }.onPointerEvent(PointerEventType.Exit) { hovered = false }
+                    .onPointerEvent(PointerEventType.Press) { dragging = true }
+                    .onPointerEvent(PointerEventType.Release) { dragging = false }
+                    .dockSplitterHandle(),
+        )
+    }
 }
 
 /**

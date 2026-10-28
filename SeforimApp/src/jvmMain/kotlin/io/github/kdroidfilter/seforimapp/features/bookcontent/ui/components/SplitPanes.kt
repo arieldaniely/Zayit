@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.cursorForHorizontalResize
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.cursorForVerticalResize
@@ -33,6 +34,21 @@ import org.jetbrains.jewel.ui.component.Divider
 internal enum class ResizeAxis {
     Horizontal,
     Vertical,
+}
+
+/** Keeps the resize target above neighbouring cards without reserving space between them. */
+@Composable
+internal fun ResizeHandleOverlay(
+    axis: ResizeAxis,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val modifier =
+        if (axis == ResizeAxis.Horizontal) {
+            Modifier.width(0.dp).fillMaxHeight()
+        } else {
+            Modifier.height(0.dp).fillMaxWidth()
+        }
+    Box(modifier.zIndex(1f), contentAlignment = androidx.compose.ui.Alignment.Center, content = content)
 }
 
 @Composable

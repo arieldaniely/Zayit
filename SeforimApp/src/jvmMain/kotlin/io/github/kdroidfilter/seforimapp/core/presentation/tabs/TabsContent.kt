@@ -189,6 +189,8 @@ fun TabsContent() {
                 },
                 onPickCategory = searchHomeViewModel::onPickCategory,
                 onClearCategory = searchHomeViewModel::onClearCategory,
+                onPickFavorites = searchHomeViewModel::onPickFavorites,
+                onClearFavorites = searchHomeViewModel::onClearFavorites,
                 onPickBook = { book, isPdf ->
                     searchHomeViewModel.onPickBook(book, isPdf)
                 },

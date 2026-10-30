@@ -8,6 +8,11 @@ import kotlinx.serialization.Serializable
 @Immutable
 sealed interface SearchScope {
     @Serializable
+    data class Favorites(
+        val folderId: Long? = null,
+    ) : SearchScope
+
+    @Serializable
     data object Global : SearchScope
 
     /** All books in a category and every descendant category. */

@@ -89,6 +89,7 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Communi
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.search.CategorySuggestionDto
 import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
+import io.github.kdroidfilter.seforimapp.features.search.FavoritesSuggestionDto
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
@@ -147,6 +148,7 @@ internal data class BookSuggestion(
 
 /** A row of the book-stage list; see [catBookRows] for their order. */
 private sealed interface CatBookRow {
+    data class Favorites(val suggestion: FavoritesSuggestionDto) : CatBookRow
     data class Jump(
         val reference: ResolvedReference,
     ) : CatBookRow
@@ -179,8 +181,10 @@ private fun catBookRows(
     authors: List<AuthorHit>,
     books: List<BookSuggestion>,
     categories: List<CategorySuggestionDto> = emptyList(),
+    favorites: List<FavoritesSuggestionDto> = emptyList(),
 ): ImmutableList<CatBookRow> {
     val key = query.searchKey()
+    val (exactFavorites, otherFavorites) = favorites.partition { it.name.searchKey() == key }
     val (exactCategories, otherCategories) = categories.partition { it.category.title.searchKey() == key }
     val (exactAuthors, otherAuthors) =
         authors.partition { author ->
@@ -197,11 +201,13 @@ private fun catBookRows(
         }
     val exactBooks = namedBooks + listOfNotNull(typedTitle)
     return buildList {
+        exactFavorites.mapTo(this) { CatBookRow.Favorites(it) }
         jumps.mapTo(this) { CatBookRow.Jump(it) }
         exactBooks.mapTo(this) { CatBookRow.Book(it) }
         exactAuthors.mapTo(this) { CatBookRow.Author(it) }
         exactCategories.mapTo(this) { CatBookRow.Category(it) }
         if (textSearch) add(CatBookRow.TextSearch)
+        otherFavorites.mapTo(this) { CatBookRow.Favorites(it) }
         otherCategories.mapTo(this) { CatBookRow.Category(it) }
         otherAuthors.mapTo(this) { CatBookRow.Author(it) }
         otherBooks.filter { it !== typedTitle }.mapTo(this) { CatBookRow.Book(it) }
@@ -235,6 +241,8 @@ data class HomeSearchCallbacks(
     val onOpenReference: () -> Unit,
     val onPickCategory: (Category) -> Unit = {},
     val onClearCategory: () -> Unit = {},
+    val onPickFavorites: (FavoritesSuggestionDto) -> Unit = {},
+    val onClearFavorites: () -> Unit = {},
     val onPickBook: (BookModel, Boolean) -> Unit,
     val onPickToc: (TocEntry) -> Unit,
     val onOpenJump: (ResolvedReference) -> Unit = {},
@@ -549,7 +557,19 @@ internal fun UnifiedSearchBar(
         textSearchEnabled = searchUi.selectedScopeToc == null,
         textSearchInBook = searchUi.selectedScopeBook?.title,
         textSearchInAuthor = searchUi.selectedScopeAuthor?.name?.let(AuthorNames::display),
-        textSearchInCategory = searchUi.selectedScopeCategory?.title,
+        textSearchInCategory = searchUi.selectedScopeCategory?.title ?: searchUi.selectedScopeFavorites?.name,
+        favoritesSuggestions = searchUi.favoritesSuggestions,
+        selectedFavorites = searchUi.selectedScopeFavorites,
+        onPickFavorites = { picked ->
+            searchCallbacks.onPickFavorites(picked)
+            skipNextReferenceQuery = true
+            referenceSearchState.edit { replace(0, length, "") }
+            focusAfterDelay(scope, 80, mainSearchFocusRequester)
+        },
+        onClearFavorites = {
+            searchCallbacks.onClearFavorites()
+            referenceSearchState.edit { replace(0, length, "") }
+        },
         categorySuggestions = if (!isTocInTopBar) searchUi.categorySuggestions.toImmutableList() else persistentListOf(),
         selectedCategory = searchUi.selectedScopeCategory,
         onPickCategory = { picked ->
@@ -588,7 +608,7 @@ internal fun UnifiedSearchBar(
                 stringResource(
                     Res.string.search_in_book_placeholder,
                 )
-            } else if (searchUi.selectedScopeCategory != null) {
+            } else if (searchUi.selectedScopeCategory != null || searchUi.selectedScopeFavorites != null) {
                 stringResource(Res.string.search_in_folder_placeholder)
             } else {
                 null
@@ -796,6 +816,14 @@ private fun SuggestionsPanel(
                     val open = RowAction(KEY_ENTER, stringResource(Res.string.row_action_open)) { onRow(row, true) }
                     val searchInside = RowAction(KEY_TAB, stringResource(Res.string.row_action_search_inside)) { onRow(row, false) }
                     when (row) {
+                        is CatBookRow.Favorites ->
+                            SuggestionRow(
+                                parts = listOf(row.suggestion.name),
+                                onClick = searchInside.onClick,
+                                kind = SuggestionKind.FAVORITES,
+                                highlighted = focused,
+                                actions = listOf(searchInside),
+                            )
                         is CatBookRow.Jump ->
                             SuggestionRow(
                                 parts = listOf(row.reference.book.title, row.reference.label),
@@ -1101,7 +1129,7 @@ private fun String.withBold(part: String?): AnnotatedString {
 }
 
 /** What a suggestion row leads to, shown by its icon. */
-private enum class SuggestionKind { PLACE, TEXT_SEARCH, AUTHOR, BOOK, CATEGORY }
+private enum class SuggestionKind { PLACE, TEXT_SEARCH, AUTHOR, BOOK, CATEGORY, FAVORITES }
 
 @Composable
 private fun SuggestionIcon(kind: SuggestionKind) {
@@ -1113,6 +1141,7 @@ private fun SuggestionIcon(kind: SuggestionKind) {
         SuggestionKind.BOOK ->
             Image(rememberVectorPainter(bookOpenTabs(tint)), null, iconModifier, colorFilter = ColorFilter.tint(tint))
         SuggestionKind.CATEGORY -> Icon(AllIconsKeys.Nodes.Folder, null, iconModifier, tint = tint)
+        SuggestionKind.FAVORITES -> Icon(AllIconsKeys.Nodes.Favorite, null, iconModifier, tint = tint)
         SuggestionKind.TEXT_SEARCH -> Icon(AllIconsKeys.Actions.Find, null, iconModifier, tint = tint)
         SuggestionKind.AUTHOR ->
             Image(rememberVectorPainter(Feather), null, iconModifier, colorFilter = ColorFilter.tint(tint))
@@ -1239,6 +1268,10 @@ internal fun SearchBar(
     state: TextFieldState,
     modifier: Modifier = Modifier,
     showModePicker: Boolean = true,
+    favoritesSuggestions: List<FavoritesSuggestionDto> = emptyList(),
+    selectedFavorites: FavoritesSuggestionDto? = null,
+    onPickFavorites: (FavoritesSuggestionDto) -> Unit = {},
+    onClearFavorites: () -> Unit = {},
     onSubmit: () -> Unit = {},
     enabled: Boolean = true,
     suggestionsVisible: Boolean = false,
@@ -1344,7 +1377,7 @@ internal fun SearchBar(
     // Rows of the book-stage list, in display order
     val query = state.text.toString().trim()
     val catBookRows =
-        remember(query, jumpSuggestions, textSearchEnabled, authorSuggestions, bookSuggestions, categorySuggestions) {
+        remember(query, jumpSuggestions, textSearchEnabled, authorSuggestions, bookSuggestions, categorySuggestions, favoritesSuggestions) {
             catBookRows(
                 query,
                 jumpSuggestions,
@@ -1352,6 +1385,7 @@ internal fun SearchBar(
                 authorSuggestions,
                 bookSuggestions,
                 categorySuggestions,
+                favoritesSuggestions,
             )
         }
     val totalCatBook = catBookRows.size
@@ -1473,6 +1507,10 @@ internal fun SearchBar(
             open: Boolean,
         ) {
             when (row) {
+                is CatBookRow.Favorites -> {
+                    onPickFavorites(row.suggestion)
+                    dismissPopup()
+                }
                 is CatBookRow.Jump -> handlePickJump(row.reference)
                 CatBookRow.TextSearch -> handleTextSearch()
                 is CatBookRow.Author -> if (open) handleOpenAuthor(row.hit) else handlePickAuthor(row.hit)
@@ -1532,7 +1570,8 @@ internal fun SearchBar(
                                 )
                         }.onPreviewKeyEvent { ev ->
                             when {
-                                ev.key == Key.Backspace && !isTocMode && (selectedAuthor != null || selectedCategory != null) -> {
+                                ev.key == Key.Backspace && !isTocMode &&
+                                    (selectedAuthor != null || selectedCategory != null || selectedFavorites != null) -> {
                                     when (ev.type) {
                                         KeyEventType.KeyDown -> {
                                             backspaceStartedEmpty = state.text.isEmpty()
@@ -1543,7 +1582,11 @@ internal fun SearchBar(
                                             val shouldClear = backspaceStartedEmpty && state.text.isEmpty()
                                             backspaceStartedEmpty = false
                                             if (shouldClear) {
-                                                if (selectedCategory != null) onClearCategory() else onClearAuthor()
+                                                when {
+                                                    selectedFavorites != null -> onClearFavorites()
+                                                    selectedCategory != null -> onClearCategory()
+                                                    else -> onClearAuthor()
+                                                }
                                             }
                                             shouldClear
                                         }
@@ -1734,6 +1777,15 @@ internal fun SearchBar(
                                 title = selectedBook.title,
                                 onClear = {
                                     onClearBook()
+                                    effectiveFocusRequester.requestFocus()
+                                },
+                            )
+                        } else if (selectedFavorites != null) {
+                            SelectedBookChip(
+                                title = selectedFavorites.name,
+                                kind = SuggestionKind.FAVORITES,
+                                onClear = {
+                                    onClearFavorites()
                                     effectiveFocusRequester.requestFocus()
                                 },
                             )

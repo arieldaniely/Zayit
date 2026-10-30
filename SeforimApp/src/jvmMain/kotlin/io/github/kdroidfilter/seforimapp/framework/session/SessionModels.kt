@@ -182,6 +182,7 @@ data class SearchPersistedState(
     val globalExtended: Boolean = false,
     val datasetScope: String = "global",
     val scopeAuthorId: Long = 0L,
+    val scopeFavoriteFolderId: Long? = null,
     val filterCategoryId: Long = 0L,
     val filterBookId: Long = 0L,
     val filterTocId: Long = 0L,
@@ -213,6 +214,7 @@ data class SearchPersistedState(
             val authorId = fetchAuthorId.takeIf { it > 0 } ?: scopeAuthorId.takeIf { it > 0 }
             val categoryId = fetchCategoryId.takeIf { it != 0L } ?: filterCategoryId.takeIf { it != 0L }
             return when {
+                datasetScope == "favorites" -> SearchScope.Favorites(scopeFavoriteFolderId)
                 tocId != null && bookId != null -> SearchScope.Toc(bookId = bookId, tocId = tocId)
                 bookId != null -> SearchScope.Book(bookId)
                 authorId != null -> SearchScope.Author(authorId)
@@ -240,8 +242,10 @@ data class SearchPersistedState(
                     is SearchScope.Book -> "book"
                     is SearchScope.Toc -> "toc"
                     is SearchScope.Author -> "author"
+                    is SearchScope.Favorites -> "favorites"
                 },
             scopeAuthorId = authorId,
+            scopeFavoriteFolderId = (scope as? SearchScope.Favorites)?.folderId,
             filterCategoryId = categoryId,
             filterBookId = bookId,
             filterTocId = tocId,

@@ -24,6 +24,16 @@ import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchHomeSelectionTest {
+    @Test
+    fun `favorite folder selection persists an explicit search scope`() =
+        runTest {
+            viewModel.onPickFavorites(FavoritesSuggestionDto(7L, "My folder"))
+            viewModel.submitSearch("תפילה", "tab")
+            assertEquals("favorites", store.get("tab")?.search?.datasetScope)
+            assertEquals(7L, store.get("tab")?.search?.scopeFavoriteFolderId)
+            assertEquals(true, store.get("tab")?.search?.globalExtended)
+        }
+
     private lateinit var viewModel: SearchHomeViewModel
     private lateinit var store: TabPersistedStateStore
     private val book = Book(id = 1L, categoryId = 1L, sourceId = 1L, title = "ברכות", order = 1f)

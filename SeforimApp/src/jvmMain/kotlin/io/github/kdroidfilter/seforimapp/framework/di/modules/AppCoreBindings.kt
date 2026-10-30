@@ -345,6 +345,7 @@ object AppCoreBindings {
         repository: SeforimRepository,
         lookup: LuceneLookupSearchService,
         settings: Settings,
+        favoritesStore: FavoritesStore,
     ): DesktopManager =
         DesktopManager(
             tabPersistedStateStore = tabPersistedStateStore,
@@ -357,6 +358,7 @@ object AppCoreBindings {
                     repository = repository,
                     lookup = lookup,
                     settings = settings,
+                    favoritesStore = favoritesStore,
                 )
             },
             initialWindowGeometry = SessionManager.peekInitialWindowGeometry(),

@@ -103,6 +103,7 @@ class SearchResultViewModel(
     private val historyStore: HistoryStore,
     private val searchFeedbackService: SearchFeedbackService,
     lookup: LuceneLookupSearchService,
+    private val favoritesStore: io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(SearchResultViewModel::class)
@@ -120,7 +121,14 @@ class SearchResultViewModel(
 
     private fun updatePersistedSearch(transform: (SearchPersistedState) -> SearchPersistedState) {
         persistedStore.update(tabId) { current ->
-            val next = transform(current.search ?: SearchPersistedState()).withScopeCoverage()
+            val previous = current.search ?: SearchPersistedState()
+            val changed = transform(previous)
+            val next =
+                (if (previous.datasetScope == "favorites") {
+                    changed.copy(datasetScope = "favorites", scopeFavoriteFolderId = previous.scopeFavoriteFolderId)
+                } else {
+                    changed
+                }).withScopeCoverage()
             if (next.hasExplicitScope && next.globalExtended) {
                 _uiState.update { it.copy(globalExtended = true) }
             }
@@ -317,8 +325,10 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState(feedbackSearchId = UUID.randomUUID().toString()))
+    @Volatile
+    private var favoriteLineIds: Set<Long> = emptySet()
     private val lucene: SearchEngine =
-        ModeBoundSearchEngine(
+        LineScopeSearchEngine(ModeBoundSearchEngine(
             searchEngine,
             selectedMode = { _uiState.value.mode },
             onFallback = {
@@ -332,7 +342,7 @@ class SearchResultViewModel(
                     it.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name, snapshot = null)
                 }
             },
-        )
+        ), { favoriteLineIds.takeIf { persistedSearchState().datasetScope == "favorites" } })
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     private var currentJob: Job? = null
     private val highlighter =
@@ -891,7 +901,7 @@ class SearchResultViewModel(
         }
 
         // Try to restore a full snapshot for this tab without redoing the search.
-        val cached = persisted.snapshot
+        val cached = persisted.snapshot.takeUnless { persisted.datasetScope == "favorites" }
         if (cached != null) {
             currentSearchQuery = initialQuery
             // Adopt cached results and aggregates; keep filters and scroll from persisted state.
@@ -1083,6 +1093,10 @@ class SearchResultViewModel(
             )
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
+                val persisted = persistedSearchState()
+                if (persisted.datasetScope == "favorites") {
+                    favoriteLineIds = favoriteScopeLines(favoritesStore, repository, persisted.scopeFavoriteFolderId)
+                }
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = true,

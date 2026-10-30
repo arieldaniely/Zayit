@@ -12,6 +12,10 @@ import io.github.kdroidfilter.seforimapp.core.deeplink.applyDeepLinkHighlight
 import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
+import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
+import org.jetbrains.compose.resources.getString
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.favorites_title
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
 import io.github.kdroidfilter.seforimapp.features.search.domain.TorahReferenceSearchHelper
@@ -113,6 +117,9 @@ data class TocSuggestionDto(
 )
 
 @Immutable
+data class FavoritesSuggestionDto(val folderId: Long?, val name: String)
+
+@Immutable
 data class SearchHomeUiState(
     val selectedFilter: SearchFilter = SearchFilter.TEXT,
     val mode: io.github.kdroidfilter.seforimlibrary.search.SearchMode =
@@ -126,6 +133,8 @@ data class SearchHomeUiState(
     val isTocLoading: Boolean = false,
     val tocSuggestions: List<TocSuggestionDto> = emptyList(),
     val selectedScopeCategory: Category? = null,
+    val favoritesSuggestions: List<FavoritesSuggestionDto> = emptyList(),
+    val selectedScopeFavorites: FavoritesSuggestionDto? = null,
     val selectedScopeBook: Book? = null,
     val selectedScopeIsPdf: Boolean = false,
     val selectedScopeToc: TocEntry? = null,
@@ -145,6 +154,7 @@ class SearchHomeViewModel(
     private val repository: SeforimRepository,
     private val lookup: LuceneLookupSearchService,
     private val settings: Settings,
+    private val favoritesStore: FavoritesStore? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchHomeUiState())
     private var modeChosen = false
@@ -224,7 +234,9 @@ class SearchHomeViewModel(
     init {
         viewModelScope.launch {
             referenceQuery.debounce(120).distinctUntilChanged().collectLatest { raw ->
-                if (_uiState.value.selectedScopeAuthor != null || _uiState.value.selectedScopeBook != null) return@collectLatest
+                if (_uiState.value.selectedScopeAuthor != null || _uiState.value.selectedScopeBook != null ||
+                    _uiState.value.selectedScopeFavorites != null
+                ) return@collectLatest
                 if (raw.trim().length < 2) {
                     _uiState.value = _uiState.value.copy(jumpSuggestions = emptyList(), authorSuggestions = emptyList())
                     return@collectLatest
@@ -290,6 +302,17 @@ class SearchHomeViewModel(
                     val q = qRaw.trim()
                     val revision = referenceRevision
                     if (referenceQuery.value != qRaw || _uiState.value.selectedScopeBook != null) return@collectLatest
+                    if (_uiState.value.selectedScopeFavorites != null) {
+                        _uiState.value =
+                            _uiState.value.copy(
+                                isReferenceLoading = false,
+                                bookSuggestions = emptyList(),
+                                categorySuggestions = emptyList(),
+                                favoritesSuggestions = emptyList(),
+                                suggestionsVisible = q.isNotBlank(),
+                            )
+                        return@collectLatest
+                    }
                     if (_uiState.value.selectedScopeAuthor != null) {
                         _uiState.value =
                             _uiState.value.copy(
@@ -305,6 +328,7 @@ class SearchHomeViewModel(
                             _uiState.value.copy(
                                 isReferenceLoading = false,
                                 categorySuggestions = emptyList(),
+                                favoritesSuggestions = emptyList(),
                                 bookSuggestions = emptyList(),
                                 suggestionsVisible = false,
                             )
@@ -451,10 +475,19 @@ class SearchHomeViewModel(
 
                         if (referenceRevision != revision || referenceQuery.value != qRaw) return@collectLatest
                         val (catSuggestions, bookSuggestions) = result
+                        val favoriteSuggestions =
+                            if (_uiState.value.selectedScopeFavorites == null && favoritesStore != null) {
+                                val all = FavoritesSuggestionDto(null, getString(Res.string.favorites_title))
+                                (listOf(all) + favoritesStore.folders().map { FavoritesSuggestionDto(it.id, it.name) })
+                                    .filter { it.name.contains(q, ignoreCase = true) }
+                            } else {
+                                emptyList()
+                            }
                         _uiState.value =
                             _uiState.value.copy(
                                 isReferenceLoading = false,
                                 categorySuggestions = catSuggestions,
+                                favoritesSuggestions = favoriteSuggestions,
                                 bookSuggestions = bookSuggestions,
                                 suggestionsVisible = true,
                             )
@@ -566,6 +599,7 @@ class SearchHomeViewModel(
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeCategory = category,
+                selectedScopeFavorites = null,
                 selectedScopeAuthor = null,
                 authorSuggestions = emptyList(),
                 jumpSuggestions = emptyList(),
@@ -585,6 +619,33 @@ class SearchHomeViewModel(
     fun onClearCategory() {
         restoringCategoryId = null
         _uiState.value = _uiState.value.copy(selectedScopeCategory = null)
+        onReferenceQueryChanged("")
+    }
+
+    fun onPickFavorites(suggestion: FavoritesSuggestionDto) {
+        restoringCategoryId = null
+        restoringAuthorId = null
+        referenceRevision++
+        referenceQuery.value = ""
+        _uiState.value =
+            _uiState.value.copy(
+                selectedScopeFavorites = suggestion,
+                selectedScopeCategory = null,
+                selectedScopeAuthor = null,
+                selectedScopeBook = null,
+                selectedScopeToc = null,
+                favoritesSuggestions = emptyList(),
+                categorySuggestions = emptyList(),
+                authorSuggestions = emptyList(),
+                jumpSuggestions = emptyList(),
+                bookSuggestions = emptyList(),
+                suggestionsVisible = false,
+                globalExtended = true,
+            )
+    }
+
+    fun onClearFavorites() {
+        _uiState.value = _uiState.value.copy(selectedScopeFavorites = null)
         onReferenceQueryChanged("")
     }
 
@@ -634,6 +695,7 @@ class SearchHomeViewModel(
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeAuthor = author,
+                selectedScopeFavorites = null,
                 selectedScopeCategory = null,
                 selectedScopeBook = null,
                 selectedScopeToc = null,
@@ -739,6 +801,16 @@ class SearchHomeViewModel(
                     showAuthorScope(scope.authorId)
                     return
                 }
+                is SearchScope.Favorites -> {
+                    if (_uiState.value.selectedScopeFavorites?.folderId == scope.folderId &&
+                        _uiState.value.selectedScopeFavorites != null
+                    ) return
+                    viewModelScope.launch {
+                        val folder = favoritesStore?.folders()?.firstOrNull { it.id == scope.folderId }
+                        onPickFavorites(FavoritesSuggestionDto(scope.folderId, folder?.name ?: getString(Res.string.favorites_title)))
+                    }
+                    return
+                }
                 else -> return
             }
         viewModelScope.launch {
@@ -764,6 +836,7 @@ class SearchHomeViewModel(
     fun barScope(): SearchScope {
         val selected = _uiState.value
         return when {
+            selected.selectedScopeFavorites != null -> SearchScope.Favorites(selected.selectedScopeFavorites.folderId)
             selected.selectedScopeToc != null && selected.selectedScopeToc.id > 0 ->
                 SearchScope.Toc(bookId = selected.selectedScopeToc.bookId, tocId = selected.selectedScopeToc.id)
             selected.selectedScopeToc != null -> SearchScope.Book(selected.selectedScopeToc.bookId)
@@ -792,6 +865,7 @@ class SearchHomeViewModel(
                 selectedScopeCategory = null,
                 selectedScopeBook = book,
                 selectedScopeAuthor = null,
+                selectedScopeFavorites = null,
                 bookPickedByUser = showSuggestions,
                 globalExtended = true,
                 selectedScopeIsPdf = isPdf,
@@ -935,7 +1009,8 @@ class SearchHomeViewModel(
                     fetchAuthorId = selected.selectedScopeAuthor?.id ?: 0L,
                     mode = selected.mode.name,
                     globalExtended = selected.globalExtended || datasetScope != "global" || selected.selectedScopeAuthor != null,
-                    datasetScope = datasetScope,
+                    datasetScope = if (selected.selectedScopeFavorites != null) "favorites" else datasetScope,
+                    scopeFavoriteFolderId = selected.selectedScopeFavorites?.folderId,
                     filterCategoryId = filterCategoryId,
                     filterBookId = filterBookId,
                     filterTocId = filterTocId,

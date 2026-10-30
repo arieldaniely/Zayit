@@ -1,0 +1,4 @@
+<resources>
+    <string name="search_scope_author">ספרי %1$s</string>
+    <string name="search_scope_author_loading">ספרי המחבר</string>
+</resources>

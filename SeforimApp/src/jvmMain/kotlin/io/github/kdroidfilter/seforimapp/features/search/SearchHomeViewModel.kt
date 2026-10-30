@@ -11,11 +11,8 @@ import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.deeplink.applyDeepLinkHighlight
 import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.core.deeplink.resolveContentDeepLink
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
-import org.jetbrains.compose.resources.getString
-import seforimapp.seforimapp.generated.resources.Res
-import seforimapp.seforimapp.generated.resources.favorites_title
+import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
 import io.github.kdroidfilter.seforimapp.features.search.domain.TorahReferenceSearchHelper
@@ -50,6 +47,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.getString
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.favorites_title
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -117,7 +117,10 @@ data class TocSuggestionDto(
 )
 
 @Immutable
-data class FavoritesSuggestionDto(val folderId: Long?, val name: String)
+data class FavoritesSuggestionDto(
+    val folderId: Long?,
+    val name: String,
+)
 
 @Immutable
 data class SearchHomeUiState(
@@ -234,9 +237,12 @@ class SearchHomeViewModel(
     init {
         viewModelScope.launch {
             referenceQuery.debounce(120).distinctUntilChanged().collectLatest { raw ->
-                if (_uiState.value.selectedScopeAuthor != null || _uiState.value.selectedScopeBook != null ||
+                if (_uiState.value.selectedScopeAuthor != null ||
+                    _uiState.value.selectedScopeBook != null ||
                     _uiState.value.selectedScopeFavorites != null
-                ) return@collectLatest
+                ) {
+                    return@collectLatest
+                }
                 if (raw.trim().length < 2) {
                     _uiState.value = _uiState.value.copy(jumpSuggestions = emptyList(), authorSuggestions = emptyList())
                     return@collectLatest
@@ -804,7 +810,9 @@ class SearchHomeViewModel(
                 is SearchScope.Favorites -> {
                     if (_uiState.value.selectedScopeFavorites?.folderId == scope.folderId &&
                         _uiState.value.selectedScopeFavorites != null
-                    ) return
+                    ) {
+                        return
+                    }
                     viewModelScope.launch {
                         val folder = favoritesStore?.folders()?.firstOrNull { it.id == scope.folderId }
                         onPickFavorites(FavoritesSuggestionDto(scope.folderId, folder?.name ?: getString(Res.string.favorites_title)))
@@ -837,7 +845,7 @@ class SearchHomeViewModel(
         val selected = _uiState.value
         return when {
             selected.selectedScopeFavorites != null -> SearchScope.Favorites(selected.selectedScopeFavorites.folderId)
-            selected.selectedScopeToc != null && selected.selectedScopeToc.id > 0 ->
+            selected.selectedScopeToc != null && selected.selectedScopeToc.id != 0L ->
                 SearchScope.Toc(bookId = selected.selectedScopeToc.bookId, tocId = selected.selectedScopeToc.id)
             selected.selectedScopeToc != null -> SearchScope.Book(selected.selectedScopeToc.bookId)
             selected.selectedScopeBook != null -> SearchScope.Book(selected.selectedScopeBook.id)
@@ -1009,7 +1017,12 @@ class SearchHomeViewModel(
                     fetchAuthorId = selected.selectedScopeAuthor?.id ?: 0L,
                     mode = selected.mode.name,
                     globalExtended = selected.globalExtended || datasetScope != "global" || selected.selectedScopeAuthor != null,
-                    datasetScope = if (selected.selectedScopeFavorites != null) "favorites" else datasetScope,
+                    datasetScope =
+                        when {
+                            selected.selectedScopeFavorites != null -> "favorites"
+                            selected.selectedScopeAuthor != null -> "author"
+                            else -> datasetScope
+                        },
                     scopeFavoriteFolderId = selected.selectedScopeFavorites?.folderId,
                     filterCategoryId = filterCategoryId,
                     filterBookId = filterBookId,

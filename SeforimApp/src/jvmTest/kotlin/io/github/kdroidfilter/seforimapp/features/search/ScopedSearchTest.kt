@@ -1,11 +1,19 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
+import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ScopedSearchTest {
+    @Test
+    fun personalBookAndChapterScopesSurviveSessionRestore() {
+        assertEquals(SearchScope.Book(-12), SearchPersistedState(fetchBookId = -12).scope)
+        assertEquals(SearchScope.Toc(-12, -34), SearchPersistedState(fetchBookId = -12, fetchTocId = -34).scope)
+    }
+
     @Test
     fun restoredBookCategoryAndTocScopesAutomaticallyExpandCoverage() {
         val scopes =

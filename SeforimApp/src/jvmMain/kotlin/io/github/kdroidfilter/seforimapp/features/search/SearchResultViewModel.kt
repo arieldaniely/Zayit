@@ -78,6 +78,8 @@ data class SearchUiState(
     val scopeCategoryPath: List<Category> = emptyList(),
     val scopeBook: Book? = null,
     val scopeTocId: Long? = null,
+    val scopeOrigin: SearchScope = SearchScope.Global,
+    val scopeOriginName: String? = null,
     // Scroll/anchor persistence
     val scrollIndex: Int = 0,
     val scrollOffset: Int = 0,
@@ -124,11 +126,13 @@ class SearchResultViewModel(
             val previous = current.search ?: SearchPersistedState()
             val changed = transform(previous)
             val next =
-                (if (previous.datasetScope == "favorites") {
-                    changed.copy(datasetScope = "favorites", scopeFavoriteFolderId = previous.scopeFavoriteFolderId)
-                } else {
-                    changed
-                }).withScopeCoverage()
+                when {
+                    previous.datasetScope == "favorites" ->
+                        changed.copy(datasetScope = "favorites", scopeFavoriteFolderId = previous.scopeFavoriteFolderId)
+                    previous.scopeAuthorId != 0L ->
+                        changed.copy(datasetScope = "author", scopeAuthorId = previous.scopeAuthorId, fetchAuthorId = previous.scopeAuthorId)
+                    else -> changed
+                }.withScopeCoverage()
             if (next.hasExplicitScope && next.globalExtended) {
                 _uiState.update { it.copy(globalExtended = true) }
             }
@@ -146,6 +150,7 @@ class SearchResultViewModel(
 
     // MVI events for SearchResultViewModel
     sealed class SearchResultEvents {
+        data object ResetScopeFilters : SearchResultEvents()
         data class SetCategoryChecked(
             val categoryId: Long,
             val checked: Boolean,
@@ -225,6 +230,7 @@ class SearchResultViewModel(
 
     fun onEvent(event: SearchResultEvents) {
         when (event) {
+            SearchResultEvents.ResetScopeFilters -> resetScopeFilters()
             is SearchResultEvents.SetCategoryChecked -> {
                 setCategoryChecked(event.categoryId, event.checked)
             }
@@ -845,7 +851,18 @@ class SearchResultViewModel(
                 anchorIndex = persisted.anchorIndex,
                 textSize = AppSettings.getTextSize(),
                 scopeTocId = persisted.filterTocId.takeIf { it != 0L },
+                scopeOrigin = persisted.originScope,
             )
+
+        viewModelScope.launch {
+            val name =
+                when (val origin = persisted.originScope) {
+                    is SearchScope.Author -> repository.getAuthorDetails(origin.authorId)?.name
+                    is SearchScope.Favorites -> favoritesStore.folders().firstOrNull { it.id == origin.folderId }?.name
+                    else -> null
+                }
+            _uiState.update { it.copy(scopeOriginName = name) }
+        }
 
         viewModelScope.launch {
             val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
@@ -1446,6 +1463,8 @@ class SearchResultViewModel(
             when {
                 fetchTocId != null -> {
                     val toc = repository.getTocEntry(fetchTocId) ?: return null
+                    val persisted = persistedSearchState()
+                    if (persisted.scopeAuthorId != 0L && toc.bookId !in authorScopeBooks(persisted).orEmpty()) return null
                     ensureTocCountingCaches(toc.bookId)
                     val lineIds = collectLineIdsForTocSubtree(toc.id, toc.bookId)
                     tocAllowedLineIds = lineIds
@@ -2033,6 +2052,27 @@ class SearchResultViewModel(
                 fetchTocId = 0L,
             )
         }
+    }
+
+    private fun resetScopeFilters() {
+        _selectedCategoryIds.value = emptySet()
+        _selectedBookIds.value = emptySet()
+        _selectedTocIds.value = emptySet()
+        updatePersistedSearch {
+            it.copy(
+                filterCategoryId = 0L,
+                filterBookId = 0L,
+                filterTocId = 0L,
+                fetchCategoryId = 0L,
+                fetchBookId = 0L,
+                fetchTocId = 0L,
+                selectedCategoryIds = emptySet(),
+                selectedBookIds = emptySet(),
+                selectedTocIds = emptySet(),
+            )
+        }
+        _uiState.update { it.copy(scopeCategoryPath = emptyList(), scopeBook = null, scopeTocId = null) }
+        executeSearch()
     }
 
     /**

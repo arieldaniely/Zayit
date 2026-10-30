@@ -1,6 +1,15 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
+import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
+
+internal val SearchPersistedState.originScope: SearchScope
+    get() =
+        when {
+            datasetScope == "favorites" -> SearchScope.Favorites(scopeFavoriteFolderId)
+            scopeAuthorId != 0L -> SearchScope.Author(scopeAuthorId)
+            else -> scope
+        }
 
 internal val SearchPersistedState.hasExplicitScope: Boolean
     get() =

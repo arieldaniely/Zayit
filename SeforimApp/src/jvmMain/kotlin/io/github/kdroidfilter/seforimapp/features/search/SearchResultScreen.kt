@@ -115,6 +115,7 @@ data class SearchShellActions(
     val onBookFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Book) -> Unit,
     val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
     val onSelectResult: (Long) -> Unit = {},
+    val onResetScopeFilters: () -> Unit = {},
 )
 
 @Composable
@@ -265,6 +266,7 @@ fun SearchResultInBookShellMvi(
                 onBookSelect = actions.onBookFilter,
                 onTocSelect = actions.onTocFilter,
                 isIslands = isIslands,
+                onResetScopeFilters = actions.onResetScopeFilters,
             )
         }
     }

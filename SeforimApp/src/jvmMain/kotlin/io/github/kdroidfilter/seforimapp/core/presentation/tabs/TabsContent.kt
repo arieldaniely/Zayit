@@ -720,6 +720,7 @@ internal fun rememberSearchShellActions(viewModel: SearchResultViewModel): Searc
             },
             onFeedback = { result, type -> viewModel.recordFeedback(result, type) },
             onSelectResult = viewModel::selectResult,
+            onResetScopeFilters = { viewModel.onEvent(SearchResultViewModel.SearchResultEvents.ResetScopeFilters) },
             onRequestBreadcrumb = { r ->
                 viewModel.onEvent(SearchResultViewModel.SearchResultEvents.RequestBreadcrumb(r))
             },

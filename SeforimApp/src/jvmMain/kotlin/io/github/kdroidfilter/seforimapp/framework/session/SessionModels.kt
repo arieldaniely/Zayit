@@ -209,8 +209,8 @@ data class SearchPersistedState(
     /** The scope the search runs in: its fetch scope, else its view filter. */
     val scope: SearchScope
         get() {
-            val bookId = fetchBookId.takeIf { it > 0 } ?: filterBookId.takeIf { it > 0 }
-            val tocId = fetchTocId.takeIf { it > 0 } ?: filterTocId.takeIf { it > 0 }
+            val bookId = fetchBookId.takeIf { it != 0L } ?: filterBookId.takeIf { it != 0L }
+            val tocId = fetchTocId.takeIf { it != 0L } ?: filterTocId.takeIf { it != 0L }
             val authorId = fetchAuthorId.takeIf { it > 0 } ?: scopeAuthorId.takeIf { it > 0 }
             val categoryId = fetchCategoryId.takeIf { it != 0L } ?: filterCategoryId.takeIf { it != 0L }
             return when {

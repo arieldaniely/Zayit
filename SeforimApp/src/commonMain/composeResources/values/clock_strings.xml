@@ -1,0 +1,8 @@
+<resources>
+    <string name="home_widget_clock">שעון וזמני היום</string>
+    <string name="clock_time_description">השעה %1$s</string>
+    <string name="clock_shema">סוף ק״ש (הגר״א)</string>
+    <string name="clock_chatzot">חצות היום</string>
+    <string name="clock_mincha_gedola">מנחה גדולה</string>
+    <string name="clock_tzais">צאת הכוכבים</string>
+</resources>

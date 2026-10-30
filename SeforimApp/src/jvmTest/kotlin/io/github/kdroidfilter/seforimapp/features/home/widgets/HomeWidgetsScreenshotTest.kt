@@ -12,12 +12,14 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.features.home.widgets.calendar.CalendarWidget
+import io.github.kdroidfilter.seforimapp.features.home.widgets.clock.ClockWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.temple.TempleCountdownWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.zmanim.ZmanimWidget
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
@@ -37,6 +39,14 @@ class HomeWidgetsScreenshotTest {
     private val layout = HomeWidgetsLayout(appSettings)
 
     private val graph by lazy { testAppGraph() }
+
+    @Test
+    fun `render analog clock at minimum and default sizes`() {
+        for (dark in listOf(false, true)) {
+            shot("clock-minimum", 800, dark, listOf(WidgetPlacement(ClockWidget, CellRect(0, 0, 5, 5))))
+            shot("clock-default", 800, dark, listOf(WidgetPlacement(ClockWidget, CellRect(0, 0, 6, 6))))
+        }
+    }
 
     @Test
     fun `render home widgets`() {
@@ -100,7 +110,9 @@ class HomeWidgetsScreenshotTest {
                 }
             }
         }
+        mainClock.advanceTimeBy(1_000)
         waitForIdle()
+        if (name.startsWith("clock")) onNodeWithText("שעון וזמני היום").assertExists()
         val out = File("build/screenshots/$name-$width-${if (dark) "dark" else "light"}.png")
         out.parentFile.mkdirs()
         ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", out)

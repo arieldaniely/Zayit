@@ -430,7 +430,9 @@ private fun HomeBody(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         // Scrolls with the page instead of floating over the widgets
-                        FullWidthSection(gapAfter = 4.dp) { CatalogRow(onEvent = onEvent) }
+                        FullWidthSection(gapAfter = 4.dp) {
+                            CatalogRow(onEvent = onEvent, modifier = Modifier.heightIn(min = 44.dp))
+                        }
                     }
                 }
             }

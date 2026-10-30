@@ -27,11 +27,14 @@ import io.github.kdroidfilter.seforimapp.catalog.MultiCategoryDropdownSpec
 import io.github.kdroidfilter.seforimapp.catalog.TocQuickLinksSpec
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.Orientation
 import org.jetbrains.jewel.ui.component.Divider
@@ -50,6 +53,16 @@ fun CatalogDropdown(
     val repo = LocalAppGraph.current.repository
     val catalogAccess = LocalAppGraph.current.catalogAccess
     val scope = rememberCoroutineScope()
+    val revision by CatalogCache.revision.collectAsState()
+    val catalogReady by produceState(false, catalogAccess, revision) {
+        value = false
+        value =
+            withContext(Dispatchers.IO) {
+                catalogAccess.warm()
+                true
+            }
+    }
+    if (!catalogReady) return
 
     fun selectBook(
         @StructuredScope scope: CoroutineScope,

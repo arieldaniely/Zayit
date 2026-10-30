@@ -38,29 +38,30 @@ class NavigationUseCase(
      * The catalog MUST be available, otherwise nothing is loaded.
      * Data is retrieved from CatalogCache which caches the extracted structures in memory.
      */
-    suspend fun loadRootCategories() {
-        val rootCategories = CatalogCache.getRootCategories()
-        val categoryChildren = CatalogCache.getCategoryChildren()
-        val categoriesById = CatalogCache.getCategoriesById().orEmpty()
-        val booksWithFlags = CatalogCache.getAllBooksWithAltFlags(repository)
+    suspend fun loadRootCategories() =
+        withContext(Dispatchers.IO) {
+            val rootCategories = CatalogCache.getRootCategories()
+            val categoryChildren = CatalogCache.getCategoryChildren()
+            val categoriesById = CatalogCache.getCategoriesById().orEmpty()
+            val booksWithFlags = CatalogCache.getAllBooksWithAltFlags(repository)
 
-        if (rootCategories == null || categoryChildren == null || booksWithFlags == null) {
-            errorln { "ERROR: Precomputed catalog not available!" }
-            return
-        }
+            if (rootCategories == null || categoryChildren == null || booksWithFlags == null) {
+                errorln { "ERROR: Precomputed catalog not available!" }
+                return@withContext
+            }
 
-        debugln { "✓ Using precomputed catalog for navigation tree" }
-        // Catalog data is derived and reloaded every app start; do not persist it.
-        // Persisting here can overwrite restored selection/book IDs before models are loaded.
-        stateManager.updateNavigation(save = false) {
-            copy(
-                rootCategories = rootCategories,
-                categoryChildren = categoryChildren,
-                categoriesById = categoriesById,
-                booksInCategory = booksWithFlags,
-            )
+            debugln { "✓ Using precomputed catalog for navigation tree" }
+            // Catalog data is derived and reloaded every app start; do not persist it.
+            // Persisting here can overwrite restored selection/book IDs before models are loaded.
+            stateManager.updateNavigation(save = false) {
+                copy(
+                    rootCategories = rootCategories,
+                    categoryChildren = categoryChildren,
+                    categoriesById = categoriesById,
+                    booksInCategory = booksWithFlags,
+                )
+            }
         }
-    }
 
     /**
      * Select a category

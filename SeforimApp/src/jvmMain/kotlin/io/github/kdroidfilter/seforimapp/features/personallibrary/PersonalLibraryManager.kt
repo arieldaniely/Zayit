@@ -25,12 +25,9 @@ class PersonalLibraryManager(
             return null
         }
         val cached = compatibleStartupArtifacts(configuration)
-        if (cached != null) {
-            PersonalLibraryRuntime.activeDatabase = cached.databasePath
-            checkAfterStartup = true
-            return cached
-        }
-        return synchronize(configuration).second
+        PersonalLibraryRuntime.activeDatabase = cached?.databasePath
+        checkAfterStartup = true
+        return cached
     }
 
     @Synchronized

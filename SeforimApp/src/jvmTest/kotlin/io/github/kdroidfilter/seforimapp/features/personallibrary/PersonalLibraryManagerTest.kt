@@ -63,12 +63,22 @@ class PersonalLibraryManagerTest {
         }
 
     @Test
-    fun legacyInstallationsAcquireAStartupStampWithoutReimportingBooks() =
+    fun legacyInstallationsDeferTheirCompatibilityCheckUntilAfterTheWindowOpens() =
         withLibrary { manager, _, _, _ ->
             assertNull(manager.compatibleStartupArtifacts())
-            assertEquals("generation", manager.prepareForStartup()?.generation)
+            assertNull(manager.prepareForStartup())
+            assertNotNull(manager.takeStartupSynchronization())
+            manager.synchronize()
             assertNotNull(manager.compatibleStartupArtifacts())
             assertNull(manager.takeStartupSynchronization())
+        }
+
+    @Test
+    fun uncachedOfflineFoldersNeverBlockStartup() =
+        withLibrary { manager, _, folder, _ ->
+            Files.delete(Path.of(folder.path))
+            assertNull(manager.prepareForStartup())
+            assertNotNull(manager.takeStartupSynchronization())
         }
 
     @Test

@@ -25,7 +25,6 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.AppNativeM
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.rememberWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.core.presentation.window.MainAppWindow
-import io.github.kdroidfilter.seforimapp.core.presentation.window.StartupWindow
 import io.github.kdroidfilter.seforimapp.core.presentation.window.TabDragGhostWindow
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panes.WindowPanes
@@ -301,29 +300,12 @@ fun main(args: Array<String>) {
                         isDatabaseMissing = isDatabaseMissing,
                     )
                 } else {
-                    // The repository provider may scan/import personal libraries and build their
-                    // indexes. Resolve it off the UI thread before any window requests it through DI.
-                    var startupAttempt by remember { mutableIntStateOf(0) }
-                    val preparation by produceState<Result<Unit>?>(null, appGraph, startupAttempt) {
-                        value = null
-                        value =
-                            prepareStartup {
-                                appGraph.repository
-                                appGraph.catalogAccess.warm()
-                                // Opening a damaged Lucene index can fail. Keep disk work and
-                                // failures in the background preparation, before creating windows.
-                                // Constructing the facade does not load the semantic model.
-                                appGraph.searchEngine
-                            }.onFailure {
-                                warnln(it) { "Application startup preparation failed" }
-                            }
-                    }
-                    if (preparation?.isSuccess != true) {
-                        StartupWindow(
-                            failed = preparation?.isFailure == true,
-                            onRetry = { startupAttempt++ },
-                        )
-                        return@IntUiTheme
+                    // Render the real window first. Catalog and personal-library work are independent
+                    // background tasks; a slow external folder must never gate window creation.
+                    LaunchedEffect(appGraph) {
+                        withFrameNanos { }
+                        prepareStartup { appGraph.catalogAccess.warm() }
+                            .onFailure { warnln(it) { "Catalog preparation failed" } }
                     }
 
                     val desktopManager = appGraph.desktopManager

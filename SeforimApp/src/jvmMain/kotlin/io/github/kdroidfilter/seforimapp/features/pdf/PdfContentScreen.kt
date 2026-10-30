@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -83,7 +81,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.github.jaiimageio.jpeg2000.impl.J2KImageReaderSpi
-import io.github.kdroidfilter.seforimapp.core.presentation.components.CountBadge
 import io.github.kdroidfilter.seforimapp.core.presentation.components.FindInPageBar
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -225,11 +222,13 @@ private fun PdfReader(
     val currentOnLineSelected by rememberUpdatedState(onLineSelect)
     var programmaticTarget by remember(session) { mutableStateOf<Int?>(null) }
     val showFind by AppSettings.findBarOpenFlow(tabId).collectAsState()
+    val findFocusRequest by AppSettings.findFocusRequestFlow(tabId).collectAsState()
     val persistedFindQuery by AppSettings.findQueryFlow(tabId).collectAsState("")
     val findState = remember(tabId) { TextFieldState() }
     val scope = rememberCoroutineScope()
     var searchMatches by remember(session) { mutableStateOf(emptyList<PdfSearchMatch>()) }
     var selectedMatchIndex by remember(session) { mutableIntStateOf(-1) }
+    var completedSearchQuery by remember(session) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(persistedFindQuery) {
         if (findState.text.toString() != persistedFindQuery) {
@@ -263,6 +262,7 @@ private fun PdfReader(
 
     LaunchedEffect(findState.text, showFind, session) {
         val query = findState.text.toString()
+        completedSearchQuery = null
         AppSettings.setFindQuery(tabId, if (query.length >= 2) query else "")
         if (!showFind || query.length < 2) {
             searchMatches = emptyList()
@@ -272,6 +272,7 @@ private fun PdfReader(
         delay(PDF_SEARCH_DEBOUNCE_MS)
         val matches = withContext(Dispatchers.IO) { session.searchPages(query) }
         searchMatches = matches
+        completedSearchQuery = query
         selectedMatchIndex =
             matches
                 .indexOfFirst { it.pageIndex >= listState.mostVisiblePage() }
@@ -292,6 +293,11 @@ private fun PdfReader(
         scope.launch { listState.animateScrollToItem(page) }
     }
 
+    val currentNavigateToMatch by rememberUpdatedState<(Boolean) -> Unit>(::navigateToMatch)
+    LaunchedEffect(tabId) {
+        AppSettings.findStepRequests(tabId).collect { currentNavigateToMatch(it) }
+    }
+
     Box(modifier.fillMaxSize().background(JewelTheme.globalColors.panelBackground)) {
         PdfPages(
             session = session,
@@ -304,19 +310,19 @@ private fun PdfReader(
             modifier = Modifier.fillMaxSize(),
         )
         if (showFind) {
-            Row(
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).zIndex(2f),
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(12.dp).zIndex(2f),
+                contentAlignment = Alignment.TopEnd,
             ) {
-                if (findState.text.length >= 2) {
-                    CountBadge(searchMatches.size)
-                    Spacer(Modifier.width(8.dp))
-                }
                 FindInPageBar(
                     state = findState,
                     onEnterNext = { navigateToMatch(true) },
                     onEnterPrev = { navigateToMatch(false) },
                     onClose = { AppSettings.closeFindBar(tabId) },
+                    focusRequest = findFocusRequest,
+                    matchCount = searchMatches.size.takeIf { completedSearchQuery == findState.text.toString() },
+                    matchPosition = (selectedMatchIndex + 1).takeIf { selectedMatchIndex >= 0 },
+                    showCounter = true,
                     showSmartModeToggle = false,
                 )
             }

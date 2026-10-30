@@ -26,14 +26,35 @@ internal fun readPersonalBook(file: Path): List<String> {
             zip.getInputStream(requireNotNull(zip.getEntry(name))).use {
                 factory.newDocumentBuilder().parse(it)
             }
-        val headingLevels = mutableMapOf<String, Int>()
+        val paragraphStyles = mutableMapOf<String, Element>()
+        var defaultStyle: String? = null
         if (zip.getEntry("word/styles.xml") != null) {
             val styles = readXml("word/styles.xml").getElementsByTagNameNS(WORD_NAMESPACE, "style")
             repeat(styles.length) { index ->
                 val style = styles.item(index) as Element
-                val outline = style.wordElement("outlineLvl")?.wordValue()?.toIntOrNull()
-                if (outline != null && outline in 0..5) headingLevels[style.getAttributeNS(WORD_NAMESPACE, "styleId")] = outline + 1
+                if (style.getAttributeNS(WORD_NAMESPACE, "type").let { it.isEmpty() || it == "paragraph" }) {
+                    val id = style.getAttributeNS(WORD_NAMESPACE, "styleId")
+                    paragraphStyles[id] = style
+                    if (style.getAttributeNS(WORD_NAMESPACE, "default") in setOf("1", "true", "on")) defaultStyle = id
+                }
             }
+        }
+
+        fun headingLevel(styleId: String?): Int? {
+            val visited = mutableSetOf<String>()
+            var id = styleId
+            while (id != null && visited.add(id)) {
+                val style = paragraphStyles[id]
+                val outline = style?.wordElement("pPr")?.wordElement("outlineLvl")?.wordValue()?.toIntOrNull()
+                // Level 9 explicitly marks body text and must stop inheritance.
+                if (outline != null) return outline.takeIf { it in 0..8 }?.let { (it + 1).coerceAtMost(6) }
+                val name = style?.wordElement("name")?.wordValue()
+                val builtin = Regex("(?:heading|כותרת)\\s*([1-9])", RegexOption.IGNORE_CASE)
+                val level = builtin.matchEntire(id) ?: name?.let(builtin::matchEntire)
+                if (level != null) return level.groupValues[1].toInt().coerceAtMost(6)
+                id = style?.wordElement("basedOn")?.wordValue()
+            }
+            return null
         }
         val paragraphs = readXml("word/document.xml").getElementsByTagNameNS(WORD_NAMESPACE, "p")
         buildList {
@@ -57,15 +78,8 @@ internal fun readPersonalBook(file: Path): List<String> {
                     val outline = properties?.wordElement("outlineLvl")?.wordValue()?.toIntOrNull()
                     val level =
                         when {
-                            outline != null -> (outline + 1).takeIf { it in 1..6 }
-                            style in headingLevels -> headingLevels[style]
-                            else ->
-                                style?.let {
-                                    Regex(
-                                        "Heading([1-6])",
-                                        RegexOption.IGNORE_CASE,
-                                    ).matchEntire(it)?.groupValues?.get(1)?.toInt()
-                                }
+                            outline != null -> outline.takeIf { it in 0..8 }?.let { (it + 1).coerceAtMost(6) }
+                            else -> headingLevel(style ?: defaultStyle)
                         }
                     add(if (level != null) "<h$level>$text</h$level>" else text)
                 }
@@ -74,6 +88,10 @@ internal fun readPersonalBook(file: Path): List<String> {
     }
 }
 
-private fun Element.wordElement(name: String): Element? = getElementsByTagNameNS(WORD_NAMESPACE, name).item(0) as? Element
+private fun Element.wordElement(name: String): Element? =
+    (0 until childNodes.length)
+        .asSequence()
+        .mapNotNull { childNodes.item(it) as? Element }
+        .firstOrNull { it.namespaceURI == WORD_NAMESPACE && it.localName == name }
 
 private fun Element.wordValue(): String = getAttributeNS(WORD_NAMESPACE, "val")

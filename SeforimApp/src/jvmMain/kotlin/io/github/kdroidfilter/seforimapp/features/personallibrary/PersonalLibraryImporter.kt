@@ -695,7 +695,7 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v3-docx-skip-errors"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v4-inherited-headings"
         val BOOK_EXTENSIONS = setOf("txt", "docx")
         val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)

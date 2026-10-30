@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
+import io.github.kdroidfilter.seforimapp.features.pdf.PdfPreindexStore
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.core.models.BookMetadata
@@ -27,6 +28,7 @@ import kotlin.streams.toList
 class PersonalLibraryImporter(
     private val baseDatabase: Path,
     private val generationsDirectory: Path,
+    private val pdfPreindex: PdfPreindexStore = PdfPreindexStore(),
 ) {
     private val json =
         Json {
@@ -203,6 +205,7 @@ class PersonalLibraryImporter(
                     val meta = metadata[rawTitle] ?: metadata[title]
                     val lines = readPersonalBook(file)
                     if (file.extension.equals("pdf", true)) {
+                        pdfPreindex.prepare(file.toFile())
                         execute(
                             "INSERT INTO schema_meta(key,value) VALUES(?,?)",
                             "personal_pdf:$bookId",
@@ -702,7 +705,7 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v5-pdf"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v6-pdf-preindex"
         val BOOK_EXTENSIONS = setOf("txt", "docx", "pdf")
         val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)

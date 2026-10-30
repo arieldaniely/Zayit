@@ -158,9 +158,10 @@ fun PdfContentView(
         return
     }
 
+    val preindex = LocalAppGraph.current.pdfPreindexStore
     val loadState by produceState<PdfLoadState>(PdfLoadState.Loading, file) {
         val session =
-            runCatching { withContext(Dispatchers.IO) { PdfDocumentSession.open(file, bookId < -1L) } }
+            runCatching { withContext(Dispatchers.IO) { PdfDocumentSession.open(file, preindex, bookId < -1L) } }
                 .getOrElse {
                     value = PdfLoadState.Failed(it.message.orEmpty())
                     return@produceState
@@ -827,7 +828,11 @@ private class PdfDocumentSession private constructor(
     }
 
     companion object {
-        fun open(file: File, includePageNumbers: Boolean = false): PdfDocumentSession {
+        fun open(
+            file: File,
+            preindex: PdfPreindexStore,
+            includePageNumbers: Boolean = false,
+        ): PdfDocumentSession {
             PdfImageIoPlugins.ensureRegistered()
             val document = Loader.loadPDF(file)
             return try {
@@ -852,7 +857,7 @@ private class PdfDocumentSession private constructor(
                         ),
                     pageAspectRatios = aspectRatios,
                     displayAspectRatio = aspectRatios.sorted().getOrNull(aspectRatios.size / 2) ?: PDF_DEFAULT_ASPECT_RATIO,
-                    searchIndex = PdfTextSearchIndex(file),
+                    searchIndex = PdfTextSearchIndex(file, preindex),
                 )
             } catch (error: Throwable) {
                 document.close()
@@ -887,6 +892,7 @@ internal object PdfImageIoPlugins {
 /** Builds a lazy, page-level index from the PDF's embedded text. No OCR is involved. */
 private class PdfTextSearchIndex(
     private val file: File,
+    private val preindex: PdfPreindexStore,
 ) : AutoCloseable {
     private val lock = Any()
     private val document = Loader.loadPDF(file)
@@ -898,9 +904,12 @@ private class PdfTextSearchIndex(
     fun page(pageIndex: Int): PdfPageText =
         synchronized(lock) {
             pageCache[pageIndex]?.let { return@synchronized it }
-            val stripper = PositionCollectingPdfStripper(pageIndex)
-            stripper.getText(document)
-            val page = PdfPageText(stripper.glyphs.toList())
+            val page =
+                preindex.page(file, pageIndex) ?: run {
+                    val stripper = PositionCollectingPdfStripper(pageIndex)
+                    stripper.getText(document)
+                    PdfPageText(stripper.glyphs.toList())
+                }
             pageCache[pageIndex] = page
             mutablePages.value = mutablePages.value + (pageIndex to page)
             page
@@ -956,7 +965,7 @@ private class PdfTextSearchIndex(
 private fun normalizePdfSearchText(text: String): String =
     text.replace(PDF_DIRECTIONAL_MARKS, "").replace(PDF_SEARCH_WHITESPACE, " ").trim()
 
-private class PositionCollectingPdfStripper(
+internal class PositionCollectingPdfStripper(
     pageIndex: Int,
 ) : PDFTextStripper() {
     val glyphs = mutableListOf<PdfGlyph>()
@@ -1147,11 +1156,11 @@ private fun List<PdfGlyph>.continuationScore(other: List<PdfGlyph>): Float {
     return overlap / narrower - centerDistance
 }
 
-private data class PdfPageText(
+internal data class PdfPageText(
     val glyphs: List<PdfGlyph>,
 )
 
-private data class PdfGlyph(
+internal data class PdfGlyph(
     val text: String,
     val bounds: PdfNormalizedRect,
 )
@@ -1161,7 +1170,7 @@ private data class PdfSearchMatch(
     val bounds: List<PdfNormalizedRect>,
 )
 
-private data class PdfNormalizedRect(
+internal data class PdfNormalizedRect(
     val left: Float,
     val top: Float,
     val right: Float,

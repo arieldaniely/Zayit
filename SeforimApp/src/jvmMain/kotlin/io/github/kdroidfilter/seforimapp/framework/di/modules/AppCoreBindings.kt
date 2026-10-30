@@ -209,6 +209,12 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
+    fun providePdfPreindexStore(): io.github.kdroidfilter.seforimapp.features.pdf.PdfPreindexStore =
+        io.github.kdroidfilter.seforimapp.features.pdf
+            .PdfPreindexStore()
+
+    @Provides
+    @SingleIn(AppScope::class)
     fun provideRepository(personalLibrary: PersonalLibraryManager): SeforimRepository {
         val dbPath = getDatabasePath()
         val personalArtifacts =

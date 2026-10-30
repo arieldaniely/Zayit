@@ -38,7 +38,13 @@ class PersonalLibraryImporterTest {
                 document.addPage(PDPage())
                 document.save(pdf.toFile())
             }
-            val importer = PersonalLibraryImporter(base, temp.resolve("generations"))
+            val importer =
+                PersonalLibraryImporter(
+                    base,
+                    temp.resolve("generations"),
+                    io.github.kdroidfilter.seforimapp.features.pdf
+                        .PdfPreindexStore(temp.resolve("pdf-index")),
+                )
             val folder = PersonalBookFolder("pdf", books.toString(), "PDF")
             val (artifacts, summaries) = importer.build(listOf(folder), "pdf")
             assertEquals(1, summaries.getValue("pdf").books)

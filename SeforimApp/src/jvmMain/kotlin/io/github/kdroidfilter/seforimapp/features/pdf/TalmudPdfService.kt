@@ -93,7 +93,14 @@ object TalmudPdfService {
 
     fun importArchive(archive: File) {
         extractTarZst(archive, pdfDirectory())
+        prepareInstalledIndexes(PdfPreindexStore())
         refreshAvailablePdfTitles()
+    }
+
+    fun prepareInstalledIndexes(store: PdfPreindexStore) {
+        val directory = pdfDirectory()
+        if (!directory.isDirectory) return
+        directory.walkTopDown().filter { it.isFile && it.extension.equals("pdf", true) }.forEach(store::prepare)
     }
 
     fun downloadAndInstall(onProgress: (Long, Long) -> Unit = { _, _ -> }) {
@@ -159,6 +166,7 @@ object TalmudPdfService {
                 }
             }
             extractTarZst(tmp.toFile(), pdfDirectory())
+            prepareInstalledIndexes(PdfPreindexStore())
             refreshAvailablePdfTitles()
         } finally {
             Files.deleteIfExists(tmp)

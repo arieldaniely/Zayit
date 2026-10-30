@@ -416,6 +416,16 @@ fun main(args: Array<String>) {
                     }
 
                     LaunchedEffect(appGraph) {
+                        kotlinx.coroutines.delay(3_000)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching {
+                                io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
+                                    .prepareInstalledIndexes(appGraph.pdfPreindexStore)
+                            }.onFailure { warnln(it) { "Could not prepare installed PDF indexes" } }
+                        }
+                    }
+
+                    LaunchedEffect(appGraph) {
                         appGraph.searchFeedbackService.run()
                     }
 

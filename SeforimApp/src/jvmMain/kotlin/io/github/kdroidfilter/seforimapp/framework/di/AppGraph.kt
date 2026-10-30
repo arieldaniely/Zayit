@@ -35,6 +35,7 @@ abstract class AppGraph : ViewModelGraph {
     abstract val dictionaryIndex: io.github.kdroidfilter.seforimapp.features.home.widgets.library.DictionaryIndex
     abstract val toolWindows: io.github.kdroidfilter.seforimapp.features.home.widgets.ToolWindows
     abstract val personalLibraryService: io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryService
+    abstract val pdfPreindexStore: io.github.kdroidfilter.seforimapp.features.pdf.PdfPreindexStore
 
     abstract val searchFeedbackService: io.github.kdroidfilter.seforimapp.features.search.SearchFeedbackService
 

@@ -24,6 +24,7 @@ import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import seforimapp.seforimapp.generated.resources.Res
@@ -48,6 +49,7 @@ fun AppJumpList(
     desktopManager: DesktopManager,
     tabsViewModel: TabsViewModel,
     favoritesStore: FavoritesStore,
+    isRestoringSession: StateFlow<Boolean>,
     pendingDeepLink: StateFlow<String?>,
     onClearDeepLink: () -> Unit,
 ) {
@@ -84,6 +86,8 @@ fun AppJumpList(
             // Only handle (and clear) seforim:// jump-list actions. Other schemes — notably
             // shareable zayita:// content links — belong to ContentDeepLinkHandler; clearing them
             // here would race that collector and swallow the link (StateFlow is conflated).
+            if (!action.startsWith("seforim://")) return@collect
+            isRestoringSession.first { !it }
             val handled =
                 when {
                     action.startsWith(SCHEME_TAB) -> {

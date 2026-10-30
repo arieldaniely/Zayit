@@ -8,7 +8,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import dev.nucleusframework.application.aotTraining
 import dev.nucleusframework.application.nucleusApplication
-import dev.nucleusframework.core.runtime.NucleusApp
 import dev.nucleusframework.energymanager.EnergyManager
 import dev.nucleusframework.window.NucleusDecoratedWindowTheme
 import dev.nucleusframework.window.jewel.rememberJewelTitleBarStyle
@@ -46,15 +45,11 @@ import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.framework.portable.PortablePaths
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.kdroidfilter.seforimapp.framework.startup.prepareStartup
-import io.github.kdroidfilter.seforimapp.logger.infoln
 import io.github.kdroidfilter.seforimapp.logger.isDevEnv
 import io.github.kdroidfilter.seforimapp.logger.warnln
 import io.github.kdroidfilter.seforimlibrary.cli.runCli
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.vinceglb.filekit.FileKit
-import io.sentry.Sentry
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -107,35 +102,11 @@ private fun computeStartupState(): StartupState =
         }
     }
 
-private fun initializeSentry() {
-    val sentryDsn =
-        System
-            .getenv("SENTRY_DSN")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: return
-    val sentryEnvironment =
-        System
-            .getenv("SENTRY_ENVIRONMENT")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: "development"
-
-    Sentry.init { options ->
-        options.dsn = sentryDsn
-        options.environment = sentryEnvironment
-        options.release = NucleusApp.version
-        options.isDebug = isDevEnv
-    }
-    infoln { "Sentry initialized for environment '$sentryEnvironment'." }
-}
-
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 fun main(args: Array<String>) {
     PortablePaths.configureSystemProperties()
     // Headless CLI mode: when the binary is launched as `zayita cli <args...>` (e.g. from the
     // in-app "open CLI in terminal" action), delegate to the SeforimLibrary search CLI and exit
-    // BEFORE any Sentry/Nucleus/GUI initialization. This keeps the normal GUI launch path
+    // BEFORE any Nucleus/GUI initialization. This keeps the normal GUI launch path
     // completely untouched — the branch is only taken when "cli" is the first argument.
     if (args.firstOrNull() == "cli") {
         exitProcess(runCli(args.copyOfRange(1, args.size)))
@@ -144,14 +115,17 @@ fun main(args: Array<String>) {
     val loggingEnv = System.getenv("ZAYITA_LOGGING")?.lowercase()
     isDevEnv = loggingEnv == "true" || loggingEnv == "1" || loggingEnv == "yes"
 
-    initializeSentry()
-
     // Roll back any half-applied seforim.db delta update from a previous
     // launch BEFORE the SQLDelight repository opens the DB. Cheap stat()
     // when nothing is in flight; never throws (failures are logged).
 //    DbDeltaRecoveryBootstrap.runOnce()
 
     val appId = "io.github.arieldaniely.zayita"
+    PlatformInfo.warmUp()
+    if (PlatformInfo.isWindows && dev.nucleusframework.launcher.windows.WindowsJumpListManager.isAvailable) {
+        dev.nucleusframework.launcher.windows.WindowsJumpListManager
+            .setProcessAppId()
+    }
 
     nucleusApplication(
         args,
@@ -182,6 +156,7 @@ fun main(args: Array<String>) {
         val appGraph = remember { createGraph<AppGraph>() }
         // Ensure AppSettings uses the DI-provided Settings immediately
         AppSettings.initialize(appGraph.settings)
+        LaunchedEffect(appGraph) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { appGraph.crashReporting.start() } }
 
         // Register the AWT-level keyboard shortcuts here (instead of in main()) so they can read
         // from the DI-provided SelectionContext. The DisposableEffect re-runs only if the graph
@@ -359,6 +334,7 @@ fun main(args: Array<String>) {
 
                             // Windows taskbar jump list with tabs and desktops
                             AppJumpList(
+                                isRestoringSession = SessionManager.isRestoringSession,
                                 desktopManager = desktopManager,
                                 tabsViewModel = focusedWindow.tabsViewModel,
                                 favoritesStore = appGraph.favoritesStore,
@@ -418,7 +394,7 @@ fun main(args: Array<String>) {
                     // Check for updates once at startup. PATCH updates are pre-downloaded
                     // here; MINOR/MAJOR surface the title-bar icon + UpdateDialog.
                     LaunchedEffect(Unit) {
-                        appGraph.appUpdateService.checkOnStartup()
+                        if (AppSettings.isAutoUpdateCheckEnabled()) appGraph.appUpdateService.checkOnStartup()
                     }
 
                     // Debounced session autosave: any tab/window change persists ~2s later, so a

@@ -67,7 +67,6 @@ import io.github.kdroidfilter.seforimapp.features.errorreport.createBookErrorRep
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
-import io.github.kdroidfilter.seforimapp.icons.Ink_pen
 import io.github.kdroidfilter.seforimlibrary.core.text.HebrewTextUtils
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.coroutines.CoroutineScope
@@ -117,6 +116,8 @@ import org.jetbrains.jewel.ui.component.ContextMenuRepresentation as JewelContex
 import org.jetbrains.jewel.ui.component.TextContextMenu as JewelTextContextMenu
 
 private val TextSearchContextMenuIconKey = PathIconKey("icons/lucide_text_search.svg", BookContentViewModel::class.java)
+private val EraserIconKey = PathIconKey("icons/eraser.svg", BookContentViewModel::class.java)
+private val HighlighterIconKey = PathIconKey("icons/highlighter.svg", BookContentViewModel::class.java)
 
 private class ContextMenuItemOptionWithKeybinding(
     val icon: org.jetbrains.jewel.ui.icon.IconKey? = null,
@@ -246,7 +247,7 @@ private fun MenuScope.contextItems(items: List<ContextMenuItem>) {
     }
 }
 
-/** A row of color swatches (plus a "clear" cross) for highlighting the current selection. */
+/** A row of color swatches (plus a "clear" eraser) for highlighting the current selection. */
 @Composable
 private fun HighlightColorPickerRow(
     colors: List<Color>,
@@ -260,7 +261,7 @@ private fun HighlightColorPickerRow(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(imageVector = Ink_pen, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+        Icon(key = HighlighterIconKey, contentDescription = null, modifier = Modifier.size(16.dp))
         Text(text = highlightLabel, color = contentColor, modifier = Modifier.padding(horizontal = 8.dp))
         colors.forEach { color ->
             HighlightColorSwatch(color = color, onClick = { onSelect(color) })
@@ -268,7 +269,7 @@ private fun HighlightColorPickerRow(
     }
 }
 
-/** A single hover-aware swatch; [Color.Transparent] renders a "clear" cross. */
+/** A single hover-aware swatch; [Color.Transparent] renders a "clear" eraser. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun HighlightColorSwatch(
@@ -290,7 +291,7 @@ private fun HighlightColorSwatch(
         contentAlignment = Alignment.Center,
     ) {
         if (color == Color.Transparent) {
-            Icon(key = AllIconsKeys.Windows.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(key = EraserIconKey, contentDescription = null, modifier = Modifier.size(16.dp))
         } else {
             Box(modifier = Modifier.size(18.dp).clip(RoundedCornerShape(4.dp)).background(color))
         }
@@ -998,6 +999,7 @@ fun handleBookShortcut(
             Key.B -> if (keyEvent.isShiftPressed) BookContentEvent.ToggleToc else BookContentEvent.ToggleBookTree
             Key.K ->
                 when {
+                    keyEvent.isAltPressed && keyEvent.isShiftPressed -> BookContentEvent.ToggleMentions
                     keyEvent.isAltPressed -> BookContentEvent.ToggleSources
                     keyEvent.isShiftPressed -> BookContentEvent.ToggleTargum
                     else -> BookContentEvent.ToggleCommentaries

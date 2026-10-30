@@ -403,16 +403,16 @@ fun NucleusApplicationScope.MainAppWindow(
             // Keep the screen awake while a book is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).
             val keepAwakeEnabled by AppSettings.keepScreenAwakeOnBookFlow.collectAsState()
-            val windowFocused by nucleusWin.focusFlow.collectAsState()
-            val shouldKeepScreenAwake =
+            val keepAwakeForTab =
                 keepAwakeEnabled &&
-                    windowFocused &&
                     selectedTab?.destination is TabsDestination.BookContent
-            LaunchedEffect(shouldKeepScreenAwake) {
-                if (shouldKeepScreenAwake) {
-                    EnergyManager.keepScreenAwake()
-                } else {
-                    EnergyManager.releaseScreenAwake()
+            LaunchedEffect(keepAwakeForTab, nucleusWin) {
+                nucleusWin.focusFlow.collect { focused ->
+                    if (keepAwakeForTab && focused) {
+                        EnergyManager.keepAwake()
+                    } else {
+                        EnergyManager.releaseAwake()
+                    }
                 }
             }
 

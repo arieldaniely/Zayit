@@ -17,6 +17,7 @@ import io.github.kdroidfilter.seforimapp.features.database.update.DatabaseCleanu
 import io.github.kdroidfilter.seforimapp.features.database.update.DatabasePreparationUseCase
 import io.github.kdroidfilter.seforimapp.features.onboarding.data.OnboardingProcessRepository
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.SharedStudyCoordinator
+import io.github.kdroidfilter.seforimapp.framework.crashreporting.CrashReporting
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.desktop.TabDockManager
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
@@ -67,4 +68,5 @@ abstract class AppGraph : ViewModelGraph {
 
     /** App self-update facade (Nucleus updater + native SSL). */
     abstract val appUpdateService: AppUpdateService
+    abstract val crashReporting: CrashReporting
 }

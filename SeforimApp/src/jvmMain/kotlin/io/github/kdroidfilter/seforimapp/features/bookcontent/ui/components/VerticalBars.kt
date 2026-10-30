@@ -262,11 +262,7 @@ fun EndVerticalBar(
                 selectedBook?.hasCommentaryConnection == true || lineAvailability.commentariesAvailable == true
             val sourcesEnabled =
                 selectedBook?.hasSourceConnection == true || lineAvailability.sourcesAvailable == true
-            val mentionsEnabled =
-                selectedBook?.hasReferenceConnection == true ||
-                    selectedBook?.hasOtherConnection == true ||
-                    (selectedBook != null && providers?.hasAdditionalMentionsForBook?.invoke(selectedBook.id) == true) ||
-                    lineAvailability.mentionsAvailable == true
+            val mentionsEnabled = selectedBook != null
 
             // Hide both buttons on Home (no book selected)
             if (!noBookSelected) {
@@ -283,10 +279,7 @@ fun EndVerticalBar(
                         lineAvailability.sourcesAvailable == false &&
                         !uiState.content.showSources
 
-                val mentionsDisabledForLine =
-                    selectedLine != null &&
-                        lineAvailability.mentionsAvailable == false &&
-                        !uiState.content.showMentions
+                val mentionsDisabledForLine = false
 
                 val targumTooltip =
                     when {
@@ -333,7 +326,8 @@ fun EndVerticalBar(
                         icon = Quote,
                         iconDescription = stringResource(Res.string.show_mentions),
                         label = stringResource(Res.string.show_mentions),
-                        enabled = selectedLine != null && !mentionsDisabledForLine,
+                        enabled = selectedLine != null,
+                        shortcutHint = if (PlatformInfo.isMacOS) "K+⇧+⌥+⌘" else "K+Shift+Alt+Ctrl",
                     )
                 }
 

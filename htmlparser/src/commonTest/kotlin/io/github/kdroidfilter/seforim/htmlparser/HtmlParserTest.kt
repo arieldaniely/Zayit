@@ -139,4 +139,76 @@ class HtmlParserTest {
         val result = HtmlParser().parse(html)
         assertTrue(result.none { it.isImage }, "Remote <img> src should be dropped")
     }
+
+    @Test
+    fun refLinkKeepsItsTargetAndOnlyTheCitationIsALink() {
+        val html = """שנאמר <a class="ref" href="seforim://line/123">(בראשית א, ד)</a> וירא"""
+        val parsed = HtmlParser().parse(html)
+        assertEquals("seforim://line/123", parsed.single { it.href != null }.href)
+
+        val annotated = buildAnnotatedFromHtml(html, 16f)
+        assertEquals("שנאמר (בראשית א, ד) וירא", annotated.text)
+        val link = annotated.getLinkAnnotations(0, annotated.length).single()
+        assertEquals("seforim://line/123", (link.item as androidx.compose.ui.text.LinkAnnotation.Url).url)
+        assertEquals("(בראשית א, ד)", annotated.text.substring(link.start, link.end))
+    }
+
+    @Test
+    fun refLinkIsColoredAndUnderlinedOnlyUnderThePointer() {
+        // An underline would cross the vowels below the letters: only while hovered
+        val color = androidx.compose.ui.graphics.Color.Red
+        val annotated = buildAnnotatedFromHtml("""<a class="ref" href="seforim://line/1">וְאָכַלְתָּ</a>""", 16f, linkColor = color)
+        val styles =
+            (
+                annotated
+                    .getLinkAnnotations(
+                        0,
+                        annotated.length,
+                    ).single()
+                    .item as androidx.compose.ui.text.LinkAnnotation.Url
+            ).styles!!
+        assertEquals(color, styles.style?.color)
+        assertEquals(null, styles.style?.textDecoration)
+        assertEquals(androidx.compose.ui.text.style.TextDecoration.Underline, styles.hoveredStyle?.textDecoration)
+    }
+
+    @Test
+    fun otherAnchorsStayPlainText() {
+        val annotated = buildAnnotatedFromHtml("""ראה <a href="https://example.com">כאן</a>""", 16f)
+        assertTrue(annotated.getLinkAnnotations(0, annotated.length).isEmpty())
+    }
+
+    @Test
+    fun commentAnchorsMarkThePassagesTheyExplain() {
+        val html =
+            """ <i data-commentator="Bach" data-order="1.1"></i><i data-commentator="Prisha" data-order="1.1"></i>וכל היום """ +
+                """<i data-commentator="Drisha" data-order="2.1"></i>י"א שלקטנים <i data-commentator="Prisha" data-order="3.1"></i>ולגדולים"""
+
+        val annotated = buildAnnotatedFromHtml(html, 16f, anchorCommentators = setOf("Bach", "Prisha", "Drisha"))
+
+        assertEquals("וכל היום י\"א שלקטנים ולגדולים", annotated.text)
+        // Not asked for: no passage at all
+        assertEquals(0, buildAnnotatedFromHtml(html, 16f).getStringAnnotations(COMMENT_SEGMENT_TAG, 0, annotated.length).size)
+        assertEquals(plainTextFromHtml(html), annotated.text)
+        val segments =
+            annotated.getStringAnnotations(COMMENT_SEGMENT_TAG, 0, annotated.length).map {
+                annotated.text.substring(it.start, it.end).trim() to commentAnchorsOf(it.item)
+            }
+        assertEquals(
+            listOf(
+                "וכל היום" to listOf(CommentAnchor("Bach", 1), CommentAnchor("Prisha", 1)),
+                "י\"א שלקטנים" to listOf(CommentAnchor("Drisha", 2)),
+                "ולגדולים" to listOf(CommentAnchor("Prisha", 3)),
+            ),
+            segments,
+        )
+    }
+
+    @Test
+    fun anAnchorBetweenWordsKeepsTheirSpace() {
+        assertEquals("ויכוין בברכותיו", plainTextFromHtml("""ויכוין <i data-commentator="Bach" data-order="1.1"></i> בברכותיו"""))
+        assertEquals("ויכוין בברכותיו", plainTextFromHtml("""ויכוין<i data-commentator="Bach" data-order="1.1"></i> בברכותיו"""))
+        // Latin words keep the space their merge gives them
+        assertEquals("abc def", plainTextFromHtml("""abc<i data-commentator="Bach" data-order="1.1"></i>def"""))
+    }
 }

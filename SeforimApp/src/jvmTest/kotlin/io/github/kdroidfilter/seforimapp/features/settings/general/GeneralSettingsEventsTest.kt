@@ -51,6 +51,7 @@ class GeneralSettingsEventsTest {
                 GeneralSettingsEvents.SetPersistSession(true),
                 GeneralSettingsEvents.SetKeepScreenAwakeOnBook(true),
                 GeneralSettingsEvents.SetSearchFeedbackEnabled(true),
+                GeneralSettingsEvents.SetAutoUpdateCheck(true),
             )
 
         events.forEach { event ->
@@ -59,6 +60,7 @@ class GeneralSettingsEventsTest {
                 is GeneralSettingsEvents.SetPersistSession -> assertEquals(true, event.value)
                 is GeneralSettingsEvents.SetKeepScreenAwakeOnBook -> assertEquals(true, event.value)
                 is GeneralSettingsEvents.SetSearchFeedbackEnabled -> assertEquals(true, event.value)
+                is GeneralSettingsEvents.SetAutoUpdateCheck -> assertEquals(true, event.value)
             }
         }
     }

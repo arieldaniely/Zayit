@@ -990,8 +990,12 @@ internal fun BookResultCard(
     feedbackKey: String = "",
     searchQuery: String = "",
     onPreview: (SearchResult) -> Unit = {},
+    showPreviewAction: Boolean = true,
+    primaryMaxLines: Int = Int.MAX_VALUE,
+    collapsedSecondaryLimit: Int = 3,
+    expandLabel: String? = null,
 ) {
-    val collapsedCap = 3
+    val collapsedCap = collapsedSecondaryLimit
     val loadedCount = 1 + group.secondaries.size
     val needsFetch = group.totalCount > loadedCount
     val isLoadingExpand = isExpanded && needsFetch && expandedHits == null
@@ -1122,11 +1126,13 @@ internal fun BookResultCard(
                     fontFamily = fontFamily,
                     lineHeight = (textSize * lineHeight).sp,
                     fontSize = textSize.sp,
+                    maxLines = primaryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Start,
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
-                PreviewResultButton(visible = primaryHovered) { onPreview(primary) }
+                if (showPreviewAction) PreviewResultButton(visible = primaryHovered) { onPreview(primary) }
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1152,6 +1158,7 @@ internal fun BookResultCard(
                             onPreview = { onPreview(sec) },
                             onFeedback = onFeedback,
                             feedbackKey = feedbackKey,
+                            showPreviewAction = showPreviewAction,
                         )
                     }
                 }
@@ -1209,7 +1216,7 @@ internal fun BookResultCard(
                             if (isExpanded) {
                                 stringResource(Res.string.search_collapse)
                             } else {
-                                stringResource(Res.string.search_more_in_book, remaining)
+                                expandLabel ?: stringResource(Res.string.search_more_in_book, remaining)
                             },
                         color = accent,
                         fontSize = (textSize * 0.85f).sp,
@@ -1310,6 +1317,7 @@ private fun SecondaryResultRow(
     onPreview: () -> Unit,
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
+    showPreviewAction: Boolean = true,
 ) {
     val hoverSource = remember { MutableInteractionSource() }
     val hovered by hoverSource.collectIsHoveredAsState()
@@ -1350,7 +1358,7 @@ private fun SecondaryResultRow(
             modifier = Modifier.weight(1f),
         )
         ResultFeedback(result, feedbackKey, hovered, onFeedback)
-        PreviewResultButton(visible = hovered, onClick = onPreview)
+        if (showPreviewAction) PreviewResultButton(visible = hovered, onClick = onPreview)
     }
 }
 

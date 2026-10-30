@@ -27,13 +27,20 @@ import io.github.kdroidfilter.seforimapp.features.settings.ui.UpdateStatusBanner
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.update.UpdateUiState
+import io.github.vinceglb.filekit.FileKit
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import java.util.Properties
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SettingsScreensUiTest {
+    @BeforeTest
+    fun initializeTestFileStorage() {
+        FileKit.init("io.github.arieldaniely.zayita.settings-ui-tests")
+    }
+
     @Test
     fun `data settings remains usable before a books database is installed`() = assertScreenRenders("מקום ההתקנה") { DataSettingsScreen() }
 

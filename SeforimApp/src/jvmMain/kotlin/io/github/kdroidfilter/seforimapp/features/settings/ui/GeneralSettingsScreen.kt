@@ -33,17 +33,20 @@ import io.github.kdroidfilter.seforimapp.features.settings.general.GeneralSettin
 import io.github.kdroidfilter.seforimapp.features.settings.general.GeneralSettingsState
 import io.github.kdroidfilter.seforimapp.features.settings.general.GeneralSettingsViewModel
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.update.InstallInfo
 import io.github.kdroidfilter.seforimapp.framework.update.UpdateMode
 import io.github.kdroidfilter.seforimapp.framework.update.UpdateUiState
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
+import org.jetbrains.jewel.ui.component.CheckboxRow
+import org.jetbrains.jewel.ui.component.CircularProgressIndicator
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconButton
 import org.jetbrains.jewel.ui.component.InlineInformationBanner
-import org.jetbrains.jewel.ui.component.InlineSuccessBanner
 import org.jetbrains.jewel.ui.component.InlineWarningBanner
+import org.jetbrains.jewel.ui.component.Link
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
@@ -51,6 +54,7 @@ import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.app_name
 import seforimapp.seforimapp.generated.resources.close_book_tree_on_new_book
 import seforimapp.seforimapp.generated.resources.close_book_tree_on_new_book_description
+import seforimapp.seforimapp.generated.resources.settings_auto_update_check
 import seforimapp.seforimapp.generated.resources.settings_info_app_version
 import seforimapp.seforimapp.generated.resources.settings_info_fork_notice
 import seforimapp.seforimapp.generated.resources.settings_info_license
@@ -111,6 +115,8 @@ private fun GeneralSettingsView(
             AppHeader(
                 version = version,
                 updateState = updateState,
+                autoUpdateCheck = state.autoUpdateCheck,
+                onAutoUpdateCheckChange = { onEvent(GeneralSettingsEvents.SetAutoUpdateCheck(it)) },
                 onDownloadUpdate = onDownloadUpdate,
                 onInstallUpdate = onInstallUpdate,
                 onCheckForUpdate = onCheckForUpdate,
@@ -151,6 +157,8 @@ private fun GeneralSettingsView(
 private fun AppHeader(
     version: String,
     updateState: UpdateUiState,
+    autoUpdateCheck: Boolean,
+    onAutoUpdateCheckChange: (Boolean) -> Unit,
     onDownloadUpdate: () -> Unit,
     onInstallUpdate: () -> Unit,
     onCheckForUpdate: () -> Unit,
@@ -190,12 +198,22 @@ private fun AppHeader(
                     fontSize = 13.sp,
                     color = JewelTheme.globalColors.text.info,
                 )
+                UpdateStatusLine(updateState, autoUpdateCheck, onCheckForUpdate)
                 Text(
                     text = stringResource(Res.string.settings_info_fork_notice),
                     fontSize = 12.sp,
                     color = JewelTheme.globalColors.text.info,
                 )
             }
+        }
+
+        // The Store updates its package itself: nothing for the user to turn off there
+        if (InstallInfo.selfUpdates) {
+            CheckboxRow(
+                text = stringResource(Res.string.settings_auto_update_check),
+                checked = autoUpdateCheck,
+                onCheckedChange = onAutoUpdateCheckChange,
+            )
         }
 
         Row(
@@ -231,6 +249,58 @@ private fun AppHeader(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun UpdateStatusLine(
+    updateState: UpdateUiState,
+    autoUpdateCheck: Boolean,
+    onCheckForUpdate: () -> Unit,
+) {
+    when (updateState) {
+        // Without the startup check nothing ever leaves Idle: offer the manual check instead of a spinner
+        UpdateUiState.Idle if !autoUpdateCheck ->
+            Link(
+                text = stringResource(Res.string.update_check_action),
+                onClick = onCheckForUpdate,
+            )
+
+        UpdateUiState.UpToDate ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    key = AllIconsKeys.General.GreenCheckmark,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = stringResource(Res.string.update_up_to_date),
+                    fontSize = 13.sp,
+                    color = JewelTheme.globalColors.text.info,
+                )
+                Link(
+                    text = stringResource(Res.string.update_check_action),
+                    onClick = onCheckForUpdate,
+                )
+            }
+
+        UpdateUiState.Idle, UpdateUiState.Checking ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(14.dp))
+                Text(
+                    text = stringResource(Res.string.update_checking),
+                    fontSize = 13.sp,
+                    color = JewelTheme.globalColors.text.info,
+                )
+            }
+
+        else -> Unit
     }
 }
 
@@ -279,17 +349,6 @@ internal fun UpdateStatusBanner(
                 )
             }
 
-            UpdateUiState.UpToDate -> {
-                val checkLabel = stringResource(Res.string.update_check_action)
-                InlineSuccessBanner(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(Res.string.update_up_to_date),
-                    linkActions = {
-                        action(checkLabel, onClick = onCheckForUpdate)
-                    },
-                )
-            }
-
             is UpdateUiState.Error -> {
                 val checkLabel = stringResource(Res.string.update_check_action)
                 InlineWarningBanner(
@@ -301,8 +360,7 @@ internal fun UpdateStatusBanner(
                 )
             }
 
-            UpdateUiState.Idle, UpdateUiState.Checking ->
-                InlineInformationBanner(text = stringResource(Res.string.update_checking), modifier = Modifier.fillMaxWidth())
+            UpdateUiState.UpToDate, UpdateUiState.Idle, UpdateUiState.Checking -> Unit
         }
     }
 }

@@ -130,7 +130,11 @@ class SearchResultViewModel(
                     previous.datasetScope == "favorites" ->
                         changed.copy(datasetScope = "favorites", scopeFavoriteFolderId = previous.scopeFavoriteFolderId)
                     previous.scopeAuthorId != 0L ->
-                        changed.copy(datasetScope = "author", scopeAuthorId = previous.scopeAuthorId, fetchAuthorId = previous.scopeAuthorId)
+                        changed.copy(
+                            datasetScope = "author",
+                            scopeAuthorId = previous.scopeAuthorId,
+                            fetchAuthorId = previous.scopeAuthorId,
+                        )
                     else -> changed
                 }.withScopeCoverage()
             if (next.hasExplicitScope && next.globalExtended) {
@@ -151,6 +155,7 @@ class SearchResultViewModel(
     // MVI events for SearchResultViewModel
     sealed class SearchResultEvents {
         data object ResetScopeFilters : SearchResultEvents()
+
         data class SetCategoryChecked(
             val categoryId: Long,
             val checked: Boolean,
@@ -331,24 +336,28 @@ class SearchResultViewModel(
     }
 
     private val _uiState = MutableStateFlow(SearchUiState(feedbackSearchId = UUID.randomUUID().toString()))
+
     @Volatile
     private var favoriteLineIds: Set<Long> = emptySet()
     private val lucene: SearchEngine =
-        LineScopeSearchEngine(ModeBoundSearchEngine(
-            searchEngine,
-            selectedMode = { _uiState.value.mode },
-            onFallback = {
-                _uiState.update { state ->
-                    state.copy(
-                        mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
-                        semanticFallback = true,
-                    )
-                }
-                updatePersistedSearch {
-                    it.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name, snapshot = null)
-                }
-            },
-        ), { favoriteLineIds.takeIf { persistedSearchState().datasetScope == "favorites" } })
+        LineScopeSearchEngine(
+            ModeBoundSearchEngine(
+                searchEngine,
+                selectedMode = { _uiState.value.mode },
+                onFallback = {
+                    _uiState.update { state ->
+                        state.copy(
+                            mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE,
+                            semanticFallback = true,
+                        )
+                    }
+                    updatePersistedSearch {
+                        it.copy(mode = io.github.kdroidfilter.seforimlibrary.search.SearchMode.FLEXIBLE.name, snapshot = null)
+                    }
+                },
+            ),
+            { favoriteLineIds.takeIf { persistedSearchState().datasetScope == "favorites" } },
+        )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
     private var currentJob: Job? = null
     private val highlighter =
@@ -624,7 +633,7 @@ class SearchResultViewModel(
 
     // The result picked in the list; the first one until one is
     private val selectedLineId = MutableStateFlow<Long?>(null)
-    private val _previewVisible = MutableStateFlow(false)
+    private val _previewVisible = MutableStateFlow(true)
     val previewVisible = _previewVisible.asStateFlow()
 
     fun hidePreview() {

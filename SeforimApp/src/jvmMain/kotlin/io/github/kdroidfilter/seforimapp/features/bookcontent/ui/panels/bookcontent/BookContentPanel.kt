@@ -28,6 +28,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.text.DiacriticsMode
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeUtils
 import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.features.bookcontent.BookContentEvent
+import io.github.kdroidfilter.seforimapp.features.bookcontent.references.LinePlaces
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentState
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookTabUi
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.LineConnectionsSnapshot
@@ -38,7 +39,6 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookdeta
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NoteDraftAnchor
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.domain.SearchEntity
-import io.github.kdroidfilter.seforimlibrary.core.models.ConnectionType
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -245,6 +245,8 @@ private fun BookContentPanelContent(
                         lazyPagingItems = lazyPagingItems,
                         selectedLineIds = uiState.content.selectedLineIds,
                         primarySelectedLineId = uiState.content.primarySelectedLineId,
+                        selectedPassage = uiState.content.selectedPassage,
+                        passageCommentatorIds = if (uiState.content.showCommentaries) uiState.content.visibleCommentatorIds else emptySet(),
                         isTocEntrySelection = uiState.content.isTocEntrySelection,
                         onLineSelect = { line, isModifier ->
                             onEvent(BookContentEvent.LineSelected(line, isModifier))
@@ -332,11 +334,10 @@ internal fun SourcesPane(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        LineTargumView(
+        LinePlacesView(
+            kind = LinePlaces.Sources,
             uiState = uiState,
             onEvent = onEvent,
-            lineConnections = lineConnections,
-            availabilityType = ConnectionType.SOURCE,
             diacritics = diacritics,
         )
     }
@@ -351,11 +352,10 @@ internal fun MentionsPane(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        LineTargumView(
+        LinePlacesView(
+            kind = LinePlaces.References,
             uiState = uiState,
             onEvent = onEvent,
-            lineConnections = lineConnections,
-            availabilityType = ConnectionType.MENTION,
             diacritics = diacritics,
         )
     }

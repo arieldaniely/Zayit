@@ -90,6 +90,8 @@ import seforimapp.seforimapp.generated.resources.semantic_import_bundle
 import seforimapp.seforimapp.generated.resources.semantic_install_body
 import seforimapp.seforimapp.generated.resources.semantic_invalid_bundle
 import seforimapp.seforimapp.generated.resources.settings_cancel
+import seforimapp.seforimapp.generated.resources.settings_error_reporting
+import seforimapp.seforimapp.generated.resources.settings_error_reporting_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_installed_description
 import seforimapp.seforimapp.generated.resources.settings_pdf_library_title
@@ -213,6 +215,14 @@ fun DataSettingsScreen() {
             ResetCard(
                 resetDone = state.resetDone,
                 onReset = { viewModel.resetApp() },
+            )
+
+            val errorReporting by viewModel.errorReporting.collectAsState()
+            SettingCard(
+                title = Res.string.settings_error_reporting,
+                description = Res.string.settings_error_reporting_description,
+                checked = errorReporting,
+                onCheckedChange = viewModel::setErrorReporting,
             )
         }
     }

@@ -36,6 +36,8 @@ object AppSettings {
             KEY_CLOSE_TREE_ON_NEW_BOOK,
             KEY_PERSIST_SESSION,
             KEY_KEEP_SCREEN_AWAKE_ON_BOOK,
+            KEY_ERROR_REPORTING,
+            KEY_AUTO_UPDATE_CHECK,
             KEY_FONT_BOOK,
             KEY_FONT_COMMENTARY,
             KEY_FONT_TARGUM,
@@ -56,7 +58,9 @@ object AppSettings {
         )
 
     private fun isPortableKey(key: String): Boolean =
-        key in PORTABLE_KEYS || key.startsWith(HOME_WIDGET_SETTINGS_PREFIX) || key.startsWith("semantic_search.") ||
+        key in PORTABLE_KEYS ||
+            key.startsWith(HOME_WIDGET_SETTINGS_PREFIX) ||
+            key.startsWith("semantic_search.") ||
             key.startsWith("home_appearance.")
 
     /**
@@ -123,6 +127,8 @@ object AppSettings {
     private const val KEY_CLOSE_TREE_ON_NEW_BOOK = "close_tree_on_new_book"
     private const val KEY_DATABASE_PATH = "database_path"
     private const val KEY_PERSIST_SESSION = "persist_session"
+    private const val KEY_ERROR_REPORTING = "error_reporting"
+    private const val KEY_AUTO_UPDATE_CHECK = "auto_update_check"
     private const val KEY_KEEP_SCREEN_AWAKE_ON_BOOK = "keep_screen_awake_on_book"
     private const val KEY_FONT_BOOK = "font_book"
     private const val KEY_FONT_COMMENTARY = "font_commentary"
@@ -201,6 +207,8 @@ object AppSettings {
         _databasePathFlow.value = getDatabasePath()
         _persistSessionFlow.value = isPersistSessionEnabled()
         _keepScreenAwakeOnBookFlow.value = isKeepScreenAwakeOnBookEnabled()
+        _errorReportingFlow.value = isErrorReportingEnabled()
+        _autoUpdateCheckFlow.value = isAutoUpdateCheckEnabled()
         _bookFontCodeFlow.value = getBookFontCode()
         _commentaryFontCodeFlow.value = getCommentaryFontCode()
         _targumFontCodeFlow.value = getTargumFontCode()
@@ -248,6 +256,14 @@ object AppSettings {
     val antiAliasingFlow: StateFlow<WidgetAntiAliasing> = _antiAliasingFlow.asStateFlow()
     val AVAILABLE_ANTI_ALIASING: List<WidgetAntiAliasing> =
         WidgetAntiAliasing.entries.filter { it != WidgetAntiAliasing.TAA || !PlatformInfo.isLinux }
+
+    // StateFlow for the anonymous error reports setting
+    private val _errorReportingFlow = MutableStateFlow(isErrorReportingEnabled())
+    val errorReportingFlow: StateFlow<Boolean> = _errorReportingFlow.asStateFlow()
+
+    // StateFlow for the automatic update check setting
+    private val _autoUpdateCheckFlow = MutableStateFlow(isAutoUpdateCheckEnabled())
+    val autoUpdateCheckFlow: StateFlow<Boolean> = _autoUpdateCheckFlow.asStateFlow()
 
     fun getAntiAliasing(): WidgetAntiAliasing =
         WidgetAntiAliasing.entries
@@ -527,6 +543,22 @@ object AppSettings {
         _keepScreenAwakeOnBookFlow.value = enabled
     }
 
+    // Anonymous error reports (enabled by default); apply it through CrashReporting, which starts or stops Sentry
+    fun isErrorReportingEnabled(): Boolean = settings[KEY_ERROR_REPORTING, true]
+
+    fun setErrorReportingEnabled(enabled: Boolean) {
+        settings[KEY_ERROR_REPORTING] = enabled
+        _errorReportingFlow.value = enabled
+    }
+
+    // Check for app updates at startup (enabled by default); the settings button still checks on demand
+    fun isAutoUpdateCheckEnabled(): Boolean = settings[KEY_AUTO_UPDATE_CHECK, true]
+
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) {
+        settings[KEY_AUTO_UPDATE_CHECK] = enabled
+        _autoUpdateCheckFlow.value = enabled
+    }
+
     /** Null goes back to the default layout. The old fork key is read until the first edit. */
     fun setHomeWidgetsLayout(layout: String?) {
         if (layout == null) settings.remove(KEY_HOME_WIDGETS_LAYOUT) else settings[KEY_HOME_WIDGETS_LAYOUT] = layout
@@ -787,6 +819,8 @@ object AppSettings {
     // Clears all persisted settings and resets in-memory flows to defaults
     fun clearAll() {
         settings.clear()
+        _errorReportingFlow.value = true
+        _autoUpdateCheckFlow.value = true
         _homeWidgetsLayoutFlow.value = null
         typedSettings.values.forEach { it.reset() }
         _textSizeFlow.value = DEFAULT_TEXT_SIZE

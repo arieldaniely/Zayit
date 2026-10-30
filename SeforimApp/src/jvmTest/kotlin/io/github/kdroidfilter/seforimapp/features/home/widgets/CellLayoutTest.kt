@@ -34,9 +34,9 @@ class CellLayoutTest {
     @Test
     fun `the default layout fills its rows, nothing overlapping`() {
         assertWellFormed(homeWidgets)
-        assertEquals(7, homeWidgets.bottom())
+        assertEquals(10, homeWidgets.bottom())
         val cells = homeWidgets.sumOf { it.cell.w * it.cell.h }
-        assertEquals(HOME_GRID_COLUMNS * 4 + HOME_GRID_COLUMNS * 3, cells)
+        assertEquals(HOME_GRID_COLUMNS * 7 + 29, cells)
     }
 
     @Test
@@ -48,24 +48,24 @@ class CellLayoutTest {
         // Vacant only: below every widget, the grid growing down
         val vacant = homeWidgets.nearestArea(centre, CellSpan(6, 3), pitch)
         assertTrue(homeWidgets.isVacant(vacant), "$vacant")
-        assertEquals(7, vacant.y)
+        assertEquals(10, vacant.y)
     }
 
     @Test
     fun `a widget added goes in the first hole big enough, row after row`() {
         val withHole = homeWidgets.filterNot { it.widget.id == TempleCountdownWidget.id }
-        assertEquals(CellRect(0, 4, 6, 3), withHole.firstVacant(CellSpan(6, 3)))
+        assertEquals(CellRect(0, 7, 6, 3), withHole.firstVacant(CellSpan(6, 3)))
         // Too big for the hole: below everything
-        assertEquals(CellRect(0, 7, 7, 5), withHole.firstVacant(CalendarWidget.defaultSpan))
+        assertEquals(CellRect(0, 10, 7, 5), withHole.firstVacant(CalendarWidget.defaultSpan))
     }
 
     @Test
     fun `a widget put over others moves only the ones in its way, to the vacant area nearest where they were`() {
         val sky = homeWidgets.first { it.widget.id == SkyWidget.id }
-        val onTheTemple = sky.copy(cell = sky.cell.at(0, 4))
+        val onTheTemple = sky.copy(cell = sky.cell.at(0, 7))
         val result = homeWidgets.reorder(onTheTemple, pitch)
         assertWellFormed(result)
-        assertEquals(CellRect(0, 4, 5, 3), result.cellOf(SkyWidget))
+        assertEquals(CellRect(0, 7, 5, 3), result.cellOf(SkyWidget))
         // The Temple was in the way; the zmanim, the Earth and the solar system weren't
         for (w in listOf(ZmanimWidget, EarthWidget)) assertEquals(homeWidgets.cellOf(w), result.cellOf(w))
         assertTrue(result.cellOf(TempleCountdownWidget) != homeWidgets.cellOf(TempleCountdownWidget))

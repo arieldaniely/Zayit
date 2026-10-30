@@ -67,7 +67,14 @@ internal class HomeWidgetsLayout(
         availableHomeWidgets.forEach { it.applySettings(appSettings) }
     }
 
-    fun current(): List<WidgetPlacement> = decodeLayout(appSettings.homeWidgetsLayoutFlow.value)
+    fun current(): List<WidgetPlacement> {
+        val saved = decodeLayout(appSettings.homeWidgetsLayoutFlow.value)
+        if (saved.any { it.widget == HomeSearchWidget }) return saved
+        // The old logo/search lived above the grid. Reserve their former header space once.
+        val legacy = saved.none { !it.widget.participatesInAutoArrange }
+        val moved = if (legacy) saved.map { it.copy(cell = it.cell.copy(y = it.cell.y + 3)) } else saved
+        return homeControlWidgets.filter { p -> saved.none { it.widget == p.widget } } + moved
+    }
 
     fun save(layout: List<WidgetPlacement>) = appSettings.setHomeWidgetsLayout(encodeLayout(layout))
 
@@ -86,6 +93,7 @@ internal class HomeWidgetsLayout(
 
     /** Returns what was removed, for an undo to [restore] it. Its area stays empty: nothing moves into it. */
     fun remove(widget: HomeWidget): RemovedWidget? {
+        if (!widget.removable) return null
         val layout = current()
         val removed = layout.firstOrNull { it.widget.id == widget.id } ?: return null
         save(layout - removed)

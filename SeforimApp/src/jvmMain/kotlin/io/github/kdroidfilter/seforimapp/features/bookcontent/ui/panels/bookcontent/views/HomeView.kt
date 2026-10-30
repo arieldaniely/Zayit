@@ -390,10 +390,14 @@ private fun HomeBody(
             HomeWidgetsState(userLocation, community, layout)
         }
     val tabs = LocalOpenWindow.current.tabsViewModel
-    SideEffect { widgetsState.openTab = tabs::openTab }
+    SideEffect {
+        widgetsState.openTab = tabs::openTab
+        widgetsState.searchUi = searchUi
+        widgetsState.searchCallbacks = searchCallbacks
+    }
     // Composed here, outside the page, so a card's window doesn't depend on the page's composition
     val widgetsLayoutRaw by widgetGraph.appSettings.homeWidgetsLayoutFlow.collectAsState()
-    val widgetsLayout = remember(widgetsLayoutRaw) { decodeLayout(widgetsLayoutRaw) }
+    val widgetsLayout = remember(widgetsLayoutRaw) { layout.current() }
     widgetsLayout.forEach { it.widget.Detached(widgetsState) }
 
     val scrollState = rememberScrollState()
@@ -409,9 +413,6 @@ private fun HomeBody(
             ) {
                 // Main search field focus handled inside SearchBar via autoFocus
 
-                val homeContentModifier =
-                    Modifier.widthIn(max = 600.dp).fillMaxWidth()
-
                 // The page is centred; while the gallery shows or a widget is dragged it holds still, gliding back after
                 FreezableCenter(frozen = widgetsState.pageHeld) {
                     HomeWidgetsGrid(
@@ -422,33 +423,6 @@ private fun HomeBody(
                     ) {
                         // Scrolls with the page instead of floating over the widgets
                         FullWidthSection(gapAfter = 4.dp) { CatalogRow(onEvent = onEvent) }
-                        FullWidthSection(gapAfter = 4.dp) {
-                            BoxWithConstraints(
-                                Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                // Scale logo width proportionally; height follows the image aspect ratio
-                                val logoWidth = (maxWidth * 0.50f).coerceIn(320.dp, 450.dp)
-                                LogoImage(modifier = Modifier.width(logoWidth))
-                            }
-                        }
-                        FullWidthSection(gapAfter = 4.dp) {
-                            Box(
-                                Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Box(homeContentModifier) {
-                                    UnifiedSearchBar(searchUi = searchUi, searchCallbacks = searchCallbacks)
-                                }
-                            }
-                        }
-                        FullWidthSection(gapAfter = 4.dp) {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Box(homeContentModifier) {
-                                    Spacer(Modifier.height(4.dp))
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -469,6 +443,7 @@ internal fun UnifiedSearchBar(
     modifier: Modifier = Modifier,
     initialText: String = "",
     autoFocus: Boolean = true,
+    showModePicker: Boolean = true,
     // The typed text, as it changes (the results page keeps it for the tab's restore)
     onTextChange: (String) -> Unit = {},
 ) {
@@ -564,6 +539,7 @@ internal fun UnifiedSearchBar(
     val breadcrumbSeparatorTop = stringResource(Res.string.breadcrumb_separator)
     val isTocInTopBar = searchUi.selectedScopeBook != null
     SearchBar(
+        showModePicker = showModePicker,
         state = if (isTocInTopBar) tocSearchState else referenceSearchState,
         onSubmit = { openReference() },
         modifier = modifier,
@@ -1262,6 +1238,7 @@ private fun SuggestionRow(
 internal fun SearchBar(
     state: TextFieldState,
     modifier: Modifier = Modifier,
+    showModePicker: Boolean = true,
     onSubmit: () -> Unit = {},
     enabled: Boolean = true,
     suggestionsVisible: Boolean = false,
@@ -1783,14 +1760,16 @@ internal fun SearchBar(
                 },
                 textStyle = TextStyle(fontSize = 13.sp),
             )
-            SearchModePicker(
-                mode = mode,
-                onModeChange = {
-                    onModeChange(it)
-                    effectiveFocusRequester.requestFocus()
-                },
-                modifier = Modifier.height(40.dp),
-            )
+            if (showModePicker) {
+                SearchModePicker(
+                    mode = mode,
+                    onModeChange = {
+                        onModeChange(it)
+                        effectiveFocusRequester.requestFocus()
+                    },
+                    modifier = Modifier.height(40.dp),
+                )
+            }
         }
 
         // Overlay suggestions anchored under the TextField

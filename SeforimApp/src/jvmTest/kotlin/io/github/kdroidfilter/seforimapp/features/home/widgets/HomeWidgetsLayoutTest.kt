@@ -5,12 +5,16 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.earth.EarthWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.temple.TempleCountdownWidget
 import io.github.kdroidfilter.seforimapp.features.home.widgets.zmanim.ZmanimWidget
 import io.github.kdroidfilter.seforimapp.testAppSettings
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeWidgetsLayoutTest {
+    private val regularLayout =
+        homeWidgets.filter { it.widget.participatesInAutoArrange }.map { it.copy(cell = it.cell.copy(y = it.cell.y - 3)) }
+
     private fun ids(layout: List<WidgetPlacement>) = layout.map { it.widget.id }
 
     @Test
@@ -78,7 +82,7 @@ class HomeWidgetsLayoutTest {
         appSettings.setHomeWidgetsLayout(encodeLayout(homeWidgets.filterNot { it.widget.id == EarthWidget.id }))
         layout.add(TempleCountdownWidget) // already there: nothing
         layout.add(EarthWidget)
-        assertEquals(CellRect(13, 0, 7, 4), layout.current().first { it.widget.id == EarthWidget.id }.cell)
+        assertEquals(CellRect(13, 3, 7, 4), layout.current().first { it.widget.id == EarthWidget.id }.cell)
     }
 
     @Test
@@ -103,8 +107,10 @@ class HomeWidgetsLayoutTest {
         val pitch = CellPitch(MAX_GRID_WIDTH)
         val layouts =
             listOf(
-                homeWidgets,
-                availableHomeWidgets.fold(emptyList<WidgetPlacement>()) { l, w -> l + WidgetPlacement(w, l.firstVacant(w.defaultSpan)) },
+                regularLayout,
+                availableHomeWidgets.filter { it.participatesInAutoArrange }.fold(emptyList<WidgetPlacement>()) { l, w ->
+                    l + WidgetPlacement(w, l.firstVacant(w.defaultSpan))
+                },
             )
         for (layout in layouts) {
             val arranged = layout.arranged(pitch)
@@ -118,10 +124,10 @@ class HomeWidgetsLayoutTest {
     @Test
     fun `arranging again gives another layout as tight`() {
         val pitch = CellPitch(MAX_GRID_WIDTH)
-        val first = homeWidgets.rearranged(pitch, 0)
+        val first = regularLayout.rearranged(pitch, 0)
         val second = first.rearranged(pitch, 1)
-        assertTrue(first != homeWidgets && second != first)
-        assertEquals(homeWidgets.bottom(), second.bottom())
+        assertTrue(first != regularLayout && second != first)
+        assertEquals(regularLayout.bottom(), second.bottom())
         assertEquals(second.bottom() * HOME_GRID_COLUMNS, second.sumOf { it.cell.w * it.cell.h })
     }
 
@@ -132,4 +138,27 @@ class HomeWidgetsLayoutTest {
         val arranged = layout.arranged(CellPitch(MAX_GRID_WIDTH))
         assertEquals(listOf(CellRect(0, 4, 14, 5), CellRect(0, 0, 20, 4)).toSet(), arranged.map { it.cell }.toSet())
     }
+
+    @Test
+    fun `search survives removal and old layouts gain movable home controls`() {
+        val settings = testAppSettings()
+        settings.setHomeWidgetsLayout("earth@0,0,7,4")
+        val layout = HomeWidgetsLayout(settings)
+        assertEquals(homeControlWidgets, layout.current().filter { !it.widget.participatesInAutoArrange })
+        assertNull(layout.remove(HomeSearchWidget))
+        assertTrue(layout.current().any { it.widget == HomeSearchWidget })
+    }
+
+    @Test
+    fun `automatic arrangement preserves home controls without overlapping them`() =
+        runTest {
+            val settings = testAppSettings()
+            val layout = HomeWidgetsLayout(settings)
+            layout.place(HomeSearchWidget, CellRect(0, 4, 10, 1))
+            val fixed = layout.current().filter { !it.widget.participatesInAutoArrange }
+            layout.arrange()
+            val result = layout.current()
+            assertEquals(fixed, result.filter { !it.widget.participatesInAutoArrange })
+            assertTrue(result.all { p -> result.none { it.widget != p.widget && it.cell.overlaps(p.cell) } })
+        }
 }

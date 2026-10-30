@@ -187,10 +187,17 @@ internal fun WidgetFrame(
                 if (selected) ResizeFrame(widget.id, drag, shape)
                 // On its corner; inside it while selected, clear of the resize frame's corner handle
                 val badgeOffset = if (selected) 12.dp else (-8).dp
-                RemoveBadge(
-                    onClick = { state.removeWidget(widget) },
-                    modifier = Modifier.align(Alignment.TopStart).offset(badgeOffset, badgeOffset).testTag("widget-remove-${widget.id}"),
-                )
+                if (widget.removable) {
+                    RemoveBadge(
+                        onClick = { state.removeWidget(widget) },
+                        modifier =
+                            Modifier
+                                .align(
+                                    Alignment.TopStart,
+                                ).offset(badgeOffset, badgeOffset)
+                                .testTag("widget-remove-${widget.id}"),
+                    )
+                }
             }
         }
         if (menuOpen) {
@@ -258,14 +265,16 @@ private fun WidgetMenu(
                 },
             ) { Text(resizeLabel) }
         }
-        selectableItem(
-            selected = false,
-            iconKey = AllIconsKeys.General.Remove,
-            onClick = {
-                onDismiss()
-                state.removeWidget(widget)
-            },
-        ) { Text(removeLabel) }
+        if (widget.removable) {
+            selectableItem(
+                selected = false,
+                iconKey = AllIconsKeys.General.Remove,
+                onClick = {
+                    onDismiss()
+                    state.removeWidget(widget)
+                },
+            ) { Text(removeLabel) }
+        }
         if (!state.editingWidgets) {
             selectableItem(
                 selected = false,

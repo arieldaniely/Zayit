@@ -187,7 +187,12 @@ private fun WidgetCells(
  */
 @Composable
 private fun rememberRevealedWidgets(widgets: List<WidgetPlacement>): Set<String>? {
-    val order = widgets.sortedWith(compareBy({ it.cell.y }, { it.cell.x })).map { it.widget.id }
+    val immediate = widgets.filterNot { it.widget.participatesInAutoArrange }.mapTo(mutableSetOf()) { it.widget.id }
+    val order =
+        widgets
+            .filter { it.widget.participatesInAutoArrange }
+            .sortedWith(compareBy({ it.cell.y }, { it.cell.x }))
+            .map { it.widget.id }
     val currentOrder by rememberUpdatedState(order)
     var count by remember { mutableIntStateOf(0) }
     var done by remember { mutableStateOf(false) }
@@ -199,7 +204,7 @@ private fun rememberRevealedWidgets(widgets: List<WidgetPlacement>): Set<String>
         }
         done = true
     }
-    return if (done) null else order.take(count).toSet()
+    return if (done) null else immediate + order.take(count)
 }
 
 /** The tab strip's opening animation (TabsView), which the widgets wait out. */

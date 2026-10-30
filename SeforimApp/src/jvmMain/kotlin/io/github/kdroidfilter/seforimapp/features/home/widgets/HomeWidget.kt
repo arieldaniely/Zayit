@@ -49,6 +49,11 @@ interface HomeWidget {
 
     val isSupported: Boolean get() = true
 
+    val removable: Boolean get() = true
+
+    /** Keeps this widget's manually chosen area when the other widgets are arranged. */
+    val participatesInAutoArrange: Boolean get() = true
+
     /**
      * Its window's size when it's also a tool, opened alone from the app's Tools menu (see [availableTools]); null for a
      * widget only.
@@ -125,20 +130,22 @@ data class WidgetPlacement(
  * The default Home layout: the zmanim and the Earth, then the Temple, the solar system and the sky.
  */
 val homeWidgets: List<WidgetPlacement> =
-    listOf(
-        WidgetPlacement(ZmanimWidget, CellRect(0, 0, 13, 4)),
-        WidgetPlacement(EarthWidget, CellRect(13, 0, 7, 4)),
-        WidgetPlacement(TempleCountdownWidget, CellRect(0, 4, 6, 3)),
-        WidgetPlacement(SolarSystemWidget, CellRect(6, 4, 9, 3)),
-        WidgetPlacement(SkyWidget, CellRect(15, 4, 5, 3)),
-    )
+    homeControlWidgets +
+        listOf(
+            WidgetPlacement(ZmanimWidget, CellRect(0, 3, 13, 4)),
+            WidgetPlacement(EarthWidget, CellRect(13, 3, 7, 4)),
+            WidgetPlacement(TempleCountdownWidget, CellRect(0, 7, 6, 3)),
+            WidgetPlacement(SolarSystemWidget, CellRect(6, 7, 9, 3)),
+            WidgetPlacement(SkyWidget, CellRect(15, 7, 5, 3)),
+        )
 
 /** The default Home layout of a low-end machine, which can't run the heavy 3D widgets: the zmanim and the Temple. */
 val lowEndHomeWidgets: List<WidgetPlacement> =
-    listOf(
-        WidgetPlacement(ZmanimWidget, CellRect(0, 0, 12, 4)),
-        WidgetPlacement(TempleCountdownWidget, CellRect(12, 0, 7, 4)),
-    )
+    homeControlWidgets +
+        listOf(
+            WidgetPlacement(ZmanimWidget, CellRect(0, 3, 12, 4)),
+            WidgetPlacement(TempleCountdownWidget, CellRect(12, 3, 7, 4)),
+        )
 
 /** [lowEndHomeWidgets] on a low-end machine, [homeWidgets] elsewhere. */
 internal fun defaultLayout(lowEnd: Boolean = PlatformInfo.isLowEnd): List<WidgetPlacement> = if (lowEnd) lowEndHomeWidgets else homeWidgets

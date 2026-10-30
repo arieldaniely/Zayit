@@ -31,6 +31,17 @@ internal fun List<WidgetPlacement>.rearranged(
     pitch: CellPitch,
     attempt: Int,
 ): List<WidgetPlacement> {
+    val (moving, fixed) = partition { it.widget.participatesInAutoArrange }
+    if (fixed.isNotEmpty()) {
+        val placed = fixed.toMutableList()
+        moving.rearranged(pitch, attempt).forEach { placement ->
+            val cell = placement.cell
+            val vacant = if (placed.isVacant(cell)) cell else placed.nearestArea(pitch.centre(cell), cell.span, pitch)
+            placed += placement.copy(cell = vacant)
+        }
+        val byId = placed.associateBy { it.widget.id }
+        return map { byId.getValue(it.widget.id) }
+    }
     val shown = map { it.widget.id to it.cell }.toSet()
     val score = score()
     return (attempt until attempt + MAX_TRIES)

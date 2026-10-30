@@ -36,6 +36,13 @@ class HomeWidgetsState internal constructor(
     community: Community?,
     internal val layout: HomeWidgetsLayout,
 ) {
+    internal var searchUi by mutableStateOf(
+        io.github.kdroidfilter.seforimapp.features.search
+            .SearchHomeUiState(),
+    )
+    internal var searchCallbacks by mutableStateOf<
+        io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.HomeSearchCallbacks?,
+    >(null)
     private val sephardi = community == Community.SEPHARADE
 
     // עדות המזרח read the אור החיים, everyone else עתים לבינה

@@ -1,0 +1,4 @@
+<resources>
+    <string name="home_widget_search">חיפוש במאגר</string>
+    <string name="home_widget_search_mode">סוג החיפוש</string>
+</resources>

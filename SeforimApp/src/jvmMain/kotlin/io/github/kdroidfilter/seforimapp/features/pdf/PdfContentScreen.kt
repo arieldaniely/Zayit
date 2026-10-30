@@ -160,7 +160,7 @@ fun PdfContentView(
 
     val loadState by produceState<PdfLoadState>(PdfLoadState.Loading, file) {
         val session =
-            runCatching { withContext(Dispatchers.IO) { PdfDocumentSession.open(file) } }
+            runCatching { withContext(Dispatchers.IO) { PdfDocumentSession.open(file, bookId < -1L) } }
                 .getOrElse {
                     value = PdfLoadState.Failed(it.message.orEmpty())
                     return@produceState
@@ -827,7 +827,7 @@ private class PdfDocumentSession private constructor(
     }
 
     companion object {
-        fun open(file: File): PdfDocumentSession {
+        fun open(file: File, includePageNumbers: Boolean = false): PdfDocumentSession {
             PdfImageIoPlugins.ensureRegistered()
             val document = Loader.loadPDF(file)
             return try {
@@ -841,7 +841,15 @@ private class PdfDocumentSession private constructor(
                     }
                 PdfDocumentSession(
                     document = document,
-                    outlineIndex = PdfOutlineIndex(readPdfOutline(document)),
+                    outlineIndex =
+                        PdfOutlineIndex(
+                            readPdfOutline(document) +
+                                if (includePageNumbers) {
+                                    List(document.numberOfPages) { PdfOutlineEntry((it + 1).toString(), 1, it) }
+                                } else {
+                                    emptyList()
+                                },
+                        ),
                     pageAspectRatios = aspectRatios,
                     displayAspectRatio = aspectRatios.sorted().getOrNull(aspectRatios.size / 2) ?: PDF_DEFAULT_ASPECT_RATIO,
                     searchIndex = PdfTextSearchIndex(file),

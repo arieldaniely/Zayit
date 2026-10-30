@@ -202,6 +202,13 @@ class PersonalLibraryImporter(
                     val bookId = ids.id("book:${folder.id}:${relative.toString().replace('\\', '/')}")
                     val meta = metadata[rawTitle] ?: metadata[title]
                     val lines = readPersonalBook(file)
+                    if (file.extension.equals("pdf", true)) {
+                        execute(
+                            "INSERT INTO schema_meta(key,value) VALUES(?,?)",
+                            "personal_pdf:$bookId",
+                            file.toAbsolutePath().normalize().toString(),
+                        )
+                    }
                     val bytesPerLine = fileBytes.toDouble() / lines.size.coerceAtLeast(1)
                     val notes =
                         listOf(title, rawTitle)
@@ -695,8 +702,8 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v4-inherited-headings"
-        val BOOK_EXTENSIONS = setOf("txt", "docx")
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v5-pdf"
+        val BOOK_EXTENSIONS = setOf("txt", "docx", "pdf")
         val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 

@@ -17,7 +17,7 @@ internal fun requireLocalPersonalFiles(folders: List<PersonalBookFolder>) {
         if (unavailable.size == MAX_UNAVAILABLE_FILES) return@forEach
         Files.walk(Path.of(folder.path)).use { files ->
             files
-                .filter { it.isRegularFile() && it.extension.lowercase() in setOf("txt", "docx", "json") }
+                .filter { it.isRegularFile() && it.extension.lowercase() in setOf("txt", "docx", "pdf", "json") }
                 .filter { file ->
                     val attributes = Files.getAttribute(file, "dos:attributes", LinkOption.NOFOLLOW_LINKS) as Int
                     personalFileNeedsDownload(attributes)

@@ -15,7 +15,8 @@ class PersonalBookReaderTest {
             ZipOutputStream(Files.newOutputStream(file)).use { zip ->
                 val entries =
                     mapOf(
-                        "word/styles.xml" to """
+                        "word/styles.xml" to
+                            """
                             <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                                 <w:style w:type="paragraph" w:styleId="Base"><w:pPr><w:outlineLvl w:val="2"/></w:pPr></w:style>
                                 <w:style w:type="paragraph" w:styleId="Custom"><w:basedOn w:val="Base"/></w:style>
@@ -26,8 +27,9 @@ class PersonalBookReaderTest {
                                 <w:style w:type="paragraph" w:styleId="Localized"><w:name w:val="כותרת 2"/></w:style>
                                 <w:style w:type="paragraph" w:styleId="Cycle"><w:basedOn w:val="Cycle"/></w:style>
                             </w:styles>
-                        """.trimIndent(),
-                        "word/document.xml" to """
+                            """.trimIndent(),
+                        "word/document.xml" to
+                            """
                             <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
                                 <w:p><w:pPr><w:pStyle w:val="Nested"/></w:pPr><w:r><w:t>ירושה</w:t></w:r></w:p>
                                 <w:p><w:pPr><w:pStyle w:val="Nested"/><w:outlineLvl w:val="0"/></w:pPr>
@@ -38,7 +40,7 @@ class PersonalBookReaderTest {
                                 <w:p><w:pPr><w:pStyle w:val="Localized"/></w:pPr><w:r><w:t>עברית</w:t></w:r></w:p>
                                 <w:p><w:pPr><w:pStyle w:val="Cycle"/></w:pPr><w:r><w:t>מעגל</w:t></w:r></w:p>
                             </w:body></w:document>
-                        """.trimIndent(),
+                            """.trimIndent(),
                     )
                 entries.forEach { (name, xml) ->
                     zip.putNextEntry(ZipEntry(name))

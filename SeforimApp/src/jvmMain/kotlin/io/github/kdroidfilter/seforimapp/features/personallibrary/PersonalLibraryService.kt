@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.nio.file.Path
+import java.sql.DriverManager
 
 class PersonalLibraryService(
     private val manager: PersonalLibraryManager,
@@ -25,6 +27,20 @@ class PersonalLibraryService(
     val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
 
     fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
+
+    suspend fun pdfFile(bookId: Long): File? =
+        withContext(Dispatchers.IO) {
+            if (bookId >= -1L) return@withContext null
+            val artifacts = manager.activeArtifacts() ?: return@withContext null
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.prepareStatement("SELECT value FROM schema_meta WHERE key=?").use { statement ->
+                    statement.setString(1, "personal_pdf:$bookId")
+                    statement.executeQuery().use { rows ->
+                        if (rows.next()) File(rows.getString(1)).takeIf { it.isFile } else null
+                    }
+                }
+            }
+        }
 
     suspend fun synchronizeAfterStartup() {
         val configuration = withContext(Dispatchers.IO) { manager.takeStartupSynchronization() } ?: return

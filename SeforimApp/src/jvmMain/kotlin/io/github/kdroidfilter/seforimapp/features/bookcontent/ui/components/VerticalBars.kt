@@ -177,7 +177,7 @@ fun EndVerticalBar(
                 shortcutHint = if (PlatformInfo.isMacOS) "-⌘" else "-Ctrl",
             )
 
-            if (!noBookSelected && isPdfEdition) {
+            if (!noBookSelected && isPdfEdition && selectedBook.id > 0L) {
                 SelectableIconButtonWithToolip(
                     toolTipText = stringResource(Res.string.pdf_text_edition_tooltip),
                     onClick = { onEvent(BookContentEvent.OpenTextEdition) },
@@ -186,7 +186,7 @@ fun EndVerticalBar(
                     iconDescription = stringResource(Res.string.back_to_text_edition),
                     label = stringResource(Res.string.back_to_text_edition),
                 )
-            } else if (!noBookSelected) {
+            } else if (!noBookSelected && !isPdfEdition) {
                 val pdfAvailability by produceState(
                     initialValue = PdfAvailability(),
                     key1 = selectedBook.id,

@@ -12,6 +12,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -139,6 +140,20 @@ fun TabsContent() {
     val scope = rememberCoroutineScope()
 
     val currentTabId = tabs.getOrNull(selectedTabIndex)?.destination?.tabId
+    val selectedDestination = tabs.getOrNull(selectedTabIndex)?.destination
+    val personalLibraryState by appGraph.personalLibraryService.state.collectAsState()
+    LaunchedEffect(selectedDestination, personalLibraryState.configuration.activeGeneration) {
+        val destination = selectedDestination as? TabsDestination.BookContent ?: return@LaunchedEffect
+        if (appGraph.personalLibraryService.pdfFile(destination.bookId) != null) {
+            tabsViewModel.replaceCurrentTabDestination(
+                TabsDestination.PdfContent(
+                    bookId = destination.bookId,
+                    tabId = destination.tabId,
+                    lineId = destination.lineId,
+                ),
+            )
+        }
+    }
     val latestCurrentTabId by rememberUpdatedState(currentTabId)
 
     fun launchSubmitSearch(
@@ -556,10 +571,10 @@ private fun PdfContentTabContent(
     }
 
     val selectedBook = uiState.navigation.selectedBook
-    val pdfFile =
-        remember(selectedBook?.title, libraryVersion) {
-            selectedBook?.title?.let(TalmudPdfService::pdfForTitle)
-        }
+    val personalLibrary = LocalAppGraph.current.personalLibraryService
+    val pdfFile by produceState<java.io.File?>(null, selectedBook, libraryVersion) {
+        value = selectedBook?.let { personalLibrary.pdfFile(it.id) ?: TalmudPdfService.pdfForTitle(it.title) }
+    }
     val selectedLine = uiState.content.primaryLine
     val requestedReferences =
         remember(uiState.toc.breadcrumbPath, selectedLine?.heRef, selectedBook?.title) {

@@ -57,7 +57,7 @@ class PersonalLibraryServiceTest {
                     )
 
                 service.requestSynchronize(configuration)
-                assertTrue(service.state.value.success)
+                assertTrue(service.state.value.success, service.state.value.error)
                 assertFalse(service.state.value.semanticWorking)
                 assertEquals(
                     1,
@@ -77,7 +77,7 @@ class PersonalLibraryServiceTest {
                         semanticDirectory = temporary.resolve("missing-semantic-index").toString(),
                     )
                 service.requestSynchronize(outdated, force = true)
-                assertTrue(service.state.value.success)
+                assertTrue(service.state.value.success, service.state.value.error)
                 assertTrue(engine.captured is LuceneSearchEngine)
                 coVerify(exactly = 0) { search.sharedEmbedder() }
                 Files.walk(temporary).use { paths ->

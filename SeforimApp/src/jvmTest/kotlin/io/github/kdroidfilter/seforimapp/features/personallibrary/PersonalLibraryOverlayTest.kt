@@ -1,7 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import app.cash.sqldelight.db.QueryResult
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
 import java.nio.file.Files
@@ -20,8 +19,8 @@ class PersonalLibraryOverlayTest {
         try {
             val base = temp.resolve("base.db")
             val personal = temp.resolve("personal.db")
-            JdbcSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
-            JdbcSqliteDriver("jdbc:sqlite:$personal").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
+            PersistentSqliteDriver("jdbc:sqlite:$personal").use(SeforimDb.Schema::create)
             PersistentSqliteDriver("jdbc:sqlite:$base").use { driver ->
                 val overlay = PersonalLibraryOverlay(driver)
                 val started = CountDownLatch(1)

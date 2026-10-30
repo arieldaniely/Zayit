@@ -1,5 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
+import org.apache.pdfbox.Loader
+import org.apache.pdfbox.text.PDFTextStripper
 import org.jsoup.nodes.Entities
 import org.w3c.dom.Element
 import java.nio.file.Files
@@ -12,6 +14,19 @@ import kotlin.io.path.extension
 private const val WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 internal fun readPersonalBook(file: Path): List<String> {
+    if (file.extension.equals("pdf", true)) {
+        return Loader.loadPDF(file.toFile()).use { document ->
+            buildList {
+                val stripper = PDFTextStripper().apply { sortByPosition = true }
+                repeat(document.numberOfPages) { page ->
+                    add("<h1>${page + 1}</h1>")
+                    stripper.startPage = page + 1
+                    stripper.endPage = page + 1
+                    add(Entities.escape(stripper.getText(document)).replace("\n", "<br>"))
+                }
+            }
+        }
+    }
     if (!file.extension.equals("docx", true)) return Files.readAllLines(file, Charsets.UTF_8)
     return ZipFile(file.toFile()).use { zip ->
         val factory =
@@ -45,7 +60,12 @@ internal fun readPersonalBook(file: Path): List<String> {
             var id = styleId
             while (id != null && visited.add(id)) {
                 val style = paragraphStyles[id]
-                val outline = style?.wordElement("pPr")?.wordElement("outlineLvl")?.wordValue()?.toIntOrNull()
+                val outline =
+                    style
+                        ?.wordElement("pPr")
+                        ?.wordElement("outlineLvl")
+                        ?.wordValue()
+                        ?.toIntOrNull()
                 // Level 9 explicitly marks body text and must stop inheritance.
                 if (outline != null) return outline.takeIf { it in 0..8 }?.let { (it + 1).coerceAtMost(6) }
                 val name = style?.wordElement("name")?.wordValue()

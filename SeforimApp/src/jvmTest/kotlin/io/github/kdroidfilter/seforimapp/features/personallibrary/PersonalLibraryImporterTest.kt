@@ -2,6 +2,11 @@ package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimlibrary.db.SeforimDb
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDPage
+import org.apache.pdfbox.pdmodel.PDPageContentStream
+import org.apache.pdfbox.pdmodel.font.PDType1Font
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.util.zip.ZipEntry
@@ -12,6 +17,52 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PersonalLibraryImporterTest {
+    @Test
+    fun importsPdfPagesTextAndOriginalFileLocation() {
+        val temp = Files.createTempDirectory("personal-library-pdf")
+        try {
+            val base = temp.resolve("base.db")
+            PersistentSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
+            val books = Files.createDirectory(temp.resolve("books"))
+            val pdf = books.resolve("Printed.PDF")
+            PDDocument().use { document ->
+                val page = PDPage()
+                document.addPage(page)
+                PDPageContentStream(document, page).use { content ->
+                    content.beginText()
+                    content.setFont(PDType1Font(Standard14Fonts.FontName.HELVETICA), 12f)
+                    content.newLineAtOffset(50f, 700f)
+                    content.showText("Searchable <PDF>")
+                    content.endText()
+                }
+                document.addPage(PDPage())
+                document.save(pdf.toFile())
+            }
+            val importer = PersonalLibraryImporter(base, temp.resolve("generations"))
+            val folder = PersonalBookFolder("pdf", books.toString(), "PDF")
+            val (artifacts, summaries) = importer.build(listOf(folder), "pdf")
+            assertEquals(1, summaries.getValue("pdf").books)
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT value FROM schema_meta WHERE key LIKE 'personal_pdf:%'").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals(pdf.toAbsolutePath().normalize().toString(), rows.getString(1))
+                    }
+                    statement.executeQuery("SELECT content FROM line ORDER BY lineIndex").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals("<h1>1</h1>", rows.getString(1))
+                        assertTrue(rows.next())
+                        assertTrue(rows.getString(1).contains("Searchable &lt;PDF&gt;"))
+                        assertTrue(rows.next())
+                        assertEquals("<h1>2</h1>", rows.getString(1))
+                    }
+                }
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
+
     @Test
     fun skipsDamagedBooksAndImportsRemainingTxtAndDocx() {
         val temp = Files.createTempDirectory("personal-library-mixed")

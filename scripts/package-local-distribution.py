@@ -103,7 +103,54 @@ def sha256(path):
         return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
-def package(database_dir, semantic_dir, output, threads=6, base_only=False, base_archive=None):
+def reuse_release_base(database_dir, source_manifest, pdf_archive, output):
+    """Preserve a checksummed release's compressed bytes and append its verified PDF supplement."""
+    source_manifest = Path(source_manifest)
+    source = json.loads(source_manifest.read_text(encoding='utf-8'))
+    paths = []
+    for number, part in enumerate(source['parts'], 1):
+        name = part['file']
+        if name != f"{source['file']}.part{number:02d}" or Path(name).name != name:
+            raise ValueError('Missing or unsafe release part')
+        path = source_manifest.parent / name
+        if path.stat().st_size != part['size'] or sha256(path) != part['sha256']:
+            raise ValueError(f'Damaged release part: {name}')
+        paths.append(path)
+    whole = hashlib.sha256()
+    for path in paths:
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1 << 20), b''):
+                whole.update(chunk)
+    if whole.hexdigest() != source['sha256'] or sum(p.stat().st_size for p in paths) != source['size']:
+        raise ValueError('Release archive fingerprint mismatch')
+    if output.exists() and any(output.iterdir()):
+        raise ValueError('Use an empty output directory')
+    contents = []
+    for name in ['seforim.db', 'catalog.pb', 'lexical.db', 'release_info.txt',
+                 'seforim.db.lucene', 'seforim.db.lookup.lucene', 'תלמוד בבלי']:
+        path = database_dir / name
+        if not path.exists():
+            raise FileNotFoundError(name)
+        for file in sorted(path.rglob('*')) if path.is_dir() else [path]:
+            if file.is_file():
+                contents.append(dict(name=file.relative_to(database_dir).as_posix(),
+                                     bytes=file.stat().st_size, sha256=sha256(file)))
+    output.mkdir(parents=True, exist_ok=True)
+    writer = SplitWriter(output)
+    for path in [*paths, pdf_archive]:
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1 << 20), b''):
+                writer.write(chunk)
+    writer.finish_part()
+    manifest = dict(defaultBundle='seforim_bundle', compressionLevel=None, shardCount=0,
+                    databaseSha256=next(e['sha256'] for e in contents if e['name'] == 'seforim.db'),
+                    preservedRelease=dict(sourceSha256=source['sha256'], pdfSha256=sha256(pdf_archive)),
+                    assets=writer.parts, contents=contents)
+    (output / 'distributions.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    verify(output)
+
+
+def package(database_dir, semantic_dir, output, threads=6, base_only=False, base_archive=None, compression_level=22):
     if output.exists() and any(output.iterdir()):
         raise ValueError('Use an empty output directory')
     required = ['seforim.db', 'catalog.pb', 'lexical.db', 'release_info.txt',
@@ -139,7 +186,9 @@ def package(database_dir, semantic_dir, output, threads=6, base_only=False, base
     writer, contents = SplitWriter(output), []
     if base_archive:
         base = json.loads((base_archive / 'distributions.json').read_text(encoding='utf-8'))
-        if base['shardCount'] != 0 or base['compressionLevel'] != 22 or base['databaseSha256'] != properties['databaseSha256']:
+        preserved = base.get('compressionLevel') is None and base.get('preservedRelease')
+        if (base['shardCount'] != 0 or (base['compressionLevel'] != 22 and not preserved)
+                or base['databaseSha256'] != properties['databaseSha256']):
             raise ValueError('Incompatible staged base archive')
         contents.extend(base['contents'])
         for part in base['assets']:
@@ -151,7 +200,7 @@ def package(database_dir, semantic_dir, output, threads=6, base_only=False, base
                     writer.write(chunk)
     started = time.monotonic()
     parameters = zstandard.ZstdCompressionParameters.from_level(
-        22, threads=threads, job_size=JOB_BYTES, write_checksum=1,
+        compression_level, threads=threads, job_size=JOB_BYTES, write_checksum=1,
     )
     compressor = zstandard.ZstdCompressor(compression_params=parameters)
     with compressor.stream_writer(writer, closefd=False) as compressed:
@@ -183,10 +232,16 @@ def package(database_dir, semantic_dir, output, threads=6, base_only=False, base
     for name, key in checks:
         if fingerprints[name] != properties[key]:
             raise ValueError(f'Source fingerprint changed while packaging: {name}')
-    manifest = dict(defaultBundle='seforim_bundle', compressionLevel=22, workers=threads, jobBytes=JOB_BYTES, partBytes=PART_BYTES,
+    manifest = dict(defaultBundle='seforim_bundle', compressionLevel=compression_level, workers=threads, jobBytes=JOB_BYTES, partBytes=PART_BYTES,
                     shardCount=0 if base_only else 1, vectorEncoding=None if base_only else 'int8-maxabs-v1',
                     databaseSha256=properties['databaseSha256'],
                     assets=writer.parts, contents=contents)
+    if base_archive and base.get('preservedRelease'):
+        manifest.update(compressionLevel=None, preservedRelease=base['preservedRelease'],
+                        compressionStreams=['preserved release and PDF supplement', f'semantic: zstd level {compression_level}'])
+    elif base_archive and base['compressionLevel'] != compression_level:
+        manifest.update(compressionLevel=None,
+                        compressionStreams=[f"base: zstd level {base['compressionLevel']}", f'semantic: zstd level {compression_level}'])
     (output / 'distributions.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
     (output / 'checksums.sha256').write_text(''.join(f"{p['sha256']}  {p['name']}\n" for p in writer.parts), encoding='utf-8')
     print(f'Packaged {len(contents)} files in {len(writer.parts)} parts', flush=True)
@@ -204,6 +259,12 @@ def verify(output, extract_semantic=None):
         with zstandard.ZstdDecompressor().stream_reader(parts, read_across_frames=True) as decompressed:
             with tarfile.open(fileobj=decompressed, mode='r|', ignore_zeros=True) as archive:
                 for entry in archive:
+                    entry.name = entry.name.removeprefix('./').rstrip('/')
+                    if entry.isdir():
+                        if '..' in entry.name.split('/') or entry.name.startswith('/') or not any(
+                                name.startswith(entry.name + '/') for name in expected):
+                            raise ValueError(f'Unexpected directory: {entry.name}')
+                        continue
                     if entry.name not in expected or entry.name in seen or not entry.isfile():
                         raise ValueError(f'Unexpected entry: {entry.name}')
                     digest = hashlib.sha256()
@@ -266,8 +327,11 @@ if __name__ == '__main__':
     parser.add_argument('--semantic-dir', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--threads', type=int, default=6)
+    parser.add_argument('--compression-level', type=int, choices=range(1, 23), default=22)
     parser.add_argument('--base-only', action='store_true', help='Stage database, text indexes and PDFs while vectors are built')
     parser.add_argument('--base-archive', type=Path, help='Append semantic assets to a verified staged base without recompressing it')
+    parser.add_argument('--reuse-release-base', type=Path, help='Manifest beside original release parts to preserve their compression')
+    parser.add_argument('--pdf-archive', type=Path, help='Complete PDF supplement to include in the reused base')
     parser.add_argument('--verify', action='store_true')
     parser.add_argument('--verify-installed', type=Path, help='Verify all files written by the real desktop installer')
     parser.add_argument('--extract-semantic', type=Path)
@@ -276,9 +340,13 @@ if __name__ == '__main__':
         verify_installed(args.output, args.verify_installed)
     elif args.verify:
         verify(args.output, args.extract_semantic)
+    elif args.reuse_release_base:
+        if args.database_dir is None or args.pdf_archive is None:
+            parser.error('--database-dir and --pdf-archive are required to reuse a release base')
+        reuse_release_base(args.database_dir, args.reuse_release_base, args.pdf_archive, args.output)
     else:
         if args.database_dir is None or (args.semantic_dir is None and not args.base_only):
             parser.error('--database-dir and --semantic-dir are required for packaging')
         if args.base_only and args.base_archive:
             parser.error('--base-only and --base-archive are mutually exclusive')
-        package(args.database_dir, args.semantic_dir, args.output, args.threads, args.base_only, args.base_archive)
+        package(args.database_dir, args.semantic_dir, args.output, args.threads, args.base_only, args.base_archive, args.compression_level)

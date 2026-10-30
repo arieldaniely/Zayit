@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import hashlib
 import json
 import os
 import re
@@ -20,6 +22,25 @@ from semantic_transfer import PART_BYTES, SplitWriter, sha256, unpack, validate_
 MODEL_SHA = "659226865abd3a1bc833565ae6b2e2f48abdd7136285824a12966d4d3294cbf8"
 TOKENIZER_SHA = "0664287976ecb078bdfd8f5e5515dc87d8cb7f985a79a481aa1cdf7a7321c0e9"
 BASE_FILES = ("seforim.db", "seforim.db.lucene", "seforim.db.lookup.lucene", "catalog.pb", "lexical.db", "release_info.txt")
+PDF_DIRECTORY = "תלמוד בבלי"
+COMPRESSION_JOB_BYTES = 128 * 1024 * 1024
+
+
+def require_complete_base(base):
+    for name in BASE_FILES:
+        path = base / name
+        if not path.exists() or (path.is_file() and not path.stat().st_size):
+            raise ValueError(f"Base distribution is missing {name}")
+        if path.is_dir() and not any(path.rglob("segments_*")):
+            raise ValueError(f"Base distribution has no completed Lucene index: {name}")
+    if not any((base / PDF_DIRECTORY).rglob("*.pdf")):
+        raise ValueError("Complete distribution is missing Talmud PDFs")
+
+
+def transfer_location(args):
+    repository = args.transfer_repository or args.db_repository
+    token = os.environ["DB_TOKEN"] if repository == args.db_repository else os.environ["GH_TOKEN"]
+    return repository, token
 
 
 def download_asset(asset, target, token):
@@ -46,15 +67,16 @@ def get_release(repository, tag, token):
 
 
 def prepare(args):
-    app_token, db_token = os.environ["GH_TOKEN"], os.environ["DB_TOKEN"]
+    db_token = os.environ["DB_TOKEN"]
     hf_token = os.environ["HF_TOKEN"]
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=False)
     transfer_dir = work / "transfer"
     transfer_dir.mkdir()
-    transfer_release = get_release(args.app_repository, args.transfer_release_tag, app_token)
+    transfer_repository, transfer_token = transfer_location(args)
+    transfer_release = get_release(transfer_repository, args.transfer_release_tag, transfer_token)
     assets = {asset["name"]: asset for asset in transfer_release["assets"]}
-    download_asset(assets["semantic-transfer.json"], transfer_dir / "semantic-transfer.json", app_token)
+    download_asset(assets["semantic-transfer.json"], transfer_dir / "semantic-transfer.json", transfer_token)
     transfer = json.loads((transfer_dir / "semantic-transfer.json").read_text(encoding="utf-8"))
     if (transfer.get("databaseReleaseTag") != args.db_release_tag
             or transfer.get("modelSha256") != MODEL_SHA or transfer.get("tokenizerSha256") != TOKENIZER_SHA):
@@ -62,7 +84,7 @@ def prepare(args):
     for number, part in enumerate(transfer["parts"], 1):
         if part["file"] != f"semantic-index.tar.zst.part{number:02d}":
             raise ValueError("Invalid transfer part name")
-        download_asset(assets[part["file"]], transfer_dir / part["file"], app_token)
+        download_asset(assets[part["file"]], transfer_dir / part["file"], transfer_token)
     unpack(transfer_dir, work / "semantic")
     for part in transfer["parts"]:
         (transfer_dir / part["file"]).unlink()
@@ -93,9 +115,21 @@ def prepare(args):
     extract_complete(parts, base, PartsReader)
     for part in parts:
         part.unlink()
-    for name in BASE_FILES:
-        if not (base / name).exists():
-            raise ValueError(f"Base distribution is missing {name}")
+    if not any((base / PDF_DIRECTORY).rglob("*.pdf")):
+        pdf_release = get_release(args.db_repository, args.pdf_release_tag, db_token)
+        pdf_asset = next((asset for asset in pdf_release["assets"]
+                          if asset["name"] == "talmud_bavli_latest.tar.zst"), None)
+        if pdf_asset is None:
+            raise ValueError("Selected PDF release has no complete Talmud archive")
+        pdf_archive = db_dir / pdf_asset["name"]
+        download_asset(pdf_asset, pdf_archive, db_token)
+        pdf_stage = work / "pdf-supplement"
+        pdf_stage.mkdir()
+        extract_complete([pdf_archive], pdf_stage, PartsReader)
+        import shutil
+        shutil.copytree(pdf_stage / PDF_DIRECTORY, base / PDF_DIRECTORY, dirs_exist_ok=True)
+        pdf_archive.unlink()
+    require_complete_base(base)
     if sha256(base / "seforim.db") != transfer["databaseSha256"]:
         raise ValueError("Semantic index was generated from a different database")
     model = work / "semantic" / "model"
@@ -120,8 +154,12 @@ def package(mappings, output, *, part_bytes=PART_BYTES):
     output.parent.mkdir(parents=True, exist_ok=True)
     writer = SplitWriter(output, part_bytes)
     names = set()
+    contents = {}
     try:
-        with zstandard.ZstdCompressor(level=22, threads=2, write_checksum=True).stream_writer(writer, closefd=False) as compressed:
+        parameters = zstandard.ZstdCompressionParameters.from_level(
+            22, threads=2, job_size=COMPRESSION_JOB_BYTES, write_checksum=1,
+        )
+        with zstandard.ZstdCompressor(compression_params=parameters).stream_writer(writer, closefd=False) as compressed:
             with tarfile.open(fileobj=compressed, mode="w|") as archive:
                 for source, prefix in mappings:
                     source = Path(source)
@@ -134,20 +172,63 @@ def package(mappings, output, *, part_bytes=PART_BYTES):
                             if name in names or name.startswith("/") or ".." in name.split("/"):
                                 raise ValueError(f"Duplicate or unsafe archive path: {name}")
                             names.add(name)
+                            contents[name] = {"size": path.stat().st_size, "sha256": sha256(path)}
                             archive.add(path, arcname=name, recursive=False)
     finally:
         writer.close()
-    return {"formatVersion": 1, "file": output.name, "size": writer.total,
-            "sha256": writer.digest.hexdigest(), "parts": writer.parts, "compressionLevel": 22}
+    manifest = {"formatVersion": 1, "file": output.name, "size": writer.total,
+                "sha256": writer.digest.hexdigest(), "parts": writer.parts, "compressionLevel": 22,
+                "contents": contents}
+    verify_package(output.parent, manifest)
+    return manifest
+
+
+def verify_package(directory, manifest):
+    paths = [directory / part["file"] for part in manifest["parts"]]
+    whole = hashlib.sha256()
+    for path, part in zip(paths, manifest["parts"]):
+        if path.stat().st_size != part["size"] or sha256(path) != part["sha256"]:
+            raise ValueError(f"Damaged archive part: {path.name}")
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1 << 20), b""):
+                whole.update(chunk)
+    if whole.hexdigest() != manifest["sha256"]:
+        raise ValueError("Archive checksum mismatch")
+    seen = set()
+    with contextlib.closing(PartsReader(paths)) as source:
+        with zstandard.ZstdDecompressor().stream_reader(source) as decompressed:
+            with tarfile.open(fileobj=decompressed, mode="r|") as archive:
+                for member in archive:
+                    expected = manifest["contents"].get(member.name)
+                    if not member.isfile() or expected is None or member.name in seen:
+                        raise ValueError(f"Unexpected archived entry: {member.name}")
+                    digest = hashlib.sha256()
+                    with archive.extractfile(member) as content:
+                        for chunk in iter(lambda: content.read(1 << 20), b""):
+                            digest.update(chunk)
+                    if member.size != expected["size"] or digest.hexdigest() != expected["sha256"]:
+                        raise ValueError(f"Damaged archived file: {member.name}")
+                    seen.add(member.name)
+            while decompressed.read(1 << 20):
+                pass
+    if seen != set(manifest["contents"]):
+        raise ValueError("Archive is missing required files")
 
 
 def finish(args):
     work = args.work.resolve()
     base, semantic = work / "base", work / "semantic"
+    require_complete_base(base)
     transfer = json.loads((work / "transfer/semantic-transfer.json").read_text(encoding="utf-8"))
     validate_index(semantic / "index", transfer["databaseSha256"], MODEL_SHA, TOKENIZER_SHA)
+    if sha256(base / "seforim.db") != transfer["databaseSha256"]:
+        raise ValueError("Database fingerprint changed after preparation")
+    for name, digest in (("seforim-embed-round2-int8.onnx", MODEL_SHA), ("tokenizer.json", TOKENIZER_SHA)):
+        if sha256(semantic / "model" / name) != digest:
+            raise ValueError(f"Unexpected model file: {name}")
     env = dict(os.environ)
-    subprocess.run([str(args.repo.resolve() / "SeforimLibrary/gradlew"), ":search:optimizeSemanticIndex",
+    wrapper = "gradlew.bat" if os.name == "nt" else "gradlew"
+    subprocess.run([str(args.repo.resolve() / "SeforimLibrary" / wrapper), ":search:optimizeSemanticIndex",
                     f"-PseforimDb={base / 'seforim.db'}", f"-PsemanticModelDir={semantic / 'model'}",
                     f"-PsemanticIndexDir={semantic / 'index'}", "-PsemanticHeap=4g",
                     "--no-daemon", "--no-configuration-cache", "--max-workers=2"],
@@ -167,7 +248,7 @@ def finish(args):
          [(semantic / "model", "model"), (semantic / "index", "index")], "semantic-archive-manifest.json"),
         (db_publisher, args.db_repository, db_release, "seforim_bundle.tar.zst",
          [(base / name, name) for name in BASE_FILES]
-         + ([(base / "תלמוד בבלי", "תלמוד בבלי")] if (base / "תלמוד בבלי").is_dir() else [])
+         + [(base / PDF_DIRECTORY, PDF_DIRECTORY)]
          + [(semantic, "seforim.db.semantic")], "bundle-manifest.json"),
     )
     for publisher, repository, release, filename, mappings, manifest_name in variants:
@@ -202,6 +283,8 @@ if __name__ == "__main__":
     parser.add_argument("--db-release-tag", required=True)
     parser.add_argument("--transfer-release-tag", required=True)
     parser.add_argument("--db-repository", default="arieldaniely/SeforimLibrary")
+    parser.add_argument("--transfer-repository", help="Defaults to the database repository containing the Kaggle transfer")
+    parser.add_argument("--pdf-release-tag", default="v2-20261001115917-full")
     parser.add_argument("--app-repository", default="arieldaniely/Zayit")
     args = parser.parse_args()
     (prepare if args.stage == "prepare" else finish)(args)

@@ -1,6 +1,8 @@
 """Local split-stream packaging and verification regressions."""
 
 import importlib.util
+import hashlib
+import io
 import json
 import tarfile
 import tempfile
@@ -13,6 +15,48 @@ spec.loader.exec_module(distribution)
 
 
 class LocalDistributionTest(unittest.TestCase):
+    def test_reuses_compressed_release_and_pdf_bytes_with_full_content_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database, inputs, output = [root / p for p in ('database', 'inputs', 'output')]
+            inputs.mkdir()
+            entries = ['seforim.db', 'catalog.pb', 'lexical.db', 'release_info.txt',
+                       'seforim.db.lucene/segments_1', 'seforim.db.lucene/write.lock',
+                       'seforim.db.lookup.lucene/segments_1', 'תלמוד בבלי/ברכות.pdf']
+            for name in entries:
+                path = database / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(name.encode('utf-8'))
+
+            def archive(names):
+                buffer = io.BytesIO()
+                with distribution.zstandard.ZstdCompressor(level=3).stream_writer(buffer, closefd=False) as compressed:
+                    with tarfile.open(fileobj=compressed, mode='w|') as tar:
+                        for name in names:
+                            tar.add(database / name, arcname='./' + name, recursive=False)
+                return buffer.getvalue()
+
+            original = archive(entries[:-1])
+            pdf = archive(entries[-1:])
+            part = inputs / 'seforim_bundle.tar.zst.part01'
+            part.write_bytes(original)
+            pdf_file = inputs / 'pdf.tar.zst'
+            pdf_file.write_bytes(pdf)
+            digest = hashlib.sha256(original).hexdigest()
+            source = dict(file='seforim_bundle.tar.zst', size=len(original), sha256=digest,
+                          parts=[dict(file=part.name, size=len(original), sha256=digest)])
+            manifest_file = inputs / 'manifest.json'
+            manifest_file.write_text(json.dumps(source))
+            distribution.reuse_release_base(database, manifest_file, pdf_file, output)
+            manifest = json.loads((output / 'distributions.json').read_text(encoding='utf-8'))
+            self.assertIsNone(manifest['compressionLevel'])
+            self.assertEqual(original + pdf, b''.join((output / p['name']).read_bytes() for p in manifest['assets']))
+            self.assertEqual(set(entries), {entry['name'] for entry in manifest['contents']})
+            self.assertTrue(json.loads((output / 'verification.json').read_text())['verified'])
+            part.write_bytes(b'damaged')
+            with self.assertRaisesRegex(ValueError, 'Damaged release part'):
+                distribution.reuse_release_base(database, manifest_file, pdf_file, root / 'bad')
+
     def test_split_writer_preserves_bytes_and_hashes_across_boundaries(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,5 +1,35 @@
 # חבילה מקומית מלאה עם אינדקס int8 מאוחד
 
+## שימוש בהפצה שכבר דחוסה
+
+כאשר המסד והאינדקסים הטקסטואליים כבר נמצאים בהפצה דחוסה עם מניפסט חתימות,
+אפשר לשמר את הבתים הדחוסים המקוריים ולצרף אליהם את תוספת ה־PDF:
+
+```powershell
+python scripts/package-local-distribution.py --database-dir $library `
+  --reuse-release-base inputs/database-source-manifest.json `
+  --pdf-archive inputs/talmud_bavli_latest.tar.zst --output build/reused-base
+python scripts/package-local-distribution.py --database-dir $library `
+  --semantic-dir build/semantic --base-archive build/reused-base `
+  --output build/release --compression-level 3
+python scripts/package-local-distribution.py --verify --output build/release
+```
+
+המניפסט חייב להימצא לצד חלקי ההפצה המקוריים. כל החתימות והגדלים נבדקים,
+ולאחר החיבור נקרא כל התוכן מחדש ונבדק מול הקבצים שחולצו. קובצי נעילה
+הכלולים בארכיון המקור נבדקים גם הם; אין שינוי שקט של ארכיון המקור.
+ברירת המחדל לדחיסת תוכן חדש נשארת 22. הפרמטר מאפשר לבחור רמה אחרת בלי
+לדחוס מחדש מסד קיים. במניפסט מתועדות רמות הדחיסה של הזרמים החדשים ושימור
+המקור; אין הצהרה שכל החבילה דחוסה ברמה 22 כאשר חלקה נשמר מהפצה אחרת.
+
+תהליך `finalize_semantic_index.py` מחפש כעת את קובצי ההעברה הסמנטיים במאגר
+הספרייה כברירת מחדל. אפשר להעביר `--transfer-repository` במפורש. חבילת ההפצה
+המלאה מחייבת מסד, שני אינדקסים טקסטואליים, קטלוג, מסד מילולי, מידע הפצה,
+קובצי PDF, מודל, טוקנייזר ואינדקס סמנטי בעלי טביעות תואמות. אימות הארכיון
+מתבצע לפני העלאתו לטיוטת הפצה.
+
+## איחוד שארדים ואריזה מחדש
+
 `scripts/MergeSemanticShards.java` קורא שארדים קיימים, מאמת את טביעות המסד,
 המודל והטוקנייזר, ומכמת את הווקטורים בשיטת `int8-maxabs-v1` של התוכנה.
 מזהי השורות, מזהי הספרים וסימון ספרי הבסיס נשמרים. הפלט כולל

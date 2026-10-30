@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       transfer_release_tag:
-        description: Draft release containing semantic-transfer.json and Kaggle index parts
+        description: SeforimLibrary release containing semantic-transfer.json and Kaggle index parts
         required: true
         type: string
 

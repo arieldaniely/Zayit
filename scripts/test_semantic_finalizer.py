@@ -3,17 +3,58 @@ import json
 import tempfile
 import tarfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
 import zstandard
 
-from finalize_semantic_index import package, prepare
+from finalize_semantic_index import BASE_FILES, COMPRESSION_JOB_BYTES, package, require_complete_base, transfer_location, verify_package
 from kaggle_semantic_stream import PartsReader
 from semantic_transfer import sha256
 
 
 class SemanticFinalizerTest(unittest.TestCase):
+    def test_transfer_defaults_to_database_repository(self):
+        args = SimpleNamespace(transfer_repository=None, db_repository="owner/library")
+        with patch.dict("os.environ", {"DB_TOKEN": "database-test", "GH_TOKEN": "app-test"}):
+            self.assertEqual(("owner/library", "database-test"), transfer_location(args))
+            args.transfer_repository = "owner/app"
+            self.assertEqual(("owner/app", "app-test"), transfer_location(args))
+
+    def test_complete_bundle_requires_pdf_and_both_completed_lexical_indexes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in BASE_FILES:
+                if name.endswith("lucene"):
+                    (root / name).mkdir()
+                    (root / name / "segments_1").write_bytes(b"index")
+                else:
+                    (root / name).write_bytes(b"fixture")
+            with self.assertRaisesRegex(ValueError, "PDF"):
+                require_complete_base(root)
+            pdf = root / "תלמוד בבלי" / "ברכות.pdf"
+            pdf.parent.mkdir()
+            pdf.write_bytes(b"%PDF-fixture")
+            require_complete_base(root)
+            (root / "seforim.db.lookup.lucene/segments_1").unlink()
+            with self.assertRaisesRegex(ValueError, "completed Lucene"):
+                require_complete_base(root)
+
+    def test_verification_detects_modified_part_and_missing_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.write_bytes(b"content")
+            manifest = package([(source, "seforim.db")], root / "bundle.tar.zst")
+            manifest["contents"]["missing"] = {"size": 1, "sha256": "0" * 64}
+            with self.assertRaisesRegex(ValueError, "missing"):
+                verify_package(root, manifest)
+            path = root / manifest["parts"][0]["file"]
+            path.write_bytes(b"damaged")
+            with self.assertRaisesRegex(ValueError, "Damaged archive part"):
+                verify_package(root, manifest)
+
     def test_recompresses_all_components_with_level_22_and_verified_parts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -25,10 +66,13 @@ class SemanticFinalizerTest(unittest.TestCase):
             (index / "write.lock").touch()
             output = root / "output/bundle.tar.zst"
             compressor = zstandard.ZstdCompressor
-            with patch("finalize_semantic_index.zstandard.ZstdCompressor", wraps=compressor) as compression:
+            parameter_type = zstandard.ZstdCompressionParameters
+            with (patch("finalize_semantic_index.zstandard.ZstdCompressor", wraps=compressor) as compression,
+                  patch("finalize_semantic_index.zstandard.ZstdCompressionParameters", wraps=parameter_type) as parameters):
                 manifest = package([(database, "seforim.db"), (root / "index", "seforim.db.semantic/index")],
                                    output, part_bytes=97)
-                compression.assert_called_once_with(level=22, threads=2, write_checksum=True)
+                parameters.from_level.assert_called_once_with(22, threads=2, job_size=COMPRESSION_JOB_BYTES, write_checksum=1)
+                self.assertIsInstance(compression.call_args.kwargs["compression_params"], parameter_type)
             paths = [output.parent / part["file"] for part in manifest["parts"]]
             self.assertGreater(len(paths), 1)
             for path, part in zip(paths, manifest["parts"]):

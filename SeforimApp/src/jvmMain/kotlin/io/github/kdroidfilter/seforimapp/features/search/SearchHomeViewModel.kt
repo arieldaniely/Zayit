@@ -103,6 +103,7 @@ data class BookSuggestionDto(
     val isPdf: Boolean = false,
     val targetToc: TocEntry? = null,
     val exactAcronym: Boolean = false,
+    val hasPdfEdition: Boolean = false,
 )
 
 @Immutable
@@ -412,7 +413,7 @@ class SearchHomeViewModel(
                                                             .take(maxBookPredictive)
 
                                                     val regularSuggestions =
-                                                        books.flatMap { book ->
+                                                        books.map { book ->
                                                             val catPath = buildCategoryPathTitlesCached(book.categoryId)
                                                             val textSuggestion =
                                                                 BookSuggestionDto(
@@ -427,11 +428,7 @@ class SearchHomeViewModel(
                                                             val hasPdfEdition =
                                                                 pdfTitles.contains(book.title.trim()) &&
                                                                     TalmudPdfService.isTalmudBavliCategoryPath(catPath)
-                                                            if (hasPdfEdition) {
-                                                                listOf(textSuggestion, textSuggestion.copy(isPdf = true))
-                                                            } else {
-                                                                listOf(textSuggestion)
-                                                            }
+                                                            textSuggestion.copy(hasPdfEdition = hasPdfEdition)
                                                         }
 
                                                     val exactBooks =

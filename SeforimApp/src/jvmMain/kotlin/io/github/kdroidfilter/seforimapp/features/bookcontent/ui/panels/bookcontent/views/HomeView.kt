@@ -142,6 +142,7 @@ internal data class BookSuggestion(
     val path: List<String>,
     val exactAcronym: Boolean = false,
     val isPdf: Boolean = false,
+    val hasPdfEdition: Boolean = false,
 )
 
 /** A row of the book-stage list; see [catBookRows] for their order. */
@@ -554,7 +555,7 @@ internal fun UnifiedSearchBar(
     val mappedBookSuggestionsForBar =
         searchUi.bookSuggestions
             .map { bs ->
-                BookSuggestion(bs.book, bs.path, bs.exactAcronym, bs.isPdf)
+                BookSuggestion(bs.book, bs.path, bs.exactAcronym, bs.isPdf, bs.hasPdfEdition)
             }.toImmutableList()
     val mappedTocSuggestionsForBar =
         searchUi.tocSuggestions.map { ts ->
@@ -882,7 +883,17 @@ private fun SuggestionsPanel(
                                 kind = SuggestionKind.BOOK,
                                 highlighted = focused,
                                 isPdf = row.suggestion.isPdf,
-                                actions = listOf(open, searchInside),
+                                actions =
+                                    listOf(open, searchInside) +
+                                        if (row.suggestion.hasPdfEdition) {
+                                            listOf(
+                                                RowAction("", stringResource(Res.string.open_pdf_edition)) {
+                                                    onRow(row.copy(suggestion = row.suggestion.copy(isPdf = true)), true)
+                                                },
+                                            )
+                                        } else {
+                                            emptyList()
+                                        },
                             )
                     }
                 }

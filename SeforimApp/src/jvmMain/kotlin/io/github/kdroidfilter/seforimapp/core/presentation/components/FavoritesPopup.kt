@@ -108,7 +108,7 @@ private fun FavoritesPopupContent(onDismiss: () -> Unit) {
         onDismiss()
     }
 
-    val rootEntries = entries.filter { it.folderId == null }
+    val rootEntries = entries.filter { it.folderIds.isEmpty() }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -138,10 +138,10 @@ private fun FavoritesPopupContent(onDismiss: () -> Unit) {
                 )
             }
             folders.forEach { folder ->
-                val folderEntries = entries.filter { it.folderId == folder.id }
+                val folderEntries = entries.filter { folder.id in it.folderIds }
                 if (folderEntries.isNotEmpty()) {
                     item(key = "folder-" + folder.id) { PopupSectionHeader(folder.name) }
-                    items(folderEntries, key = { "fav-" + it.key }) { entry ->
+                    items(folderEntries, key = { "folder-${folder.id}-fav-${it.key}" }) { entry ->
                         PopupRow(
                             label = entry.title,
                             tabType = TabType.BOOK,

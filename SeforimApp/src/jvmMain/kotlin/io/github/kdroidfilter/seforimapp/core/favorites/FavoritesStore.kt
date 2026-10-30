@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
-/** One favorited book position, optionally filed into a user folder (Chrome-like bookmark). */
+/** One favorited book position, shared by every folder it belongs to. */
 @Stable
 data class FavoriteEntry(
     val key: String,
@@ -20,6 +20,7 @@ data class FavoriteEntry(
     val createdAt: Long,
     val tocEntryId: Long? = null,
     val lineId: Long? = null,
+    val folderIds: Set<Long> = folderId?.let(::setOf).orEmpty(),
 )
 
 @Stable
@@ -30,7 +31,7 @@ data class FavoriteFolder(
 
 /**
  * Persistent favorites (the Chrome bookmarks equivalent): book positions the user starred,
- * deduplicated by target key and optionally grouped into flat user-created folders.
+ * deduplicated by target key and optionally included in several user-created folders.
  *
  * Reads are on-demand SQL queries; [revision] bumps on every write so UI can re-run its
  * current query reactively.
@@ -39,6 +40,13 @@ class FavoritesStore(
     database: UserSettingsDb,
 ) {
     private val queries = database.favoritesQueries
+
+    init {
+        queries.transaction {
+            queries.migrateLegacyFolders()
+            queries.clearLegacyFolders()
+        }
+    }
 
     private val _revision = MutableStateFlow(0L)
     val revision: StateFlow<Long> = _revision.asStateFlow()
@@ -59,21 +67,28 @@ class FavoritesStore(
     ): Unit =
         withContext(Dispatchers.IO) {
             if (title.isBlank()) return@withContext
-            queries.upsertFavorite(
-                key = keyFor(bookId, tocEntryId),
-                bookId = bookId,
-                title = title,
-                folderId = folderId,
-                createdAt = timestamp,
-                tocEntryId = tocEntryId,
-                lineId = lineId,
-            )
+            val key = keyFor(bookId, tocEntryId)
+            queries.transaction {
+                queries.upsertFavorite(
+                    key = key,
+                    bookId = bookId,
+                    title = title,
+                    folderId = null,
+                    createdAt = timestamp,
+                    tocEntryId = tocEntryId,
+                    lineId = lineId,
+                )
+                folderId?.let { queries.addFavoriteToFolder(key, it) }
+            }
             _revision.update { it + 1 }
         }
 
     suspend fun remove(key: String): Unit =
         withContext(Dispatchers.IO) {
-            queries.deleteFavoriteByKey(key)
+            queries.transaction {
+                queries.clearFavoriteFolders(key)
+                queries.deleteFavoriteByKey(key)
+            }
             _revision.update { it + 1 }
         }
 
@@ -90,9 +105,32 @@ class FavoritesStore(
     suspend fun setFolder(
         key: String,
         folderId: Long?,
+    ): Unit = setFolders(key, folderId?.let(::setOf).orEmpty())
+
+    suspend fun setFolders(
+        key: String,
+        folderIds: Set<Long>,
     ): Unit =
         withContext(Dispatchers.IO) {
-            queries.setFavoriteFolder(folderId = folderId, key = key)
+            queries.transaction {
+                queries.clearFavoriteFolders(key)
+                folderIds.forEach { queries.addFavoriteToFolder(key, it) }
+            }
+            _revision.update { it + 1 }
+        }
+
+    suspend fun toggleFolder(
+        key: String,
+        folderId: Long,
+    ): Unit =
+        withContext(Dispatchers.IO) {
+            queries.transaction {
+                if (folderId in queries.selectFavoriteFolderIds(key).executeAsList()) {
+                    queries.removeFavoriteFromFolder(key, folderId)
+                } else {
+                    queries.addFavoriteToFolder(key, folderId)
+                }
+            }
             _revision.update { it + 1 }
         }
 
@@ -111,8 +149,10 @@ class FavoritesStore(
     /** Deletes a folder; its favorites move back to the root. */
     suspend fun deleteFolder(id: Long): Unit =
         withContext(Dispatchers.IO) {
-            queries.clearFolderFromFavorites(id)
-            queries.deleteFolder(id)
+            queries.transaction {
+                queries.clearFolderMemberships(id)
+                queries.deleteFolder(id)
+            }
             _revision.update { it + 1 }
         }
 
@@ -136,7 +176,7 @@ class FavoritesStore(
                             .replace("_", "\\_")
                     queries.searchFavoritesByTitle(escaped).executeAsList()
                 }
-            rows.map { it.toEntry() }
+            rows.toEntries()
         }
 
     /** A bounded Home card query; no other folders' entries are loaded. */
@@ -152,17 +192,23 @@ class FavoritesStore(
                 } else {
                     queries.selectRecentInFolder(folderId, limit.toLong()).executeAsList()
                 }
-            rows.map { it.toEntry() }
+            rows.toEntries()
         }
 
-    private fun Favorite.toEntry(): FavoriteEntry =
+    private fun List<Favorite>.toEntries(): List<FavoriteEntry> {
+        val memberships = queries.selectFavoriteMemberships().executeAsList().groupBy({ it.favoriteKey }, { it.folderId })
+        return map { it.toEntry(memberships[it.key].orEmpty().toSet()) }
+    }
+
+    private fun Favorite.toEntry(folderIds: Set<Long> = queries.selectFavoriteFolderIds(key).executeAsList().toSet()): FavoriteEntry =
         FavoriteEntry(
             key = key,
             bookId = bookId,
             title = title,
-            folderId = folderId,
+            folderId = folderIds.firstOrNull(),
             createdAt = createdAt,
             tocEntryId = tocEntryId,
             lineId = lineId,
+            folderIds = folderIds,
         )
 }

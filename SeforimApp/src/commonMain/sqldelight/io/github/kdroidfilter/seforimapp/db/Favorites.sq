@@ -16,6 +16,41 @@ CREATE TABLE IF NOT EXISTS favorite (
     lineId INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS favorite_folder_membership (
+    favoriteKey TEXT NOT NULL REFERENCES favorite(key) ON DELETE CASCADE,
+    folderId INTEGER NOT NULL REFERENCES favorite_folder(id) ON DELETE CASCADE,
+    PRIMARY KEY (favoriteKey, folderId)
+);
+
+CREATE INDEX IF NOT EXISTS favorite_membership_by_folder ON favorite_folder_membership(folderId);
+
+migrateLegacyFolders:
+INSERT OR IGNORE INTO favorite_folder_membership(favoriteKey, folderId)
+SELECT key, folderId FROM favorite WHERE folderId IS NOT NULL;
+
+clearLegacyFolders:
+UPDATE favorite SET folderId = NULL WHERE folderId IS NOT NULL;
+
+selectFavoriteFolderIds:
+SELECT folderId FROM favorite_folder_membership WHERE favoriteKey = :key ORDER BY folderId;
+
+selectFavoriteMemberships:
+SELECT * FROM favorite_folder_membership;
+
+addFavoriteToFolder:
+INSERT OR IGNORE INTO favorite_folder_membership(favoriteKey, folderId)
+SELECT favorite.key, favorite_folder.id FROM favorite, favorite_folder
+WHERE favorite.key = :key AND favorite_folder.id = :folderId;
+
+removeFavoriteFromFolder:
+DELETE FROM favorite_folder_membership WHERE favoriteKey = :key AND folderId = :folderId;
+
+clearFavoriteFolders:
+DELETE FROM favorite_folder_membership WHERE favoriteKey = :key;
+
+clearFolderMemberships:
+DELETE FROM favorite_folder_membership WHERE folderId = :folderId;
+
 upsertFavorite:
 INSERT INTO favorite(key, bookId, title, folderId, createdAt, tocEntryId, lineId)
 VALUES (:key, :bookId, :title, :folderId, :createdAt, :tocEntryId, :lineId)
@@ -30,7 +65,9 @@ selectRecentFavorites:
 SELECT * FROM favorite ORDER BY createdAt DESC LIMIT :maxRows;
 
 selectRecentInFolder:
-SELECT * FROM favorite WHERE folderId = :folderId ORDER BY createdAt DESC LIMIT :maxRows;
+SELECT * FROM favorite WHERE key IN (
+    SELECT favoriteKey FROM favorite_folder_membership WHERE folderId = :folderId
+) ORDER BY createdAt DESC LIMIT :maxRows;
 
 searchFavoritesByTitle:
 SELECT * FROM favorite

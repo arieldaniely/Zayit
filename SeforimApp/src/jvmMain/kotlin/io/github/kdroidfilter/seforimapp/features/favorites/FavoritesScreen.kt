@@ -110,7 +110,11 @@ fun FavoritesTabContent(tabId: String) {
         onDelete = { entry -> scope.launch { favoritesStore.remove(entry.key) } },
         onCreateFolder = { name -> scope.launch { favoritesStore.createFolder(name, System.currentTimeMillis()) } },
         onDeleteFolder = { folder -> scope.launch { favoritesStore.deleteFolder(folder.id) } },
-        onMoveToFolder = { entry, folderId -> scope.launch { favoritesStore.setFolder(entry.key, folderId) } },
+        onMoveToFolder = { entry, folderId ->
+            scope.launch {
+                if (folderId == null) favoritesStore.setFolders(entry.key, emptySet()) else favoritesStore.toggleFolder(entry.key, folderId)
+            }
+        },
     )
 }
 
@@ -126,8 +130,14 @@ private fun FavoritesPageContent(
     onDeleteFolder: (FavoriteFolder) -> Unit,
     onMoveToFolder: (FavoriteEntry, Long?) -> Unit,
 ) {
-    val byFolder = remember(entries) { entries.groupBy { it.folderId } }
-    val unfiled = byFolder[null].orEmpty()
+    val byFolder =
+        remember(entries) {
+            entries
+                .flatMap { entry ->
+                    entry.folderIds.map { it to entry }
+                }.groupBy({ it.first }, { it.second })
+        }
+    val unfiled = entries.filter { it.folderIds.isEmpty() }
     val accent = JewelTheme.globalColors.outlines.focused
 
     ListPageContainer(scrollable = true) {
@@ -327,7 +337,7 @@ private fun FavoriteRowWithContextMenu(
         if (contextMenuOpen) {
             FolderMovePopup(
                 folders = folders,
-                currentFolderId = entry.folderId,
+                currentFolderIds = entry.folderIds,
                 onMove = { onMoveToFolder(it) },
                 onDismiss = { contextMenuOpen = false },
             )
@@ -338,7 +348,7 @@ private fun FavoriteRowWithContextMenu(
 @Composable
 private fun FolderMovePopup(
     folders: List<FavoriteFolder>,
-    currentFolderId: Long?,
+    currentFolderIds: Set<Long>,
     onMove: (Long?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -352,7 +362,7 @@ private fun FolderMovePopup(
                 Text(
                     text = stringResource(Res.string.favorites_no_folder),
                     fontSize = 13.sp,
-                    fontWeight = if (currentFolderId == null) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (currentFolderIds.isEmpty()) FontWeight.SemiBold else FontWeight.Normal,
                     color = JewelTheme.globalColors.text.normal,
                     modifier =
                         Modifier
@@ -365,9 +375,9 @@ private fun FolderMovePopup(
                 )
                 folders.forEach { folder ->
                     Text(
-                        text = folder.name,
+                        text = if (folder.id in currentFolderIds) "✓ ${folder.name}" else folder.name,
                         fontSize = 13.sp,
-                        fontWeight = if (currentFolderId == folder.id) FontWeight.SemiBold else FontWeight.Normal,
+                        fontWeight = if (folder.id in currentFolderIds) FontWeight.SemiBold else FontWeight.Normal,
                         color = JewelTheme.globalColors.text.normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -377,7 +387,6 @@ private fun FolderMovePopup(
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable {
                                     onMove(folder.id)
-                                    onDismiss()
                                 }.padding(horizontal = 8.dp, vertical = 6.dp),
                     )
                 }

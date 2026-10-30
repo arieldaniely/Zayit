@@ -266,15 +266,22 @@ private fun FavoritePopupContent(
     val scope = rememberCoroutineScope()
     val revision by favoritesStore.revision.collectAsState()
     var folders by remember { mutableStateOf<List<FavoriteFolder>>(emptyList()) }
-    var selectedFolderId by remember { mutableStateOf<Long?>(null) }
+    var selectedFolderIds by remember { mutableStateOf(emptySet<Long>()) }
     LaunchedEffect(revision) {
         folders = favoritesStore.folders()
-        selectedFolderId = favoritesStore.get(favoriteKey)?.folderId
+        selectedFolderIds = favoritesStore.get(favoriteKey)?.folderIds.orEmpty()
     }
 
     fun moveTo(folderId: Long?) {
-        selectedFolderId = folderId
-        scope.launch { favoritesStore.setFolder(favoriteKey, folderId) }
+        selectedFolderIds =
+            when (folderId) {
+                null -> emptySet()
+                in selectedFolderIds -> selectedFolderIds - folderId
+                else -> selectedFolderIds + folderId
+            }
+        scope.launch {
+            if (folderId == null) favoritesStore.setFolders(favoriteKey, emptySet()) else favoritesStore.toggleFolder(favoriteKey, folderId)
+        }
     }
 
     Column(
@@ -297,7 +304,7 @@ private fun FavoritePopupContent(
 
         FolderChoiceRow(
             label = stringResource(Res.string.favorites_no_folder),
-            selected = selectedFolderId == null,
+            selected = selectedFolderIds.isEmpty(),
             onClick = {
                 moveTo(null)
                 onDismiss()
@@ -306,10 +313,9 @@ private fun FavoritePopupContent(
         folders.forEach { folder ->
             FolderChoiceRow(
                 label = folder.name,
-                selected = selectedFolderId == folder.id,
+                selected = folder.id in selectedFolderIds,
                 onClick = {
                     moveTo(folder.id)
-                    onDismiss()
                 },
             )
         }
@@ -318,7 +324,7 @@ private fun FavoritePopupContent(
             onCreate = { name ->
                 scope.launch {
                     val id = favoritesStore.createFolder(name, System.currentTimeMillis())
-                    favoritesStore.setFolder(favoriteKey, id)
+                    favoritesStore.toggleFolder(favoriteKey, id)
                     onDismiss()
                 }
             },

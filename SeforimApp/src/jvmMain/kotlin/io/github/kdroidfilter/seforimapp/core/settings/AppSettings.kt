@@ -56,7 +56,8 @@ object AppSettings {
         )
 
     private fun isPortableKey(key: String): Boolean =
-        key in PORTABLE_KEYS || key.startsWith(HOME_WIDGET_SETTINGS_PREFIX) || key.startsWith("semantic_search.")
+        key in PORTABLE_KEYS || key.startsWith(HOME_WIDGET_SETTINGS_PREFIX) || key.startsWith("semantic_search.") ||
+            key.startsWith("home_appearance.")
 
     /**
      * The portable preferences of [settings] as their stored strings: Java Preferences keeps

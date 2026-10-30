@@ -1,0 +1,20 @@
+<resources>
+    <string name="appearance_preview">תצוגה מקדימה חיה</string>
+    <string name="appearance_preview_sample">וְהָגִיתָ בּוֹ יוֹמָם וָלַיְלָה</string>
+    <string name="wallpaper_title">רקע דף הבית</string>
+    <string name="wallpaper_olive">ענפי זית</string>
+    <string name="wallpaper_dawn">אור ראשון</string>
+    <string name="wallpaper_forest">גבעות ירוקות</string>
+    <string name="wallpaper_custom">תמונה אישית</string>
+    <string name="wallpaper_choose_image">בחירת תמונה מהמחשב…</string>
+    <string name="wallpaper_reset">איפוס הרקע</string>
+    <string name="wallpaper_image_error">לא ניתן לפתוח את התמונה. בחרו קובץ תמונה תקין מסוג PNG או JPG.</string>
+    <string name="wallpaper_fit">אופן הצגת התמונה</string>
+    <string name="wallpaper_fill">מילוי המסך</string>
+    <string name="wallpaper_fit_image">התאמה למסך</string>
+    <string name="wallpaper_strength">עוצמת הרקע</string>
+    <string name="wallpaper_subtle">עדין</string>
+    <string name="wallpaper_balanced">מאוזן</string>
+    <string name="wallpaper_vivid">בולט</string>
+    <string name="wallpaper_full">תמונה מלאה</string>
+</resources>

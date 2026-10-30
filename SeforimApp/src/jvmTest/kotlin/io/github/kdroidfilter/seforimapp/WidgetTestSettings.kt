@@ -17,6 +17,8 @@ internal fun testAppGraph(): io.github.kdroidfilter.seforimapp.framework.di.AppG
         kotlinx.coroutines.flow.MutableStateFlow(
             io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle.Islands,
         )
+    io.mockk.every { main.theme } returns
+        kotlinx.coroutines.flow.MutableStateFlow(io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes.Light)
     io.mockk.every { graph.appSettings } returns AppSettings
     io.mockk.every { graph.mainAppState } returns main
     io.mockk.every { graph.dictionaryIndex } returns

@@ -30,7 +30,6 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,11 +39,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.*
@@ -84,12 +81,11 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsGrid
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsLayout
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsOverlay
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidgetsState
-import io.github.kdroidfilter.seforimapp.features.home.widgets.decodeLayout
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfEditionMarker
 import io.github.kdroidfilter.seforimapp.features.search.CategorySuggestionDto
-import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.FavoritesSuggestionDto
+import io.github.kdroidfilter.seforimapp.features.search.SearchFilter
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeUiState
 import io.github.kdroidfilter.seforimapp.features.search.SearchModePicker
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
@@ -111,18 +107,12 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.decodeToImageBitmap
-import org.jetbrains.compose.resources.getDrawableResourceBytes
 import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.painterResource
-import org.jetbrains.compose.resources.rememberResourceEnvironment
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.ExperimentalJewelApi
 import org.jetbrains.jewel.foundation.theme.JewelTheme
@@ -131,7 +121,6 @@ import org.jetbrains.jewel.ui.component.*
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import org.jetbrains.jewel.ui.theme.menuStyle
 import seforimapp.seforimapp.generated.resources.*
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import io.github.kdroidfilter.seforimlibrary.core.models.Book as BookModel
@@ -148,7 +137,10 @@ internal data class BookSuggestion(
 
 /** A row of the book-stage list; see [catBookRows] for their order. */
 private sealed interface CatBookRow {
-    data class Favorites(val suggestion: FavoritesSuggestionDto) : CatBookRow
+    data class Favorites(
+        val suggestion: FavoritesSuggestionDto,
+    ) : CatBookRow
+
     data class Jump(
         val reference: ResolvedReference,
     ) : CatBookRow
@@ -266,96 +258,14 @@ fun HomeView(
 ) {
     val appSettings = LocalAppGraph.current.appSettings
 
-    val panelBackground = JewelTheme.globalColors.panelBackground
-    val showWallpaper by appSettings.showHomeWallpaperFlow.collectAsState()
-
-    val resolvedLocation = homeUserLocation
-
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        if (showWallpaper) {
-            val isDark = JewelTheme.isDark
-            val widthPx = with(LocalDensity.current) { maxWidth.toPx() }.roundToInt()
-            val wallpaper =
-                if (isDark) {
-                    when {
-                        widthPx <= 960 -> Res.drawable.homepage_wallpaper_dark_small
-                        widthPx <= 1440 -> Res.drawable.homepage_wallpaper_dark_medium
-                        else -> Res.drawable.homepage_wallpaper_dark_large
-                    }
-                } else {
-                    when {
-                        widthPx <= 960 -> Res.drawable.homepage_wallpaper_small
-                        widthPx <= 1440 -> Res.drawable.homepage_wallpaper_medium
-                        else -> Res.drawable.homepage_wallpaper_large
-                    }
-                }
-            // Layer 1: Wallpaper background, decoded off the UI thread (a new tab's first frame is its opening animation's)
-            rememberDecodedImage(wallpaper)?.let { image ->
-                Image(
-                    bitmap = image,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-
-            // Layer 2: Smooth horizontal vignette — image blends into background atmosphere
-            Box(
-                modifier =
-                    Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(
-                            colorStops =
-                                arrayOf(
-                                    0.00f to panelBackground.copy(alpha = 0.10f),
-                                    0.04f to panelBackground.copy(alpha = 0.20f),
-                                    0.08f to panelBackground.copy(alpha = 0.35f),
-                                    0.13f to panelBackground.copy(alpha = 0.50f),
-                                    0.20f to panelBackground.copy(alpha = 0.65f),
-                                    0.28f to panelBackground.copy(alpha = 0.78f),
-                                    0.38f to panelBackground.copy(alpha = 0.85f),
-                                    0.50f to panelBackground.copy(alpha = 0.78f),
-                                    0.62f to panelBackground.copy(alpha = 0.85f),
-                                    0.72f to panelBackground.copy(alpha = 0.78f),
-                                    0.80f to panelBackground.copy(alpha = 0.65f),
-                                    0.87f to panelBackground.copy(alpha = 0.50f),
-                                    0.92f to panelBackground.copy(alpha = 0.35f),
-                                    0.96f to panelBackground.copy(alpha = 0.20f),
-                                    1.00f to panelBackground.copy(alpha = 0.10f),
-                                ),
-                        ),
-                    ),
-            )
-
-            // Layer 3: Radial gradient — bottom-center opaque, edges visible all around
-            Box(
-                modifier =
-                    Modifier.fillMaxSize().background(
-                        Brush.radialGradient(
-                            colorStops =
-                                arrayOf(
-                                    0.00f to panelBackground,
-                                    0.35f to panelBackground,
-                                    0.55f to panelBackground.copy(alpha = 0.75f),
-                                    0.75f to panelBackground.copy(alpha = 0.40f),
-                                    1.00f to Color.Transparent,
-                                ),
-                            center =
-                                androidx.compose.ui.geometry.Offset(
-                                    x = constraints.maxWidth / 2f,
-                                    y = constraints.maxHeight * 0.65f,
-                                ),
-                            radius = constraints.maxWidth * 0.55f,
-                        ),
-                    ),
-            )
-        }
-
-        // Layer 4: Content
+    Box(modifier.fillMaxSize()) {
+        io.github.kdroidfilter.seforimapp.features.home
+            .ConfiguredHomeWallpaper(Modifier.fillMaxSize())
         HomeBody(
             onEvent = onEvent,
             searchUi = searchUi,
             searchCallbacks = searchCallbacks,
-            homeUserLocation = resolvedLocation,
+            homeUserLocation = homeUserLocation,
         )
     }
 }
@@ -1572,7 +1482,8 @@ internal fun SearchBar(
                                 )
                         }.onPreviewKeyEvent { ev ->
                             when {
-                                ev.key == Key.Backspace && !isTocMode &&
+                                ev.key == Key.Backspace &&
+                                    !isTocMode &&
                                     (selectedAuthor != null || selectedCategory != null || selectedFavorites != null) -> {
                                     when (ev.type) {
                                         KeyEventType.KeyDown -> {
@@ -2031,16 +1942,3 @@ private fun HomeViewPreview() {
         )
     }
 }
-
-/** [resource] decoded on the IO dispatcher, once for the app: null until then. */
-@Composable
-private fun rememberDecodedImage(resource: DrawableResource): ImageBitmap? {
-    val environment = rememberResourceEnvironment()
-    return produceState(decodedImages[resource], resource, environment) {
-        value = decodedImages[resource]
-            ?: withContext(Dispatchers.IO) { getDrawableResourceBytes(environment, resource).decodeToImageBitmap() }
-                .also { decodedImages[resource] = it }
-    }.value
-}
-
-private val decodedImages = ConcurrentHashMap<DrawableResource, ImageBitmap>()

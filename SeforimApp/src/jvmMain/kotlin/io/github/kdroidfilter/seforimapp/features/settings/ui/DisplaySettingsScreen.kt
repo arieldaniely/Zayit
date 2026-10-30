@@ -85,6 +85,7 @@ fun DisplaySettingsScreen() {
     val mainAppState = LocalAppGraph.current.mainAppState
     val themeStyle by mainAppState.themeStyle.collectAsState()
     val accentColor by mainAppState.accentColor.collectAsState()
+    val themeMode by mainAppState.theme.collectAsState()
     DisplaySettingsView(
         state = state,
         antiAliasing = state.antiAliasing,
@@ -94,6 +95,8 @@ fun DisplaySettingsScreen() {
         onEvent = viewModel::onEvent,
         onThemeStyleChange = { mainAppState.setThemeStyle(it) },
         onAccentColorChange = { mainAppState.setAccentColor(it) },
+        themeMode = themeMode,
+        onThemeModeChange = mainAppState::setTheme,
     )
 }
 
@@ -108,6 +111,9 @@ private fun DisplaySettingsView(
     onAntiAliasingChange: (io.github.kdroidfilter.seforimapp.earthwidget.WidgetAntiAliasing) -> Unit = {},
     accentColor: AccentColor = AccentColor.System,
     onAccentColorChange: (AccentColor) -> Unit = {},
+    themeMode: io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes =
+        io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes.System,
+    onThemeModeChange: (io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes) -> Unit = {},
 ) {
     VerticallyScrollableContainer(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -117,6 +123,8 @@ private fun DisplaySettingsView(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            AppearancePreview(themeStyle, accentColor)
+            ThemeModeChoices(themeMode, onThemeModeChange)
             ThemeStyleCard(themeStyle = themeStyle, onStyleChange = onThemeStyleChange)
 
             AccentColorCard(
@@ -132,6 +140,7 @@ private fun DisplaySettingsView(
                 checked = state.showHomeWallpaper,
                 onCheckedChange = { onEvent(DisplaySettingsEvents.SetShowHomeWallpaper(it)) },
             )
+            HomeAppearanceCard()
 
             SettingCard(
                 title = Res.string.settings_compact_mode,

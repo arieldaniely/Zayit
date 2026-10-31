@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
+import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.ChooseInstallationLocationButton
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
 import io.github.kdroidfilter.seforimapp.icons.Download_for_offline
 import io.github.kdroidfilter.seforimapp.icons.Unarchive
@@ -67,13 +68,12 @@ private fun TypeOfInstallationView(
     OnBoardingScaffold(
         title = stringResource(Res.string.installation_title),
         bottomAction = {
-            org.jetbrains.jewel.ui.component.Link(
-                text = stringResource(Res.string.installation_choose_root),
+            ChooseInstallationLocationButton(
                 onClick = onChooseLocation,
             )
         },
     ) {
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             InstallationTypeColumn(
                 // Offline
                 title = stringResource(Res.string.installation_offline_title),
@@ -106,10 +106,10 @@ private fun RowScope.InstallationTypeColumn(
     Column(
         modifier =
             Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .weight(1f)
                 .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(title, fontSize = JewelTheme.typography.h1TextStyle.fontSize)

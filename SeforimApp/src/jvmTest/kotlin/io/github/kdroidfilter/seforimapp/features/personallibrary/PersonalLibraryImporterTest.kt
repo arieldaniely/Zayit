@@ -18,6 +18,194 @@ import kotlin.test.assertTrue
 
 class PersonalLibraryImporterTest {
     @Test
+    fun resolvesLinksToPersonalBooksImportedFromALaterFolder() {
+        val temp = Files.createTempDirectory("personal-library-docx-cross-folder")
+        try {
+            val base = temp.resolve("base.db")
+            PersistentSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
+            DriverManager.getConnection("jdbc:sqlite:$base").use { connection ->
+                connection.createStatement().use { it.execute("INSERT INTO connection_type(id,name) VALUES(1,'COMMENTARY')") }
+            }
+            val targets = Files.createDirectory(temp.resolve("targets"))
+            targets.resolve("מקור אישי.txt").writeText("טקסט המקור")
+            val targetFolder = PersonalBookFolder("target", targets.toString(), "מקורות")
+            val importer = PersonalLibraryImporter(base, temp.resolve("generations"))
+            val (initial, _) = importer.build(listOf(targetFolder), "initial")
+            val (targetBookId, targetLineId) =
+                DriverManager.getConnection("jdbc:sqlite:${initial.databasePath}").use { connection ->
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT bookId,id FROM line").use { rows ->
+                            assertTrue(rows.next())
+                            rows.getLong(1) to rows.getLong(2)
+                        }
+                    }
+                }
+            val documents = Files.createDirectory(temp.resolve("documents"))
+            ZipOutputStream(Files.newOutputStream(documents.resolve("פירוש אישי.docx"))).use { zip ->
+                zip.putNextEntry(ZipEntry("word/document.xml"))
+                zip.write(
+                    """
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+                        <w:p><w:r><w:t>[zayita://book/$targetBookId/line/$targetLineId]</w:t></w:r></w:p>
+                    </w:body></w:document>
+                    """.trimIndent().toByteArray(),
+                )
+                zip.closeEntry()
+            }
+            val documentFolder = PersonalBookFolder("document", documents.toString(), "פירושים")
+            val (artifacts, summaries) = importer.build(listOf(documentFolder, targetFolder), "linked")
+            assertEquals(1, summaries.getValue("document").links)
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT sourceBookId,sourceLineId,targetBookId FROM link").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals(targetBookId, rows.getLong(1))
+                        assertEquals(targetLineId, rows.getLong(2))
+                        assertTrue(rows.getLong(3) < 0 && rows.getLong(3) != targetBookId)
+                    }
+                }
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun importsDocxFootnotesAndEmbeddedOrBracketedLinksAsSources() {
+        val temp = Files.createTempDirectory("personal-library-docx-links")
+        try {
+            val base = temp.resolve("base.db")
+            PersistentSqliteDriver("jdbc:sqlite:$base").use(SeforimDb.Schema::create)
+            DriverManager.getConnection("jdbc:sqlite:$base").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.execute("INSERT INTO source(id,name) VALUES(1,'base')")
+                    statement.execute("INSERT INTO category(id,title,level) VALUES(1,'בסיס',0)")
+                    statement.execute("INSERT INTO book(id,categoryId,sourceId,title) VALUES(1,1,1,'מקור')")
+                    statement.execute("INSERT INTO book(id,categoryId,sourceId,title) VALUES(2,1,1,'ספר אחר')")
+                    statement.execute("INSERT INTO line(id,bookId,lineIndex,content) VALUES(101,1,0,'תחילה')")
+                    statement.execute("INSERT INTO line(id,bookId,lineIndex,content) VALUES(103,1,3,'המשך')")
+                    statement.execute("INSERT INTO line(id,bookId,lineIndex,content) VALUES(201,2,0,'אחר')")
+                    statement.execute("INSERT INTO connection_type(id,name) VALUES(1,'COMMENTARY')")
+                }
+            }
+            val books = Files.createDirectory(temp.resolve("books"))
+            ZipOutputStream(Files.newOutputStream(books.resolve("פירוש.docx"))).use { zip ->
+                val entries =
+                    mapOf(
+                        "word/document.xml" to
+                            """
+                            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>
+                                <w:p><w:hyperlink r:id="native"><w:r><w:t>המילים המקושרות</w:t></w:r></w:hyperlink>
+                                    <w:r><w:t>[zayit://book/1/line/101]</w:t></w:r></w:p>
+                                <w:p><w:r><w:t>[otzaria://open/book/1?index=3]</w:t></w:r></w:p>
+                                <w:p><w:r><w:t>עם הערה</w:t><w:footnoteReference w:id="1"/></w:r></w:p>
+                                <w:p><w:r><w:t>[zayit://book/1/line/201] [zayita://book/99]</w:t></w:r>
+                                    <w:r><w:t> [otzaria://open/book/1?index=99] [otzaria://open/book/1?index=-1]</w:t></w:r></w:p>
+                                <w:p><w:r><w:t>[zayita://book/1]</w:t></w:r></w:p>
+                                <w:p><w:r><w:t>[zayita://book/1/line/103]</w:t></w:r></w:p>
+                                <w:p><w:hyperlink r:id="external"><w:r><w:t>אתר</w:t></w:r></w:hyperlink></w:p>
+                            </w:body></w:document>
+                            """.trimIndent(),
+                        "word/_rels/document.xml.rels" to
+                            """
+                            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                                <Relationship Id="native" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                    Target="zayita://book/1/line/101" TargetMode="External"/>
+                                <Relationship Id="external" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                    Target="https://example.org" TargetMode="External"/>
+                            </Relationships>
+                            """.trimIndent(),
+                        "word/footnotes.xml" to
+                            """
+                            <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                                <w:footnote w:id="1"><w:p><w:r><w:footnoteRef/><w:t>תוכן ההערה </w:t></w:r>
+                                    <w:hyperlink r:id="note"><w:r><w:t>מקור ההערה</w:t></w:r></w:hyperlink></w:p></w:footnote>
+                            </w:footnotes>
+                            """.trimIndent(),
+                        "word/_rels/footnotes.xml.rels" to
+                            """
+                            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                                <Relationship Id="note" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                    Target="zayit://book/1/line/101" TargetMode="External"/>
+                            </Relationships>
+                            """.trimIndent(),
+                    )
+                entries.forEach { (name, xml) ->
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(xml.toByteArray())
+                    zip.closeEntry()
+                }
+            }
+            val (artifacts, summaries) =
+                PersonalLibraryImporter(base, temp.resolve("generations"))
+                    .build(listOf(PersonalBookFolder("docx", books.toString(), "מסמכים")), "docx")
+            assertEquals(1, summaries.getValue("docx").books)
+            assertEquals(5, summaries.getValue("docx").links)
+            DriverManager.getConnection("jdbc:sqlite:${artifacts.databasePath}").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT id,hasSourceConnection FROM book").use { rows ->
+                        assertTrue(rows.next())
+                        val bookId = rows.getLong(1)
+                        assertEquals(1, rows.getInt(2))
+                        statement
+                            .executeQuery(
+                                "SELECT sourceBookId,targetBookId,sourceLineId,targetLineIndex,connectionTypeId FROM link",
+                            ).use { links ->
+                                val targets = mutableMapOf<Int, Long>()
+                                while (links.next()) {
+                                    assertEquals(1L, links.getLong(1))
+                                    assertEquals(bookId, links.getLong(2))
+                                    assertEquals(1L, links.getLong(5))
+                                    targets[links.getInt(4)] = links.getLong(3)
+                                }
+                                assertEquals(mapOf(0 to 101L, 1 to 103L, 2 to 101L, 4 to 101L, 5 to 103L), targets)
+                            }
+                    }
+                    statement.executeQuery("SELECT content FROM line ORDER BY lineIndex").use { rows ->
+                        assertTrue(rows.next())
+                        assertTrue(rows.getString(1).contains("href=\"seforim://line/101\">המילים המקושרות</a>"))
+                        assertTrue(rows.next())
+                        assertTrue(rows.next())
+                        val note = rows.getString(1)
+                        assertTrue(note.contains("class=\"footnote\""))
+                        assertTrue(note.contains("תוכן ההערה"))
+                        assertTrue(note.contains("href=\"seforim://line/101\">מקור ההערה</a>"))
+                    }
+                    statement.executeQuery("SELECT hasSourceLinks,hasTargetLinks FROM book_has_links").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals(0, rows.getInt(1))
+                        assertEquals(1, rows.getInt(2))
+                    }
+                }
+            }
+            PersistentSqliteDriver("jdbc:sqlite:$base").use { driver ->
+                val overlay = PersonalLibraryOverlay(driver)
+                overlay.attach(artifacts.databasePath)
+                val queries = SeforimDb(driver).linkQueriesQueries
+                val commentaries = queries.selectLinksBySourceLineIds(listOf(101L)).executeAsList()
+                assertEquals(3, commentaries.size)
+                assertTrue(commentaries.all { it.targetBookTitle == "פירוש" && it.connectionType == "COMMENTARY" })
+                assertEquals("פירוש", queries.selectCommentatorsByBook(1L).executeAsOne().targetBookTitle)
+                val documentLineId = commentaries.first().targetLineId
+                val sources =
+                    driver
+                        .queryEachLinkPartitionForTargetLines(listOf(documentLineId)) {
+                            queries.selectInverseLinkSummariesByTargetLineIds(listOf(documentLineId), listOf("COMMENTARY")).executeAsList()
+                        }.flatten()
+                assertEquals(1, sources.size)
+                assertEquals("מקור", sources.single().targetBookTitle)
+                assertEquals(101L, sources.single().targetLineId)
+                overlay.attach(null)
+                assertTrue(queries.selectLinksBySourceLineIds(listOf(101L)).executeAsList().isEmpty())
+            }
+        } finally {
+            temp.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun importsPdfPagesTextAndOriginalFileLocation() {
         val temp = Files.createTempDirectory("personal-library-pdf")
         try {

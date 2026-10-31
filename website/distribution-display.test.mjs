@@ -38,7 +38,8 @@ test('full package is prominent, all parts are visible, alternatives and supplem
   assert.equal(recommended.includes('<details'), false);
   assert.ok(html.indexOf('download-distribution-recommended') < html.indexOf('download-distribution-alternatives'));
   assert.ok(html.indexOf('download-distribution-alternatives') < html.indexOf('download-distribution-supplements'));
-  assert.equal((html.match(/<details/g) || []).length, 2);
+  assert.match(html, /<details class="download-database-details">/);
+  assert.equal((html.match(/<details class="download-distribution-files">/g) || []).length, 2);
   assert.equal(html.includes('SHA'), false);
   assert.equal(html.includes('not-user-facing'), false);
   assert.equal(html.includes('<select'), false);

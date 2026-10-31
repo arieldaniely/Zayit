@@ -206,7 +206,8 @@ class WidgetDragUiTest {
             }
             waitForIdle()
             val after = saved()
-            assertEquals(CellRect(0, 4, 9, 3), after.cellOf(TempleCountdownWidget))
+            val before = homeWidgets.cellOf(TempleCountdownWidget)
+            assertEquals(before.copy(w = before.w + 3), after.cellOf(TempleCountdownWidget))
             // The solar system was in the way
             assertTrue(!after.cellOf(SolarSystemWidget).overlaps(after.cellOf(TempleCountdownWidget)))
             assertNoOverlap(after)
@@ -342,7 +343,8 @@ class WidgetDragUiTest {
             waitForIdle()
             // The hidden one kept in the save, where it was
             val raw = appSettings.homeWidgetsLayoutFlow.value!!
-            assertTrue("earth@13,0,7,4" in raw, raw)
+            val expectedEarth = encodeLayout(listOf(WidgetPlacement(EarthWidget, earthArea)))
+            assertTrue(expectedEarth in raw.split(';'), raw)
         }
     }
 

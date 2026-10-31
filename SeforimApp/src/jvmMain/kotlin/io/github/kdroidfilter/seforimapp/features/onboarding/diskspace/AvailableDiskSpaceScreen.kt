@@ -17,6 +17,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowView
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.formatBytes
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
+import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.ChooseInstallationLocationButton
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
 import io.github.kdroidfilter.seforimapp.theme.PreviewContainer
 import io.github.koalaplot.core.pie.DefaultSlice
@@ -51,6 +52,7 @@ fun AvailableDiskSpaceScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onNext = { navController.navigate(OnBoardingDestination.TypeOfInstallationScreen) },
+        onChooseLocation = { navController.navigate(OnBoardingDestination.DatabaseLocationScreen) },
     )
 }
 
@@ -60,6 +62,7 @@ fun AvailableDiskSpaceView(
     state: AvailableDiskSpaceState,
     onEvent: (AvailableDiskSpaceEvents) -> Unit,
     onNext: () -> Unit = {},
+    onChooseLocation: () -> Unit = {},
 ) {
     val requiredBytes = AvailableDiskSpaceUseCase.REQUIRED_SPACE_BYTES
     // Include both the installed library and temporary download space.
@@ -67,8 +70,14 @@ fun AvailableDiskSpaceView(
     val temporarySpaceBytes = (AvailableDiskSpaceUseCase.TEMPORARY_SPACE_GB * 1024 * 1024 * 1024).toLong()
 
     OnBoardingScaffold(title = stringResource(Res.string.onboarding_disk_title), bottomAction = {
-        DefaultButton(onClick = onNext, enabled = state.hasEnoughSpace && !state.isLoading) {
-            Text(stringResource(Res.string.next_button))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DefaultButton(onClick = onNext, enabled = state.hasEnoughSpace && !state.isLoading) {
+                Text(stringResource(Res.string.next_button))
+            }
+            ChooseInstallationLocationButton(onClick = onChooseLocation)
         }
     }) {
         if (state.isLoading) {

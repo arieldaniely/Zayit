@@ -6,6 +6,50 @@ import kotlin.test.assertTrue
 
 class PersonalLibraryQueryRouterTest {
     @Test
+    fun `merges imported commentaries only for base sources with additional links`() {
+        val sql =
+            "SELECT l.id, b.title, tl.content FROM link l " +
+                "JOIN connection_type ct ON ct.id = l.connectionTypeId " +
+                "JOIN book b ON b.id = l.targetBookId JOIN line tl ON tl.id = l.targetLineId " +
+                "WHERE l.sourceLineId IN (?)"
+        val routed =
+            PersonalLibraryQueryRouter.route(
+                sql,
+                mapOf(0 to 12L),
+                attached = true,
+                additionalSourceBookIds = setOf(1L),
+                additionalSourceLineIds = setOf(12L),
+            )
+        assertTrue("FROM link l" in routed)
+        assertTrue("JOIN main.\"connection_type\" ct" in routed)
+        assertTrue("JOIN book b" in routed)
+        assertTrue("JOIN line tl" in routed)
+        val unrelated =
+            PersonalLibraryQueryRouter.route(
+                sql,
+                mapOf(0 to 13L),
+                attached = true,
+                additionalSourceBookIds = setOf(1L),
+                additionalSourceLineIds = setOf(12L),
+            )
+        assertTrue("FROM main.\"link\" l" in unrelated)
+    }
+
+    @Test
+    fun `keeps base source entities visible in the forced personal partition`() {
+        val sql =
+            "SELECT l.id, b.title, sl.content FROM link l " +
+                "JOIN connection_type ct ON ct.id = l.connectionTypeId " +
+                "JOIN book b ON b.id = l.sourceBookId JOIN line sl ON sl.id = l.sourceLineId " +
+                "WHERE l.targetLineId IN (?)"
+        val routed = PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, "personal", allowBaseSources = true)
+        assertTrue("FROM personal.\"link\" l" in routed)
+        assertTrue("JOIN main.\"connection_type\" ct" in routed)
+        assertTrue("JOIN book b" in routed)
+        assertTrue("JOIN line sl" in routed)
+    }
+
+    @Test
     fun `first binding capture does not traverse a large binder`() {
         var trailingBindingsVisited = 0
 

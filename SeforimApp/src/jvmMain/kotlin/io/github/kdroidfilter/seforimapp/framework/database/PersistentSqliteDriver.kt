@@ -58,6 +58,12 @@ class PersistentSqliteDriver(
 
     @Volatile
     private var personalMentionBookIds: Set<Long> = emptySet()
+
+    @Volatile
+    private var additionalSourceBookIds: Set<Long> = emptySet()
+
+    @Volatile
+    private var additionalSourceLineIds: Set<Long> = emptySet()
     private val forcedLinkSchema = ThreadLocal<String?>()
 
     init {
@@ -82,11 +88,15 @@ class PersistentSqliteDriver(
         targetBookIds: Set<Long> = emptySet(),
         sourceTargetBookIds: Set<Long> = emptySet(),
         mentionBookIds: Set<Long> = emptySet(),
+        sourceBookIds: Set<Long> = emptySet(),
+        sourceLineIds: Set<Long> = emptySet(),
     ) {
         if (!attached) personalOverlayAttached = false
         personalTargetBookIds = if (attached) targetBookIds else emptySet()
         personalSourceTargetBookIds = if (attached) sourceTargetBookIds else emptySet()
         personalMentionBookIds = if (attached) mentionBookIds else emptySet()
+        additionalSourceBookIds = if (attached) sourceBookIds else emptySet()
+        additionalSourceLineIds = if (attached) sourceLineIds else emptySet()
         if (attached) personalOverlayAttached = true
     }
 
@@ -216,10 +226,16 @@ class PersistentSqliteDriver(
                 when {
                     !personalOverlayAttached || binders == null -> sql
                     forcedSchema != null && PersonalLibraryQueryRouter.isLinkQuery(sql) ->
-                        PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, forcedSchema)
+                        PersonalLibraryQueryRouter.routeLinkQueryToSchema(sql, forcedSchema, additionalSourceBookIds.isNotEmpty())
                     PersonalLibraryQueryRouter.isLinkQuery(sql) -> {
                         val bindings = LinkBindingProbe().also { probe -> binders(probe) }.bindings
-                        PersonalLibraryQueryRouter.route(sql, bindings, attached = true)
+                        PersonalLibraryQueryRouter.route(
+                            sql,
+                            bindings,
+                            attached = true,
+                            additionalSourceBookIds = additionalSourceBookIds,
+                            additionalSourceLineIds = additionalSourceLineIds,
+                        )
                     }
                     else ->
                         PersonalLibraryQueryRouter.routeEntityQuery(
@@ -401,19 +417,32 @@ internal object PersonalLibraryQueryRouter {
 
     fun isLinkQuery(sql: String): Boolean = linkQueryPresence.computeIfAbsent(sql) { candidate -> linkQuery.containsMatchIn(candidate) }
 
-    /** Used by partitioned inverse-link reads; source-side JOINs live with their link row. */
+    /** Used by partitioned inverse-link reads, including imported links from a base-library source. */
     fun routeLinkQueryToSchema(
         sql: String,
         schema: String,
-    ): String = routeLinkQuery(sql, emptyMap(), forcedLinkSchema = schema)
+        allowBaseSources: Boolean = false,
+    ): String = routeLinkQuery(sql, emptyMap(), forcedLinkSchema = schema, allowBaseSources = allowBaseSources)
 
     fun route(
         sql: String,
         bindings: Map<Int, Any?>,
         attached: Boolean,
+        additionalSourceBookIds: Set<Long> = emptySet(),
+        additionalSourceLineIds: Set<Long> = emptySet(),
     ): String {
         if (!attached) return sql
-        if (isLinkQuery(sql)) return routeLinkQuery(sql, bindings)
+        if (isLinkQuery(sql)) {
+            val mergeBaseSourceLinks =
+                selectorValues(sql, "sourceBookId", bindings).any { it in additionalSourceBookIds } ||
+                    selectorValues(sql, "sourceLineId", bindings).any { it in additionalSourceLineIds }
+            return routeLinkQuery(
+                sql,
+                bindings,
+                mergeBaseSourceLinks = mergeBaseSourceLinks,
+                allowBaseSources = additionalSourceBookIds.isNotEmpty(),
+            )
+        }
 
         return routeEntityQuery(sql, bindings[0], attached = true)
     }
@@ -440,14 +469,15 @@ internal object PersonalLibraryQueryRouter {
     }
 
     /**
-     * Link rows belong to the database of their source book/line. Route that table directly,
-     * then route JOINs when their owning IDs are also known. This preserves cross-library links
-     * while avoiding the combinatorial UNION-view query plan on commentary hot paths.
+     * Route links and entity joins to their physical schemas when known. Imported commentary can
+     * have a base-library source and a personal target; those source selectors need both link tables.
      */
     private fun routeLinkQuery(
         sql: String,
         bindings: Map<Int, Any?>,
         forcedLinkSchema: String? = null,
+        mergeBaseSourceLinks: Boolean = false,
+        allowBaseSources: Boolean = false,
     ): String {
         val sourceLineSchema = schemaFor(selectorValues(sql, "sourceLineId", bindings))
         val sourceBookSchema = schemaFor(selectorValues(sql, "sourceBookId", bindings))
@@ -457,24 +487,32 @@ internal object PersonalLibraryQueryRouter {
             forcedLinkSchema ?: if (filteredTargetSchema == "personal") {
                 // The immutable base DB can never point at a later personal entity.
                 "personal"
+            } else if (mergeBaseSourceLinks) {
+                null
             } else {
                 sourceLineSchema ?: sourceBookSchema ?: linkIdSchema ?: return sql
             }
 
-        var routed = qualifyTableAlias(sql, "link", "l", linkSchema)
-        routed =
-            bareLinkPattern.replace(routed) { match ->
-                match.groupValues[1] + " " + linkSchema + ".\"link\""
-            }
+        var routed = sql
+        if (linkSchema != null) {
+            routed = qualifyTableAlias(routed, "link", "l", linkSchema)
+            routed =
+                bareLinkPattern.replace(routed) { match ->
+                    match.groupValues[1] + " " + linkSchema + ".\"link\""
+                }
+        }
         // Personal links deliberately reuse the immutable base connection-type IDs.
         routed = qualifyTableAlias(routed, "connection_type", "ct", "main")
 
         val normalized = sql.replace(whitespace, " ")
-        if (sourceLineJoin.containsMatchIn(normalized)) {
-            routed = qualifyTableAlias(routed, "line", "sl", linkSchema)
-        }
-        if (sourceBookJoin.containsMatchIn(normalized)) {
-            routed = qualifyTableAlias(routed, "book", "b", linkSchema)
+        val sourceSchema = sourceLineSchema ?: sourceBookSchema ?: linkSchema?.takeIf { it == "main" || !allowBaseSources }
+        if (sourceSchema != null) {
+            if (sourceLineJoin.containsMatchIn(normalized)) {
+                routed = qualifyTableAlias(routed, "line", "sl", sourceSchema)
+            }
+            if (sourceBookJoin.containsMatchIn(normalized)) {
+                routed = qualifyTableAlias(routed, "book", "b", sourceSchema)
+            }
         }
 
         val targetSchema =

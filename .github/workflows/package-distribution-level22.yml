@@ -1,0 +1,59 @@
+name: Package full distribution (Zstandard 22)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'תג המקור ב־SeforimLibrary המכיל את המסד ואת האינדקס הסמנטי'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-distribution-level22
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DB_TOKEN: ${{ secrets.SEFORIM_LIBRARY_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check configuration and archive regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_TAG" || { echo 'A source release tag is required'; exit 1; }
+          test -n "$DB_TOKEN" || { echo 'SEFORIM_LIBRARY_TOKEN must read and write SeforimLibrary releases'; exit 1; }
+          test -n "$HF_TOKEN" || { echo 'HF_TOKEN must read the approved embedding model'; exit 1; }
+          python -m pip install 'requests>=2.32,<3' 'zstandard>=0.23,<1'
+          python -m unittest discover -s scripts -p 'test_semantic_transfer.py'
+          python -m unittest discover -s scripts -p 'test_semantic_finalizer.py'
+      - name: Download and verify database and index from the selected tag
+        run: |
+          python scripts/finalize_semantic_index.py prepare --work "$RUNNER_TEMP/distribution-level22" \
+            --db-release-tag "$RELEASE_TAG" --transfer-release-tag "$RELEASE_TAG"
+      - name: Recompress all contents at level 22, verify and upload a new draft
+        run: |
+          chmod +x SeforimLibrary/gradlew
+          python scripts/finalize_semantic_index.py finish --work "$RUNNER_TEMP/distribution-level22" \
+            --db-release-tag "$RELEASE_TAG" --transfer-release-tag "$RELEASE_TAG" --full-bundle-only

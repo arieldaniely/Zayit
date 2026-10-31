@@ -233,24 +233,29 @@ def finish(args):
                     f"-PsemanticIndexDir={semantic / 'index'}", "-PsemanticHeap=4g",
                     "--no-daemon", "--no-configuration-cache", "--max-workers=2"],
                    cwd=args.repo / "SeforimLibrary", env=env, check=True)
-    db_publisher, app_publisher = Publisher(os.environ["DB_TOKEN"]), Publisher(os.environ["GH_TOKEN"])
+    db_publisher = Publisher(os.environ["DB_TOKEN"])
     suffix = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
     db_tag, app_tag = args.db_release_tag + "-semantic-" + suffix, "semantic-round2-" + suffix
     notes = (f"Verified semantic index for {args.db_repository}@{args.db_release_tag}. "
              "Model: Judaic Semantic Embedding project, Otzaria; CC BY-NC-SA 4.0. "
              "Repacked using zstd level 22. Draft for review; existing releases are unchanged.")
-    # Check access to both destinations before doing the expensive compression.
+    # Allocate the output draft before doing the expensive compression.
     db_release = db_publisher.draft(args.db_repository, db_tag, notes)
-    app_release = app_publisher.draft(args.app_repository, app_tag, notes)
     output = work / "output"
-    variants = (
-        (app_publisher, args.app_repository, app_release, "semantic-bundle.tar.zst",
-         [(semantic / "model", "model"), (semantic / "index", "index")], "semantic-archive-manifest.json"),
+    variants = [
         (db_publisher, args.db_repository, db_release, "seforim_bundle.tar.zst",
          [(base / name, name) for name in BASE_FILES]
          + [(base / PDF_DIRECTORY, PDF_DIRECTORY)]
          + [(semantic, "seforim.db.semantic")], "bundle-manifest.json"),
-    )
+    ]
+    app_release = None
+    if not args.full_bundle_only:
+        app_publisher = Publisher(os.environ["GH_TOKEN"])
+        app_release = app_publisher.draft(args.app_repository, app_tag, notes)
+        variants.insert(0, (
+            app_publisher, args.app_repository, app_release, "semantic-bundle.tar.zst",
+            [(semantic / "model", "model"), (semantic / "index", "index")], "semantic-archive-manifest.json",
+        ))
     for publisher, repository, release, filename, mappings, manifest_name in variants:
         manifest = package(mappings, output / filename)
         manifest.update(databaseSha256=transfer["databaseSha256"], databaseReleaseTag=args.db_release_tag,
@@ -271,8 +276,9 @@ def finish(args):
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
         summary.write(f"Verified draft outputs (zstd level 22):\n\n"
                       f"- Database with semantic search: {db_release['html_url']}\n"
-                      f"- Optional semantic supplement: {app_release['html_url']}\n"
                       f"- Database SHA-256: `{transfer['databaseSha256']}`\n")
+        if app_release is not None:
+            summary.write(f"- Optional semantic supplement: {app_release['html_url']}\n")
 
 
 if __name__ == "__main__":
@@ -286,5 +292,7 @@ if __name__ == "__main__":
     parser.add_argument("--transfer-repository", help="Defaults to the database repository containing the Kaggle transfer")
     parser.add_argument("--pdf-release-tag", default="v2-20261001115917-full")
     parser.add_argument("--app-repository", default="arieldaniely/Zayit")
+    parser.add_argument("--full-bundle-only", action="store_true",
+                        help="Create only the complete database distribution, without a second app release")
     args = parser.parse_args()
     (prepare if args.stage == "prepare" else finish)(args)

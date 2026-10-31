@@ -9,12 +9,54 @@ from unittest.mock import patch
 
 import zstandard
 
-from finalize_semantic_index import BASE_FILES, COMPRESSION_JOB_BYTES, package, require_complete_base, transfer_location, verify_package
+from finalize_semantic_index import BASE_FILES, COMPRESSION_JOB_BYTES, finish, package, require_complete_base, transfer_location, verify_package
 from kaggle_semantic_stream import PartsReader
 from semantic_transfer import sha256
 
 
 class SemanticFinalizerTest(unittest.TestCase):
+    def test_full_bundle_only_uploads_one_verified_level22_distribution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base, semantic = root / "base", root / "semantic"
+            base.mkdir()
+            for name in BASE_FILES:
+                if name.endswith("lucene"):
+                    (base / name).mkdir()
+                    (base / name / "segments_1").write_bytes(b"index")
+                else:
+                    (base / name).write_bytes(b"database")
+            (base / "תלמוד בבלי").mkdir()
+            (base / "תלמוד בבלי/test.pdf").write_bytes(b"%PDF-test")
+            (semantic / "index").mkdir(parents=True)
+            (semantic / "index/segments_1").write_bytes(b"semantic")
+            (semantic / "model").mkdir()
+            (semantic / "model/seforim-embed-round2-int8.onnx").write_bytes(b"model")
+            (semantic / "model/tokenizer.json").write_bytes(b"tokenizer")
+            (root / "transfer").mkdir()
+            (root / "transfer/semantic-transfer.json").write_text(json.dumps({"databaseSha256": sha256(base / "seforim.db")}))
+            args = SimpleNamespace(work=root, repo=root, db_repository="owner/library",
+                                   db_release_tag="v4", transfer_release_tag="v4", full_bundle_only=True)
+            summary = root / "summary.md"
+            # No GH_TOKEN or app_repository: this path must need only library publication access.
+            with (patch.dict("os.environ", {"DB_TOKEN": "test", "GITHUB_RUN_ID": "123",
+                                           "GITHUB_STEP_SUMMARY": str(summary)}, clear=True),
+                  patch("finalize_semantic_index.validate_index"),
+                  patch("finalize_semantic_index.subprocess.run") as optimize,
+                  patch("finalize_semantic_index.MODEL_SHA", sha256(semantic / "model/seforim-embed-round2-int8.onnx")),
+                  patch("finalize_semantic_index.TOKENIZER_SHA", sha256(semantic / "model/tokenizer.json")),
+                  patch("finalize_semantic_index.Publisher") as publisher):
+                publisher.return_value.draft.return_value = {"html_url": "https://example.test/draft"}
+                finish(args)
+            publisher.assert_called_once_with("test")
+            optimize.assert_called_once()
+            manifest = json.loads((root / "output/bundle-manifest.json").read_text())
+            self.assertEqual(22, manifest["compressionLevel"])
+            self.assertIn("seforim.db.semantic/index/segments_1", manifest["contents"])
+            self.assertIn("תלמוד בבלי/test.pdf", manifest["contents"])
+            self.assertEqual(len(manifest["parts"]) + 1, publisher.return_value.upload.call_count)
+            self.assertNotIn("Optional semantic supplement", summary.read_text())
+
     def test_transfer_defaults_to_database_repository(self):
         args = SimpleNamespace(transfer_repository=None, db_repository="owner/library")
         with patch.dict("os.environ", {"DB_TOKEN": "database-test", "GH_TOKEN": "app-test"}):

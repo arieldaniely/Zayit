@@ -52,7 +52,7 @@ class LocalDistributionTest(unittest.TestCase):
             self.assertIsNone(manifest['compressionLevel'])
             self.assertEqual(original + pdf, b''.join((output / p['name']).read_bytes() for p in manifest['assets']))
             self.assertEqual(set(entries), {entry['name'] for entry in manifest['contents']})
-            self.assertTrue(json.loads((output / 'verification.json').read_text())['verified'])
+            self.assertTrue(json.loads((output / 'verification.json').read_text(encoding='utf-8'))['verified'])
             part.write_bytes(b'damaged')
             with self.assertRaisesRegex(ValueError, 'Damaged release part'):
                 distribution.reuse_release_base(database, manifest_file, pdf_file, root / 'bad')
@@ -94,15 +94,15 @@ class LocalDistributionTest(unittest.TestCase):
             distribution.verify(output, extracted)
             self.assertEqual((semantic / 'index/shard-00/segments_1').read_bytes(),
                              (extracted / 'index/shard-00/segments_1').read_bytes())
-            self.assertTrue(json.loads((output / 'verification.json').read_text())['verified'])
-            manifest = json.loads((output / 'distributions.json').read_text())
+            self.assertTrue(json.loads((output / 'verification.json').read_text(encoding='utf-8'))['verified'])
+            manifest = json.loads((output / 'distributions.json').read_text(encoding='utf-8'))
             self.assertEqual(22, manifest['compressionLevel'])
             self.assertEqual(11, len(manifest['contents']))
             staged, assembled = root / 'staged', root / 'assembled'
             distribution.package(database, None, staged, threads=0, base_only=True)
             distribution.package(database, semantic, assembled, threads=0, base_archive=staged)
             distribution.verify(assembled, root / 'assembled-semantic')
-            assembled_manifest = json.loads((assembled / 'distributions.json').read_text())
+            assembled_manifest = json.loads((assembled / 'distributions.json').read_text(encoding='utf-8'))
             self.assertEqual(manifest['contents'], assembled_manifest['contents'])
             installed = root / 'installed'
             with distribution.PartsReader([assembled / p['name'] for p in assembled_manifest['assets']]) as parts:
@@ -110,7 +110,7 @@ class LocalDistributionTest(unittest.TestCase):
                     with tarfile.open(fileobj=decoded, mode='r|', ignore_zeros=True) as archive:
                         archive.extractall(installed, filter='data')
             distribution.verify_installed(assembled, installed)
-            self.assertTrue(json.loads((assembled / 'installed-verification.json').read_text())['verified'])
+            self.assertTrue(json.loads((assembled / 'installed-verification.json').read_text(encoding='utf-8'))['verified'])
             pdf = installed / 'תלמוד בבלי/ברכות.pdf'
             corrupted_pdf = bytearray(pdf.read_bytes())
             corrupted_pdf[0] ^= 1

@@ -1,4 +1,6 @@
 <resources>
+    <string name="font_system_family">%1$s (מותקן במחשב)</string>
+    <string name="settings_font_selection_hint">ניתן לבחור מהגופנים המובנים ומכל הגופנים המותקנים במחשב. לחיפוש מהיר ברשימה, הקלידו את שם הגופן.</string>
     <string name="personal_library_files_unavailable">הייבוא לא התחיל כי חלק מהקבצים נמצאים בענן ואינם זמינים במחשב. ב־OneDrive יש ללחוץ לחיצה ימנית על התיקייה ולבחור ״שמור תמיד במכשיר זה״, להמתין לסיום ההורדה ואז לנסות שוב. הספרייה הקיימת נשמרה.\n\n%1$s</string>
     <string name="personal_semantic_working">בונה אינדקס לחיפוש לפי משמעות…</string>
     <string name="personal_semantic_title">חיפוש לפי משמעות בספרים אישיים — לבחירתך</string>

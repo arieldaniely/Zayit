@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +38,14 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.ListComboBox
 import org.jetbrains.jewel.ui.component.OutlinedButton
+import org.jetbrains.jewel.ui.component.SpeedSearchArea
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.settings_font_book_label
 import seforimapp.seforimapp.generated.resources.settings_font_commentary_label
 import seforimapp.seforimapp.generated.resources.settings_font_reset_defaults
+import seforimapp.seforimapp.generated.resources.settings_font_selection_hint
 import seforimapp.seforimapp.generated.resources.settings_font_sources_label
 import seforimapp.seforimapp.generated.resources.settings_font_targum_label
 
@@ -61,8 +64,12 @@ private fun FontsSettingsView(
     state: FontsSettingsState,
     onEvent: (FontsSettingsEvents) -> Unit,
 ) {
-    val options = FontCatalog.options
-    val optionLabels = options.map { stringResource(it.label) }.toImmutableList()
+    val options by produceState(FontCatalog.options) { value = FontCatalog.installedOptions() }
+    val optionLabels =
+        options
+            .map { option ->
+                option.systemFamilyName?.let { stringResource(option.label, it) } ?: stringResource(option.label)
+            }.toImmutableList()
 
     VerticallyScrollableContainer(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -72,6 +79,10 @@ private fun FontsSettingsView(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text(
+                text = stringResource(Res.string.settings_font_selection_hint),
+                color = JewelTheme.globalColors.text.info,
+            )
             FontSettingCard(
                 label = Res.string.settings_font_book_label,
                 fontCode = state.bookFontCode,
@@ -148,12 +159,14 @@ private fun FontSettingCard(
                 fontSize = 15.sp,
                 modifier = Modifier.weight(1f),
             )
-            ListComboBox(
-                items = optionLabels,
-                selectedIndex = selectedIndex,
-                onSelectedItemChange = { idx -> onFontChange(options[idx].code) },
-                modifier = Modifier.fillMaxWidth(0.4f),
-            )
+            SpeedSearchArea(Modifier.fillMaxWidth(0.4f)) {
+                ListComboBox(
+                    items = optionLabels,
+                    selectedIndex = selectedIndex,
+                    onSelectedItemChange = { idx -> onFontChange(options[idx].code) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))

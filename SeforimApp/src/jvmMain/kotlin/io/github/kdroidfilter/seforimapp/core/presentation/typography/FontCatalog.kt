@@ -2,14 +2,20 @@ package io.github.kdroidfilter.seforimapp.core.presentation.typography
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.skia.FontMgr
 import seforimapp.seforimapp.generated.resources.AharoniCLM_Bold
 import seforimapp.seforimapp.generated.resources.AharoniCLM_BoldOblique
 import seforimapp.seforimapp.generated.resources.AharoniCLM_Book
@@ -112,6 +118,7 @@ import seforimapp.seforimapp.generated.resources.font_shofar
 import seforimapp.seforimapp.generated.resources.font_simple_clm
 import seforimapp.seforimapp.generated.resources.font_stam_ashkenaz_clm
 import seforimapp.seforimapp.generated.resources.font_stam_sefarad_clm
+import seforimapp.seforimapp.generated.resources.font_system_family
 import seforimapp.seforimapp.generated.resources.font_taamey_ashkenaz
 import seforimapp.seforimapp.generated.resources.font_taamey_david_clm
 import seforimapp.seforimapp.generated.resources.font_taamey_frank_clm
@@ -129,9 +136,40 @@ import seforimapp.seforimapp.generated.resources.notoserifhebrew
 data class FontOption(
     val code: String,
     val label: StringResource,
+    val systemFamilyName: String? = null,
 )
 
 object FontCatalog {
+    private const val SYSTEM_PREFIX = "system:"
+
+    /** Uses the same platform font manager as Compose, including fonts installed for the current user. */
+    suspend fun installedOptions(): ImmutableList<FontOption> =
+        withContext(Dispatchers.IO) {
+            val families =
+                runCatching {
+                    val manager = FontMgr.default
+                    List(manager.familiesCount) { manager.getFamilyName(it) }
+                }.getOrDefault(emptyList())
+            withSystemFonts(families)
+        }
+
+    internal fun withSystemFonts(families: List<String>): ImmutableList<FontOption> =
+        (
+            options +
+                families
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinctBy { it.lowercase() }
+                    .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                    .map { family ->
+                        FontOption(
+                            code = SYSTEM_PREFIX + family,
+                            label = Res.string.font_system_family,
+                            systemFamilyName = family,
+                        )
+                    }
+        ).toImmutableList()
+
     // Public list of options in a stable order (no Composable calls here)
     val options: ImmutableList<FontOption> =
         persistentListOf(
@@ -170,6 +208,7 @@ object FontCatalog {
     fun boldScaleFor(code: String): Float =
         if (PlatformInfo.isMacOS && code in setOf("notoserifhebrew", "notorashihebrew", "frankruhllibre")) 1.08f else 1.0f
 
+    @OptIn(ExperimentalTextApi::class)
     @Composable
     fun familyFor(code: String): FontFamily =
         when (code) {
@@ -340,6 +379,11 @@ object FontCatalog {
                     Font(resource = Res.font.YehudaCLM_Light, weight = FontWeight.Light),
                     Font(resource = Res.font.YehudaCLM_Bold, weight = FontWeight.Bold),
                 )
-            else -> FontFamily(Font(resource = Res.font.notoserifhebrew, weight = FontWeight.Normal))
+            else ->
+                if (code.startsWith(SYSTEM_PREFIX) && code.length > SYSTEM_PREFIX.length) {
+                    remember(code) { FontFamily(code.removePrefix(SYSTEM_PREFIX)) }
+                } else {
+                    FontFamily(Font(resource = Res.font.notoserifhebrew, weight = FontWeight.Normal))
+                }
         }
 }

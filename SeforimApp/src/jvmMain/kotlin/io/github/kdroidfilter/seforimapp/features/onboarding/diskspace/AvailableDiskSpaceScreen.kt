@@ -74,7 +74,9 @@ fun AvailableDiskSpaceView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DefaultButton(onClick = onNext, enabled = state.hasEnoughSpace && !state.isLoading) {
+            // Installation preparation checks space after reclaiming the previous install's files.
+            // Keep this preview informational so those files cannot block reaching that cleanup.
+            DefaultButton(onClick = onNext, enabled = !state.isLoading) {
                 Text(stringResource(Res.string.next_button))
             }
             ChooseInstallationLocationButton(onClick = onChooseLocation)

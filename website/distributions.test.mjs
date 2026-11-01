@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { distributionName, distributionOrder, isDistributionArchive, isOwnDistributionUrl } from './src/distributions.ts';
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+
+const bundled = await build({
+  entryPoints: [fileURLToPath(new URL('./src/distributions.ts', import.meta.url))],
+  bundle: true, platform: 'node', format: 'esm', write: false,
+});
+const { distributionName, distributionOrder, isDistributionArchive, isOwnDistributionUrl } =
+  await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 
 test('all six distributions include every numbered part', () => {
   for (const name of distributionOrder) {

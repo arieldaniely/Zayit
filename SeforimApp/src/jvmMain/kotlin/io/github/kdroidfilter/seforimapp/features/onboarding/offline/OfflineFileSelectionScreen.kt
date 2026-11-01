@@ -16,6 +16,7 @@ import io.github.kdroidfilter.seforimapp.features.onboarding.extract.ExtractEven
 import io.github.kdroidfilter.seforimapp.features.onboarding.extract.ExtractViewModel
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.OnBoardingDestination
 import io.github.kdroidfilter.seforimapp.features.onboarding.navigation.ProgressBarState
+import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.ChooseInstallationLocationButton
 import io.github.kdroidfilter.seforimapp.features.onboarding.ui.components.OnBoardingScaffold
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -85,8 +86,7 @@ fun OfflineFileSelectionScreen(
     OnBoardingScaffold(
         title = stringResource(Res.string.onboarding_file_selection),
         bottomAction = {
-            Link(
-                text = stringResource(Res.string.installation_choose_root),
+            ChooseInstallationLocationButton(
                 onClick = { navController.navigate(OnBoardingDestination.DatabaseLocationScreen) },
             )
         },

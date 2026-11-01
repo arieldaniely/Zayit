@@ -39,3 +39,11 @@ DATABASE_LICENSING_REVIEW_HE.md
 __pycache__/
 **/.codex-semantic-build/
 .codex-semantic-lint-files.txt
+
+# Temporary verification outputs (at the root and in shared modules).
+**/.codex-*-build/
+**/.codex-*-cache/
+.codex-*-classpath.txt
+.codex-*-lint-files.txt
+.codex-*-checker.txt
+.codex-*.args

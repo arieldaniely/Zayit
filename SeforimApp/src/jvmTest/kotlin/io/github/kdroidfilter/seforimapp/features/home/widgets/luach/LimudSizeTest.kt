@@ -35,7 +35,11 @@ class LimudSizeTest {
         settings.setHomeWidgetsLayout(encodeLayout(listOf(WidgetPlacement(LimudWidget, CellRect(0, 0, 4, 2)))))
         val layout = HomeWidgetsLayout(settings)
         layout.set(LimudSettings.shown, Limud.entries.toSet())
-        val cell = layout.current().single().cell
+        val cell =
+            layout
+                .current()
+                .single { it.widget == LimudWidget }
+                .cell
         assertEquals(LimudWidget.minRows(4, pitch), cell.h)
         layout.resetSettings(LimudWidget)
     }

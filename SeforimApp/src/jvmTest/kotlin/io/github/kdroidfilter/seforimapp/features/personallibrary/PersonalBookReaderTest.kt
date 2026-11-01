@@ -6,8 +6,124 @@ import java.util.zip.ZipOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertTrue
 
 class PersonalBookReaderTest {
+    @Test
+    fun readsFootnotesEndnotesAndTheirHyperlinksAtTheReference() {
+        val lines =
+            readDocx(
+                mapOf(
+                    "word/document.xml" to
+                        """
+                        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+                            <w:p><w:r><w:t>לפני</w:t><w:footnoteReference w:id="3"/><w:t>אחרי</w:t></w:r></w:p>
+                            <w:p><w:r><w:endnoteReference w:id="1"/></w:r></w:p>
+                            <w:p><w:r><w:t>הערה חסרה</w:t><w:footnoteReference w:id="99"/></w:r></w:p>
+                        </w:body></w:document>
+                        """.trimIndent(),
+                    "word/footnotes.xml" to
+                        """
+                        <w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                            <w:footnote w:id="-1" w:type="separator"><w:p><w:r><w:t>מפריד</w:t></w:r></w:p></w:footnote>
+                            <w:footnote w:id="3">
+                                <w:p><w:r><w:footnoteRef/><w:t>הערה &lt;א&gt;</w:t></w:r></w:p>
+                                <w:p><w:hyperlink r:id="noteLink"><w:r><w:t>מקור</w:t></w:r></w:hyperlink></w:p>
+                            </w:footnote>
+                        </w:footnotes>
+                        """.trimIndent(),
+                    "word/endnotes.xml" to
+                        """
+                        <w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                            <w:endnote w:id="1"><w:p><w:r><w:endnoteRef/><w:t>הערת סיום</w:t></w:r></w:p></w:endnote>
+                        </w:endnotes>
+                        """.trimIndent(),
+                    "word/_rels/footnotes.xml.rels" to
+                        """
+                        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                            <Relationship Id="noteLink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="zayita://book/2/line/42" TargetMode="External"/>
+                        </Relationships>
+                        """.trimIndent(),
+                ),
+            )
+        assertEquals(
+            listOf(
+                "לפני<sup class=\"footnote-marker\">1</sup><i class=\"footnote\">" +
+                    " 1. הערה &lt;א&gt;<br><a class=\"ref\" href=\"zayita://book/2/line/42\">מקור</a> </i>אחרי",
+                "<sup class=\"footnote-marker\">2</sup><i class=\"footnote\"> 2. הערת סיום </i>",
+                "הערה חסרה",
+            ),
+            lines,
+        )
+        val rendered =
+            io.github.kdroidfilter.seforim.htmlparser
+                .buildAnnotatedFromHtml(lines.first(), 16f)
+        assertTrue(rendered.text.contains("1. הערה <א>"))
+        assertTrue(rendered.getLinkAnnotations(0, rendered.length).isNotEmpty())
+    }
+
+    @Test
+    fun preservesRelationshipAndFieldHyperlinksWithoutImportingInstructionsOrUnsafeTargets() {
+        val lines =
+            readDocx(
+                mapOf(
+                    "word/document.xml" to
+                        """
+                        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>
+                            <w:p><w:hyperlink r:id="link"><w:r><w:t>שתי </w:t></w:r><w:r><w:t>מילים</w:t></w:r></w:hyperlink></w:p>
+                            <w:p><w:fldSimple w:instr=' HYPERLINK "zayit://book/2/line/42" '>
+                                <w:r><w:t>פשוט</w:t></w:r></w:fldSimple></w:p>
+                            <w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>
+                                <w:r><w:instrText> HYPER</w:instrText></w:r>
+                                <w:r><w:instrText>LINK "zayita://book/2/line/42" </w:instrText></w:r>
+                                <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+                                <w:r><w:t>מורכב</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/><w:t> סוף</w:t></w:r></w:p>
+                            <w:p><w:hyperlink r:id="unsafe"><w:r><w:t>טקסט רגיל</w:t></w:r></w:hyperlink></w:p>
+                            <w:p><w:r><w:t>[otzaria://open/book/2?index=1]</w:t></w:r></w:p>
+                        </w:body></w:document>
+                        """.trimIndent(),
+                    "word/_rels/document.xml.rels" to
+                        """
+                        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                            <Relationship Id="link" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="otzaria://open/book/2?index=1&amp;mark=1" TargetMode="External"/>
+                            <Relationship Id="unsafe" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+                                Target="javascript:alert(1)" TargetMode="External"/>
+                        </Relationships>
+                        """.trimIndent(),
+                ),
+            )
+        assertEquals(
+            listOf(
+                "<a class=\"ref\" href=\"otzaria://open/book/2?index=1&amp;mark=1\">שתי מילים</a>",
+                "<a class=\"ref\" href=\"zayit://book/2/line/42\">פשוט</a>",
+                "<a class=\"ref\" href=\"zayita://book/2/line/42\">מורכב</a> סוף",
+                "טקסט רגיל",
+                "[otzaria://open/book/2?index=1]",
+            ),
+            lines,
+        )
+    }
+
+    private fun readDocx(entries: Map<String, String>): List<String> {
+        val file = Files.createTempFile("personal-book-notes-links", ".docx")
+        try {
+            ZipOutputStream(Files.newOutputStream(file)).use { zip ->
+                entries.forEach { (name, xml) ->
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(xml.toByteArray())
+                    zip.closeEntry()
+                }
+            }
+            return readPersonalBook(file)
+        } finally {
+            Files.deleteIfExists(file)
+        }
+    }
+
     @Test
     fun resolvesCustomStyleInheritanceAndExplicitBodyText() {
         val file = Files.createTempFile("personal-book-styles", ".docx")

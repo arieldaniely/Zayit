@@ -19,7 +19,7 @@ class HomeWidgetsLayoutTest {
 
     @Test
     fun `no saved layout is the default one`() {
-        assertEquals(homeWidgets, decodeLayout(null))
+        assertEquals(defaultLayout(), decodeLayout(null))
     }
 
     @Test

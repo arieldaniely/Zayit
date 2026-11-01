@@ -1,5 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.personallibrary
 
+import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
 import io.github.kdroidfilter.seforimapp.features.pdf.PdfPreindexStore
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.logger.warnln
@@ -11,7 +13,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.jsoup.Jsoup
+import org.jsoup.nodes.TextNode
 import org.jsoup.safety.Safelist
+import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -135,7 +139,9 @@ class PersonalLibraryImporter(
                 val counts = linkedMapOf<String, PersonalImportSummary>()
                 folders.forEach { folder ->
                     counts[folder.id] = context.importFolder(folder, ::completed)
-                    val added = context.importLinks(folder, ::completed)
+                }
+                folders.forEach { folder ->
+                    val added = context.importLinks(folder, ::completed) + context.importDocumentLinks(folder)
                     counts[folder.id] = counts.getValue(folder.id).copy(links = added)
                 }
                 context.finishLinks()
@@ -157,7 +163,9 @@ class PersonalLibraryImporter(
         private val categoryLevels = HashMap<Long, Int>(base.categoryLevels)
         private val personalCategories = HashMap<String, Long>()
         private val booksByTitle = HashMap<String, BookRef>(base.booksByTitle)
+        private val booksById = HashMap<Long, BookRef>(base.booksById)
         private val personalBooksByFolderAndTitle = HashMap<Pair<String, String>, BookRef>()
+        private val documentBooksByFolder = HashMap<String, MutableList<BookRef>>()
         private val booksWithSourceLinks = HashSet<Long>()
         private val booksWithTargetLinks = HashSet<Long>()
         private val sourceTargetBooks = HashSet<Long>()
@@ -262,10 +270,14 @@ class PersonalLibraryImporter(
                             }
                         }
                     val ref = BookRef(bookId, title, categoryId, meta?.order?.toInt() ?: 999, lineIds)
-                    booksByTitle[comparable(title)] = ref
-                    personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
-                    bookCount++
                     connection.releaseSavepoint(savepoint)
+                    booksByTitle[comparable(title)] = ref
+                    booksById[bookId] = ref
+                    personalBooksByFolderAndTitle[folder.id to comparable(title)] = ref
+                    if (file.extension.equals("docx", true)) {
+                        documentBooksByFolder.getOrPut(folder.id, ::mutableListOf).add(ref)
+                    }
+                    bookCount++
                 } catch (failure: Exception) {
                     connection.rollback(savepoint)
                     connection.releaseSavepoint(savepoint)
@@ -434,56 +446,161 @@ class PersonalLibraryImporter(
                         val targetLineId =
                             target.lineIds.getOrNull(targetIndex)
                                 ?: base.lineId(target.id, targetIndex) ?: return@forEachIndexed
-                        val declaredType = ConnectionType.fromString(data.connectionType)
-                        val isExplicitSource = declaredType == ConnectionType.SOURCE
-                        val type = if (isExplicitSource) ConnectionType.COMMENTARY else declaredType
-                        val storedSourceBook = if (isExplicitSource) target else source
-                        val storedTargetBook = if (isExplicitSource) source else target
-                        val storedSourceLineId = if (isExplicitSource) targetLineId else sourceLineId
-                        val storedTargetLineId = if (isExplicitSource) sourceLineId else targetLineId
-                        val storedTargetIndex = if (isExplicitSource) sourceIndex else targetIndex
-                        val typeId = base.connectionTypes[type.name] ?: return@forEachIndexed
-                        val linkId = ids.id("link:${folder.id}:${file.fileName}:$index:$storedSourceLineId:$storedTargetLineId")
-                        execute(
-                            """
-                            INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
-                            targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)
-                            """.trimIndent(),
-                            linkId,
-                            storedSourceBook.id,
-                            storedTargetBook.id,
-                            storedSourceLineId,
-                            storedTargetLineId,
-                            storedTargetIndex,
-                            storedTargetBook.order,
-                            typeId,
-                        )
-                        booksWithSourceLinks += storedSourceBook.id
-                        booksWithTargetLinks += storedTargetBook.id
                         if (
-                            type == ConnectionType.COMMENTARY ||
-                            type == ConnectionType.SUPER_COMMENTARY ||
-                            type == ConnectionType.TARGUM ||
-                            type == ConnectionType.MIDRASH ||
-                            type == ConnectionType.PARSHANUT ||
-                            type == ConnectionType.DIBUR_HAMATCHIL ||
-                            type == ConnectionType.EIN_MISHPAT
+                            storeLink(
+                                "link:${folder.id}:${file.fileName}:$index",
+                                source,
+                                sourceLineId,
+                                sourceIndex,
+                                target,
+                                targetLineId,
+                                targetIndex,
+                                ConnectionType.fromString(data.connectionType),
+                            )
                         ) {
-                            sourceTargetBooks += storedTargetBook.id
+                            count++
                         }
-                        if (type == ConnectionType.REFERENCE || type == ConnectionType.OTHER) {
-                            mentionTargetBooks += storedTargetBook.id
-                        }
-                        flagsByBook.getOrPut(storedSourceBook.id, ::mutableSetOf).add(type)
-                        flagsByBook.getOrPut(storedTargetBook.id, ::mutableSetOf).add(
-                            if (isExplicitSource) ConnectionType.SOURCE else type,
-                        )
-                        count++
                     }
                     onBytesProcessed(fileBytes)
                 }
             }
             return count
+        }
+
+        fun importDocumentLinks(folder: PersonalBookFolder): Int {
+            var count = 0
+            documentBooksByFolder[folder.id].orEmpty().forEach { source ->
+                val lines =
+                    connection
+                        .prepareStatement(
+                            "SELECT id,lineIndex,content FROM line WHERE bookId=? ORDER BY lineIndex",
+                        ).use { statement ->
+                            statement.setLong(1, source.id)
+                            statement.executeQuery().use { rows ->
+                                buildList {
+                                    while (rows.next()) add(Triple(rows.getLong(1), rows.getInt(2), rows.getString(3)))
+                                }
+                            }
+                        }
+                lines.forEach { (sourceLineId, sourceIndex, content) ->
+                    val document = Jsoup.parseBodyFragment(content)
+                    document.outputSettings().prettyPrint(false)
+                    val destinations = linkedSetOf<Pair<Long, Long>>()
+                    var changed = false
+
+                    fun importLink(uri: String): Long? {
+                        val parsed = parseContentDeepLink(uri) ?: return null
+                        // Navigation tolerates malformed indices by opening the book. An imported relation
+                        // must not silently attach the document to the book's first line instead.
+                        if (parsed.lineIndex == null &&
+                            URI(uri.trim())
+                                .rawQuery
+                                .orEmpty()
+                                .split('&')
+                                .any { it.substringBefore('=').equals("index", true) }
+                        ) {
+                            return null
+                        }
+                        val destination = parsed.destination as? TabsDestination.BookContent ?: return null
+                        val target = booksById[destination.bookId] ?: return null
+                        val targetIndex =
+                            destination.lineId?.let { lineId ->
+                                if (target.id < 0) target.lineIds.indexOf(lineId).takeIf { it >= 0 } else base.lineIndex(target.id, lineId)
+                            } ?: if (destination.lineId == null) parsed.lineIndex ?: 0 else return null
+                        val targetLineId =
+                            if (target.id < 0) target.lineIds.getOrNull(targetIndex) else base.lineId(target.id, targetIndex)
+                        if (targetLineId == null) return null
+                        if (
+                            destinations.add(target.id to targetLineId) &&
+                            storeLink(
+                                "docx-link:${source.id}:$sourceLineId:${target.id}:$targetLineId",
+                                source,
+                                sourceLineId,
+                                sourceIndex,
+                                target,
+                                targetLineId,
+                                targetIndex,
+                                ConnectionType.SOURCE,
+                            )
+                        ) {
+                            count++
+                        }
+                        return targetLineId
+                    }
+
+                    document.select("a[href]").forEach { anchor ->
+                        importLink(anchor.attr("href"))?.let { targetLineId ->
+                            anchor.addClass("ref").attr("href", "seforim://line/$targetLineId")
+                            changed = true
+                        }
+                    }
+                    val plain = document.body().clone()
+                    plain.select("a").forEach { it.replaceWith(TextNode(" ")) }
+                    CONTENT_LINK.findAll(plain.text()).forEach { match ->
+                        importLink(match.value.trimEnd('.', ',', ';', ':', '!', '?', '،', '׃'))
+                    }
+                    if (changed) {
+                        execute("UPDATE line SET content=? WHERE id=?", document.body().html(), sourceLineId)
+                    }
+                }
+            }
+            return count
+        }
+
+        private fun storeLink(
+            key: String,
+            source: BookRef,
+            sourceLineId: Long,
+            sourceIndex: Int,
+            target: BookRef,
+            targetLineId: Long,
+            targetIndex: Int,
+            declaredType: ConnectionType,
+        ): Boolean {
+            val isExplicitSource = declaredType == ConnectionType.SOURCE
+            val type = if (isExplicitSource) ConnectionType.COMMENTARY else declaredType
+            val storedSourceBook = if (isExplicitSource) target else source
+            val storedTargetBook = if (isExplicitSource) source else target
+            val storedSourceLineId = if (isExplicitSource) targetLineId else sourceLineId
+            val storedTargetLineId = if (isExplicitSource) sourceLineId else targetLineId
+            val storedTargetIndex = if (isExplicitSource) sourceIndex else targetIndex
+            val typeId = base.connectionTypes[type.name] ?: return false
+            val linkId = ids.id("$key:$storedSourceLineId:$storedTargetLineId")
+            execute(
+                """
+                INSERT INTO link(id,sourceBookId,targetBookId,sourceLineId,targetLineId,targetLineIndex,
+                targetBookOrderIndex,connectionTypeId,isDeclaredBase) VALUES(?,?,?,?,?,?,?,?,0)
+                """.trimIndent(),
+                linkId,
+                storedSourceBook.id,
+                storedTargetBook.id,
+                storedSourceLineId,
+                storedTargetLineId,
+                storedTargetIndex,
+                storedTargetBook.order,
+                typeId,
+            )
+            booksWithSourceLinks += storedSourceBook.id
+            booksWithTargetLinks += storedTargetBook.id
+            if (
+                type == ConnectionType.COMMENTARY ||
+                type == ConnectionType.SUPER_COMMENTARY ||
+                type == ConnectionType.TARGUM ||
+                type == ConnectionType.MIDRASH ||
+                type == ConnectionType.PARSHANUT ||
+                type == ConnectionType.DIBUR_HAMATCHIL ||
+                type == ConnectionType.EIN_MISHPAT
+            ) {
+                sourceTargetBooks += storedTargetBook.id
+            }
+            if (type == ConnectionType.REFERENCE || type == ConnectionType.OTHER) {
+                mentionTargetBooks += storedTargetBook.id
+            }
+            flagsByBook.getOrPut(storedSourceBook.id, ::mutableSetOf).add(type)
+            flagsByBook.getOrPut(storedTargetBook.id, ::mutableSetOf).add(
+                if (isExplicitSource) ConnectionType.SOURCE else type,
+            )
+            return true
         }
 
         fun finishLinks() {
@@ -567,25 +684,33 @@ class PersonalLibraryImporter(
         val categoryLevels: Map<Long, Int>,
         val categoryByParentAndTitle: Map<Pair<Long?, String>, Long>,
         val booksByTitle: Map<String, BookRef>,
+        val booksById: Map<Long, BookRef>,
         val connectionTypes: Map<String, Long>,
         private val database: Path,
     ) {
-        private val lineIdsByBook = HashMap<Long, List<Long>>()
+        private val lineIdsByBook = HashMap<Long, Map<Int, Long>>()
 
         @Synchronized
         fun lineId(
             bookId: Long,
             lineIndex: Int,
-        ): Long? =
+        ): Long? = lines(bookId)[lineIndex]
+
+        fun lineIndex(
+            bookId: Long,
+            lineId: Long,
+        ): Int? = lines(bookId).entries.firstOrNull { it.value == lineId }?.key
+
+        private fun lines(bookId: Long): Map<Int, Long> =
             lineIdsByBook
                 .getOrPut(bookId) {
                     DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
-                        connection.prepareStatement("SELECT id FROM line WHERE bookId=? ORDER BY lineIndex").use { statement ->
+                        connection.prepareStatement("SELECT lineIndex,id FROM line WHERE bookId=? ORDER BY lineIndex").use { statement ->
                             statement.setLong(1, bookId)
-                            statement.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.getLong(1)) } }
+                            statement.executeQuery().use { rows -> buildMap { while (rows.next()) put(rows.getInt(1), rows.getLong(2)) } }
                         }
                     }
-                }.getOrNull(lineIndex)
+                }
 
         companion object {
             fun load(database: Path): BaseLibraryIndex =
@@ -605,11 +730,13 @@ class PersonalLibraryImporter(
                         }
                     }
                     val books = HashMap<String, BookRef>()
+                    val booksById = HashMap<Long, BookRef>()
                     connection.createStatement().use { statement ->
                         statement.executeQuery("SELECT id,title,categoryId,orderIndex FROM book ORDER BY sourceId").use { rows ->
                             while (rows.next()) {
                                 val ref = BookRef(rows.getLong(1), rows.getString(2), rows.getLong(3), rows.getInt(4))
                                 books.putIfAbsent(comparable(ref.title), ref)
+                                booksById[ref.id] = ref
                             }
                         }
                     }
@@ -619,7 +746,7 @@ class PersonalLibraryImporter(
                             while (rows.next()) types[rows.getString(2)] = rows.getLong(1)
                         }
                     }
-                    BaseLibraryIndex(parents, levels, categories, books, types, database)
+                    BaseLibraryIndex(parents, levels, categories, books, booksById, types, database)
                 }
         }
     }
@@ -705,10 +832,11 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v6-pdf-preindex"
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v7-docx-notes-links"
         val BOOK_EXTENSIONS = setOf("txt", "docx", "pdf")
         val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+        val CONTENT_LINK = Regex("""(?:otzaria|zayit|zayita)://[^\s<>\[\]()"']+""", RegexOption.IGNORE_CASE)
 
         fun normalizeLabel(value: String): String =
             value

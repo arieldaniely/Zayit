@@ -42,7 +42,7 @@ fun LicenceScreen(
     }
     LicenceView(
         onNext = {
-            navController.navigate(OnBoardingDestination.TypeOfInstallationScreen)
+            navController.navigate(OnBoardingDestination.AvailableDiskSpaceScreen)
         },
         onPrevious = { navController.navigateUp() },
     )
@@ -57,6 +57,7 @@ private fun LicenceView(
 
     OnBoardingScaffold(
         title = stringResource(Res.string.license_screen_title),
+        scrollContent = false,
         bottomAction = {
             DefaultButton(onClick = { onNext() }, enabled = isChecked) {
                 Text(text = stringResource(Res.string.next_button))

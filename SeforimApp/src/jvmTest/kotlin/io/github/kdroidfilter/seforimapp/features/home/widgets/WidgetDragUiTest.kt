@@ -38,11 +38,17 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.solarsystem.Solar
 import io.github.kdroidfilter.seforimapp.features.home.widgets.temple.TempleCountdownWidget
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.testAppGraph
 import io.github.kdroidfilter.seforimapp.testAppSettings
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import kotlin.math.abs
 import kotlin.random.Random
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -56,6 +62,19 @@ import kotlin.test.fail
  */
 @OptIn(ExperimentalTestApi::class)
 class WidgetDragUiTest {
+    @BeforeTest
+    fun useFullWidgetLayout() {
+        // These tests exercise 3D widget placement with rendering disabled by LocalTabSelected.
+        // Their fixture must stay available on CI's software renderer too.
+        mockkObject(PlatformInfo)
+        every { PlatformInfo.isLowEnd } returns false
+    }
+
+    @AfterTest
+    fun restoreHardwareDetection() {
+        unmockkObject(PlatformInfo)
+    }
+
     private val appSettings = testAppSettings()
     private val layout = HomeWidgetsLayout(appSettings)
     private val graph by lazy { testAppGraph() }
@@ -206,7 +225,8 @@ class WidgetDragUiTest {
             }
             waitForIdle()
             val after = saved()
-            assertEquals(CellRect(0, 4, 9, 3), after.cellOf(TempleCountdownWidget))
+            val before = homeWidgets.cellOf(TempleCountdownWidget)
+            assertEquals(before.copy(w = before.w + 3), after.cellOf(TempleCountdownWidget))
             // The solar system was in the way
             assertTrue(!after.cellOf(SolarSystemWidget).overlaps(after.cellOf(TempleCountdownWidget)))
             assertNoOverlap(after)
@@ -342,7 +362,8 @@ class WidgetDragUiTest {
             waitForIdle()
             // The hidden one kept in the save, where it was
             val raw = appSettings.homeWidgetsLayoutFlow.value!!
-            assertTrue("earth@13,0,7,4" in raw, raw)
+            val expectedEarth = encodeLayout(listOf(WidgetPlacement(EarthWidget, earthArea)))
+            assertTrue(expectedEarth in raw.split(';'), raw)
         }
     }
 
@@ -467,7 +488,7 @@ class WidgetDragUiTest {
             val pageTop = shown("home").top
             var steps = 0
             while (shown("widget-zmanim").top > pageTop - 60f && steps++ < 50) {
-                onNodeWithTag("home").performMouseInput { scroll(5f) }
+                onNodeWithTag("home").performMouseInput { scroll(1f) }
                 waitForIdle()
             }
             val before = shown("widget-zmanim")

@@ -45,6 +45,8 @@ class PersonalLibraryOverlay(
             val targetBookIds = HashSet<Long>()
             val sourceTargetBookIds = HashSet<Long>()
             val mentionBookIds = HashSet<Long>()
+            val sourceBookIds = HashSet<Long>()
+            val sourceLineIds = HashSet<Long>()
             connection.createStatement().use { statement ->
                 statement
                     .executeQuery(
@@ -57,6 +59,12 @@ class PersonalLibraryOverlay(
                             if (rows.getInt(3) != 0) mentionBookIds += bookId
                         }
                     }
+                statement.executeQuery("SELECT DISTINCT sourceBookId,sourceLineId FROM personal.link WHERE sourceBookId > 0").use { rows ->
+                    while (rows.next()) {
+                        sourceBookIds += rows.getLong(1)
+                        sourceLineIds += rows.getLong(2)
+                    }
+                }
             }
             TABLES.forEach { table ->
                 if (table == "author") return@forEach
@@ -73,6 +81,8 @@ class PersonalLibraryOverlay(
                 targetBookIds = targetBookIds,
                 sourceTargetBookIds = sourceTargetBookIds,
                 mentionBookIds = mentionBookIds,
+                sourceBookIds = sourceBookIds,
+                sourceLineIds = sourceLineIds,
             )
         }
     }

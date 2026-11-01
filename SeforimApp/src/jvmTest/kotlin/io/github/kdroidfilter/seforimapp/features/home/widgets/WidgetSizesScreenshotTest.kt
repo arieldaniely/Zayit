@@ -7,14 +7,17 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
+import io.github.kdroidfilter.seforimapp.features.home.widgets.clock.ClockWidget
 import io.github.kdroidfilter.seforimapp.features.onboarding.userprofile.Community
 import io.github.kdroidfilter.seforimapp.framework.di.AppGraph
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -26,6 +29,7 @@ import org.jetbrains.jewel.intui.standalone.theme.IntUiTheme
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -33,7 +37,9 @@ import kotlin.test.assertTrue
  * Renders every widget at every size the grid lets it take, and measures the widest empty band across each card: a
  * widget must never be resizable to a size it can't fill. Every size and the report go to build/screenshots/sizes. The Filament widgets (the Earth, the sky, the solar system) need a real window and fill
  * their card with their view; they're left out. So is the dictionary: it reads its books on first use, and the tests have
- * no library DB, so its card holds its title and field over the room its words would take.
+ * no library DB, so its card holds its title and field over the room its words would take. The logo and search controls
+ * deliberately allow whitespace around their content; they are not content cards.
+ * The clock is measured inside its square dial; the surrounding space preserves its circular shape.
  */
 @OptIn(ExperimentalTestApi::class)
 class WidgetSizesScreenshotTest {
@@ -77,7 +83,11 @@ class WidgetSizesScreenshotTest {
     fun `no widget size leaves its card half empty`() {
         val faults = mutableListOf<String>()
         val report = StringBuilder()
-        for (widget in availableHomeWidgets.filterNot { it.id in FILAMENT_WIDGETS || it.id in LIBRARY_DB_WIDGETS }) {
+        val contentWidgets =
+            availableHomeWidgets.filterNot {
+                it.id in FILAMENT_WIDGETS || it.id in LIBRARY_DB_WIDGETS || it.id in HOME_CONTROL_WIDGETS
+            }
+        for (widget in contentWidgets) {
             for (w in widget.minSpan.w..minOf(widget.maxSpan.w, HOME_GRID_COLUMNS)) {
                 val minRows = widget.minRows(w, pitch)
                 for (h in minRows..maxOf(widget.maxSpan.h, minRows)) {
@@ -92,10 +102,18 @@ class WidgetSizesScreenshotTest {
                         }
                     val image = shot(widget, w, h, maxEmptyHeight)
                     val (rows, columns) = emptyBands(image)
-                    val line = "${widget.id} ${w}x$h: empty band ${rows}dp high, ${columns}dp wide"
+                    val filled =
+                        if (widget == ClockWidget) {
+                            dialFillsFrame(image)
+                        } else {
+                            rows <= maxEmptyHeight && columns <= MAX_EMPTY_WIDTH
+                        }
+                    val measurement =
+                        if (widget == ClockWidget) "dial fills its frame: $filled" else "empty band ${rows}dp high, ${columns}dp wide"
+                    val line = "${widget.id} ${w}x$h: $measurement"
                     report.appendLine(line)
                     ImageIO.write(image, "png", File(out, "${widget.id}-${w}x$h.png"))
-                    if (rows > maxEmptyHeight || columns > MAX_EMPTY_WIDTH) {
+                    if (!filled) {
                         faults += line
                     }
                 }
@@ -131,19 +149,65 @@ class WidgetSizesScreenshotTest {
                 }
             }
             waitForIdle()
+            val content =
+                if (widget == ClockWidget) {
+                    onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
+                } else {
+                    onRoot()
+                }
+
+            fun captureContent(): BufferedImage {
+                val captured = content.captureToImage().toAwtImage()
+                if (widget != ClockWidget) return captured
+                // The circular dial keeps its aspect ratio inside a resizable rectangular card.
+                val side = minOf(captured.width, captured.height)
+                assertTrue(side > FRAME_INSET * 2 + MAX_EMPTY_HEIGHT, "Clock dial is too small to measure: $side")
+                return captured.getSubimage((captured.width - side) / 2, (captured.height - side) / 2, side, side)
+            }
+
             // Store reads and image decoding run outside Compose's idle tracking. Wait for the rendered content,
             // rather than racing them with a fixed sleep; retain the final frame for the failure report.
             try {
                 waitUntil(timeoutMillis = 3_000) {
-                    image = onRoot().captureToImage().toAwtImage()
-                    val (rows, columns) = emptyBands(image!!)
-                    rows <= maxEmptyHeight && columns <= MAX_EMPTY_WIDTH
+                    image = captureContent()
+                    if (widget == ClockWidget) {
+                        dialFillsFrame(image!!)
+                    } else {
+                        val (rows, columns) = emptyBands(image!!)
+                        rows <= maxEmptyHeight && columns <= MAX_EMPTY_WIDTH
+                    }
                 }
             } catch (_: ComposeTimeoutException) {
-                image = onRoot().captureToImage().toAwtImage()
+                image = captureContent()
             }
         }
         return image!!
+    }
+
+    /** A dial may have an empty centre, but its visible ticks must reach near all four sides of its square. */
+    private fun dialFillsFrame(image: BufferedImage): Boolean {
+        val background = image.getRGB(0, 0)
+        var left = image.width
+        var right = -1
+        var top = image.height
+        var bottom = -1
+        for (y in 0 until image.height) {
+            for (x in 0 until image.width) {
+                val pixel = image.getRGB(x, y)
+                val difference =
+                    maxOf(
+                        abs((pixel shr 16 and 0xFF) - (background shr 16 and 0xFF)),
+                        abs((pixel shr 8 and 0xFF) - (background shr 8 and 0xFF)),
+                        abs((pixel and 0xFF) - (background and 0xFF)),
+                    )
+                if (difference < FLAT_RANGE) continue
+                left = minOf(left, x)
+                right = maxOf(right, x)
+                top = minOf(top, y)
+                bottom = maxOf(bottom, y)
+            }
+        }
+        return right - left >= image.width * 0.8f && bottom - top >= image.height * 0.8f
     }
 
     /** The highest run of rows, and the widest run of columns, with nothing drawn on them, in dp, inside the frame. */
@@ -186,6 +250,7 @@ class WidgetSizesScreenshotTest {
     }
 
     private companion object {
+        val HOME_CONTROL_WIDGETS = homeControlWidgets.map { it.widget.id }.toSet()
         val FILAMENT_WIDGETS = setOf("earth", "sky", "solar_system")
         val LIBRARY_DB_WIDGETS = setOf("dictionary")
 

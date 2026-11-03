@@ -8,6 +8,7 @@ import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.selection.SelectionContext
@@ -43,6 +44,7 @@ abstract class AppGraph : ViewModelGraph {
     // Expose strongly-typed graph entries as abstract vals for generated implementation
     abstract val mainAppState: MainAppState
     abstract val catalogAccess: CatalogAccess
+    abstract val libraryVisibility: LibraryVisibility
     abstract val selectionContext: SelectionContext
     abstract val tabPersistedStateStore: TabPersistedStateStore
     abstract val tabTitleUpdateManager: TabTitleUpdateManager

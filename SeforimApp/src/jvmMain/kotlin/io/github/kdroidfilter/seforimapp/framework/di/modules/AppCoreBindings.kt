@@ -18,6 +18,7 @@ import io.github.kdroidfilter.seforimapp.core.MainAppState
 import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
@@ -32,6 +33,7 @@ import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibrar
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryOverlay
 import io.github.kdroidfilter.seforimapp.features.personallibrary.PersonalLibraryRuntime
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
+import io.github.kdroidfilter.seforimapp.features.search.VisibilitySearchEngine
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.BluetoothClassicTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.CompositeSharedStudyTransport
 import io.github.kdroidfilter.seforimapp.features.sharedstudy.LazySharedStudyTransport
@@ -112,7 +114,11 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideCatalogAccess(): CatalogAccess = CatalogAccess { CatalogCache.getCatalog() }
+    fun provideCatalogAccess(visibility: LibraryVisibility): CatalogAccess = CatalogAccess(visibility) { CatalogCache.getCatalog() }
+
+    @Provides
+    @SingleIn(AppScope::class)
+    fun provideLibraryVisibility(database: UserSettingsDb): LibraryVisibility = LibraryVisibility(database) { CatalogCache.getCatalog() }
 
     @Provides
     @SingleIn(AppScope::class)
@@ -290,7 +296,10 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideSearchEngine(engine: CompositeSearchEngine): SearchEngine = engine
+    fun provideSearchEngine(
+        engine: CompositeSearchEngine,
+        visibility: LibraryVisibility,
+    ): SearchEngine = VisibilitySearchEngine(engine, visibility)
 
     @Provides
     @SingleIn(AppScope::class)
@@ -346,6 +355,7 @@ object AppCoreBindings {
         lookup: LuceneLookupSearchService,
         settings: Settings,
         favoritesStore: FavoritesStore,
+        visibility: LibraryVisibility,
     ): DesktopManager =
         DesktopManager(
             tabPersistedStateStore = tabPersistedStateStore,
@@ -359,6 +369,7 @@ object AppCoreBindings {
                     lookup = lookup,
                     settings = settings,
                     favoritesStore = favoritesStore,
+                    libraryVisibility = visibility,
                 )
             },
             initialWindowGeometry = SessionManager.peekInitialWindowGeometry(),

@@ -52,6 +52,8 @@ fun CatalogDropdown(
 ) {
     val repo = LocalAppGraph.current.repository
     val catalogAccess = LocalAppGraph.current.catalogAccess
+    val visibility by LocalAppGraph.current.libraryVisibility.selection
+        .collectAsState()
     val scope = rememberCoroutineScope()
     val revision by CatalogCache.revision.collectAsState()
     val catalogReady by produceState(false, catalogAccess, revision) {
@@ -77,8 +79,8 @@ fun CatalogDropdown(
     when (spec) {
         is CategoryDropdownSpec -> {
             val categoryId = spec.categoryId
-            val categoryTitle = remember(categoryId, catalogAccess) { catalogAccess.categoryTitle(categoryId) }
-            val precomputedBooks = remember(categoryId, catalogAccess) { catalogAccess.booksFor(categoryId) }
+            val categoryTitle = remember(categoryId, catalogAccess, visibility, revision) { catalogAccess.categoryTitle(categoryId) }
+            val precomputedBooks = remember(categoryId, catalogAccess, visibility, revision) { catalogAccess.booksFor(categoryId) }
 
             if (categoryTitle != null && precomputedBooks.isNotEmpty()) {
                 val baseMax: Dp = 360.dp
@@ -143,11 +145,11 @@ fun CatalogDropdown(
         }
         is MultiCategoryDropdownSpec -> {
             val labelTitle =
-                remember(spec.labelCategoryId, catalogAccess) {
+                remember(spec.labelCategoryId, catalogAccess, visibility, revision) {
                     catalogAccess.categoryTitle(spec.labelCategoryId)
                 }
             val sections =
-                remember(spec.bookCategoryIds, catalogAccess) {
+                remember(spec.bookCategoryIds, catalogAccess, visibility, revision) {
                     spec.bookCategoryIds.mapNotNull { cid ->
                         val t = catalogAccess.categoryTitle(cid) ?: return@mapNotNull null
                         val list = catalogAccess.booksFor(cid)
@@ -230,6 +232,12 @@ fun CatalogDropdown(
             }
         }
         is TocQuickLinksSpec -> {
+            if (!LocalAppGraph.current.libraryVisibility
+                    .snapshot()
+                    .isBookVisible(spec.bookId)
+            ) {
+                return
+            }
             TocJumpDropdownForBook(
                 bookId = spec.bookId,
                 links = spec.links.toImmutableList(),

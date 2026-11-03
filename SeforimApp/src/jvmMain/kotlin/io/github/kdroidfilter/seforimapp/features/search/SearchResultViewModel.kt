@@ -15,6 +15,7 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metrox.viewmodel.ViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ViewModelAssistedFactoryKey
 import io.github.kdroidfilter.seforim.tabs.*
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.history.SearchVisitContext
@@ -106,6 +107,7 @@ class SearchResultViewModel(
     private val searchFeedbackService: SearchFeedbackService,
     lookup: LuceneLookupSearchService,
     private val favoritesStore: io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore,
+    private val libraryVisibility: LibraryVisibility,
 ) : ViewModel() {
     @AssistedFactory
     @ViewModelAssistedFactoryKey(SearchResultViewModel::class)
@@ -677,6 +679,9 @@ class SearchResultViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     init {
+        viewModelScope.launch {
+            libraryVisibility.selection.drop(1).collectLatest { executeSearch(recordVisit = false) }
+        }
         // Compute search tree when visible and results change; emits into _searchTree
         // Skip if facets have been computed (tree is built from facets directly)
         viewModelScope.launch {
@@ -927,7 +932,7 @@ class SearchResultViewModel(
         }
 
         // Try to restore a full snapshot for this tab without redoing the search.
-        val cached = persisted.snapshot.takeUnless { persisted.datasetScope == "favorites" }
+        val cached = persisted.snapshot.takeUnless { persisted.datasetScope == "favorites" || !libraryVisibility.selection.value.isEmpty }
         if (cached != null) {
             currentSearchQuery = initialQuery
             // Adopt cached results and aggregates; keep filters and scroll from persisted state.
@@ -1086,13 +1091,15 @@ class SearchResultViewModel(
         updatePersistedSearch { it.copy(query = q) }
     }
 
-    fun executeSearch() {
+    fun executeSearch() = executeSearch(recordVisit = true)
+
+    private fun executeSearch(recordVisit: Boolean) {
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
         dropBeforeBook()
         newSearchGeneration()
         titleUpdateManager.updateTabTitle(tabId, q, TabType.SEARCH)
-        recordSearchVisit(q)
+        if (recordVisit) recordSearchVisit(q)
         // New search: clear any previous streaming job and reset scroll/anchor state
         currentJob?.cancel()
         highlighter.cancel()
@@ -1535,8 +1542,10 @@ class SearchResultViewModel(
         cancelSearch()
     }
 
-    private fun buildSnapshot(results: List<SearchResult>): SearchTabCache.Snapshot =
-        searchStatePersistenceUseCase.buildSnapshot(
+    private fun buildSnapshot(results: List<SearchResult>): SearchTabCache.Snapshot? {
+        // Results saved under one visibility selection must not be reused under another.
+        if (!libraryVisibility.selection.value.isEmpty) return null
+        return searchStatePersistenceUseCase.buildSnapshot(
             results = results,
             categoryAgg = _categoryAgg.value,
             tocTree = _tocTree.value,
@@ -1545,6 +1554,7 @@ class SearchResultViewModel(
             progressTotal = _uiState.value.progressTotal,
             hasMore = _uiState.value.hasMore,
         )
+    }
 
     fun onScroll(
         anchorId: Long,

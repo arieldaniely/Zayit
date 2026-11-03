@@ -238,6 +238,14 @@ internal fun settingsSearchEntries(): List<SettingsSearchEntry> =
             keywords = stringResource(Res.string.settings_search_vectors_keywords),
         ),
         SettingsSearchEntry(
+            SettingsDestination.LibraryVisibility,
+            stringResource(Res.string.settings_group_library),
+            stringResource(Res.string.settings_library_visibility_title),
+            stringResource(Res.string.settings_library_visibility_description),
+            key = Res.string.settings_library_visibility_title,
+            keywords = stringResource(Res.string.settings_library_visibility_author_filter),
+        ),
+        SettingsSearchEntry(
             SettingsDestination.About,
             stringResource(Res.string.settings_category_about),
             stringResource(Res.string.settings_category_about),

@@ -69,6 +69,8 @@ import seforimapp.seforimapp.generated.resources.settings_description_profile
 import seforimapp.seforimapp.generated.resources.settings_group_information
 import seforimapp.seforimapp.generated.resources.settings_group_library
 import seforimapp.seforimapp.generated.resources.settings_group_reading
+import seforimapp.seforimapp.generated.resources.settings_library_visibility_description
+import seforimapp.seforimapp.generated.resources.settings_library_visibility_title
 import seforimapp.seforimapp.generated.resources.settings_search_clear
 import seforimapp.seforimapp.generated.resources.settings_search_empty
 import seforimapp.seforimapp.generated.resources.settings_search_placeholder
@@ -156,6 +158,13 @@ internal fun SettingsSidebarView(
                 group = 1,
             ),
             SettingsItem(
+                label = stringResource(Res.string.settings_library_visibility_title),
+                destination = SettingsDestination.LibraryVisibility,
+                icon = Library_books,
+                description = stringResource(Res.string.settings_library_visibility_description),
+                group = 1,
+            ),
+            SettingsItem(
                 label = stringResource(Res.string.settings_category_about),
                 destination = SettingsDestination.About,
                 icon = TablerInfoSquare,
@@ -233,6 +242,7 @@ internal fun SettingsSidebarView(
                             is SettingsDestination.Conditions -> currentRoute.contains("Conditions")
                             is SettingsDestination.Data -> currentRoute.contains("Data")
                             is SettingsDestination.PersonalLibrary -> currentRoute.contains("PersonalLibrary")
+                            is SettingsDestination.LibraryVisibility -> currentRoute.contains("LibraryVisibility")
                         }
                     SidebarItem(
                         label = item.label,

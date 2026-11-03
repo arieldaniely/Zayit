@@ -139,6 +139,8 @@ class SearchLatencyIntegrationTest {
                 LuceneLookupSearchService(Path.of("$database.lookup.lucene")),
                 io.github.kdroidfilter.seforimapp.core.favorites
                     .FavoritesStore(UserSettingsDb(settingsDriver)),
+                io.github.kdroidfilter.seforimapp.core.catalog
+                    .LibraryVisibility(UserSettingsDb(settingsDriver)) { null },
             )
         val visible = launch { model.visibleResultsFlow.collect() }
         try {

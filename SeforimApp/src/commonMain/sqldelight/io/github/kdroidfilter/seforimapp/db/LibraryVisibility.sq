@@ -1,0 +1,17 @@
+CREATE TABLE IF NOT EXISTS library_visibility (
+    kind TEXT NOT NULL,
+    itemId INTEGER NOT NULL,
+    PRIMARY KEY (kind, itemId)
+);
+
+selectAll:
+SELECT kind, itemId FROM library_visibility;
+
+hide:
+INSERT OR IGNORE INTO library_visibility(kind, itemId) VALUES (?, ?);
+
+show:
+DELETE FROM library_visibility WHERE kind = ? AND itemId = ?;
+
+restoreAll:
+DELETE FROM library_visibility;

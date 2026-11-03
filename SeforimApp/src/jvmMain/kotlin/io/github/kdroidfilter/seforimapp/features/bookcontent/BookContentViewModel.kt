@@ -310,9 +310,10 @@ class BookContentViewModel(
 
     private fun observeCatalogChanges() {
         viewModelScope.launch {
-            CatalogCache.revision
-                .filter { it != catalogRevisionAtCreation }
-                .collectLatest { navigationUseCase.loadRootCategories() }
+            merge(
+                CatalogCache.revision.filter { it != catalogRevisionAtCreation }.map { Unit },
+                navigationUseCase.visibilityChanges,
+            ).collectLatest { navigationUseCase.loadRootCategories() }
         }
     }
 

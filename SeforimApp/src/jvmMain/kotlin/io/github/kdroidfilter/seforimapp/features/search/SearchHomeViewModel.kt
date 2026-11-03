@@ -7,6 +7,7 @@ import com.russhwolf.settings.Settings
 import com.russhwolf.settings.get
 import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforim.tabs.TabsDestination
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.core.deeplink.applyDeepLinkHighlight
 import io.github.kdroidfilter.seforimapp.core.deeplink.parseContentDeepLink
@@ -20,6 +21,7 @@ import io.github.kdroidfilter.seforimapp.features.search.domain.reference.Refere
 import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ReferenceResolver
 import io.github.kdroidfilter.seforimapp.features.search.domain.reference.RepositoryReferenceSource
 import io.github.kdroidfilter.seforimapp.features.search.domain.reference.ResolvedReference
+import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService.AuthorHit
 import io.github.kdroidfilter.seforimapp.framework.session.SearchPersistedState
@@ -36,13 +38,16 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -158,10 +163,27 @@ class SearchHomeViewModel(
     private val lookup: LuceneLookupSearchService,
     private val settings: Settings,
     private val favoritesStore: FavoritesStore? = null,
+    private val libraryVisibility: LibraryVisibility? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SearchHomeUiState())
     private var modeChosen = false
-    val uiState: StateFlow<SearchHomeUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<SearchHomeUiState> =
+        libraryVisibility?.let { visibility ->
+            combine(_uiState, visibility.selection, CatalogCache.revision) { state, _, _ ->
+                val snapshot = visibility.snapshot()
+                if (snapshot.allowedBookIds == null) {
+                    state
+                } else {
+                    state.copy(
+                        categorySuggestions = state.categorySuggestions.filter { snapshot.isCategoryVisible(it.category.id) },
+                        bookSuggestions = state.bookSuggestions.filter { snapshot.isBookVisible(it.book.id) },
+                        jumpSuggestions = state.jumpSuggestions.filter { snapshot.isBookVisible(it.book.id) },
+                        tocSuggestions = state.tocSuggestions.filter { snapshot.isBookVisible(it.toc.bookId) },
+                    )
+                }
+            }.flowOn(Dispatchers.Default)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value)
+        } ?: _uiState.asStateFlow()
 
     // Navigation events channel - UI collects and handles navigation
     private val _navigationEvents = Channel<SearchHomeNavigationEvent>(Channel.BUFFERED)

@@ -99,6 +99,7 @@ class PostSelectLineTest {
 
         // CategoryDisplaySettingsUseCase.categoryChanges must return a flow
         every { categoryDisplaySettingsUseCase.categoryChanges } returns MutableSharedFlow()
+        every { navigationUseCase.visibilityChanges } returns kotlinx.coroutines.flow.emptyFlow()
 
         // Factory returns mocked use cases; capture stateManager from the first call
         val stateManagerSlot = slot<BookContentStateManager>()

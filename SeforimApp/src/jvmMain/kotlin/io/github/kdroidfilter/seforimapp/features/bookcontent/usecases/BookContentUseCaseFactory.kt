@@ -2,6 +2,7 @@ package io.github.kdroidfilter.seforimapp.features.bookcontent.usecases
 
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.settings.CategoryDisplaySettingsStore
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
@@ -22,6 +23,7 @@ class BookContentUseCaseFactory(
     private val repository: SeforimRepository,
     private val categoryDisplaySettingsStore: CategoryDisplaySettingsStore,
     private val lookup: LuceneLookupSearchService,
+    private val visibility: LibraryVisibility,
 ) {
     /**
      * Creates a [TocUseCase] for managing table of contents.
@@ -45,7 +47,7 @@ class BookContentUseCaseFactory(
      * Creates a [NavigationUseCase] for managing category/book tree navigation.
      */
     fun createNavigationUseCase(stateManager: BookContentStateManager): NavigationUseCase =
-        NavigationUseCase(repository, stateManager, lookup)
+        NavigationUseCase(repository, stateManager, lookup, visibility)
 
     /**
      * Creates an [AltTocUseCase] for managing alternative TOC structures.

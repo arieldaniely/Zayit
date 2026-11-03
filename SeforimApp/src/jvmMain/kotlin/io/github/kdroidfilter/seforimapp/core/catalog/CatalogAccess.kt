@@ -15,6 +15,7 @@ import io.github.kdroidfilter.seforimlibrary.core.models.PrecomputedCatalog
  *  - ancestor-label prefix stripping on book display titles
  */
 class CatalogAccess(
+    private val visibility: LibraryVisibility? = null,
     private val catalogProvider: () -> PrecomputedCatalog?,
 ) {
     private data class Indices(
@@ -42,11 +43,16 @@ class CatalogAccess(
         return built
     }
 
-    fun categoryTitle(id: Long): String? = resolve()?.categoryTitles?.get(id)
+    fun categoryTitle(id: Long): String? =
+        if (visibility?.snapshot()?.isCategoryVisible(id) == false) null else resolve()?.categoryTitles?.get(id)
 
     fun bookTitle(id: Long): String? = resolve()?.bookTitles?.get(id)
 
-    fun booksFor(categoryId: Long): List<BookRef> = resolve()?.booksByCategory?.get(categoryId).orEmpty()
+    fun booksFor(categoryId: Long): List<BookRef> {
+        val books = resolve()?.booksByCategory?.get(categoryId).orEmpty()
+        val snapshot = visibility?.snapshot()
+        return if (snapshot?.allowedBookIds == null) books else books.filter { snapshot.isBookVisible(it.id) }
+    }
 
     private fun build(catalog: PrecomputedCatalog): Indices {
         val rawCategoryTitles = LinkedHashMap<Long, String>()

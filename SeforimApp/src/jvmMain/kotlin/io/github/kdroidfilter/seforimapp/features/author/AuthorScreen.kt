@@ -109,7 +109,8 @@ fun AuthorTabContent(
 ) {
     val appGraph = LocalAppGraph.current
     val tabsViewModel = LocalOpenWindow.current.tabsViewModel
-    val page by produceState<AuthorPage>(AuthorPage.Loading, authorId) {
+    val visibility by appGraph.libraryVisibility.selection.collectAsState()
+    val page by produceState<AuthorPage>(AuthorPage.Loading, authorId, visibility) {
         value =
             withContext(Dispatchers.IO) {
                 appGraph.repository.getAuthorDetails(authorId)?.withHebrewQuotes()?.let { details ->
@@ -124,7 +125,9 @@ fun AuthorTabContent(
                                     ?.hebrewQuotes()
                                     .orEmpty()
                             }
-                    AuthorPage.Loaded(details, categories, BioText.of(details.bio?.bodyMd))
+                    val visible = appGraph.libraryVisibility.snapshot()
+                    val visibleDetails = details.copy(books = details.books.filter { visible.isBookVisible(it.id) })
+                    AuthorPage.Loaded(visibleDetails, categories, BioText.of(details.bio?.bodyMd))
                 } ?: AuthorPage.Missing
             }
     }

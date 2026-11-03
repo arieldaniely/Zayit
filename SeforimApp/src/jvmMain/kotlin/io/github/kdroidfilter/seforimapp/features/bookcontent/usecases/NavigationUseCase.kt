@@ -2,6 +2,7 @@
 
 package io.github.kdroidfilter.seforimapp.features.bookcontent.usecases
 
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
 import io.github.kdroidfilter.seforimapp.core.coroutines.runSuspendCatching
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentStateManager
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookFilterResult
@@ -14,7 +15,9 @@ import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.splitpane.ExperimentalSplitPaneApi
 
@@ -27,7 +30,10 @@ class NavigationUseCase(
     private val repository: SeforimRepository,
     private val stateManager: BookContentStateManager,
     private val lookup: LuceneLookupSearchService,
+    private val visibility: LibraryVisibility,
 ) {
+    val visibilityChanges = visibility.selection.drop(1).map { Unit }
+
     private val searchRunner =
         PaneSearchRunner<BookFilterResult> { transform ->
             stateManager.updateNavigation(save = false) { copy(search = search?.let(transform)) }
@@ -51,16 +57,31 @@ class NavigationUseCase(
             }
 
             debugln { "✓ Using precomputed catalog for navigation tree" }
+            val visible = visibility.snapshot()
+            val filtered = visible.allowedBookIds != null
+            val visibleChildren =
+                if (filtered) {
+                    categoryChildren.filterKeys(visible::isCategoryVisible).mapValues { (_, children) ->
+                        children.filter { visible.isCategoryVisible(it.id) }
+                    }
+                } else {
+                    categoryChildren
+                }
             // Catalog data is derived and reloaded every app start; do not persist it.
             // Persisting here can overwrite restored selection/book IDs before models are loaded.
             stateManager.updateNavigation(save = false) {
                 copy(
-                    rootCategories = rootCategories,
-                    categoryChildren = categoryChildren,
+                    rootCategories = if (filtered) rootCategories.filter { visible.isCategoryVisible(it.id) } else rootCategories,
+                    categoryChildren = visibleChildren,
                     categoriesById = categoriesById,
-                    booksInCategory = booksWithFlags,
+                    booksInCategory =
+                        if (filtered) booksWithFlags.filterTo(LinkedHashSet()) { visible.isBookVisible(it.id) } else booksWithFlags,
+                    search = search?.copy(result = null, resultQuery = null),
                 )
             }
+            stateManager.state.value.navigation.search
+                ?.query
+                ?.let { search(it) }
         }
 
     /**

@@ -1,4 +1,18 @@
 <resources>
+    <string name="settings_library_visibility_title">הסתרת ספרים וקטגוריות</string>
+    <string name="settings_library_visibility_description">סמנו פריטים להסתרה מהקטלוג ומהחיפוש. הסתרת קטגוריה מסתירה גם את כל הספרים ותתי־הקטגוריות שבתוכה. אפשר להחזיר פריטים שהוסתרו בכל עת.</string>
+    <string name="settings_library_visibility_books">ספרים</string>
+    <string name="settings_library_visibility_categories">קטגוריות</string>
+    <string name="settings_library_visibility_name_filter">סינון לפי שם</string>
+    <string name="settings_library_visibility_author_filter">סינון לפי מחבר</string>
+    <string name="settings_library_visibility_hidden_only">מוסתרים בלבד</string>
+    <string name="settings_library_visibility_hide_results">הסתרת תוצאות</string>
+    <string name="settings_library_visibility_show_results">הצגת תוצאות</string>
+    <string name="settings_library_visibility_restore_all">ביטול כל ההסתרות</string>
+    <string name="settings_library_visibility_count">%1$d פריטים</string>
+    <string name="settings_library_visibility_inherited">מוסתר בגלל קטגוריית האב</string>
+    <string name="settings_library_visibility_empty">לא נמצאו פריטים מתאימים.</string>
+    <string name="settings_library_visibility_error">לא ניתן לשמור את השינוי. נסו שוב.</string>
     <string name="font_system_family">%1$s (מותקן במחשב)</string>
     <string name="settings_font_selection_hint">ניתן לבחור מהגופנים המובנים ומכל הגופנים המותקנים במחשב. לחיפוש מהיר ברשימה, הקלידו את שם הגופן.</string>
     <string name="personal_library_files_unavailable">הייבוא לא התחיל כי חלק מהקבצים נמצאים בענן ואינם זמינים במחשב. ב־OneDrive יש ללחוץ לחיצה ימנית על התיקייה ולבחור ״שמור תמיד במכשיר זה״, להמתין לסיום ההורדה ואז לנסות שוב. הספרייה הקיימת נשמרה.\n\n%1$s</string>

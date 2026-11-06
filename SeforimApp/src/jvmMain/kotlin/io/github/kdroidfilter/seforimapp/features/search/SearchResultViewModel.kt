@@ -2073,6 +2073,21 @@ class SearchResultViewModel(
         }
     }
 
+    fun changeOriginScope(scope: SearchScope) {
+        updatePersistedSearch { it.withScope(scope).copy(globalExtended = true, snapshot = null, breadcrumbs = emptyMap()) }
+        _uiState.update { it.copy(scopeOrigin = scope, scopeOriginName = null, globalExtended = true) }
+        resetScopeFilters()
+        viewModelScope.launch {
+            val name =
+                when (scope) {
+                    is SearchScope.Author -> repository.getAuthorDetails(scope.authorId)?.name
+                    is SearchScope.Favorites -> favoritesStore.folders().firstOrNull { it.id == scope.folderId }?.name
+                    else -> null
+                }
+            if (_uiState.value.scopeOrigin == scope) _uiState.update { it.copy(scopeOriginName = name) }
+        }
+    }
+
     private fun resetScopeFilters() {
         _selectedCategoryIds.value = emptySet()
         _selectedBookIds.value = emptySet()

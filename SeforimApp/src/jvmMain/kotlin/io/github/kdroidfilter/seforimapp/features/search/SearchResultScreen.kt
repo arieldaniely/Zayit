@@ -116,6 +116,7 @@ data class SearchShellActions(
     val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
     val onSelectResult: (Long) -> Unit = {},
     val onResetScopeFilters: () -> Unit = {},
+    val onOriginScopeChange: (io.github.kdroidfilter.seforim.tabs.SearchScope) -> Unit = {},
 )
 
 @Composable
@@ -267,6 +268,7 @@ fun SearchResultInBookShellMvi(
                 onTocSelect = actions.onTocFilter,
                 isIslands = isIslands,
                 onResetScopeFilters = actions.onResetScopeFilters,
+                onOriginScopeChange = actions.onOriginScopeChange,
             )
         }
     }

@@ -3,7 +3,11 @@ package io.github.kdroidfilter.seforimapp.features.search
 import androidx.lifecycle.viewModelScope
 import io.github.kdroidfilter.seforimapp.framework.session.TabPersistedStateStore
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
+import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -36,6 +40,7 @@ class SearchHomeSelectionTest {
 
     private lateinit var viewModel: SearchHomeViewModel
     private lateinit var store: TabPersistedStateStore
+    private lateinit var repository: SeforimRepository
     private val book = Book(id = 1L, categoryId = 1L, sourceId = 1L, title = "ברכות", order = 1f)
     private val toc = TocEntry(id = 2L, bookId = 1L, text = "דף ב עמוד ב", level = 1, lineId = 42L)
 
@@ -45,7 +50,8 @@ class SearchHomeSelectionTest {
         mockkObject(SemanticAssetsManager)
         every { SemanticAssetsManager.validatedReady() } returns false
         store = TabPersistedStateStore()
-        viewModel = SearchHomeViewModel(store, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        repository = mockk(relaxed = true)
+        viewModel = SearchHomeViewModel(store, repository, mockk(relaxed = true), mockk(relaxed = true))
     }
 
     @AfterTest
@@ -54,6 +60,29 @@ class SearchHomeSelectionTest {
         unmockkObject(SemanticAssetsManager)
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `category suggestions stay inside the selected tree while typing`() =
+        runTest {
+            val second = book.copy(id = 2L, title = "שבת", categoryId = 2L)
+            coEvery { repository.getCategory(any()) } returns null
+            coEvery { repository.getBooksUnderCategoryTree(9L) } returns listOf(book, second)
+            viewModel.onPickCategory(Category(id = 9L, title = "תלמוד"))
+            val initial = viewModel.uiState.first { it.bookSuggestions.size == 2 }
+            assertEquals(setOf(1L, 2L), initial.bookSuggestions.map { it.book.id }.toSet())
+            viewModel.onReferenceQueryChanged("בר")
+            val filtered = viewModel.uiState.first { it.bookSuggestions.size == 1 }
+            assertEquals(
+                book.id,
+                filtered.bookSuggestions
+                    .single()
+                    .book.id,
+            )
+            assertEquals(emptyList(), filtered.authorSuggestions)
+            assertEquals(emptyList(), filtered.categorySuggestions)
+            assertEquals(emptyList(), filtered.jumpSuggestions)
+            coVerify(exactly = 0) { repository.findBooksByTitleLikeCore(any(), any()) }
+        }
 
     @Test
     fun `combined scope selection produces only a search event and preserves toc filter`() =

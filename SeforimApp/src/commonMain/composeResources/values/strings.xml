@@ -1218,4 +1218,10 @@
     <string name="references_mesorat_hashas">מסורת הש״ס</string>
     <string name="references_summary">%1$d ספרים · %2$d מקומות</string>
     <string name="references_more_from_book">עוד %1$d מקומות ב%2$s</string>
+    <string name="search_scope_kind_books">ספרים</string>
+    <string name="search_scope_kind_authors">מחברים</string>
+    <string name="search_scope_kind_favorites">מועדפים</string>
+    <string name="search_scope_era_unknown">מחברים נוספים</string>
+    <string name="search_scope_author_query">איתור מחבר בתקופה</string>
+    <string name="search_scope_back">חזרה לסוג האיתור</string>
 </resources>

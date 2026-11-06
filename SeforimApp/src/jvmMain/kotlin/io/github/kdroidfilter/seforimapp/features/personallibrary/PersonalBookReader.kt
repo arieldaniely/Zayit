@@ -2,6 +2,9 @@ package io.github.kdroidfilter.seforimapp.features.personallibrary
 
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
+import org.commonmark.parser.Parser
+import org.commonmark.renderer.html.HtmlRenderer
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Entities
 import org.w3c.dom.Element
 import java.net.URI
@@ -16,6 +19,32 @@ private const val WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordproces
 private const val RELATIONSHIP_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 internal fun readPersonalBook(file: Path): List<String> {
+    if (file.extension.lowercase() in setOf("md", "markdown")) {
+        val document = Parser.builder().build().parse(Files.readString(file, Charsets.UTF_8))
+        val renderer =
+            HtmlRenderer
+                .builder()
+                .escapeHtml(true)
+                .sanitizeUrls(true)
+                .build()
+        return buildList {
+            var block = document.firstChild
+            while (block != null) {
+                val html = Jsoup.parseBodyFragment(renderer.render(block))
+                html.outputSettings().prettyPrint(false)
+                html.select("a").addClass("ref")
+                html.select("li, blockquote > p").forEach { it.appendElement("br") }
+                add(
+                    html
+                        .body()
+                        .html()
+                        .trim()
+                        .replace("\n", " "),
+                )
+                block = block.next
+            }
+        }
+    }
     if (file.extension.equals("pdf", true)) {
         return Loader.loadPDF(file.toFile()).use { document ->
             buildList {
@@ -44,11 +73,20 @@ internal fun readPersonalBook(file: Path): List<String> {
                 factory.newDocumentBuilder().parse(it)
             }
         val paragraphStyles = mutableMapOf<String, Element>()
+        val allStyles = mutableMapOf<String, Element>()
+        var defaultRunProperties: Element? = null
         var defaultStyle: String? = null
         if (zip.getEntry("word/styles.xml") != null) {
-            val styles = readXml("word/styles.xml").getElementsByTagNameNS(WORD_NAMESPACE, "style")
+            val stylesDocument = readXml("word/styles.xml")
+            defaultRunProperties =
+                stylesDocument.documentElement
+                    .wordElement("docDefaults")
+                    ?.wordElement("rPrDefault")
+                    ?.wordElement("rPr")
+            val styles = stylesDocument.getElementsByTagNameNS(WORD_NAMESPACE, "style")
             repeat(styles.length) { index ->
                 val style = styles.item(index) as Element
+                allStyles[style.getAttributeNS(WORD_NAMESPACE, "styleId")] = style
                 if (style.getAttributeNS(WORD_NAMESPACE, "type").let { it.isEmpty() || it == "paragraph" }) {
                     val id = style.getAttributeNS(WORD_NAMESPACE, "styleId")
                     paragraphStyles[id] = style
@@ -78,7 +116,7 @@ internal fun readPersonalBook(file: Path): List<String> {
             }
             return null
         }
-        val renderer = DocxInlineRenderer(zip, ::readXml)
+        val renderer = DocxInlineRenderer(zip, ::readXml, allStyles, defaultStyle, defaultRunProperties)
         val paragraphs = readXml("word/document.xml").getElementsByTagNameNS(WORD_NAMESPACE, "p")
         buildList {
             repeat(paragraphs.length) { index ->
@@ -104,6 +142,9 @@ internal fun readPersonalBook(file: Path): List<String> {
 private class DocxInlineRenderer(
     private val zip: ZipFile,
     private val readXml: (String) -> org.w3c.dom.Document,
+    private val styles: Map<String, Element>,
+    private val defaultStyle: String?,
+    private val defaultRunProperties: Element?,
 ) {
     private val relationships = mutableMapOf<String, Map<String, String>>()
     private val notes = mutableMapOf<String, Map<String, Element>>()
@@ -115,6 +156,39 @@ private class DocxInlineRenderer(
         part: String,
     ): String {
         val fields = mutableListOf<Field>()
+        val paragraphStyle = root.wordElement("pPr")?.wordElement("pStyle")?.wordValue() ?: defaultStyle
+
+        fun styleProperties(styleId: String?): List<Element> {
+            val visited = mutableSetOf<String>()
+            var id = styleId
+            return buildList {
+                while (id != null && visited.add(id)) {
+                    val style = styles[id] ?: break
+                    style.wordElement("rPr")?.let(::add)
+                    id = style.wordElement("basedOn")?.wordValue()
+                }
+            }
+        }
+
+        fun formatted(
+            run: Element,
+            text: String,
+        ): String {
+            val direct = run.wordElement("rPr")
+            val properties =
+                listOfNotNull(direct) +
+                    styleProperties(direct?.wordElement("rStyle")?.wordValue()) +
+                    styleProperties(paragraphStyle) + listOfNotNull(defaultRunProperties)
+
+            fun enabled(name: String): Boolean =
+                properties.firstNotNullOfOrNull { property ->
+                    (property.wordElement(name) ?: property.wordElement("${name}Cs"))
+                        ?.wordValue()
+                        ?.let { it.lowercase() !in setOf("0", "false", "off") }
+                } ?: false
+            val italic = if (enabled("i")) "<i>$text</i>" else text
+            return if (enabled("b")) "<b>$italic</b>" else italic
+        }
 
         fun linked(
             text: String,
@@ -129,6 +203,7 @@ private class DocxInlineRenderer(
                 element.wordChildren().forEach { child ->
                     when (child.localName) {
                         "pPr", "rPr", "footnoteRef", "endnoteRef" -> Unit
+                        "r" -> append(formatted(child, children(child)))
                         "fldChar" -> {
                             when (child.getAttributeNS(WORD_NAMESPACE, "fldCharType")) {
                                 "begin" -> fields += Field()

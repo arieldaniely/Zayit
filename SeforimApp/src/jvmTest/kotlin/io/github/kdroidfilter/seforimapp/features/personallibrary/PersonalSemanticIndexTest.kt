@@ -13,6 +13,53 @@ import kotlin.test.assertFalse
 
 class PersonalSemanticIndexTest {
     @Test
+    fun incrementalUpdateEmbedsOnlyNewTextAndRemovesDeletedLines() =
+        runTest {
+            val root = fixture()
+            try {
+                val original = root.resolve("personal-semantic-original")
+                val updated = root.resolve("personal-semantic-updated")
+                val vector = FloatArray(256) { if (it == 0) 1f else 0f }
+                buildPersonalSemanticIndex(root.resolve("personal.db"), root, original, { vector })
+                val oldDatabase = Files.copy(root.resolve("personal.db"), root.resolve("previous.db"))
+                DriverManager.getConnection("jdbc:sqlite:${root.resolve("personal.db")}").use { connection ->
+                    connection.createStatement().use { it.execute("INSERT INTO line VALUES(-11,-7,'תוכן חדש')") }
+                }
+                var embeddings = 0
+                buildPersonalSemanticIndex(
+                    root.resolve("personal.db"),
+                    root,
+                    updated,
+                    embed = {
+                        embeddings++
+                        vector
+                    },
+                    previousIndex = original,
+                    previousDatabase = oldDatabase,
+                )
+                assertEquals(1, embeddings)
+                val afterDelete = root.resolve("personal-semantic-deleted")
+                Files.copy(root.resolve("personal.db"), root.resolve("before-delete.db"))
+                DriverManager.getConnection("jdbc:sqlite:${root.resolve("personal.db")}").use { connection ->
+                    connection.createStatement().use { it.execute("DELETE FROM line WHERE id=-10") }
+                }
+                buildPersonalSemanticIndex(
+                    root.resolve("personal.db"),
+                    root,
+                    afterDelete,
+                    embed = { error("Unchanged text must reuse its vector") },
+                    previousIndex = updated,
+                    previousDatabase = root.resolve("before-delete.db"),
+                )
+                VectorSearcher(afterDelete, 256, root.resolve("personal.db"), root).use { search ->
+                    assertEquals(listOf(-11L), search.search(vector, 5).map { it.lineId })
+                }
+            } finally {
+                root.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
     fun buildsCompatibleVectorsWithStableNegativeIds() =
         runTest {
             val root = fixture()

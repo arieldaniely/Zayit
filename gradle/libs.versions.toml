@@ -4,6 +4,7 @@ filamentKmp = "0.7.10"
 kosherkotlin = "3.0.5"
 
 commonsCompress = "1.28.0"
+commonmark = "0.24.0"
 composeSonner = "0.4.0"
 confettikit = "0.8.0"
 filekitCore = "0.14.1"
@@ -67,6 +68,7 @@ androidx-activityCompose = { module = "androidx.activity:activity-compose", vers
 androidx-uitest-testManifest = { module = "androidx.compose.ui:ui-test-manifest", version.ref = "androidx-uiTest" }
 androidx-uitest-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "androidx-uiTest" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
 compose-sonner = { module = "io.github.brdominguez:compose-sonner", version.ref = "composeSonner" }
 confettikit = { module = "io.github.vinceglb:confettikit", version.ref = "confettikit" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekitCore" }

@@ -832,8 +832,8 @@ class PersonalLibraryImporter(
         private const val INDEX_END = 0.98f
         private const val MIN_PROGRESS_STEP = 0.001f
         private const val TARGET_BOOK_HINTS_KEY = "personal_target_book_hints_v2"
-        private const val IMPORT_FORMAT_VERSION = "personal-import-v7-docx-notes-links"
-        val BOOK_EXTENSIONS = setOf("txt", "docx", "pdf")
+        private const val IMPORT_FORMAT_VERSION = "personal-import-v8-docx-styles-markdown"
+        val BOOK_EXTENSIONS = setOf("txt", "docx", "pdf", "md", "markdown")
         val SUPPORTED_EXTENSIONS = BOOK_EXTENSIONS + "json"
         val HEADER = Regex("<h([1-6])(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
         val CONTENT_LINK = Regex("""(?:otzaria|zayit|zayita)://[^\s<>\[\]()"']+""", RegexOption.IGNORE_CASE)

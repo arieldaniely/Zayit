@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="luach_find">איתור</string>
+    <string name="luach_search_hint">תאריך, למשל י״ד ניסן תשפ״ז</string>
+    <string name="luach_search_invalid">התאריך אינו תקין בלוח הנבחר</string>
     <string name="luach_previous_month">החודש הקודם</string>
     <string name="luach_next_month">החודש הבא</string>
     <string name="luach_swap">החלפה בין לוח עברי ללוח לועזי</string>

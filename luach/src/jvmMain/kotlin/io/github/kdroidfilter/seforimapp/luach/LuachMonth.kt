@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -28,6 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -49,13 +56,18 @@ import kotlinx.datetime.toKotlinLocalDate
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
+import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
+import org.jetbrains.jewel.ui.component.TextField
 import org.jetbrains.jewel.ui.component.Tooltip
 import org.jetbrains.jewel.ui.icon.IconKey
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.luach.generated.resources.Res
+import seforimapp.luach.generated.resources.luach_find
 import seforimapp.luach.generated.resources.luach_next_month
 import seforimapp.luach.generated.resources.luach_previous_month
+import seforimapp.luach.generated.resources.luach_search_hint
+import seforimapp.luach.generated.resources.luach_search_invalid
 import seforimapp.luach.generated.resources.luach_swap
 import seforimapp.luach.generated.resources.luach_today
 import java.time.LocalDate
@@ -81,6 +93,20 @@ fun LuachMonth(
 ) {
     // Any day of the month on show; follows the date picked elsewhere (a zman card, the Earth orbit)
     var shown by remember(selected) { mutableStateOf(selected) }
+    var level by remember { mutableIntStateOf(0) }
+    var yearPage by remember(shown, civil) { mutableIntStateOf(calendarYear(shown, civil)) }
+    val search = rememberTextFieldState()
+    var invalidSearch by remember { mutableStateOf(false) }
+
+    fun findDate() {
+        val result = parseFlexibleDate(search.text.toString(), if (civil) CalendarMode.GREGORIAN else CalendarMode.HEBREW, selected)
+        invalidSearch = result == null
+        result?.let {
+            shown = it
+            level = 0
+            onSelect(it)
+        }
+    }
     val month =
         remember(shown, civil, inIsrael) {
             if (civil) civilMonth(shown, inIsrael) else calendarMonth(shown, inIsrael)
@@ -88,42 +114,111 @@ fun LuachMonth(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         MonthHeader(
             month = month,
-            onPrevious = { shown = month.first.minusDays(1) },
-            onNext = { shown = month.last.plusDays(1) },
+            onPrevious = {
+                when (level) {
+                    0 -> shown = month.first.minusDays(1)
+                    1 -> shown = calendarYearMonths((calendarYear(shown, civil) - 1).coerceAtLeast(if (civil) 1 else 3762), civil).first()
+                    else -> yearPage = (yearPage - 12).coerceAtLeast(if (civil) 1 else 3762)
+                }
+            },
+            onNext = {
+                when (level) {
+                    0 -> shown = month.last.plusDays(1)
+                    1 -> shown = calendarYearMonths((calendarYear(shown, civil) + 1).coerceAtMost(9999), civil).first()
+                    else -> yearPage = (yearPage + 12).coerceAtMost(9988)
+                }
+            },
             onSwap = onSwap,
             onToday = onToday,
+            onTitleClick = { level = (level + 1).coerceAtMost(2) },
+            title =
+                when (level) {
+                    1 -> calendarYear(shown, civil).toString()
+                    2 -> "$yearPage – ${yearPage + 11}"
+                    else -> month.title
+                },
         )
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-            // Holiday names only where a cell can hold a word
-            val showTags = maxWidth / 7 >= 56.dp
-            // Too narrow for both dates side by side: the Gregorian one goes under the Hebrew one
-            val stacked = maxWidth / 7 < 56.dp
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth()) {
-                    WEEKDAY_INITIALS.forEach { name ->
-                        Text(
-                            text = name,
-                            fontSize = 11.sp,
-                            color = JewelTheme.globalColors.text.info,
-                            modifier = Modifier.weight(1f).padding(bottom = 4.dp),
-                            textAlign = TextAlign.Center,
-                        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            TextField(
+                state = search,
+                placeholder = { Text(stringResource(Res.string.luach_search_hint)) },
+                modifier =
+                    Modifier.weight(1f).onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.Enter) {
+                            findDate()
+                            true
+                        } else {
+                            false
+                        }
+                    },
+            )
+            OutlinedButton(onClick = ::findDate) { Text(stringResource(Res.string.luach_find)) }
+        }
+        if (invalidSearch) Text(stringResource(Res.string.luach_search_invalid), color = JewelTheme.globalColors.text.error)
+        if (level != 0) {
+            val choices =
+                if (level == 1) {
+                    calendarYearMonths(calendarYear(shown, civil), civil).map { date ->
+                        val title = if (civil) civilMonth(date, inIsrael).title else calendarMonth(date, inIsrael).title
+                        date to title.substringBeforeLast(" ")
+                    }
+                } else {
+                    (yearPage..yearPage + 11).map { year -> calendarYearMonths(year, civil).first() to year.toString() }
+                }
+            Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                choices.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { (date, label) ->
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(accent.copy(alpha = 0.08f))
+                                    .clickable {
+                                        shown = date
+                                        level--
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) { Text(label) }
+                        }
+                        repeat(3 - row.size) { Box(Modifier.weight(1f)) }
                     }
                 }
-                month.weeks.forEach { week ->
-                    Row(Modifier.fillMaxWidth().weight(1f)) {
-                        week.forEach { day ->
-                            DayCell(
-                                day = day,
-                                isToday = day?.date == today,
-                                isSelected = day?.date == selected,
-                                showTag = showTags,
-                                stacked = stacked,
-                                civil = civil,
-                                accent = accent,
-                                onClick = { day?.let { onSelect(it.date) } },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+            }
+        } else {
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                // Holiday names only where a cell can hold a word
+                val showTags = maxWidth / 7 >= 56.dp
+                // Too narrow for both dates side by side: the Gregorian one goes under the Hebrew one
+                val stacked = maxWidth / 7 < 56.dp
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth()) {
+                        WEEKDAY_INITIALS.forEach { name ->
+                            Text(
+                                text = name,
+                                fontSize = 11.sp,
+                                color = JewelTheme.globalColors.text.info,
+                                modifier = Modifier.weight(1f).padding(bottom = 4.dp),
+                                textAlign = TextAlign.Center,
                             )
+                        }
+                    }
+                    month.weeks.forEach { week ->
+                        Row(Modifier.fillMaxWidth().weight(1f)) {
+                            week.forEach { day ->
+                                DayCell(
+                                    day = day,
+                                    isToday = day?.date == today,
+                                    isSelected = day?.date == selected,
+                                    showTag = showTags,
+                                    stacked = stacked,
+                                    civil = civil,
+                                    accent = accent,
+                                    onClick = { day?.let { onSelect(it.date) } },
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                            }
                         }
                     }
                 }
@@ -133,6 +228,36 @@ fun LuachMonth(
 }
 
 private val WEEKDAY_INITIALS = listOf("א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳")
+
+internal fun calendarYear(
+    date: LocalDate,
+    civil: Boolean,
+): Int =
+    if (civil) {
+        date.year
+    } else {
+        com.kosherjava.zmanim.hebrewcalendar
+            .JewishDate(date)
+            .jewishYear
+    }
+
+internal fun calendarYearMonths(
+    year: Int,
+    civil: Boolean,
+): List<LocalDate> {
+    if (civil) return (1..12).map { LocalDate.of(year, it, 1) }
+    val first =
+        com.kosherjava.zmanim.hebrewcalendar
+            .JewishDate(year, 7, 1)
+            .localDate
+    return buildList {
+        var current = first
+        do {
+            add(current)
+            current = calendarMonth(current, false).last.plusDays(1)
+        } while (calendarYear(current, false) == year)
+    }
+}
 
 @Immutable
 internal data class CalendarDay(
@@ -258,6 +383,8 @@ private fun MonthHeader(
     onNext: () -> Unit,
     onSwap: () -> Unit,
     onToday: (() -> Unit)?,
+    onTitleClick: () -> Unit,
+    title: String,
 ) {
     // The earlier month sits at the start of the reading direction; Jewel icons don't mirror themselves
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -265,8 +392,8 @@ private fun MonthHeader(
     val towardsEnd = if (rtl) AllIconsKeys.General.ChevronLeft else AllIconsKeys.General.ChevronRight
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         StepButton(towardsStart, stringResource(Res.string.luach_previous_month), onPrevious)
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(month.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Column(Modifier.weight(1f).clickable(onClick = onTitleClick), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(month.subtitle, fontSize = 11.sp, color = JewelTheme.globalColors.text.info, maxLines = 1)
         }
         onToday?.let { StepButton(AllIconsKeys.General.Locate, stringResource(Res.string.luach_today), it) }

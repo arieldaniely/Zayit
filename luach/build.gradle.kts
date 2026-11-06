@@ -25,6 +25,7 @@ kotlin {
                 exclude(group = "org.jetbrains.compose.material")
             }
             implementation(libs.kosherkotlin)
+            implementation(libs.zmanim)
             implementation(libs.kotlinx.datetime)
         }
 

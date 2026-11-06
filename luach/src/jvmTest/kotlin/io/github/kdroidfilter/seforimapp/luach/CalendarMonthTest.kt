@@ -7,6 +7,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class CalendarMonthTest {
+    @Test
+    fun yearPickerIncludesBothAdarsOnlyInLeapYears() {
+        assertEquals(13, calendarYearMonths(5787, false).size)
+        assertEquals(12, calendarYearMonths(5786, false).size)
+        assertEquals(12, calendarYearMonths(2026, true).size)
+        val months = calendarYearMonths(5787, false)
+        months.forEach { assertEquals(5787, calendarYear(it, false)) }
+        assertEquals(months.distinct(), months)
+    }
+
     // 30 September 2026 is 19 Tishrei 5787; 1 Tishrei (Rosh Hashana) is 12 September
     private val month = calendarMonth(LocalDate.of(2026, 9, 30), inIsrael = true)
     private val days = month.weeks.flatten().filterNotNull()

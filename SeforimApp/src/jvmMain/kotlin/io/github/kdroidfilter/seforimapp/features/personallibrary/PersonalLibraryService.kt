@@ -61,15 +61,24 @@ class PersonalLibraryService(
         val result =
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val previousGeneration = _state.value.configuration.activeGeneration
+                    val previous = manager.store.load()
+                    val previousGeneration = previous.activeGeneration
                     val publishedDatabase = PersonalLibraryRuntime.activeDatabase
-                    val (updated, artifacts) =
+                    val (imported, artifacts) =
                         manager.synchronize(configuration, force) { progress ->
                             _state.update { it.copy(progress = progress) }
                         }
-                    if (updated.activeGeneration == previousGeneration && artifacts?.databasePath == publishedDatabase) {
-                        return@withContext updated
+                    if (imported.activeGeneration == previousGeneration && artifacts?.databasePath == publishedDatabase) {
+                        return@withContext imported
                     }
+                    val updated =
+                        try {
+                            synchronizeSemanticIndex(previous, imported, artifacts, publishedDatabase)
+                        } catch (failure: Exception) {
+                            manager.store.save(previous)
+                            PersonalLibraryRuntime.activeDatabase = publishedDatabase
+                            throw failure
+                        }
                     overlay.attach(artifacts?.databasePath)
                     search.replacePersonal(
                         artifacts?.let {
@@ -93,6 +102,41 @@ class PersonalLibraryService(
                     )
                 }
             }
+    }
+
+    private suspend fun synchronizeSemanticIndex(
+        previous: PersonalLibraryConfiguration,
+        imported: PersonalLibraryConfiguration,
+        artifacts: PersonalLibraryArtifacts?,
+        previousDatabase: Path?,
+    ): PersonalLibraryConfiguration {
+        if (!previous.semanticEnabled || artifacts == null) return imported
+        val model = checkNotNull(search.sharedEmbedder()) { "SEMANTIC_MODEL_REQUIRED" }
+        val output = artifacts.newSemanticDirectory()
+        var saved = false
+        try {
+            buildPersonalSemanticIndex(
+                artifacts.databasePath,
+                Path.of("${getDatabasePath()}.semantic/model"),
+                output,
+                embed = { model.embedClean(it, io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder.Role.PASSAGE) },
+                onProgress = { progress -> _state.update { it.copy(semanticWorking = true, progress = progress) } },
+                previousIndex = previous.semanticDirectory?.let(Path::of),
+                previousDatabase = previousDatabase,
+            )
+            val updated = imported.copy(semanticGeneration = artifacts.generation, semanticDirectory = output.toString())
+            manager.store.save(updated)
+            saved = true
+            return updated
+        } finally {
+            if (!saved &&
+                java.nio.file.Files
+                    .exists(output)
+            ) {
+                deletePersonalSemanticBuild(output)
+            }
+            _state.update { it.copy(semanticWorking = false) }
+        }
     }
 
     suspend fun buildSemanticIndex() {

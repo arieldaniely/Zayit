@@ -10,6 +10,52 @@ import kotlin.test.assertTrue
 
 class PersonalBookReaderTest {
     @Test
+    fun preservesRunFormattingInheritedStylesAndExplicitOverrides() {
+        val lines =
+            readDocx(
+                mapOf(
+                    "word/styles.xml" to
+                        """
+                        <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                            <w:style w:type="paragraph" w:styleId="Body"><w:rPr><w:b/></w:rPr></w:style>
+                            <w:style w:type="character" w:styleId="Emphasis"><w:rPr><w:iCs/></w:rPr></w:style>
+                            <w:style w:type="character" w:styleId="Nested"><w:basedOn w:val="Emphasis"/></w:style>
+                        </w:styles>
+                        """.trimIndent(),
+                    "word/document.xml" to
+                        """
+                        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+                            <w:p><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>מודגש ונטוי</w:t></w:r></w:p>
+                            <w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr>
+                                <w:r><w:rPr><w:rStyle w:val="Nested"/></w:rPr><w:t>ירושה</w:t></w:r>
+                                <w:r><w:rPr><w:b w:val="false"/></w:rPr><w:t>רגיל</w:t></w:r></w:p>
+                        </w:body></w:document>
+                        """.trimIndent(),
+                ),
+            )
+        assertEquals(listOf("<b><i>מודגש ונטוי</i></b>", "<b><i>ירושה</i></b>רגיל"), lines)
+    }
+
+    @Test
+    fun importsMarkdownHeadingsParagraphsListsAndEmphasis() {
+        val file = Files.createTempFile("personal-markdown", ".MD")
+        try {
+            Files.writeString(file, "# פרק א\n\nטקסט **מודגש** וגם *נטוי*.\n\n- פריט\n- נוסף\n")
+            val lines = readPersonalBook(file)
+            assertEquals("<h1>פרק א</h1>", lines[0])
+            assertTrue(lines[1].contains("<strong>מודגש</strong>"))
+            assertTrue(lines[1].contains("<em>נטוי</em>"))
+            val renderedList =
+                io.github.kdroidfilter.seforim.htmlparser
+                    .buildAnnotatedFromHtml(lines[2], 16f)
+                    .text
+            assertTrue(renderedList.contains("פריט\nנוסף"))
+        } finally {
+            Files.deleteIfExists(file)
+        }
+    }
+
+    @Test
     fun readsFootnotesEndnotesAndTheirHyperlinksAtTheReference() {
         val lines =
             readDocx(

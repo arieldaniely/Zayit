@@ -143,6 +143,7 @@ kotlin {
 //        }
 
         jvmMain.dependencies {
+            implementation(libs.commonmark)
             implementation(libs.hebrew.numerals)
             api(project(":jewel"))
             implementation(project(":earthwidget"))

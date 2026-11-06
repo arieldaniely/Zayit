@@ -260,6 +260,7 @@ class SearchHomeViewModel(
         viewModelScope.launch {
             referenceQuery.debounce(120).distinctUntilChanged().collectLatest { raw ->
                 if (_uiState.value.selectedScopeAuthor != null ||
+                    _uiState.value.selectedScopeCategory != null ||
                     _uiState.value.selectedScopeBook != null ||
                     _uiState.value.selectedScopeFavorites != null
                 ) {
@@ -269,6 +270,7 @@ class SearchHomeViewModel(
                     _uiState.value = _uiState.value.copy(jumpSuggestions = emptyList(), authorSuggestions = emptyList())
                     return@collectLatest
                 }
+                val revision = referenceRevision
                 val jumps = runSuspendCatching { referenceResolver.resolve(raw) }.getOrDefault(emptyList())
                 val authors =
                     cachedAuthorLookup ?: runSuspendCatching { repository.getAuthorsForLookup() }
@@ -287,7 +289,11 @@ class SearchHomeViewModel(
                     runSuspendCatching { withContext(Dispatchers.IO) { lookup.suggestAuthors(raw, 10) } }
                         .getOrDefault(emptyList())
                 val hits = indexedAuthors.ifEmpty { fallbackHits }
-                if (referenceQuery.value == raw && _uiState.value.selectedScopeAuthor == null) {
+                if (referenceRevision == revision &&
+                    referenceQuery.value == raw &&
+                    _uiState.value.selectedScopeAuthor == null &&
+                    _uiState.value.selectedScopeCategory == null
+                ) {
                     _uiState.value = _uiState.value.copy(jumpSuggestions = jumps, authorSuggestions = hits)
                 }
             }
@@ -348,6 +354,10 @@ class SearchHomeViewModel(
                                 bookSuggestions = authorBooks.filter { it.titleContains(q) },
                                 suggestionsVisible = true,
                             )
+                        return@collectLatest
+                    }
+                    _uiState.value.selectedScopeCategory?.let { category ->
+                        showCategoryBooks(category.id, q, revision)
                         return@collectLatest
                     }
                     val qNorm = sanitizeHebrewForAcronym(q)
@@ -629,6 +639,9 @@ class SearchHomeViewModel(
                 selectedScopeCategory = category,
                 selectedScopeFavorites = null,
                 selectedScopeAuthor = null,
+                categorySuggestions = emptyList(),
+                favoritesSuggestions = emptyList(),
+                bookSuggestions = emptyList(),
                 authorSuggestions = emptyList(),
                 jumpSuggestions = emptyList(),
                 globalExtended = true,
@@ -642,6 +655,36 @@ class SearchHomeViewModel(
                 isReferenceLoading = false,
                 isTocLoading = false,
             )
+        val revision = referenceRevision
+        viewModelScope.launch { showCategoryBooks(category.id, "", revision) }
+    }
+
+    private suspend fun showCategoryBooks(
+        categoryId: Long,
+        query: String,
+        revision: Long,
+    ) {
+        val books =
+            withContext(Dispatchers.IO) {
+                runSuspendCatching { repository.getBooksUnderCategoryTree(categoryId) }
+                    .getOrDefault(emptyList())
+                    .filter { it.title.contains(query, ignoreCase = true) }
+                    .sortedWith(compareByDescending<Book> { it.isBaseBook }.thenBy { it.order })
+                    .take(maxBookPredictive)
+                    .map { BookSuggestionDto(it, buildCategoryPathTitlesCached(it.categoryId) + it.title) }
+            }
+        if (referenceRevision == revision && _uiState.value.selectedScopeCategory?.id == categoryId) {
+            _uiState.value =
+                _uiState.value.copy(
+                    bookSuggestions = books,
+                    categorySuggestions = emptyList(),
+                    authorSuggestions = emptyList(),
+                    favoritesSuggestions = emptyList(),
+                    jumpSuggestions = emptyList(),
+                    isReferenceLoading = false,
+                    suggestionsVisible = true,
+                )
+        }
     }
 
     fun onClearCategory() {
@@ -720,9 +763,12 @@ class SearchHomeViewModel(
     ) {
         restoringAuthorId = null
         restoringCategoryId = null
+        referenceRevision++
         _uiState.value =
             _uiState.value.copy(
                 selectedScopeAuthor = author,
+                categorySuggestions = emptyList(),
+                favoritesSuggestions = emptyList(),
                 selectedScopeFavorites = null,
                 selectedScopeCategory = null,
                 selectedScopeBook = null,
@@ -740,11 +786,12 @@ class SearchHomeViewModel(
         authorId: Long,
         books: List<Book>,
     ) {
-        authorBooks =
+        val suggestions =
             books
                 .sortedWith(compareByDescending<Book> { it.isBaseBook }.thenBy { it.order })
                 .map { book -> BookSuggestionDto(book, buildCategoryPathTitlesCached(book.categoryId) + book.title) }
         if (_uiState.value.selectedScopeAuthor?.id == authorId) {
+            authorBooks = suggestions
             val typed = referenceQuery.value.trim()
             _uiState.value =
                 _uiState.value.copy(bookSuggestions = authorBooks.filter { it.titleContains(typed) }, isReferenceLoading = false)
@@ -756,6 +803,7 @@ class SearchHomeViewModel(
         restoringCategoryId = null
         authorBooks = emptyList()
         _uiState.value = _uiState.value.copy(selectedScopeAuthor = null, bookSuggestions = emptyList(), suggestionsVisible = false)
+        onReferenceQueryChanged("")
     }
 
     /** Opens [book] at its start in the current tab. */

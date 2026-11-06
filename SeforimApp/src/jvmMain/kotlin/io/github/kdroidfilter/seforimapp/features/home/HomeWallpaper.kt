@@ -39,6 +39,7 @@ internal object HomeAppearanceSettings : SettingsGroup("home_appearance") {
     val imageName by setting("", SettingCodec({ it }, { it }))
     val fit by setting(WallpaperFit.FILL, SettingCodec({ it.name }, { name -> WallpaperFit.entries.find { it.name == name } }))
     val strength by float(0.3f)
+    val clearCenter by boolean(true)
 }
 
 /** Copies a validated, bounded image into app storage, independently of the original file. */
@@ -96,7 +97,8 @@ internal fun ConfiguredHomeWallpaper(modifier: Modifier = Modifier) {
     val image by settings.flow(HomeAppearanceSettings.imageName).collectAsState()
     val fit by settings.flow(HomeAppearanceSettings.fit).collectAsState()
     val strength by settings.flow(HomeAppearanceSettings.strength).collectAsState()
-    if (enabled) HomeWallpaper(kind, modifier, image, fit, strength)
+    val clearCenter by settings.flow(HomeAppearanceSettings.clearCenter).collectAsState()
+    if (enabled) HomeWallpaper(kind, modifier, image, fit, strength, clearCenter)
 }
 
 /** Shared by Home, the appearance preview, and the wallpaper thumbnails. */
@@ -107,46 +109,48 @@ internal fun HomeWallpaper(
     imageName: String = "",
     fit: WallpaperFit = WallpaperFit.FILL,
     strength: Float = 0.75f,
+    clearCenter: Boolean = false,
 ) {
     val background = JewelTheme.globalColors.panelBackground
     val dark = JewelTheme.isDark
-    val resource = if (dark) Res.drawable.homepage_wallpaper_dark_medium else Res.drawable.homepage_wallpaper_medium
+    val resource =
+        when (kind) {
+            HomeWallpaperKind.OLIVE -> if (dark) Res.drawable.homepage_wallpaper_dark_medium else Res.drawable.homepage_wallpaper_medium
+            HomeWallpaperKind.DAWN -> if (dark) Res.drawable.wallpaper_dawn_dark else Res.drawable.wallpaper_dawn_light
+            HomeWallpaperKind.FOREST -> if (dark) Res.drawable.wallpaper_forest_dark else Res.drawable.wallpaper_forest_light
+            HomeWallpaperKind.CUSTOM -> null
+        }
     val environment = rememberResourceEnvironment()
     val bitmap by produceState<ImageBitmap?>(null, kind, imageName, resource) {
         value =
             withContext(Dispatchers.IO) {
                 runCatching {
                     when (kind) {
-                        HomeWallpaperKind.OLIVE -> getDrawableResourceBytes(environment, resource).decodeToImageBitmap()
                         HomeWallpaperKind.CUSTOM ->
                             HomeWallpaperStorage()
                                 .image(
                                     imageName,
                                 )?.let { Files.readAllBytes(it).decodeToImageBitmap() }
-                        else -> null
+                        else -> resource?.let { getDrawableResourceBytes(environment, it).decodeToImageBitmap() }
                     }
                 }.getOrNull()
             }
     }
     Box(modifier.background(background)) {
-        if (kind == HomeWallpaperKind.DAWN || kind == HomeWallpaperKind.FOREST) {
-            LandscapeWallpaper(kind, dark, Modifier.fillMaxSize())
-        } else {
-            bitmap?.let {
-                Image(
-                    it,
-                    null,
-                    Modifier.fillMaxSize(),
-                    contentScale =
-                        if (fit ==
-                            WallpaperFit.FILL
-                        ) {
-                            ContentScale.Crop
-                        } else {
-                            ContentScale.Fit
-                        },
-                )
-            }
+        bitmap?.let {
+            Image(
+                it,
+                null,
+                Modifier.fillMaxSize(),
+                contentScale =
+                    if (fit ==
+                        WallpaperFit.FILL
+                    ) {
+                        ContentScale.Crop
+                    } else {
+                        ContentScale.Fit
+                    },
+            )
         }
         Box(
             Modifier.fillMaxSize().background(
@@ -156,51 +160,39 @@ internal fun HomeWallpaper(
                 ),
             ),
         )
-    }
-}
-
-@Composable
-private fun LandscapeWallpaper(
-    kind: HomeWallpaperKind,
-    dark: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val dawn = kind == HomeWallpaperKind.DAWN
-    val sky =
-        when {
-            dark && dawn -> listOf(Color(0xFF201E39), Color(0xFF845B6D))
-            dark -> listOf(Color(0xFF10292D), Color(0xFF395B55))
-            dawn -> listOf(Color(0xFFF3D9C6), Color(0xFFB8CCDB))
-            else -> listOf(Color(0xFFD4E5DD), Color(0xFF83AFA2))
-        }
-    Canvas(modifier) {
-        drawRect(Brush.verticalGradient(sky))
-        drawCircle(
-            Color(0xFFFFE8BB).copy(alpha = if (dark) 0.45f else 0.8f),
-            size.minDimension * 0.11f,
-            Offset(
-                size.width * 0.72f,
-                size.height * 0.28f,
-            ),
-        )
-        repeat(4) { layer ->
-            val y = size.height * (0.48f + layer * 0.13f)
-            val path =
-                androidx.compose.ui.graphics.Path().apply {
-                    moveTo(0f, y)
-                    cubicTo(
-                        size.width * 0.25f,
-                        y - size.height * 0.22f,
-                        size.width * 0.55f,
-                        y + size.height * 0.25f,
-                        size.width,
-                        y - size.height * 0.06f,
-                    )
-                    lineTo(size.width, size.height)
-                    lineTo(0f, size.height)
-                    close()
-                }
-            drawPath(path, (if (dawn) Color(0xFF577A83) else Color(0xFF315F51)).copy(alpha = 0.25f + layer * 0.15f))
+        if (clearCenter) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(
+                    Brush.horizontalGradient(
+                        0.00f to background.copy(alpha = 0.10f),
+                        0.04f to background.copy(alpha = 0.20f),
+                        0.08f to background.copy(alpha = 0.35f),
+                        0.13f to background.copy(alpha = 0.50f),
+                        0.20f to background.copy(alpha = 0.65f),
+                        0.28f to background.copy(alpha = 0.78f),
+                        0.38f to background.copy(alpha = 0.85f),
+                        0.50f to background.copy(alpha = 0.78f),
+                        0.62f to background.copy(alpha = 0.85f),
+                        0.72f to background.copy(alpha = 0.78f),
+                        0.80f to background.copy(alpha = 0.65f),
+                        0.87f to background.copy(alpha = 0.50f),
+                        0.92f to background.copy(alpha = 0.35f),
+                        0.96f to background.copy(alpha = 0.20f),
+                        1.00f to background.copy(alpha = 0.10f),
+                    ),
+                )
+                drawRect(
+                    Brush.radialGradient(
+                        0.00f to background,
+                        0.35f to background,
+                        0.55f to background.copy(alpha = 0.75f),
+                        0.75f to background.copy(alpha = 0.40f),
+                        1.00f to Color.Transparent,
+                        center = Offset(size.width / 2f, size.height * 0.65f),
+                        radius = size.width * 0.55f,
+                    ),
+                )
+            }
         }
     }
 }

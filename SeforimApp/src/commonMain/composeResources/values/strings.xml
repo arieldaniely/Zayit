@@ -1,4 +1,9 @@
 <resources>
+    <string name="appearance_preview_unavailable">התצוגה המקדימה תופיע לאחר פתיחת לשונית בחלון הראשי</string>
+    <string name="settings_vector_library_description">נתוני החיפוש החכם מאפשרים למצוא מקורות גם לפי משמעות. התקינו או ייבאו אותם כאן; מנוע החיפוש מוכן לשימוש ללא כוונון נוסף.</string>
+    <string name="settings_theme_mode_label">מצב תצוגה</string>
+    <string name="wallpaper_clear_center">מרכז נקי לקריאה</string>
+    <string name="wallpaper_clear_center_description">מסתיר את התמונה במרכז המסך ומשאיר את הרקע בצדדים, כמו במראה המקורי.</string>
     <string name="settings_library_visibility_title">הסתרת ספרים וקטגוריות</string>
     <string name="settings_library_visibility_description">סמנו פריטים להסתרה מהקטלוג ומהחיפוש. הסתרת קטגוריה מסתירה גם את כל הספרים ותתי־הקטגוריות שבתוכה. אפשר להחזיר פריטים שהוסתרו בכל עת.</string>
     <string name="settings_library_visibility_books">ספרים</string>

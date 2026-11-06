@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.settings.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,6 +19,7 @@ import io.github.kdroidfilter.seforimapp.core.presentation.theme.AccentColor
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.IntUiThemes
 import io.github.kdroidfilter.seforimapp.core.presentation.theme.ThemeStyle
 import io.github.kdroidfilter.seforimapp.features.home.*
+import io.github.kdroidfilter.seforimapp.features.settings.LocalSettingsPreview
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitType
@@ -41,40 +44,19 @@ internal fun AppearancePreview(
     val shape = RoundedCornerShape(if (style == ThemeStyle.Islands) 12.dp else 2.dp)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(Res.string.appearance_preview), fontWeight = FontWeight.SemiBold)
-        Column(
+        Box(
             Modifier
                 .fillMaxWidth()
                 .height(225.dp)
                 .clip(shape)
-                .border(1.dp, JewelTheme.globalColors.borders.normal, shape),
+                .border(1.dp, color, shape),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                Modifier.fillMaxWidth().background(JewelTheme.globalColors.toolwindowBackground).padding(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(stringResource(Res.string.app_name), fontSize = 12.sp)
-                Box(Modifier.size(60.dp, 4.dp).align(Alignment.CenterVertically).background(color, shape))
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                ConfiguredHomeWallpaper(Modifier.fillMaxSize())
-                Column(
-                    Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(stringResource(Res.string.app_name), fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-                    Row(
-                        Modifier
-                            .widthIn(max = 380.dp)
-                            .fillMaxWidth()
-                            .clip(shape)
-                            .background(
-                                JewelTheme.globalColors.panelBackground.copy(alpha = 0.9f),
-                            ).border(1.dp, color, shape)
-                            .padding(10.dp),
-                    ) { Text(stringResource(Res.string.home_widget_search), fontSize = 12.sp) }
-                    Text(stringResource(Res.string.appearance_preview_sample), fontSize = 14.sp)
-                }
+            val preview = LocalSettingsPreview.current
+            if (preview != null) {
+                Image(preview, stringResource(Res.string.appearance_preview), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            } else {
+                Text(stringResource(Res.string.appearance_preview_unavailable), color = JewelTheme.globalColors.text.info)
             }
         }
     }
@@ -85,15 +67,24 @@ internal fun ThemeModeChoices(
     mode: IntUiThemes,
     onChange: (IntUiThemes) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        IntUiThemes.entries.forEach { theme ->
-            val label =
-                when (theme) {
-                    IntUiThemes.Light -> Res.string.light_theme
-                    IntUiThemes.Dark -> Res.string.dark_theme
-                    IntUiThemes.System -> Res.string.system_theme
-                }
-            RadioButtonRow(text = stringResource(label), selected = mode == theme, onClick = { onChange(theme) })
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(stringResource(Res.string.settings_theme_mode_label), fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            IntUiThemes.entries.forEach { theme ->
+                val label =
+                    when (theme) {
+                        IntUiThemes.Light -> Res.string.light_theme
+                        IntUiThemes.Dark -> Res.string.dark_theme
+                        IntUiThemes.System -> Res.string.system_theme
+                    }
+                RadioButtonRow(text = stringResource(label), selected = mode == theme, onClick = { onChange(theme) })
+            }
         }
     }
 }
@@ -105,6 +96,7 @@ internal fun HomeAppearanceCard() {
     val imageName by settings.flow(HomeAppearanceSettings.imageName).collectAsState()
     val fit by settings.flow(HomeAppearanceSettings.fit).collectAsState()
     val strength by settings.flow(HomeAppearanceSettings.strength).collectAsState()
+    val clearCenter by settings.flow(HomeAppearanceSettings.clearCenter).collectAsState()
     val storage = remember { HomeWallpaperStorage() }
     val scope = rememberCoroutineScope()
     var importing by remember { mutableStateOf(false) }
@@ -162,32 +154,30 @@ internal fun HomeAppearanceCard() {
                     },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    HomeWallpaper(
-                        choice,
-                        imageName = imageName,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(70.dp)
-                                .clip(shape)
-                                .border(
-                                    if (kind ==
-                                        choice
-                                    ) {
-                                        2.dp
-                                    } else {
-                                        1.dp
-                                    },
-                                    if (kind ==
-                                        choice
-                                    ) {
-                                        JewelTheme.globalColors.outlines.focused
-                                    } else {
-                                        JewelTheme.globalColors.borders.normal
-                                    },
-                                    shape,
-                                ),
-                    )
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(76.dp)
+                            .clip(shape)
+                            .border(
+                                if (kind == choice) 2.dp else 1.dp,
+                                if (kind == choice) JewelTheme.globalColors.outlines.focused else JewelTheme.globalColors.borders.normal,
+                                shape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (choice == HomeWallpaperKind.CUSTOM && imageName.isEmpty()) {
+                            Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White))
+                            Icon(
+                                org.jetbrains.jewel.ui.icons.AllIconsKeys.General.Add,
+                                contentDescription = stringResource(Res.string.wallpaper_choose_image),
+                                tint = androidx.compose.ui.graphics.Color.DarkGray,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        } else {
+                            HomeWallpaper(choice, imageName = imageName, modifier = Modifier.fillMaxSize())
+                        }
+                    }
                     Text(stringResource(label), fontSize = 12.sp)
                 }
             }
@@ -198,6 +188,18 @@ internal fun HomeAppearanceCard() {
             OutlinedButton(onClick = { settings.reset(HomeAppearanceSettings) }) { Text(stringResource(Res.string.wallpaper_reset)) }
         }
         if (imageError) Text(stringResource(Res.string.wallpaper_image_error), color = JewelTheme.globalColors.text.error)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            CheckboxRow(
+                checked = clearCenter,
+                onCheckedChange = { settings[HomeAppearanceSettings.clearCenter] = it },
+                text = stringResource(Res.string.wallpaper_clear_center),
+            )
+            Text(
+                stringResource(Res.string.wallpaper_clear_center_description),
+                color = JewelTheme.globalColors.text.info,
+                fontSize = 12.sp,
+            )
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(Res.string.wallpaper_fit), modifier = Modifier.weight(1f))
             ListComboBox(

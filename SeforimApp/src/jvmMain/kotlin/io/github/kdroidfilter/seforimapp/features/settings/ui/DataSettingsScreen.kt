@@ -87,7 +87,6 @@ import seforimapp.seforimapp.generated.resources.pdf_remove_library
 import seforimapp.seforimapp.generated.resources.pdf_remove_success
 import seforimapp.seforimapp.generated.resources.pdf_removing_library
 import seforimapp.seforimapp.generated.resources.semantic_import_bundle
-import seforimapp.seforimapp.generated.resources.semantic_install_body
 import seforimapp.seforimapp.generated.resources.semantic_invalid_bundle
 import seforimapp.seforimapp.generated.resources.settings_cancel
 import seforimapp.seforimapp.generated.resources.settings_error_reporting
@@ -100,6 +99,7 @@ import seforimapp.seforimapp.generated.resources.settings_reset_confirm_no
 import seforimapp.seforimapp.generated.resources.settings_reset_confirm_yes
 import seforimapp.seforimapp.generated.resources.settings_reset_done
 import seforimapp.seforimapp.generated.resources.settings_reset_warning
+import seforimapp.seforimapp.generated.resources.settings_vector_library_description
 import java.io.File
 
 @Composable
@@ -545,19 +545,19 @@ private fun VectorLibrarySettingsCard() {
     }
     val ready = availability == SemanticAssetsManager.Availability.READY
     val busy = checking || progress != null || availability == SemanticAssetsManager.Availability.VALIDATING
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(8.dp)
     Column(
         Modifier
             .fillMaxWidth()
             .clip(shape)
             .border(1.dp, JewelTheme.globalColors.borders.normal, shape)
             .background(JewelTheme.globalColors.panelBackground)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(stringResource(Res.string.optional_vectors), fontSize = 15.sp)
         Text(
-            stringResource(seforimapp.seforimapp.generated.resources.Res.string.semantic_install_body),
+            stringResource(Res.string.settings_vector_library_description),
             color = JewelTheme.globalColors.text.info,
             fontSize = 12.sp,
         )

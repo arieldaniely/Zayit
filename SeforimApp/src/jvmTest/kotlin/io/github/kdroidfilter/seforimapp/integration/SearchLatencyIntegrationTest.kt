@@ -11,6 +11,7 @@ import io.github.kdroidfilter.seforimapp.db.UserSettingsDb
 import io.github.kdroidfilter.seforimapp.features.search.SearchFeedbackService
 import io.github.kdroidfilter.seforimapp.features.search.SearchHomeViewModel
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
+import io.github.kdroidfilter.seforimapp.features.search.SemanticSearchSettings
 import io.github.kdroidfilter.seforimapp.framework.database.PersistentSqliteDriver
 import io.github.kdroidfilter.seforimapp.framework.desktop.DesktopManager
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
@@ -60,6 +61,7 @@ class SearchLatencyIntegrationTest {
                     Path.of("$semantic/model"),
                     Path.of("$semantic/index"),
                     Path.of(database),
+                    optionsProvider = SemanticSearchSettings::currentOptions,
                     resolveLine = { lineId, bookId, query ->
                         val line = repository.getLine(lineId)
                         val book = repository.getBookCore(bookId)
@@ -103,6 +105,7 @@ class SearchLatencyIntegrationTest {
                             val elapsed = (System.nanoTime() - before) / 1_000_000
                             assertTrue(page?.hits?.isNotEmpty() == true, "No results: $query")
                             println("FIRST PAGE mode=$mode query=$query ms=$elapsed hits=${page!!.hits.size}")
+                            println("FIRST BOOKS ${page.hits.take(3).map { it.bookTitle }}")
                             System.getProperty("zayit.search.benchmark.maxMillis")?.toLong()?.let {
                                 assertTrue(elapsed < it, "$mode $query exceeded ${it}ms: ${elapsed}ms")
                             }

@@ -148,7 +148,6 @@ private fun GeneralSettingsView(
                 checked = state.searchFeedbackEnabled,
                 onCheckedChange = { onEvent(GeneralSettingsEvents.SetSearchFeedbackEnabled(it)) },
             )
-            SemanticSearchSettingsCard()
         }
     }
 }

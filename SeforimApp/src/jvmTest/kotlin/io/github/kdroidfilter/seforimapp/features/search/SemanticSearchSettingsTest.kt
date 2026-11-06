@@ -11,6 +11,18 @@ import kotlin.test.assertTrue
 
 class SemanticSearchSettingsTest {
     @Test
+    fun legacyExperimentsCannotChangeProductionSearchQuality() {
+        AppSettings.initialize(PropertiesSettings(Properties()))
+        try {
+            AppSettings[SemanticSearchSettings.preferences] =
+                SemanticSearchPreferences(thresholdEnabled = true, minimumSimilarity = 1f, candidates = 1, maximumResults = 1)
+            assertEquals(SemanticSearchOptions(cacheQueries = true), SemanticSearchSettings.currentOptions())
+        } finally {
+            AppSettings.initialize(PropertiesSettings(Properties()))
+        }
+    }
+
+    @Test
     fun defaultsMatchBaselineAndThresholdHasNoImplicitCap() {
         assertEquals(SemanticSearchOptions(), SemanticSearchPreferences().options())
         val options = SemanticSearchPreferences(thresholdEnabled = true, minimumSimilarity = 0.92f).options()

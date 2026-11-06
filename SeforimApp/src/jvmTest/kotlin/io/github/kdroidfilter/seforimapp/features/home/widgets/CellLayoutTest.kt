@@ -36,7 +36,7 @@ class CellLayoutTest {
         assertWellFormed(homeWidgets)
         assertEquals(10, homeWidgets.bottom())
         val cells = homeWidgets.sumOf { it.cell.w * it.cell.h }
-        assertEquals(HOME_GRID_COLUMNS * 7 + 29, cells)
+        assertEquals(HOME_GRID_COLUMNS * 7 + 27, cells)
     }
 
     @Test

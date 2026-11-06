@@ -19,7 +19,7 @@ internal val homeControlWidgets: List<WidgetPlacement> =
     listOf(
         WidgetPlacement(HomeLogoWidget, CellRect(6, 0, 8, 2)),
         WidgetPlacement(HomeSearchWidget, CellRect(4, 2, 10, 1)),
-        WidgetPlacement(HomeSearchModeWidget, CellRect(14, 2, 3, 1)),
+        WidgetPlacement(HomeSearchModeWidget, CellRect(14, 2, 1, 1)),
     )
 
 object HomeLogoWidget : HomeWidget {
@@ -77,9 +77,9 @@ object HomeSearchWidget : HomeWidget {
 object HomeSearchModeWidget : HomeWidget {
     override val id = "home_search_mode"
     override val title = Res.string.home_widget_search_mode
-    override val defaultSpan = CellSpan(3, 1)
-    override val minSpan = CellSpan(3, 1)
-    override val maxSpan = CellSpan(8, 3)
+    override val defaultSpan = CellSpan(1, 1)
+    override val minSpan = CellSpan(1, 1)
+    override val maxSpan = CellSpan(1, 1)
     override val participatesInAutoArrange = false
 
     @Composable

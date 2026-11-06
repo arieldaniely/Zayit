@@ -1,4 +1,16 @@
 <resources>
+    <string name="clock_style">עיצוב השעון</string>
+    <string name="clock_style_classic">קלאסי</string>
+    <string name="clock_style_minimal">מינימלי</string>
+    <string name="clock_style_roman">ספרות רומיות</string>
+    <string name="clock_choose_time">בחירת שעה לכל הוויג׳יטים</string>
+    <string name="clock_time_input_hint">שעה בפורמט 14:30</string>
+    <string name="clock_apply_time">בחירה</string>
+    <string name="clock_live_time">חזרה לעכשיו</string>
+    <string name="clock_dawn">עלות השחר</string>
+    <string name="clock_prayer">סוף זמן תפילה</string>
+    <string name="clock_mincha_ketana">מנחה קטנה</string>
+    <string name="clock_plag">פלג המנחה</string>
     <string name="settings_library_visibility_title">הסתרת ספרים וקטגוריות</string>
     <string name="settings_library_visibility_description">סמנו פריטים להסתרה מהקטלוג ומהחיפוש. הסתרת קטגוריה מסתירה גם את כל הספרים ותתי־הקטגוריות שבתוכה. אפשר להחזיר פריטים שהוסתרו בכל עת.</string>
     <string name="settings_library_visibility_books">ספרים</string>

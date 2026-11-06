@@ -1,6 +1,5 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
-import io.github.kdroidfilter.seforimapp.core.settings.AppSettings
 import io.github.kdroidfilter.seforimapp.core.settings.SettingsGroup
 import io.github.kdroidfilter.seforimlibrary.search.SemanticSearchOptions
 import kotlinx.serialization.Serializable
@@ -31,5 +30,5 @@ object SemanticSearchSettings : SettingsGroup("semantic_search") {
     val preferences by json(SemanticSearchPreferences())
 
     /** Called once when opening a session, so an in-progress search keeps its settings. */
-    fun currentOptions(): SemanticSearchOptions = AppSettings[preferences].options()
+    fun currentOptions(): SemanticSearchOptions = SemanticSearchOptions(cacheQueries = true)
 }

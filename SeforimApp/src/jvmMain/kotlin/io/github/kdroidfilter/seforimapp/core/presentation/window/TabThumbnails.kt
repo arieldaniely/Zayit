@@ -2,6 +2,8 @@ package io.github.kdroidfilter.seforimapp.core.presentation.window
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -18,7 +20,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import dev.nucleusframework.window.tao.TaoGpuRenderContext
 import dev.nucleusframework.window.tao.rememberTaoGpuRenderContext
+import io.github.kdroidfilter.seforimapp.features.home.HomeAppearanceSettings
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -39,7 +43,17 @@ fun rememberTabThumbnails(openWindow: OpenWindow): Modifier {
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
     val gpu = rememberTaoGpuRenderContext()
-    LaunchedEffect(openWindow, density, direction, gpu) {
+    val graph = LocalAppGraph.current
+    val theme by graph.mainAppState.theme.collectAsState()
+    val style by graph.mainAppState.themeStyle.collectAsState()
+    val accent by graph.mainAppState.accentColor.collectAsState()
+    val wallpaper by graph.appSettings.flow(HomeAppearanceSettings.wallpaper).collectAsState()
+    val image by graph.appSettings.flow(HomeAppearanceSettings.imageName).collectAsState()
+    val strength by graph.appSettings.flow(HomeAppearanceSettings.strength).collectAsState()
+    val fit by graph.appSettings.flow(HomeAppearanceSettings.fit).collectAsState()
+    val showWallpaper by graph.appSettings.showHomeWallpaperFlow.collectAsState()
+    val clearCenter by graph.appSettings.flow(HomeAppearanceSettings.clearCenter).collectAsState()
+    LaunchedEffect(openWindow, density, direction, gpu, theme, style, accent, wallpaper, image, strength, fit, showWallpaper, clearCenter) {
         var last: String? = null
         kotlinx.coroutines.flow
             .combine(

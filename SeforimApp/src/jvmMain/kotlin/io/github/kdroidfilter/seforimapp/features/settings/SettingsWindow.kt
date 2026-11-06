@@ -8,10 +8,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
@@ -45,15 +48,36 @@ import seforimapp.seforimapp.generated.resources.AppIcon
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.settings
 import seforimapp.seforimapp.generated.resources.settings_close
+import java.awt.GraphicsEnvironment
+import java.awt.MouseInfo
+import java.awt.Toolkit
+
+internal val LocalSettingsPreview = staticCompositionLocalOf<ImageBitmap?> { null }
+
+internal fun settingsDialogSize(
+    availableWidth: Int,
+    availableHeight: Int,
+): DpSize = DpSize(minOf(960, (availableWidth - 48).coerceAtLeast(1)).dp, minOf(720, (availableHeight - 48).coerceAtLeast(1)).dp)
+
+private fun availableSettingsSize(): DpSize =
+    runCatching {
+        val pointer = MouseInfo.getPointerInfo()?.location
+        val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration }
+        val screen = screens.firstOrNull { pointer != null && it.bounds.contains(pointer) } ?: screens.first()
+        val insets = Toolkit.getDefaultToolkit().getScreenInsets(screen)
+        settingsDialogSize(screen.bounds.width - insets.left - insets.right, screen.bounds.height - insets.top - insets.bottom)
+    }.getOrDefault(DpSize(960.dp, 720.dp))
 
 @Composable
 fun NucleusApplicationScope.SettingsWindow(
     onClose: () -> Unit,
     initialDestination: SettingsDestination? = null,
+    preview: ImageBitmap? = null,
 ) {
     SettingsWindowView(
         onClose = onClose,
         initialDestination = initialDestination,
+        preview = preview,
     )
 }
 
@@ -61,6 +85,7 @@ fun NucleusApplicationScope.SettingsWindow(
 private fun NucleusApplicationScope.SettingsWindowView(
     onClose: () -> Unit,
     initialDestination: SettingsDestination? = null,
+    preview: ImageBitmap? = null,
 ) {
     val themeDefinition = buildThemeDefinition()
 
@@ -68,8 +93,8 @@ private fun NucleusApplicationScope.SettingsWindowView(
         theme = themeDefinition,
         styling = ThemeUtils.buildComponentStyling(),
     ) {
-        val settingsDialogState =
-            rememberDialogState(position = WindowPosition.Aligned(Alignment.Center), size = DpSize(960.dp, 720.dp))
+        val initialSize = remember { availableSettingsSize() }
+        val settingsDialogState = rememberDialogState(position = WindowPosition.Aligned(Alignment.Center), size = initialSize)
         JewelDecoratedDialog(
             onCloseRequest = onClose,
             title = stringResource(Res.string.settings),
@@ -82,6 +107,7 @@ private fun NucleusApplicationScope.SettingsWindowView(
             CompositionLocalProvider(
                 LocalWindowViewModelStoreOwner provides windowViewModelOwner,
                 LocalViewModelStoreOwner provides windowViewModelOwner,
+                LocalSettingsPreview provides preview,
             ) {
                 JewelDialogTitleBar(
                     modifier = Modifier.newFullscreenControls(),
@@ -125,7 +151,7 @@ private fun NucleusApplicationScope.SettingsWindowView(
                             modifier =
                                 Modifier
                                     .fillMaxHeight()
-                                    .width(220.dp),
+                                    .width(if (settingsDialogState.size.width < 800.dp) 168.dp else 220.dp),
                             navController = navController,
                             searchState = search,
                         )

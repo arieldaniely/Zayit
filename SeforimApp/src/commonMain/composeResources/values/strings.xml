@@ -93,6 +93,11 @@
     <string name="shortcut_home_windows">Alt+Home</string>
     <string name="info">מידע</string>
     <string name="info_tooltip">הצג מידע</string>
+    <string name="appearance_preview_unavailable">התצוגה המקדימה תופיע לאחר פתיחת לשונית בחלון הראשי</string>
+    <string name="settings_vector_library_description">נתוני החיפוש החכם מאפשרים למצוא מקורות גם לפי משמעות. התקינו או ייבאו אותם כאן; מנוע החיפוש מוכן לשימוש ללא כוונון נוסף.</string>
+    <string name="settings_theme_mode_label">מצב תצוגה</string>
+    <string name="wallpaper_clear_center">מרכז נקי לקריאה</string>
+    <string name="wallpaper_clear_center_description">מסתיר את התמונה במרכז המסך ומשאיר את הרקע בצדדים, כמו במראה המקורי.</string>
     <string name="settings">הגדרות</string>
     <string name="settings_reset_app">איפוס האפליקציה</string>
     <string name="settings_reset_warning">פעולה זו תמחק את ההגדרות והנתונים האישיים של זיתא ותפעיל אותה מחדש כמו בהתקנה הראשונה. מסד שמנוהל בתיקייה של זיתא יימחק; מסד משותף שנבחר מתיקייה חיצונית יישאר במקומו.</string>

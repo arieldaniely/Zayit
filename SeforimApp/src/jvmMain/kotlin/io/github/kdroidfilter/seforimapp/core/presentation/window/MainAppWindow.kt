@@ -314,6 +314,13 @@ fun NucleusApplicationScope.MainAppWindow(
             SettingsWindow(
                 onClose = { settingsWindowViewModel.onEvent(SettingsWindowEvents.OnClose) },
                 initialDestination = settingsDialogState.initialDestination,
+                preview =
+                    openWindow.tabThumbnails[
+                        openWindow.tabsViewModel.state.value.tabs
+                            .getOrNull(openWindow.tabsViewModel.state.value.selectedTabIndex)
+                            ?.destination
+                            ?.tabId,
+                    ],
             )
         }
 

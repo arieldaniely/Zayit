@@ -961,18 +961,9 @@ fun BookContentView(
 
     // Request initial focus so arrow keys work as soon as the view appears
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(bookId) { focusRequester.requestFocus() }
-    LaunchedEffect(focusRequest) {
-        if (focusRequest > 0) focusRequester.requestFocus()
-    }
-    LaunchedEffect(showFind) {
-        if (!showFind) {
-            focusRequester.requestFocus()
-        }
-    }
-    // Request focus when tab becomes selected for immediate keyboard navigation
-    LaunchedEffect(isSelected) {
-        if (isSelected) {
+    LaunchedEffect(bookId, isTabSelected, isSelected, focusRequest, showFind) {
+        if (isTabSelected && isSelected && !showFind) {
+            withFrameNanos { }
             focusRequester.requestFocus()
         }
     }

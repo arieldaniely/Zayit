@@ -416,7 +416,7 @@ private fun DrawScope.drawPass(
  * The sky over [latitude]/[longitude] as seen from the ground, in 3D: the Sun and Moon where they really are
  * (the Moon lit by the Sun, so its phase is real), the stars turning with the night, and a sky whose colours
  * tell dawn, midday, sunset and night apart; the day's path of the Sun with its rise, highest point and set.
- * A fixed view (the Sun while any daylight is left; in full night the Moon close in if it is up), that glides along
+ * A view of the Sun by day and the Moon after civil twilight if it is up, that glides along
  * when the moment changes.
  */
 @Composable
@@ -493,23 +493,22 @@ fun SkyWidgetView(
     val clock = remember(timeZone) { SimpleDateFormat("HH:mm").apply { this.timeZone = timeZone } }
 
     // The Sun while any of its light is left in the sky (down to 18° under: alos, netz, shkia, tzeis all look at
-    // its side); in full night the Moon if it is up, close in so its phase reads; else the south
+    // its side); after civil twilight the Moon if it is up, close in so its phase reads; else the south
     fun facing(
         sunPos: SolarPosition,
         moonPos: HorizontalPosition,
-    ): SkyAim =
-        when {
+    ): SkyAim {
+        val moonElevation = moonPos.elevationDeg + refractionDeg(moonPos.elevationDeg)
+        return when {
+            sunPos.elevationDegrees <= -6.0 && moonElevation > 0.0 ->
+                SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), moonElevation.toFloat().coerceAtLeast(4f), MOON_FOCUS_FOV_DEG)
             sunPos.elevationDegrees > -18.0 -> {
                 val el = sunPos.elevationDegrees.toFloat()
                 SkyAim(sunPos.azimuthDegreesFromNorth.toFloat(), (el - 18f).coerceIn(DEFAULT_PITCH_DEG, 60f), SKY_VFOV_DEG)
             }
-            moonPos.elevationDeg > 0.0 -> {
-                // Low, it keeps a strip of skyline under it
-                val el = moonPos.elevationDeg.toFloat()
-                SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), el.coerceAtLeast(MOON_FOCUS_FOV_DEG * 0.3f), MOON_FOCUS_FOV_DEG)
-            }
             else -> SkyAim(if (latitude >= 0) 180f else 0f, DEFAULT_PITCH_DEG, SKY_VFOV_DEG)
         }
+    }
 
     // Re-aimed whenever the place or the moment changes
     fun facingAt(t: Long): SkyAim {
@@ -520,7 +519,7 @@ fun SkyWidgetView(
         )
     }
     // Turned toward whatever is up at the new place or moment, gliding there with the time
-    // Not glided, the view holds still: re-aimed at every frame it would swing about
+    // During playback the render uses the same moment for the sky and its aim.
     val aimTime = if (glide) target else null
     val aim = remember(latitude, longitude, aimTime) { facingAt(aimTime ?: target) }
     var yaw by remember { mutableFloatStateOf(aim.yawDeg) }
@@ -551,13 +550,14 @@ fun SkyWidgetView(
         val density = LocalDensity.current
         val widthPx = with(density) { maxWidth.toPx() }.toInt().coerceAtLeast(1)
         val heightPx = with(density) { maxHeight.toPx() }.toInt().coerceAtLeast(1)
+        val currentAim = if (glide) SkyAim(yaw, pitch, fov) else facing(sunPos, moonPos)
         val state =
             SkyViewState(
                 widthPx = widthPx,
                 heightPx = heightPx,
-                yawDeg = yaw,
-                pitchDeg = pitch,
-                fovDeg = fov,
+                yawDeg = currentAim.yawDeg,
+                pitchDeg = currentAim.pitchDeg,
+                fovDeg = currentAim.fovDeg,
                 sun = sun,
                 moon = moon,
                 stars = equatorialToSky(localSiderealTimeRad(julianDay, longitude), latitude),

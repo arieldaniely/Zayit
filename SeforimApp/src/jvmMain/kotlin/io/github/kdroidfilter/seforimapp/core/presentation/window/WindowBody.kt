@@ -67,6 +67,7 @@ fun WindowBody(openWindow: OpenWindow) {
                 it is TabsDestination.PdfContent ||
                 it is TabsDestination.Search
         }
+    val navigationWorkspace = openWindow.panesOf(navigation = true)
     val lineWorkspace = openWindow.panesOf(navigation = false)
     // The book view's shortcuts (Ctrl/Cmd+B, K, J) act on the selected reader tab, as they did
     // over the whole book screen.
@@ -93,7 +94,8 @@ fun WindowBody(openWindow: OpenWindow) {
     }
 
     val titleBarStyle = LocalTitleBarStyle.current
-    val previewStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(content = JewelTheme.globalColors.outlines.focused))
+    val previewColor = JewelTheme.globalColors.outlines.focused
+    val previewStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(content = previewColor))
     Row(
         Modifier
             .fillMaxSize()
@@ -105,12 +107,13 @@ fun WindowBody(openWindow: OpenWindow) {
         }
         CompositionLocalProvider(LocalTitleBarStyle provides previewStyle) {
             DockLayout(
-                workspace = openWindow.panesOf(navigation = true),
+                workspace = navigationWorkspace,
                 modifier =
                     Modifier
                         .weight(
                             1f,
                         ).fillMaxHeight()
+                        .readerDockGlow(navigationWorkspace, previewColor, NavigationLayeredSides)
                         .onSizeChanged { outerWidth = it.width },
                 layeredSides = NavigationLayeredSides,
                 splitter = { ReaderSplitter() },
@@ -123,6 +126,7 @@ fun WindowBody(openWindow: OpenWindow) {
                             Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
+                                .readerDockGlow(lineWorkspace, previewColor)
                                 .onSizeChanged { innerSize = it },
                         sideOrder = LineSideOrder,
                         splitter = { ReaderSplitter() },

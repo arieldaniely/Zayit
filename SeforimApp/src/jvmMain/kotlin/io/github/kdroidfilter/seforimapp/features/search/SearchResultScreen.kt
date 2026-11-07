@@ -11,6 +11,7 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -71,6 +72,7 @@ import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.JournalText
+import io.github.kdroidfilter.seforimapp.icons.bookOpenTabs
 import io.github.kdroidfilter.seforimlibrary.core.models.SearchResult
 import io.github.santimattius.structured.annotations.StructuredScope
 import kotlinx.collections.immutable.ImmutableList
@@ -114,7 +116,7 @@ data class SearchShellActions(
     val onCategoryFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Category) -> Unit,
     val onBookFilter: (io.github.kdroidfilter.seforimlibrary.core.models.Book) -> Unit,
     val onFeedback: (SearchResult, SearchFeedbackType) -> Unit = { _, _ -> },
-    val onSelectResult: (Long) -> Unit = {},
+    val onSelectResult: (SearchResult) -> Unit = {},
     val onResetScopeFilters: () -> Unit = {},
     val onOriginScopeChange: (io.github.kdroidfilter.seforim.tabs.SearchScope) -> Unit = {},
 )
@@ -640,7 +642,7 @@ private fun SearchResultContentMvi(
                                         BookResultCard(
                                             group = group,
                                             searchQuery = state.query,
-                                            onPreview = { actions.onSelectResult(it.lineId) },
+                                            onPreview = { actions.onSelectResult(it) },
                                             textSize = mainTextSize,
                                             lineHeight = mainLineHeight,
                                             fontFamily = hebrewFontFamily,
@@ -742,6 +744,7 @@ private fun SearchResultContentMvi(
                                                 null
                                             },
                                         feedbackKey = state.feedbackSearchId,
+                                        onPreview = { actions.onSelectResult(result) },
                                         onClick = {
                                             val mods = windowInfo.keyboardModifiers
                                             actions.onOpenResult(result, !(mods.isCtrlPressed || mods.isMetaPressed))
@@ -991,8 +994,8 @@ internal fun BookResultCard(
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
     searchQuery: String = "",
-    onPreview: (SearchResult) -> Unit = {},
-    showPreviewAction: Boolean = true,
+    onPreview: ((SearchResult) -> Unit)? = null,
+    showOpenAction: Boolean = true,
     primaryMaxLines: Int = Int.MAX_VALUE,
     collapsedSecondaryLimit: Int = 3,
     expandLabel: String? = null,
@@ -1052,7 +1055,10 @@ internal fun BookResultCard(
                         Modifier
                             .weight(1f)
                             .pointerHoverIcon(PointerIcon.Hand)
-                            .clickable { onOpenResult(group.primary) },
+                            .combinedClickable(
+                                onClick = { (onPreview ?: onOpenResult)(group.primary) },
+                                onDoubleClick = onPreview?.let { { onOpenResult(group.primary) } },
+                            ),
                 )
                 if (onOpenPdf != null) {
                     Spacer(Modifier.width(6.dp))
@@ -1107,8 +1113,10 @@ internal fun BookResultCard(
                         .fillMaxWidth()
                         .hoverable(primaryHoverSource)
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable { onOpenResult(primary) }
-                        .pointerHoverIcon(PointerIcon.Hand)
+                        .combinedClickable(
+                            onClick = { (onPreview ?: onOpenResult)(primary) },
+                            onDoubleClick = onPreview?.let { { onOpenResult(primary) } },
+                        ).pointerHoverIcon(PointerIcon.Hand)
                         .padding(vertical = 5.dp),
             ) {
                 // Reference column (leading): the location, aligned like a concordance index.
@@ -1134,7 +1142,7 @@ internal fun BookResultCard(
                     modifier = Modifier.weight(1f),
                 )
                 ResultFeedback(primary, feedbackKey, primaryHovered, onFeedback)
-                if (showPreviewAction) PreviewResultButton(visible = primaryHovered) { onPreview(primary) }
+                if (showOpenAction) OpenResultButton(visible = primaryHovered) { onOpenResult(primary) }
             }
 
             // Secondary hits: a thin divider tops every row (the first one also separates them
@@ -1157,10 +1165,10 @@ internal fun BookResultCard(
                             pieces = breadcrumbs[sec.lineId],
                             onRequestBreadcrumb = onRequestBreadcrumb,
                             onClick = { onOpenResult(sec) },
-                            onPreview = { onPreview(sec) },
+                            onPreview = onPreview?.let { { it(sec) } },
                             onFeedback = onFeedback,
                             feedbackKey = feedbackKey,
-                            showPreviewAction = showPreviewAction,
+                            showOpenAction = showOpenAction,
                         )
                     }
                 }
@@ -1316,10 +1324,10 @@ private fun SecondaryResultRow(
     pieces: List<String>?,
     onRequestBreadcrumb: (SearchResult) -> Unit,
     onClick: () -> Unit,
-    onPreview: () -> Unit,
+    onPreview: (() -> Unit)?,
     onFeedback: ((SearchResult, SearchFeedbackType) -> Unit)? = null,
     feedbackKey: String = "",
-    showPreviewAction: Boolean = true,
+    showOpenAction: Boolean = true,
 ) {
     val hoverSource = remember { MutableInteractionSource() }
     val hovered by hoverSource.collectIsHoveredAsState()
@@ -1333,7 +1341,7 @@ private fun SecondaryResultRow(
                 .fillMaxWidth()
                 .hoverable(hoverSource)
                 .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onPreview ?: onClick, onDoubleClick = onClick.takeIf { onPreview != null })
                 .pointerHoverIcon(PointerIcon.Hand)
                 .padding(top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.Top,
@@ -1360,22 +1368,22 @@ private fun SecondaryResultRow(
             modifier = Modifier.weight(1f),
         )
         ResultFeedback(result, feedbackKey, hovered, onFeedback)
-        if (showPreviewAction) PreviewResultButton(visible = hovered, onClick = onPreview)
+        if (showOpenAction) OpenResultButton(visible = hovered, onClick = onClick)
     }
 }
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun PreviewResultButton(
+private fun OpenResultButton(
     visible: Boolean,
     onClick: () -> Unit,
 ) {
-    val label = stringResource(Res.string.search_preview_title)
+    val label = stringResource(Res.string.open_book)
     Box(Modifier.size(28.dp)) {
         if (visible || io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalIsTouchMode.current) {
             Tooltip({ Text(label) }) {
                 IconButton(onClick = onClick, modifier = Modifier.size(28.dp)) {
-                    Icon(AllIconsKeys.Actions.Preview, contentDescription = label, modifier = Modifier.size(16.dp))
+                    Icon(bookOpenTabs(JewelTheme.globalColors.text.normal), contentDescription = label, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -1414,6 +1422,7 @@ internal fun LegacySearchResultItem(
     fontFamily: FontFamily,
     findQuery: String?,
     onClick: () -> Unit,
+    onPreview: () -> Unit,
     breadcrumbs: ImmutableMap<Long, List<String>>,
     onRequestBreadcrumb: (SearchResult) -> Unit,
     bookFontCode: String,
@@ -1489,7 +1498,7 @@ internal fun LegacySearchResultItem(
                 .fillMaxWidth()
                 .hoverable(hoverSource)
                 .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onPreview, onDoubleClick = onClick)
                 .padding(vertical = 10.dp),
     ) {
         // Top: small book title – toc leaf
@@ -1530,6 +1539,7 @@ internal fun LegacySearchResultItem(
                     }
                 }
             }
+            OpenResultButton(visible = hovered, onClick = onClick)
             if (onOpenPdf != null) {
                 Spacer(Modifier.width(6.dp))
                 Tooltip({ Text(stringResource(Res.string.open_pdf_edition_tooltip)) }) {

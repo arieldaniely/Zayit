@@ -198,7 +198,7 @@ private fun ReferenceBookCard(
         isExpanded = expanded,
         expandedHits = hits.takeIf { expanded },
         onToggleExpand = { onExpand() },
-        showPreviewAction = false,
+        showOpenAction = false,
         primaryMaxLines = 6,
         collapsedSecondaryLimit = 0,
         expandLabel = stringResource(Res.string.references_more_from_book, book.places.size - 1, book.title),

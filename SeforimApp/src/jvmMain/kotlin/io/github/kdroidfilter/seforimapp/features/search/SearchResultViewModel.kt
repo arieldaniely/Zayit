@@ -634,7 +634,7 @@ class SearchResultViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
 
     // The result picked in the list; the first one until one is
-    private val selectedLineId = MutableStateFlow<Long?>(null)
+    private val selectedResult = MutableStateFlow<SearchResult?>(null)
     private val _previewVisible = MutableStateFlow(true)
     val previewVisible = _previewVisible.asStateFlow()
 
@@ -643,8 +643,8 @@ class SearchResultViewModel(
     }
 
     /** Shows a result in the preview beside the list. */
-    fun selectResult(lineId: Long) {
-        selectedLineId.value = lineId
+    fun selectResult(result: SearchResult) {
+        selectedResult.value = result
         _previewVisible.value = true
     }
 
@@ -658,8 +658,9 @@ class SearchResultViewModel(
     private suspend fun bookDetails(bookId: Long): SearchEntity.BookEntity? = bookDetailsLoader.load(bookId)
 
     val previewFlow: StateFlow<PassagePreview?> =
-        combine(visibleResultsFlow, selectedLineId) { results, id -> results.firstOrNull { it.lineId == id } ?: results.firstOrNull() }
-            .distinctUntilChangedBy { it?.lineId }
+        combine(visibleResultsFlow, selectedResult) { results, picked ->
+            if (picked == null) results.firstOrNull() else results.firstOrNull { it.lineId == picked.lineId } ?: picked
+        }.distinctUntilChangedBy { it?.lineId }
             .mapLatest { hit ->
                 hit?.let {
                     PassagePreview(
@@ -1098,6 +1099,7 @@ class SearchResultViewModel(
         if (q.isBlank()) return
         dropBeforeBook()
         newSearchGeneration()
+        selectedResult.value = null
         titleUpdateManager.updateTabTitle(tabId, q, TabType.SEARCH)
         if (recordVisit) recordSearchVisit(q)
         // New search: clear any previous streaming job and reset scroll/anchor state
@@ -1757,6 +1759,7 @@ class SearchResultViewModel(
         if (q.isBlank()) return
 
         recordSearchVisit(q)
+        selectedResult.value = null
         currentJob?.cancel()
         highlighter.cancel()
         currentJob =
@@ -2118,6 +2121,7 @@ class SearchResultViewModel(
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
 
+        selectedResult.value = null
         currentJob?.cancel()
         highlighter.cancel()
         currentJob =

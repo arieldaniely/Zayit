@@ -67,7 +67,12 @@ internal fun PassagePreview(
                 .fillMaxWidth()
                 .card(),
     ) {
-        Column(Modifier.padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 14.dp)) {
+        Column(
+            Modifier
+                .pointerHoverIcon(PointerIcon.Hand)
+                .clickable(onClick = onOpen)
+                .padding(start = 28.dp, end = 28.dp, top = 18.dp, bottom = 14.dp),
+        ) {
             if (categories.isNotEmpty()) Text(categories, fontSize = 12.sp, color = readingSecondary(), maxLines = 1)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

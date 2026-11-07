@@ -10,6 +10,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.font.FontFamily
@@ -59,16 +60,19 @@ class SearchFeedbackUiTest {
                 }
             }
             onNodeWithContentDescription("התוצאה מועילה").assertDoesNotExist()
-            onNodeWithContentDescription("תצוגה מקדימה בהקשר").assertDoesNotExist()
+            onNodeWithContentDescription("פתח ספר").assertDoesNotExist()
             onNodeWithText("תוצאה ראשית").performMouseInput { enter(center) }
-            onNodeWithContentDescription("תצוגה מקדימה בהקשר").performMouseInput { click() }
-            assertEquals(listOf(2L), previews)
+            onNodeWithText("תוצאה ראשית").performClick()
+            waitUntil(timeoutMillis = 5_000) { previews == listOf(2L) }
             onNodeWithContentDescription("התוצאה מועילה").performMouseInput { click() }
             onNodeWithContentDescription("התוצאה מועילה").performMouseInput { click() }
             onNodeWithText("תוצאה משנית").performMouseInput { moveTo(center) }
             onNodeWithContentDescription("התוצאה אינה מועילה").performMouseInput { click() }
             assertEquals(listOf(2L to SearchFeedbackType.LIKE, 3L to SearchFeedbackType.DISLIKE), votes)
             assertEquals(0, opens)
+            onNodeWithContentDescription("פתח ספר").performMouseInput { click() }
+            assertEquals(1, opens)
+            assertEquals(listOf(2L), previews)
             AppSettings.setSearchFeedbackEnabled(false)
             onNodeWithContentDescription("התוצאה מועילה").assertDoesNotExist()
             AppSettings.initialize(PropertiesSettings(Properties()))
@@ -79,6 +83,7 @@ class SearchFeedbackUiTest {
         runComposeUiTest {
             AppSettings.initialize(PropertiesSettings(Properties()))
             var entries = 0
+            var previews = 0
             val feedback = mutableListOf<SearchFeedbackType>()
             setContent {
                 IntUiTheme(isDark = false) {
@@ -90,6 +95,7 @@ class SearchFeedbackUiTest {
                             fontFamily = FontFamily.Default,
                             findQuery = null,
                             onClick = { entries++ },
+                            onPreview = { previews++ },
                             breadcrumbs = persistentMapOf(),
                             onRequestBreadcrumb = {},
                             bookFontCode = "notoserifhebrew",
@@ -104,6 +110,7 @@ class SearchFeedbackUiTest {
             onNodeWithContentDescription("התוצאה מועילה").performMouseInput { click() }
             assertEquals(listOf(SearchFeedbackType.LIKE), feedback)
             assertEquals(0, entries)
+            assertEquals(0, previews)
             onNodeWithTag("result").performMouseInput {
                 moveTo(Offset(-10f, -10f))
             }

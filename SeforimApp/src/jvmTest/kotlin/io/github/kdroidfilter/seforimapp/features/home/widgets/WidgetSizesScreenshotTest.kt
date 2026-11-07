@@ -151,7 +151,15 @@ class WidgetSizesScreenshotTest {
             waitForIdle()
             val content =
                 if (widget == ClockWidget) {
-                    onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ContentDescription))
+                    onNode(
+                        SemanticsMatcher
+                            .keyIsDefined(SemanticsProperties.ContentDescription)
+                            .and(
+                                SemanticsMatcher("Clock dial") { node ->
+                                    node.config[SemanticsProperties.ContentDescription].any { it.startsWith("השעה ") }
+                                },
+                            ),
+                    )
                 } else {
                     onRoot()
                 }

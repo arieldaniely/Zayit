@@ -1142,6 +1142,8 @@
     <string name="siddur_option_mezonot">מזונות</string>
     <string name="siddur_option_wine">יין</string>
     <string name="siddur_option_fruit">פירות משבעת המינים</string>
+    <string name="siddur_choose_meal_food">בחרו למעלה על מה מברכים: מזונות, יין, או פירות משבעת המינים.</string>
+    <string name="siddur_meein_land_of_israel_note">על פירות או יין שאינם מארץ ישראל אומרים ״הפירות״ ו״פרי הגפן״, ועל מזונות ״המחיה ועל הכלכלה״.</string>
     <string name="siddur_option_beit_avel">בבית האבל</string>
     <string name="siddur_option_first_lulav">נטילת לולב ראשונה</string>
     <string name="siddur_option_seudat_mila">סעודת ברית מילה</string>

@@ -64,9 +64,9 @@ import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.Bookmark
-import io.github.kdroidfilter.seforimapp.icons.JournalBookmark
 import io.github.kdroidfilter.seforimapp.icons.BookmarkFilled
 import io.github.kdroidfilter.seforimapp.icons.CloseAll
+import io.github.kdroidfilter.seforimapp.icons.JournalBookmark
 import io.github.kdroidfilter.seforimapp.icons.Link
 import io.github.kdroidfilter.seforimapp.icons.Tab_close
 import io.github.kdroidfilter.seforimapp.icons.Tab_close_right

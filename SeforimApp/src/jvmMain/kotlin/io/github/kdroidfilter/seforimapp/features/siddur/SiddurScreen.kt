@@ -74,13 +74,13 @@ import dev.zacsweers.metrox.viewmodel.metroViewModel
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
 import io.github.kdroidfilter.seforim.htmlparser.buildAnnotatedFromHtml
 import io.github.kdroidfilter.seforim.tabs.TabType
-import io.github.kdroidfilter.seforimapp.core.presentation.text.refLinkLineId
-import io.github.kdroidfilter.seforimapp.core.presentation.text.rememberRefLinkUriHandler
 import io.github.kdroidfilter.seforimapp.core.presentation.components.SelectableIconButtonWithToolip
 import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLateralBar
 import io.github.kdroidfilter.seforimapp.core.presentation.components.VerticalLateralBarPosition
 import io.github.kdroidfilter.seforimapp.core.presentation.components.rememberAppTextZoom
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
+import io.github.kdroidfilter.seforimapp.core.presentation.text.refLinkLineId
+import io.github.kdroidfilter.seforimapp.core.presentation.text.rememberRefLinkUriHandler
 import io.github.kdroidfilter.seforimapp.core.presentation.typography.FontCatalog
 import io.github.kdroidfilter.seforimapp.core.presentation.utils.LocalWindowViewModelStoreOwner
 import io.github.kdroidfilter.seforimapp.earthwidget.EarthWidgetLocation
@@ -141,6 +141,7 @@ import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.siddur_at_night
 import seforimapp.seforimapp.generated.resources.siddur_chanuka_candle
 import seforimapp.seforimapp.generated.resources.siddur_chanuka_candles
+import seforimapp.seforimapp.generated.resources.siddur_choose_meal_food
 import seforimapp.seforimapp.generated.resources.siddur_hl_al_hanisim
 import seforimapp.seforimapp.generated.resources.siddur_hl_aneinu
 import seforimapp.seforimapp.generated.resources.siddur_hl_avinu
@@ -160,21 +161,10 @@ import seforimapp.seforimapp.generated.resources.siddur_hl_retzeh
 import seforimapp.seforimapp.generated.resources.siddur_hl_tachanun
 import seforimapp.seforimapp.generated.resources.siddur_hl_tal_umatar
 import seforimapp.seforimapp.generated.resources.siddur_hl_torah
-import seforimapp.seforimapp.generated.resources.siddur_hl_vihi_noam
 import seforimapp.seforimapp.generated.resources.siddur_hl_viduy_erev_yom_kippur
+import seforimapp.seforimapp.generated.resources.siddur_hl_vihi_noam
 import seforimapp.seforimapp.generated.resources.siddur_hl_vten_bracha
 import seforimapp.seforimapp.generated.resources.siddur_hl_yaale
-import seforimapp.seforimapp.generated.resources.siddur_levana_open
-import seforimapp.seforimapp.generated.resources.siddur_levana_window
-import seforimapp.seforimapp.generated.resources.siddur_minyan
-import seforimapp.seforimapp.generated.resources.siddur_mincha_erev_rosh_hashana
-import seforimapp.seforimapp.generated.resources.siddur_mincha_erev_yom_kippur
-import seforimapp.seforimapp.generated.resources.siddur_next_day
-import seforimapp.seforimapp.generated.resources.siddur_night_of
-import seforimapp.seforimapp.generated.resources.siddur_nusach_ashkenaz
-import seforimapp.seforimapp.generated.resources.siddur_nusach_edot
-import seforimapp.seforimapp.generated.resources.siddur_nusach_missing
-import seforimapp.seforimapp.generated.resources.siddur_nusach_sefard
 import seforimapp.seforimapp.generated.resources.siddur_israeli_custom
 import seforimapp.seforimapp.generated.resources.siddur_israeli_day_and_night
 import seforimapp.seforimapp.generated.resources.siddur_israeli_daytime
@@ -182,6 +172,18 @@ import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_blessed
 import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_unblessed
 import seforimapp.seforimapp.generated.resources.siddur_israeli_no_tachanun
 import seforimapp.seforimapp.generated.resources.siddur_israeli_unblessed
+import seforimapp.seforimapp.generated.resources.siddur_levana_open
+import seforimapp.seforimapp.generated.resources.siddur_levana_window
+import seforimapp.seforimapp.generated.resources.siddur_meein_land_of_israel_note
+import seforimapp.seforimapp.generated.resources.siddur_mincha_erev_rosh_hashana
+import seforimapp.seforimapp.generated.resources.siddur_mincha_erev_yom_kippur
+import seforimapp.seforimapp.generated.resources.siddur_minyan
+import seforimapp.seforimapp.generated.resources.siddur_next_day
+import seforimapp.seforimapp.generated.resources.siddur_night_of
+import seforimapp.seforimapp.generated.resources.siddur_nusach_ashkenaz
+import seforimapp.seforimapp.generated.resources.siddur_nusach_edot
+import seforimapp.seforimapp.generated.resources.siddur_nusach_missing
+import seforimapp.seforimapp.generated.resources.siddur_nusach_sefard
 import seforimapp.seforimapp.generated.resources.siddur_occasion_pesach
 import seforimapp.seforimapp.generated.resources.siddur_occasion_rosh_hashana
 import seforimapp.seforimapp.generated.resources.siddur_occasion_shabbat_and
@@ -217,10 +219,10 @@ import seforimapp.seforimapp.generated.resources.siddur_part_mincha_yom_tov
 import seforimapp.seforimapp.generated.resources.siddur_part_neila
 import seforimapp.seforimapp.generated.resources.siddur_part_nerot_chanuka
 import seforimapp.seforimapp.generated.resources.siddur_part_of
+import seforimapp.seforimapp.generated.resources.siddur_part_selichot
 import seforimapp.seforimapp.generated.resources.siddur_part_seudat_shabbat
 import seforimapp.seforimapp.generated.resources.siddur_part_seudat_yom_tov
 import seforimapp.seforimapp.generated.resources.siddur_part_sfirat_haomer
-import seforimapp.seforimapp.generated.resources.siddur_part_selichot
 import seforimapp.seforimapp.generated.resources.siddur_part_shacharit
 import seforimapp.seforimapp.generated.resources.siddur_part_shacharit_shabbat
 import seforimapp.seforimapp.generated.resources.siddur_part_shacharit_yom_tov
@@ -416,16 +418,27 @@ fun SiddurTabContent(
     }
     val civil = LocalDate.fromEpochDays(epochDay)
     val options = optionsSaved.split(',').filter { it.isNotEmpty() }.toSet()
+    val listState = rememberLazyListState(saved?.scrollIndex ?: 0, saved?.scrollOffset ?: 0)
 
     // The book with the day it is of: a scroll waits for the day asked for, not the one still shown
-    val loaded by produceState<Pair<LocalDate, List<BookSection>>?>(null, civil, prefs, optionsSaved, showAll) {
-        value = civil to withContext(Dispatchers.Default) { buildDayBook(civil, prefs, options, showAll, source) }
+    val loaded by produceState<LoadedSiddurBook?>(null, civil, prefs, optionsSaved, showAll) {
+        val next =
+            withContext(Dispatchers.Default) {
+                val book = buildDayBook(civil, prefs, options, showAll, source)
+                LoadedSiddurBook(civil, showAll, book, bookItems(book))
+            }
+        val previous = value
+        val anchor =
+            previous?.takeIf { it.date == civil && it.showAll != showAll }?.let {
+                retainedSiddurPosition(it.items, next.items, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
+        value = next
+        anchor?.let { (index, offset) -> listState.requestScrollToItem(index, offset) }
     }
-    val book = loaded?.second
-    val items = remember(book) { bookItems(book.orEmpty()) }
+    val book = loaded?.sections
+    val items = loaded?.items.orEmpty()
 
     val accent = rememberAccentColor(JewelTheme.isDark)
-    val listState = rememberLazyListState(saved?.scrollIndex ?: 0, saved?.scrollOffset ?: 0)
     val scope = rememberCoroutineScope()
     // Where to open: a restored tab where it was read; else the part (and heading) asked for, or the tefila of the hour
     var target by remember {
@@ -441,7 +454,7 @@ fun SiddurTabContent(
     }
     LaunchedEffect(items, target) {
         val (part, heading) = target ?: return@LaunchedEffect
-        if (items.isEmpty() || loaded?.first != civil) return@LaunchedEffect
+        if (items.isEmpty() || loaded?.date != civil) return@LaunchedEffect
         val partStart =
             part?.let { p -> items.indexOfFirst { it is BookItem.Title && it.section.part.familyOf() == p.familyOf() } }?.takeIf { it >= 0 }
                 ?: 0
@@ -477,9 +490,10 @@ fun SiddurTabContent(
 
     val tabs = LocalOpenWindow.current.tabsViewModel
     val linkHandler = rememberRefLinkUriHandler(tabs)
-    val openLink: (String) -> Unit = remember(linkHandler) {
-        { href -> if (refLinkLineId(href) != null) linkHandler.openUri(href) }
-    }
+    val openLink: (String) -> Unit =
+        remember(linkHandler) {
+            { href -> if (refLinkLineId(href) != null) linkHandler.openUri(href) }
+        }
     // Each tefila's title, a festival's with its day: "שחרית ומוסף · שבת וראש השנה"
     val titles = book.orEmpty().associateWith { sectionTitle(it) }
     val toc = remember(items, titles) { bookToc(items) { titles[it].orEmpty() } }
@@ -543,7 +557,7 @@ fun SiddurTabContent(
                             showAll = showAll,
                             onShowAll = { showAll = it },
                         )
-                        if (loaded?.first == civil && book.isNullOrEmpty()) {
+                        if (loaded?.date == civil && book.isNullOrEmpty()) {
                             Text(
                                 stringResource(Res.string.siddur_nusach_missing),
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -593,6 +607,13 @@ fun SiddurTabContent(
     }
 }
 
+private data class LoadedSiddurBook(
+    val date: LocalDate,
+    val showAll: Boolean,
+    val sections: List<BookSection>,
+    val items: List<BookItem>,
+)
+
 /** What the book's column shows: a tefila's title, what changes in it today, its choices, and its lines. */
 @Immutable
 internal sealed interface BookItem {
@@ -603,6 +624,10 @@ internal sealed interface BookItem {
     ) : BookItem
 
     data class Options(
+        override val section: BookSection,
+    ) : BookItem
+
+    data class MealOriginNote(
         override val section: BookSection,
     ) : BookItem
 
@@ -620,11 +645,47 @@ internal fun bookItems(book: List<BookSection>): List<BookItem> =
             // The book titles each tefila itself: the template's own opening title ("מנחה לימות החול") would repeat it
             val opening = section.lines.firstOrNull()?.takeIf { it.kind == SiddurLine.Kind.HEADING }
             section.lines.forEach { if (it !== opening) add(BookItem.Text(section, it)) }
+            if (section.part == SiddurPart.MEEIN_SHALOSH && section.lines.isNotEmpty()) add(BookItem.MealOriginNote(section))
         }
     }
 
 /** A section's name in the saved table of contents: its part, and tonight's meal apart from the day's. */
 private val BookSection.key get() = if (night && !part.night) "${part.name}/night" else part.name
+
+private data class SiddurItemAnchor(
+    val section: String,
+    val type: Int,
+    val text: String?,
+)
+
+private fun List<BookItem>.scrollAnchors(): List<Pair<SiddurItemAnchor, Int>> {
+    val occurrences = mutableMapOf<SiddurItemAnchor, Int>()
+    return map { item ->
+        val text = (item as? BookItem.Text)?.line?.html?.filterNot { it in MARK_START..SKIP_END }
+        val anchor = SiddurItemAnchor(item.section.key, item.contentType, text)
+        val count = occurrences.getOrDefault(anchor, 0)
+        occurrences[anchor] = count + 1
+        anchor to count
+    }
+}
+
+internal fun retainedSiddurPosition(
+    before: List<BookItem>,
+    after: List<BookItem>,
+    index: Int,
+    offset: Int,
+): Pair<Int, Int>? {
+    if (index !in before.indices || after.isEmpty()) return null
+    val oldKeys = before.scrollAnchors()
+    val newIndices = after.scrollAnchors().withIndex().associate { (index, key) -> key to index }
+    newIndices[oldKeys[index]]?.let { return it to offset }
+    // The current line can itself be filtered out. Prefer the next surviving line at equal distance.
+    for (distance in 1..maxOf(index, oldKeys.lastIndex - index)) {
+        oldKeys.getOrNull(index + distance)?.let(newIndices::get)?.let { return it to 0 }
+        oldKeys.getOrNull(index - distance)?.let(newIndices::get)?.let { return it to 0 }
+    }
+    return null
+}
 
 /** The book's table of contents, as the book view's: a tefila per root, its headings nested by level. */
 @Immutable
@@ -754,10 +815,11 @@ private fun BookHeader(
     val weekday = if (date.dayOfWeek == DayOfWeek.SATURDAY) "שבת" else "יום ${date.toJavaLocalDate().hebrewWeekday()}"
     val dayLabel = "$weekday, ${hebrewFormatter.format(day)}"
     val israeliDay = remember(day) { israeliOccasion(day) }
-    val showIsraeliCustom = remember(date, israeliDay) {
-        israeliDay?.hasThanksgivingPrayer == true ||
-            israeliOccasion(LocalDate.fromEpochDays(date.toEpochDays() + 1))?.hasThanksgivingPrayer == true
-    }
+    val showIsraeliCustom =
+        remember(date, israeliDay) {
+            israeliDay?.hasThanksgivingPrayer == true ||
+                israeliOccasion(LocalDate.fromEpochDays(date.toEpochDays() + 1))?.hasThanksgivingPrayer == true
+        }
     val occasion =
         israeliDay?.localizedName()
             ?: remember(day) {
@@ -909,6 +971,7 @@ private fun highlights(
 ): List<Pair<StringResource, Boolean>> =
     buildList {
         val prayer = part.familyOf()
+
         fun on(
             flag: String,
             label: StringResource,
@@ -938,11 +1001,12 @@ private fun highlights(
                 on("torah_reading", Res.string.siddur_hl_torah)
             }
             if ("israeli_hallel" in flags) {
-                val hallel = if ("hallel_without_blessings" in flags) {
-                    Res.string.siddur_israeli_hallel_unblessed
-                } else {
-                    Res.string.siddur_israeli_hallel_blessed
-                }
+                val hallel =
+                    if ("hallel_without_blessings" in flags) {
+                        Res.string.siddur_israeli_hallel_unblessed
+                    } else {
+                        Res.string.siddur_israeli_hallel_blessed
+                    }
                 add(hallel to true)
             }
             if (prayer == SiddurPart.SHACHARIT) {
@@ -1009,7 +1073,10 @@ private fun SiddurText(
     val style = LineStyle(textSize, lineHeight, fontFamily, boldScale, showDiacritics, accent)
     // Every line's text is built ahead, off the main thread: a line coming into view parsed its HTML in composition
     val openLink = LocalSiddurLinks.current
-    val annotations = remember(style, openLink) { LineAnnotations(style, openLink) }
+    val skippedText =
+        JewelTheme.globalColors.text.normal
+            .copy(alpha = SKIPPED_ALPHA)
+    val annotations = remember(style, openLink, skippedText) { LineAnnotations(style, openLink, skippedText) }
     LaunchedEffect(annotations, items) {
         withContext(Dispatchers.Default) { items.forEach { item -> (item as? BookItem.Text)?.line?.let(annotations::prepare) } }
     }
@@ -1017,10 +1084,15 @@ private fun SiddurText(
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().then(zoom.modifier).padding(end = 16.dp, bottom = 8.dp)) {
         itemsIndexed(items, contentType = { _, item -> item.contentType }) { _, item ->
             val line = (item as? BookItem.Text)?.line
+            val skipped =
+                line?.skipped == true ||
+                    item is BookItem.Title &&
+                    item.section.lines.isNotEmpty() &&
+                    item.section.lines.all(SiddurLine::skipped)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .alpha(if (line?.skipped == true) 0.35f else 1f)
+                    .alpha(if (skipped) SKIPPED_ALPHA else 1f)
                     .padding(horizontal = 8.dp)
                     .then(if (line?.special == true) Modifier.specialMark(accent) else Modifier),
             ) {
@@ -1028,7 +1100,8 @@ private fun SiddurText(
                 Box(Modifier.weight(1f).padding(vertical = LineItemVerticalPaddingPerSide)) {
                     when (item) {
                         is BookItem.Title -> PartTitle(item.section, titles[item.section].orEmpty(), inIsrael, style)
-                        is BookItem.Options -> PartOptions(item.section, options, onOption)
+                        is BookItem.Options -> PartOptions(item.section, options, onOption, style, annotations)
+                        is BookItem.MealOriginNote -> Note(stringResource(Res.string.siddur_meein_land_of_israel_note), style, annotations)
                         is BookItem.Text ->
                             when (item.line.kind) {
                                 SiddurLine.Kind.HEADING -> Heading(item.line, style)
@@ -1121,17 +1194,24 @@ private fun PartOptions(
     section: BookSection,
     options: Set<String>,
     onOption: (SiddurPart, String, Boolean) -> Unit,
+    style: LineStyle,
+    annotations: LineAnnotations,
 ) {
     // The lulav's option only in Sukkot
     val shown = section.part.options.filter { it != "first_lulav" || "sukkot" in section.flags }
     if (shown.isEmpty()) return
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        shown.forEach { option ->
-            CheckboxRow(
-                text = stringResource(OPTION_TITLES.getValue(option)),
-                checked = "${section.part.name}:$option" in options,
-                onCheckedChange = { on -> onOption(section.part, option, on) },
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            shown.forEach { option ->
+                CheckboxRow(
+                    text = stringResource(OPTION_TITLES.getValue(option)),
+                    checked = "${section.part.name}:$option" in options,
+                    onCheckedChange = { on -> onOption(section.part, option, on) },
+                )
+            }
+        }
+        if (section.part == SiddurPart.MEEIN_SHALOSH && shown.none { "${section.part.name}:$it" in options }) {
+            Note(stringResource(Res.string.siddur_choose_meal_food), style, annotations)
         }
     }
 }
@@ -1214,6 +1294,7 @@ private fun Paragraph(
 private class LineAnnotations(
     private val style: LineStyle,
     private val openLink: (String) -> Unit,
+    private val skippedText: Color,
 ) {
     private val paragraphs = ConcurrentHashMap<String, AnnotatedString>()
     private val notes = ConcurrentHashMap<String, AnnotatedString>()
@@ -1222,10 +1303,14 @@ private class LineAnnotations(
         paragraphs.getOrPut(html) {
             htmlWithLinks(style.html(html), style.textSize, style.accent, openLink, style.boldScale)
                 .marked(SpanStyle(color = style.accent, fontWeight = FontWeight.Bold))
+                .marked(SpanStyle(color = skippedText), SKIP_START, SKIP_END)
         }
 
     fun note(html: String): AnnotatedString =
-        notes.getOrPut(html) { htmlWithLinks(style.html(html), style.textSize * 0.8f, style.accent, openLink, style.boldScale) }
+        notes.getOrPut(html) {
+            htmlWithLinks(style.html(html), style.textSize * 0.8f, style.accent, openLink, style.boldScale)
+                .marked(SpanStyle(color = skippedText), SKIP_START, SKIP_END)
+        }
 
     fun prepare(line: SiddurLine) {
         when (line.kind) {
@@ -1242,6 +1327,7 @@ private val BookItem.contentType: Int
         when (this) {
             is BookItem.Title -> 0
             is BookItem.Options -> 1
+            is BookItem.MealOriginNote -> 2 + SiddurLine.Kind.entries.size
             is BookItem.Text -> 2 + line.kind.ordinal
         }
 
@@ -1251,6 +1337,7 @@ private val ARROW_SCROLL_STEP = 48.dp
 
 // A page keeps a line of the last one in sight
 private const val PAGE_SCROLL_FRACTION = 0.9f
+private const val SKIPPED_ALPHA = 0.35f
 
 /** Draws the mark in the slot at the line's start, its full height: drawn, as a child sized to the line laid its text out twice. */
 private fun Modifier.specialMark(color: Color): Modifier =
@@ -1312,26 +1399,31 @@ internal fun htmlWithLinks(
     }
 }
 
-/** The text between [MARK_START] and [MARK_END] in [style], the marks dropped. */
-internal fun AnnotatedString.marked(style: SpanStyle): AnnotatedString {
+/** Style the text between the markers and remove the markers from the result. */
+internal fun AnnotatedString.marked(
+    style: SpanStyle,
+    start: Char = MARK_START,
+    end: Char = MARK_END,
+): AnnotatedString {
     val source = this
-    if (source.text.none { it == MARK_START || it == MARK_END }) return source
+    if (source.text.none { it == start || it == end }) return source
+    val markers = charArrayOf(start, end)
     return buildAnnotatedString {
         var markFrom = -1
         var i = 0
         while (i < source.length) {
             when (source.text[i]) {
-                MARK_START -> {
+                start -> {
                     markFrom = length
                     i++
                 }
-                MARK_END -> {
+                end -> {
                     if (markFrom >= 0) addStyle(style, markFrom, length)
                     markFrom = -1
                     i++
                 }
                 else -> {
-                    val next = source.text.indexOfAny(charArrayOf(MARK_START, MARK_END), i).let { if (it < 0) source.length else it }
+                    val next = source.text.indexOfAny(markers, i).let { if (it < 0) source.length else it }
                     append(source.subSequence(i, next))
                     i = next
                 }
@@ -1405,17 +1497,19 @@ private fun ReadingBlock(
     style: LineStyle,
     annotations: LineAnnotations,
 ) {
-    val heading = stringResource(
-        when (reading.kind) {
-            ReadingKind.TORAH -> Res.string.siddur_reading_torah
-            ReadingKind.HAFTARAH -> if (reading.withBlessings) {
-                Res.string.siddur_reading_haftarah
-            } else {
-                Res.string.siddur_reading_unblessed_haftarah
-            }
-            ReadingKind.MEGILLAH -> Res.string.siddur_reading_megillah
-        },
-    )
+    val heading =
+        stringResource(
+            when (reading.kind) {
+                ReadingKind.TORAH -> Res.string.siddur_reading_torah
+                ReadingKind.HAFTARAH ->
+                    if (reading.withBlessings) {
+                        Res.string.siddur_reading_haftarah
+                    } else {
+                        Res.string.siddur_reading_unblessed_haftarah
+                    }
+                ReadingKind.MEGILLAH -> Res.string.siddur_reading_megillah
+            },
+        )
     val title = if (reading.occasion.isBlank()) heading else "$heading · ${reading.occasion}"
     var open by remember(reading) { mutableStateOf(true) }
     val verses by produceState<List<List<String>?>?>(null, reading, source, open) {
@@ -1437,11 +1531,12 @@ private fun ReadingBlock(
         if (open) {
             verses?.forEachIndexed { index, lines ->
                 val passage = reading.passages[index]
-                val label = if (passage.aliyah == "M") {
-                    stringResource(Res.string.siddur_reading_maftir)
-                } else {
-                    passage.aliyah?.toIntOrNull()?.let { ALIYOS.getOrNull(it - 1) }
-                }
+                val label =
+                    if (passage.aliyah == "M") {
+                        stringResource(Res.string.siddur_reading_maftir)
+                    } else {
+                        passage.aliyah?.toIntOrNull()?.let { ALIYOS.getOrNull(it - 1) }
+                    }
                 label?.let {
                     Text(
                         it,

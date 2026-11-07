@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.features.home.widgets
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
@@ -9,9 +10,10 @@ import io.github.kdroidfilter.seforimapp.features.zmanim.data.ISRAEL_COUNTRY_NAM
 import io.github.kdroidfilter.seforimapp.features.zmanim.data.Place
 import io.github.kdroidfilter.seforimapp.features.zmanim.data.worldPlaces
 import io.github.kdroidfilter.seforimapp.framework.di.AppScope
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 data class HomeUserLocation(
     val userPlace: Place,
@@ -34,12 +36,18 @@ private val DEFAULT_PLACE = Place(31.7683, 35.2137, 800.0, "Asia/Jerusalem")
 @ViewModelKey
 @Inject
 class HomeUserLocationViewModel : ViewModel() {
-    private val _state = MutableStateFlow(resolveState())
-    val state: StateFlow<HomeUserLocation> = _state.asStateFlow()
+    val state: StateFlow<HomeUserLocation> =
+        combine(AppSettings.regionCountryFlow, AppSettings.regionCityFlow, ::resolveState)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                resolveState(AppSettings.getRegionCountry(), AppSettings.getRegionCity()),
+            )
 
-    private fun resolveState(): HomeUserLocation {
-        val country = AppSettings.getRegionCountry()
-        val city = AppSettings.getRegionCity()
+    private fun resolveState(
+        country: String?,
+        city: String?,
+    ): HomeUserLocation {
         val place =
             if (!country.isNullOrBlank() && !city.isNullOrBlank()) {
                 worldPlaces[country]?.get(city)

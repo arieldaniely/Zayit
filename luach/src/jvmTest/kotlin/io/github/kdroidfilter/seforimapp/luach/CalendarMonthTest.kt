@@ -11,17 +11,25 @@ class CalendarMonthTest {
     @Test
     fun bothCalendarModesTagTheObservedDates() {
         val independence = LocalDate.of(2024, 5, 14)
-        val expected = mapOf(
-            independence.minusDays(1) to IsraeliOccasion.YOM_HAZIKARON,
-            independence to IsraeliOccasion.YOM_HAATZMAUT,
-        )
-        for (month in listOf(calendarMonth(independence, inIsrael = true), civilMonth(independence, inIsrael = false))) {
-            val tagged = month.weeks
-                .flatten()
-                .filterNotNull()
-                .mapNotNull { day ->
-                    day.israeliOccasion?.takeUnless { it == IsraeliOccasion.YOM_YERUSHALAYIM }?.let { day.date to it }
-                }.toMap()
+        val expected =
+            mapOf(
+                independence.minusDays(1) to IsraeliOccasion.YOM_HAZIKARON,
+                independence to IsraeliOccasion.YOM_HAATZMAUT,
+            )
+        val months =
+            listOf(
+                calendarMonth(independence, inIsrael = true),
+                civilMonth(independence, inIsrael = false),
+            )
+        for (month in months) {
+            val taggedDays =
+                month.weeks
+                    .flatten()
+                    .filterNotNull()
+                    .mapNotNull { day ->
+                        day.israeliOccasion?.takeUnless { it == IsraeliOccasion.YOM_YERUSHALAYIM }?.let { day.date to it }
+                    }
+            val tagged = taggedDays.toMap()
             assertEquals(expected, tagged)
         }
     }

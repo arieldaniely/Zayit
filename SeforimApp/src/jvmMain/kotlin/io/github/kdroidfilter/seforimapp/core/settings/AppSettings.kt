@@ -152,10 +152,10 @@ object AppSettings {
     private const val KEY_USER_FIRST_NAME = "user_first_name"
     private const val KEY_USER_LAST_NAME = "user_last_name"
     private const val KEY_USER_COMMUNITY = "user_community" // stores a stable code (e.g., "SEPHARADE")
-        private const val KEY_SIDDUR_NUSACH = "siddur_nusach"
-        private const val KEY_SIDDUR_ISRAELI_PRAYER_CUSTOM = "siddur_israeli_prayer_custom"
-        private const val KEY_SIDDUR_MINYAN = "siddur_minyan"
-        private const val KEY_SIDDUR_BEIT_AVEL = "siddur_beit_avel"
+    private const val KEY_SIDDUR_NUSACH = "siddur_nusach"
+    private const val KEY_SIDDUR_ISRAELI_PRAYER_CUSTOM = "siddur_israeli_prayer_custom"
+    private const val KEY_SIDDUR_MINYAN = "siddur_minyan"
+    private const val KEY_SIDDUR_BEIT_AVEL = "siddur_beit_avel"
     private const val KEY_SHARED_STUDY_DEVICE_ID = "shared_study_device_id"
     private const val KEY_SHARED_STUDY_DISPLAY_NAME = "shared_study_display_name"
 
@@ -667,6 +667,12 @@ object AppSettings {
     }
 
     // Region configuration accessors
+    private val _regionCountryFlow = MutableStateFlow(getRegionCountry())
+    val regionCountryFlow: StateFlow<String?> = _regionCountryFlow.asStateFlow()
+
+    private val _regionCityFlow = MutableStateFlow(getRegionCity())
+    val regionCityFlow: StateFlow<String?> = _regionCityFlow.asStateFlow()
+
     fun getRegionCountry(): String? {
         val value: String = settings[KEY_REGION_COUNTRY, ""]
         return value.ifBlank { null }
@@ -674,6 +680,7 @@ object AppSettings {
 
     fun setRegionCountry(value: String?) {
         settings[KEY_REGION_COUNTRY] = value?.takeIf { it.isNotBlank() } ?: ""
+        _regionCountryFlow.value = getRegionCountry()
     }
 
     fun getRegionCity(): String? {
@@ -683,6 +690,7 @@ object AppSettings {
 
     fun setRegionCity(value: String?) {
         settings[KEY_REGION_CITY] = value?.takeIf { it.isNotBlank() } ?: ""
+        _regionCityFlow.value = getRegionCity()
     }
 
     // Onboarding finished flag

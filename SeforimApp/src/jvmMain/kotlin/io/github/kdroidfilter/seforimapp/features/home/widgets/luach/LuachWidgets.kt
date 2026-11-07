@@ -89,15 +89,15 @@ import seforimapp.seforimapp.generated.resources.home_molad_label
 import seforimapp.seforimapp.generated.resources.home_molad_moment
 import seforimapp.seforimapp.generated.resources.home_next_zman_heading
 import seforimapp.seforimapp.generated.resources.home_tefila_heading
-import seforimapp.seforimapp.generated.resources.siddur_open_siddur
-import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_blessed
-import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_unblessed
 import seforimapp.seforimapp.generated.resources.home_widget_name_events
 import seforimapp.seforimapp.generated.resources.home_widget_name_limud
 import seforimapp.seforimapp.generated.resources.home_widget_name_molad
 import seforimapp.seforimapp.generated.resources.home_widget_name_next_zman
 import seforimapp.seforimapp.generated.resources.home_widget_name_tefila
 import seforimapp.seforimapp.generated.resources.home_widgets_options
+import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_blessed
+import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_unblessed
+import seforimapp.seforimapp.generated.resources.siddur_open_siddur
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
@@ -490,16 +490,18 @@ internal object TefilaWidget : HomeWidget {
         val now = rememberMinute()
         val moment = state.skyTimeMillisHere() ?: now.time
         val day = if (tzais != null && moment >= tzais.time) civilDay.plusDays(1) else civilDay
-        val customCode by LocalAppGraph.current.appSettings.siddurIsraeliPrayerCustomFlow.collectAsState()
+        val customCode by LocalAppGraph.current.appSettings.siddurIsraeliPrayerCustomFlow
+            .collectAsState()
         val custom = israeliPrayerCustomOf(customCode)
         val occasion = remember(day) { israeliOccasion(day.toKotlinLocalDate()) }
-        val israeliHallel = if (occasion != null && custom.saysHallel(occasion, SiddurPart.SHACHARIT)) {
-            stringResource(
-                if (custom.festive) Res.string.siddur_israeli_hallel_blessed else Res.string.siddur_israeli_hallel_unblessed,
-            )
-        } else {
-            null
-        }
+        val israeliHallel =
+            if (occasion != null && custom.saysHallel(occasion, SiddurPart.SHACHARIT)) {
+                stringResource(
+                    if (custom.festive) Res.string.siddur_israeli_hallel_blessed else Res.string.siddur_israeli_hallel_unblessed,
+                )
+            } else {
+                null
+            }
         val lines = remember(day, state.inIsrael, israeliHallel) { tefilaOfDay(day, state.inIsrael, israeliHallel) }
         val hebrewDate =
             remember(day, state.inIsrael) {
@@ -520,12 +522,13 @@ internal object TefilaWidget : HomeWidget {
                     Spacer(Modifier.width(8.dp))
                     OutlinedButton(onClick = {
                         val tabId = UUID.randomUUID().toString()
-                        val destination = if (occasion?.hasThanksgivingPrayer == true) {
-                            val part = if (day != civilDay) SiddurPart.MAARIV else SiddurPart.SHACHARIT
-                            TabsDestination.Siddur(tabId, part = part.name, epochDay = day.toEpochDay())
-                        } else {
-                            TabsDestination.Siddur(tabId)
-                        }
+                        val destination =
+                            if (occasion?.hasThanksgivingPrayer == true) {
+                                val part = if (day != civilDay) SiddurPart.MAARIV else SiddurPart.SHACHARIT
+                                TabsDestination.Siddur(tabId, part = part.name, epochDay = day.toEpochDay())
+                            } else {
+                                TabsDestination.Siddur(tabId)
+                            }
                         state.openTab(destination)
                     }) {
                         Text(stringResource(Res.string.siddur_open_siddur))

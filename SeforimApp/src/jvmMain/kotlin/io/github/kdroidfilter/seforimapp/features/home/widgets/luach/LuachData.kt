@@ -3,8 +3,6 @@ package io.github.kdroidfilter.seforimapp.features.home.widgets.luach
 import androidx.compose.runtime.Immutable
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.HebrewDateFormatter
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
-import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
-import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar.Parsha
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.TefilaRules
 import io.github.kdroidfilter.seforimapp.earthwidget.EarthWidgetLocation
@@ -14,6 +12,8 @@ import io.github.kdroidfilter.seforimapp.earthwidget.ZmanimOpinion
 import io.github.kdroidfilter.seforimapp.earthwidget.computeZmanimTimes
 import io.github.kdroidfilter.seforimapp.features.home.widgets.zmanim.candleLightingTime
 import io.github.kdroidfilter.seforimapp.features.home.widgets.zmanim.havdalahTime
+import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
+import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
 import kotlinx.datetime.toJavaLocalDate

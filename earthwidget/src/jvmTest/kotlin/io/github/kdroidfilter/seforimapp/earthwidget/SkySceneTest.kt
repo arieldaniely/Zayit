@@ -1,6 +1,7 @@
 package io.github.kdroidfilter.seforimapp.earthwidget
 
 import io.github.erkko68.filament.compose.scene.Direction
+import java.time.Instant
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -8,8 +9,21 @@ import kotlin.math.sin
 import kotlin.math.tan
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SkySceneTest {
+    @Test
+    fun moonVisibilityUsesTheSelectedMomentAndLocation() {
+        val noon = Instant.parse("2024-04-08T18:42:00Z").toEpochMilli()
+        val night = Instant.parse("2024-04-08T06:42:00Z").toEpochMilli()
+
+        // The Moon was near the Sun on the day of the Dallas solar eclipse.
+        assertTrue(isMoonAboveHorizon(32.78, -96.80, noon))
+        assertFalse(isMoonAboveHorizon(32.78, -96.80, night))
+        assertFalse(isMoonAboveHorizon(-32.78, 83.20, noon))
+    }
+
     /** The star field's rotation puts a star where the textbook hour-angle formula does. */
     @Test
     fun equatorialRotationMatchesHorizontalFormula() {

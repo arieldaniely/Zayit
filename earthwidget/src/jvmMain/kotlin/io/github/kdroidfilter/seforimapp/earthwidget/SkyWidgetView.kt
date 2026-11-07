@@ -445,6 +445,16 @@ private fun DrawScope.drawPass(
     pass.hours.forEach { d -> camera.project(d)?.let { drawCircle(color.copy(alpha = 0.8f), radius = 2.dp.toPx(), center = it) } }
 }
 
+/** Whether the Moon's centre is above the apparent horizon at the selected time and place. */
+fun isMoonAboveHorizon(
+    latitude: Double,
+    longitude: Double,
+    timeMillis: Long,
+): Boolean = computeMoonHorizontalPosition(computeJulianDayUtc(Date(timeMillis)), latitude, longitude).apparentElevation > 0.0
+
+private val HorizontalPosition.apparentElevation: Double
+    get() = elevationDeg + refractionDeg(elevationDeg)
+
 /**
  * The sky over [latitude]/[longitude] as seen from the ground, in 3D: the Sun and Moon where they really are
  * (the Moon lit by the Sun, so its phase is real), the stars turning with the night, and a sky whose colours
@@ -463,8 +473,11 @@ fun SkyWidgetView(
     timeMillis: Long? = null,
     /** Glides to a new moment and re-aims at what is up; false follows [timeMillis] as is (a moment per frame). */
     glide: Boolean = true,
+    /** Show the illuminated lunar disc without the horizon, even when the Moon is below it. */
+    moonOnly: Boolean = false,
 ) {
-    val catalog by produceState<StarCatalog?>(null) {
+    val catalog by produceState<StarCatalog?>(null, moonOnly) {
+        if (moonOnly || value != null) return@produceState
         value = withContext(Dispatchers.Default) { parseStars(Res.readBytes("files/stars.csv").decodeToString()) }
     }
     val moonMap by produceState<Pair<org.jetbrains.skia.Image, org.jetbrains.skia.Shader>?>(null) {
@@ -476,10 +489,12 @@ fun SkyWidgetView(
             }
     }
     var liveNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(20_000L)
-            liveNow = System.currentTimeMillis()
+    LaunchedEffect(timeMillis == null) {
+        if (timeMillis == null) {
+            while (true) {
+                liveNow = System.currentTimeMillis()
+                delay(20_000L)
+            }
         }
     }
     // A new moment glides there: the Sun moves along its path and the sky changes colour on the way. Across days,
@@ -507,18 +522,20 @@ fun SkyWidgetView(
     val moonPos = computeMoonHorizontalPosition(julianDay, latitude, longitude)
     // Seen through the air: raised by refraction, most at the horizon
     val sun = skyDirection(sunPos.azimuthDegreesFromNorth, sunPos.elevationDegrees + refractionDeg(sunPos.elevationDegrees))
-    val moon = skyDirection(moonPos.azimuthFromNorthDeg, moonPos.elevationDeg + refractionDeg(moonPos.elevationDeg))
+    val moon = skyDirection(moonPos.azimuthFromNorthDeg, moonPos.apparentElevation)
 
     // The Sun's path by day and the Moon's own pass at night, including its next rise while it is down.
     val night = sunPos.elevationDegrees <= NIGHT_SUN_ELEVATION_DEG
     val passKey = instant / if (glide) 600_000L else DAY_MS
     val sunRising = sunSoon.elevationDegrees > sunPos.elevationDegrees
     val pass =
-        remember(latitude, longitude, passKey, night, sunRising) {
-            if (night) {
+        remember(latitude, longitude, passKey, night, sunRising, moonOnly) {
+            if (moonOnly) {
+                null
+            } else if (night) {
                 skyPass(instant, horizon = 0.0, upcoming = true) { t ->
                     val position = computeMoonHorizontalPosition(computeJulianDayUtc(Date(t)), latitude, longitude)
-                    position.azimuthFromNorthDeg to (position.elevationDeg + refractionDeg(position.elevationDeg))
+                    position.azimuthFromNorthDeg to position.apparentElevation
                 }
             } else {
                 skyPass(instant, horizon = -0.833, upcoming = sunRising) { t ->
@@ -536,7 +553,7 @@ fun SkyWidgetView(
         sunPos: SolarPosition,
         moonPos: HorizontalPosition,
     ): SkyAim {
-        val moonElevation = moonPos.elevationDeg + refractionDeg(moonPos.elevationDeg)
+        val moonElevation = moonPos.apparentElevation
         return when {
             sunPos.elevationDegrees <= NIGHT_SUN_ELEVATION_DEG && moonElevation > 0.0 ->
                 SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), moonElevation.toFloat().coerceAtLeast(4f), MOON_FOCUS_FOV_DEG)
@@ -588,7 +605,12 @@ fun SkyWidgetView(
         val density = LocalDensity.current
         val widthPx = with(density) { maxWidth.toPx() }.toInt().coerceAtLeast(1)
         val heightPx = with(density) { maxHeight.toPx() }.toInt().coerceAtLeast(1)
-        val currentAim = if (glide) SkyAim(yaw, pitch, fov) else facing(sunPos, moonPos)
+        val currentAim =
+            when {
+                moonOnly -> SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), moonPos.apparentElevation.toFloat(), MOON_FOCUS_FOV_DEG)
+                glide -> SkyAim(yaw, pitch, fov)
+                else -> facing(sunPos, moonPos)
+            }
         val state =
             SkyViewState(
                 widthPx = widthPx,
@@ -606,21 +628,29 @@ fun SkyWidgetView(
         val camera = SkyCamera(overlay)
         val moonIllumination =
             (1f - (overlay.sun.x * overlay.moon.x + overlay.sun.y * overlay.moon.y + overlay.sun.z * overlay.moon.z)) / 2f
-        val light = skyLight(overlay, moonIllumination)
+        val light = if (moonOnly) null else skyLight(overlay, moonIllumination)
 
         // Back to front: the air, the stars, the Moon, the Sun, the day's path, then the land
         // over them all, so whatever sets goes down behind the skyline
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(skyBrush(overlay, light))
-            catalog?.let { drawStars(it, overlay, camera, light) }
-            if (moon.y > 0f) {
-                if (night) drawMoonGlow(overlay, camera, moonIllumination)
+            if (light == null) {
+                drawRect(Color(0xFF080D18))
+            } else {
+                drawRect(skyBrush(overlay, light))
+                catalog?.let { drawStars(it, overlay, camera, light) }
+            }
+            if (moonOnly || moon.y > 0f) {
+                if (night && !moonOnly) drawMoonGlow(overlay, camera, moonIllumination)
                 moonMap?.let { (image, shader) ->
-                    drawRect(moonBrush(overlay, camera, image, shader, moonIllumination), blendMode = BlendMode.Plus)
+                    drawRect(
+                        moonBrush(overlay, camera, image, shader, moonIllumination, moonOnly),
+                        blendMode = BlendMode.Plus,
+                    )
                 }
             }
-            if (!night) drawSun(overlay, camera, sunPos.elevationDegrees)
+            if (!moonOnly && !night) drawSun(overlay, camera, sunPos.elevationDegrees)
         }
+        if (light == null) return@BoxWithConstraints
         Canvas(Modifier.fillMaxSize()) {
             pass?.let { drawPass(it, instant, camera, pathColor) }
             drawRect(groundBrush(overlay, light))

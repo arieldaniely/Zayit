@@ -236,10 +236,16 @@ internal fun moonBrush(
     image: Image,
     imageShader: Shader,
     illumination: Float,
+    moonOnly: Boolean,
 ): ShaderBrush {
     val m = state.moon
-    val at = camera.project(m) ?: Offset(-1e4f, -1e4f)
-    val radius = kotlin.math.tan(MOON_ANGULAR_RADIUS_DEG * DEG_TO_RAD_F) / camera.tanHalfV * state.heightPx / 2f
+    val at = if (moonOnly) Offset(state.widthPx / 2f, state.heightPx / 2f) else camera.project(m) ?: Offset(-1e4f, -1e4f)
+    val radius =
+        if (moonOnly) {
+            minOf(state.widthPx, state.heightPx) * 0.31f
+        } else {
+            kotlin.math.tan(MOON_ANGULAR_RADIUS_DEG * DEG_TO_RAD_F) / camera.tanHalfV * state.heightPx / 2f
+        }
     val toViewer = Direction(-m.x, -m.y, -m.z)
     val north = (state.stars * Direction(0f, 0f, 1f)).let { it.minus(m, it.dot(m)).unit() }
     val east = Direction(m.y * north.z - m.z * north.y, m.z * north.x - m.x * north.z, m.x * north.y - m.y * north.x)
@@ -259,7 +265,7 @@ internal fun moonBrush(
                 child("moonTex", imageShader)
                 uniform("texSize", image.width.toFloat(), image.height.toFloat())
                 // Earthshine: brightest on a thin crescent, when the Earth seen from the Moon is nearly full
-                val night = ((-state.sun.y - 0.10f) / 0.18f).coerceIn(0f, 1f)
+                val night = if (moonOnly) 1f else ((-state.sun.y - 0.10f) / 0.18f).coerceIn(0f, 1f)
                 uniform("shine", (0.05f + night * 0.10f) * (1f - illumination))
             }.makeShader()
             .asComposeShader(),

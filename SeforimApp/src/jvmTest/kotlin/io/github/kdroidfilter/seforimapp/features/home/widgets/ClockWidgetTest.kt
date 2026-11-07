@@ -1,19 +1,19 @@
 package io.github.kdroidfilter.seforimapp.features.home.widgets
 
+import androidx.compose.ui.geometry.Offset
 import io.github.kdroidfilter.seforimapp.features.home.widgets.clock.clockHandDegrees
-import io.github.kdroidfilter.seforimapp.features.home.widgets.clock.parseClockTime
+import io.github.kdroidfilter.seforimapp.features.home.widgets.clock.timeFromDialOffset
 import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 class ClockWidgetTest {
     @Test
-    fun acceptsTwentyFourHourTimesWithoutRollingInvalidInputIntoAnotherDay() {
-        assertEquals(LocalTime.of(14, 30), parseClockTime("14:30"))
-        assertEquals(LocalTime.of(9, 5), parseClockTime("9:05"))
-        assertNull(parseClockTime("24:00"))
-        assertNull(parseClockTime("14:65"))
+    fun `dial positions select a time in the current half day`() {
+        assertEquals(LocalTime.of(15, 0), timeFromDialOffset(Offset(1f, 0f), LocalTime.NOON))
+        assertEquals(LocalTime.of(6, 0), timeFromDialOffset(Offset(0f, 1f), LocalTime.MIDNIGHT))
+        assertEquals(LocalTime.of(10, 30), timeFromDialOffset(Offset(-1f, -1f), LocalTime.MIDNIGHT))
+        assertEquals(LocalTime.NOON, timeFromDialOffset(Offset(0f, -1f), LocalTime.of(23, 30)))
     }
 
     @Test

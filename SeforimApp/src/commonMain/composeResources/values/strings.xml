@@ -3,10 +3,8 @@
     <string name="clock_style_classic">קלאסי</string>
     <string name="clock_style_minimal">מינימלי</string>
     <string name="clock_style_roman">ספרות רומיות</string>
-    <string name="clock_choose_time">בחירת שעה לכל הוויג׳יטים</string>
-    <string name="clock_time_input_hint">שעה בפורמט 14:30</string>
-    <string name="clock_apply_time">בחירה</string>
     <string name="clock_live_time">חזרה לעכשיו</string>
+    <string name="clock_switch_half_day">העברה ב־12 שעות</string>
     <string name="clock_dawn">עלות השחר</string>
     <string name="clock_prayer">סוף זמן תפילה</string>
     <string name="clock_mincha_ketana">מנחה קטנה</string>

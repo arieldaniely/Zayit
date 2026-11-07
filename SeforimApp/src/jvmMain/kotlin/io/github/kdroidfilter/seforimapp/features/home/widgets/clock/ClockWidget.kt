@@ -1,18 +1,20 @@
 package io.github.kdroidfilter.seforimapp.features.home.widgets.clock
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -22,7 +24,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.settings.SettingCodec
 import io.github.kdroidfilter.seforimapp.earthwidget.computeZmanimTimes
@@ -30,17 +31,21 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.*
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.DefaultButton
-import org.jetbrains.jewel.ui.component.OutlinedButton
+import org.jetbrains.jewel.ui.component.Icon
+import org.jetbrains.jewel.ui.component.IconButton
 import org.jetbrains.jewel.ui.component.RadioButtonRow
 import org.jetbrains.jewel.ui.component.Text
-import org.jetbrains.jewel.ui.component.TextField
+import org.jetbrains.jewel.ui.component.Tooltip
+import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.*
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Date
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 internal object ClockWidget : HomeWidget {
@@ -80,6 +85,7 @@ internal object ClockWidget : HomeWidget {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     override fun Content(
         state: HomeWidgetsState,
@@ -102,7 +108,13 @@ internal object ClockWidget : HomeWidget {
         val time = Instant.ofEpochMilli(state.skyTimeMillis ?: now).atZone(zone).toLocalTime()
         val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
         val accent = JewelTheme.globalColors.outlines.focused
-        var pickingTime by remember { mutableStateOf(false) }
+
+        fun localTime(moment: Date): LocalTime = moment.toInstant().atZone(zone).toLocalTime()
+
+        fun selectTime(selected: LocalTime) {
+            state.selectDate(date)
+            state.targetTime = Date.from(date.atTime(selected).atZone(zone).toInstant())
+        }
         val entries =
             listOf(
                 Res.string.home_widget_card_sunrise_title to times?.sunrise,
@@ -116,6 +128,7 @@ internal object ClockWidget : HomeWidget {
                 Res.string.clock_mincha_ketana to times?.minchaKetana,
                 Res.string.clock_plag to times?.plagHamincha,
             )
+        val markers = entries.mapNotNull { (_, moment) -> moment?.let(::localTime) }
         val reference = state.skyTimeMillis ?: now
         val next = entries.mapNotNull { it.second }.filter { it.time > reference }.minByOrNull(Date::getTime)
         PanelCard(modifier.fillMaxSize()) {
@@ -131,25 +144,40 @@ internal object ClockWidget : HomeWidget {
                 Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(title), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        OutlinedButton(onClick = { pickingTime = true }) { Text(time.format(formatter), color = accent) }
+                        val halfDayLabel = stringResource(Res.string.clock_switch_half_day)
+                        Tooltip({ Text(halfDayLabel) }) {
+                            Text(
+                                time.format(formatter),
+                                color = accent,
+                                modifier =
+                                    Modifier
+                                        .clickable(onClickLabel = halfDayLabel) {
+                                            selectTime(time.plusHours(12))
+                                        }.padding(4.dp),
+                            )
+                        }
+                        val liveLabel = stringResource(Res.string.clock_live_time)
+                        Tooltip({ Text(liveLabel) }) {
+                            IconButton(onClick = { state.selectDate(LocalDate.now(zone)) }, modifier = Modifier.size(24.dp)) {
+                                Icon(AllIconsKeys.Actions.Refresh, contentDescription = liveLabel, modifier = Modifier.size(14.dp))
+                            }
+                        }
                     }
                     state.cityLabel?.let { Text(it, fontSize = 12.sp, color = JewelTheme.globalColors.text.info) }
                     AnalogDial(
-                        time,
-                        state[ClockSettings.style],
-                        entries.mapNotNull {
-                            it.second
-                                ?.toInstant()
-                                ?.atZone(zone)
-                                ?.toLocalTime()
-                        },
-                        Modifier.weight(1f).fillMaxWidth(),
+                        time = time,
+                        style = state[ClockSettings.style],
+                        markers = markers,
+                        onSelect = ::selectTime,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
                     visible.chunked(2).forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             row.forEach { (label, moment) ->
                                 Column(
-                                    Modifier.weight(1f).clickable(enabled = moment != null) { state.targetTime = moment },
+                                    Modifier.weight(1f).clickable(enabled = moment != null) {
+                                        moment?.let { selectTime(localTime(it)) }
+                                    },
                                 ) {
                                     Text(stringResource(label), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(
@@ -165,40 +193,6 @@ internal object ClockWidget : HomeWidget {
                 }
             }
         }
-        if (pickingTime) {
-            val input = rememberTextFieldState(time.format(formatter))
-            val chosen = parseClockTime(input.text.toString())
-            Dialog(onDismissRequest = { pickingTime = false }) {
-                Column(
-                    Modifier
-                        .width(300.dp)
-                        .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(12.dp))
-                        .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(12.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text(stringResource(Res.string.clock_choose_time), fontWeight = FontWeight.SemiBold)
-                    TextField(
-                        input,
-                        placeholder = { Text(stringResource(Res.string.clock_time_input_hint)) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DefaultButton(enabled = chosen != null, onClick = {
-                            chosen?.let {
-                                state.selectDate(date)
-                                state.targetTime = Date.from(date.atTime(it).atZone(zone).toInstant())
-                            }
-                            pickingTime = false
-                        }) { Text(stringResource(Res.string.clock_apply_time)) }
-                        OutlinedButton(onClick = {
-                            state.selectDate(java.time.LocalDate.now(zone))
-                            pickingTime = false
-                        }) { Text(stringResource(Res.string.clock_live_time)) }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -208,67 +202,131 @@ internal object ClockSettings : WidgetSettings(ClockWidget.id) {
 
 private val clockStyles = listOf(Res.string.clock_style_classic, Res.string.clock_style_minimal, Res.string.clock_style_roman)
 
-internal fun parseClockTime(value: String): LocalTime? =
-    runCatching {
-        LocalTime.parse(
-            value.trim(),
-            DateTimeFormatter.ofPattern("H:mm").withResolverStyle(java.time.format.ResolverStyle.STRICT),
-        )
-    }.getOrNull()
-
 internal fun clockHandDegrees(time: LocalTime): Pair<Float, Float> =
     ((time.hour % 12 + time.minute / 60f) * 30f) to ((time.minute + time.second / 60f) * 6f)
+
+private const val DIAL_RADIUS = 0.46f
+
+private fun clockAngle(offset: Offset): Float = Math.toDegrees(atan2(offset.x, -offset.y).toDouble()).toFloat().mod(360f)
+
+private fun angleDifference(from: Float, to: Float): Float = (to - from + 180f).mod(360f) - 180f
+
+private fun dialPoint(degrees: Float, distance: Float): Offset {
+    val radians = Math.toRadians((degrees - 90f).toDouble())
+    return Offset(cos(radians).toFloat(), sin(radians).toFloat()) * distance
+}
+
+private fun distanceToHand(offset: Offset, degrees: Float, length: Float): Float {
+    val direction = dialPoint(degrees, 1f)
+    val along = (offset.x * direction.x + offset.y * direction.y).coerceIn(0f, length)
+    return (offset - direction * along).getDistance()
+}
+
+internal fun timeFromDialOffset(
+    offset: Offset,
+    current: LocalTime,
+): LocalTime {
+    val minutes = (clockAngle(offset) * 2).roundToInt() % 720 + (current.hour / 12) * 720
+    return LocalTime.of(minutes / 60, minutes % 60)
+}
 
 @Composable
 private fun AnalogDial(
     time: LocalTime,
     style: Int,
     markers: List<LocalTime>,
+    onSelect: (LocalTime) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val foreground = JewelTheme.globalColors.text.normal
     val muted = JewelTheme.globalColors.text.info
     val accent = JewelTheme.globalColors.outlines.focused
     val measurer = rememberTextMeasurer()
+    val currentTime by rememberUpdatedState(time)
+    val currentOnSelect by rememberUpdatedState(onSelect)
     val label = stringResource(Res.string.clock_time_description, time.format(DateTimeFormatter.ofPattern("HH:mm")))
-    Canvas(modifier.semantics { contentDescription = label }) {
-        val radius = size.minDimension * 0.46f
-        val centre = center
+    Box(modifier) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .semantics { contentDescription = label }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val first = awaitFirstDown()
+                        val centre = Offset(size.width / 2f, size.height / 2f)
+                        val radius = minOf(size.width, size.height) * DIAL_RADIUS
+                        val offset = first.position - centre
+                        if (offset.getDistance() > radius || offset.getDistance() < 2.dp.toPx()) return@awaitEachGesture
+                        val startTime = currentTime
+                        val (hour, minute) = clockHandDegrees(startTime)
+                        val hourDistance = distanceToHand(offset, hour, radius * 0.46f)
+                        val minuteDistance = distanceToHand(offset, minute, radius * 0.64f)
+                        val minutesPerTurn =
+                            when {
+                                minOf(hourDistance, minuteDistance) > 5.dp.toPx() -> null
+                                minuteDistance < hourDistance -> 60
+                                else -> 720
+                            }
+                        first.consume()
+                        if (minutesPerTurn == null) currentOnSelect(timeFromDialOffset(offset, startTime))
 
-        fun point(
-            degrees: Float,
-            distance: Float,
-        ): Offset {
-            val radians = Math.toRadians((degrees - 90f).toDouble())
-            return centre + Offset(cos(radians).toFloat(), sin(radians).toFloat()) * distance
-        }
-        drawCircle(muted.copy(alpha = 0.2f), radius, centre, style = Stroke(1.dp.toPx()))
-        repeat(60) { tick ->
-            val major = tick % 5 == 0
-            drawLine(
-                if (major) foreground else muted.copy(alpha = 0.4f),
-                point(tick * 6f, radius * if (major) 0.88f else 0.94f),
-                point(tick * 6f, radius),
-                strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-        if (style != 1) {
-            (1..12).forEach { number ->
-                val label = if (style == 2) ROMAN_NUMBERS[number - 1] else number.toString()
-                val text = measurer.measure(label, TextStyle(color = foreground, fontSize = 12.sp))
-                val at = point(number * 30f, radius * 0.73f)
-                drawText(text, topLeft = at - Offset(text.size.width / 2f, text.size.height / 2f))
+                        var lastAngle = clockAngle(offset)
+                        var turn = 0f
+                        var moved = false
+                        do {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == first.id } ?: break
+                            val position = change.position - centre
+                            if (change.pressed && change.position != change.previousPosition && position.getDistance() >= 2.dp.toPx()) {
+                                moved = true
+                                val angle = clockAngle(position)
+                                turn += angleDifference(lastAngle, angle)
+                                lastAngle = angle
+                                val picked = if (minutesPerTurn == null) {
+                                    timeFromDialOffset(position, startTime)
+                                } else {
+                                    startTime.plusMinutes((turn * minutesPerTurn / 360f).roundToInt().toLong())
+                                }
+                                currentOnSelect(picked)
+                                change.consume()
+                            }
+                        } while (change.pressed)
+                        if (!moved && minutesPerTurn != null) currentOnSelect(timeFromDialOffset(offset, startTime))
+                    }
+                },
+        ) {
+            val radius = minOf(size.width, size.height) * DIAL_RADIUS
+            val centre = center
+
+            fun point(degrees: Float, distance: Float): Offset = centre + dialPoint(degrees, distance)
+
+            drawCircle(muted.copy(alpha = 0.2f), radius, centre, style = Stroke(1.dp.toPx()))
+            repeat(60) { tick ->
+                val major = tick % 5 == 0
+                drawLine(
+                    if (major) foreground else muted.copy(alpha = 0.4f),
+                    point(tick * 6f, radius * if (major) 0.88f else 0.94f),
+                    point(tick * 6f, radius),
+                    strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
             }
+            if (style != 1) {
+                (1..12).forEach { number ->
+                    val label = if (style == 2) ROMAN_NUMBERS[number - 1] else number.toString()
+                    val text = measurer.measure(label, TextStyle(color = foreground, fontSize = 12.sp))
+                    val at = point(number * 30f, radius * 0.73f)
+                    drawText(text, topLeft = at - Offset(text.size.width / 2f, text.size.height / 2f))
+                }
+            }
+            markers.forEachIndexed { index, marker ->
+                val angle = clockHandDegrees(marker).first
+                drawCircle(accent.copy(alpha = 0.8f), 3.dp.toPx(), point(angle, radius * (if (index % 2 == 0) 1.04f else 0.98f)))
+            }
+            val (hour, minute) = clockHandDegrees(time)
+            drawLine(foreground, centre, point(hour, radius * 0.46f), 5.dp.toPx(), StrokeCap.Round)
+            drawLine(accent, centre, point(minute, radius * 0.64f), 3.dp.toPx(), StrokeCap.Round)
+            drawCircle(accent, 5.dp.toPx(), centre)
         }
-        markers.forEachIndexed { index, marker ->
-            val angle = clockHandDegrees(marker).first
-            drawCircle(accent.copy(alpha = 0.8f), 3.dp.toPx(), point(angle, radius * (if (index % 2 == 0) 1.04f else 0.98f)))
-        }
-        val (hour, minute) = clockHandDegrees(time)
-        drawLine(foreground, centre, point(hour, radius * 0.46f), 5.dp.toPx(), StrokeCap.Round)
-        drawLine(accent, centre, point(minute, radius * 0.64f), 3.dp.toPx(), StrokeCap.Round)
-        drawCircle(accent, 5.dp.toPx(), centre)
     }
 }
 

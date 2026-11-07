@@ -66,6 +66,7 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.booktoc.
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.CategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.categorytree.SearchCategoryTreePanel
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.notes.NotesPanel
+import io.github.kdroidfilter.seforimapp.framework.desktop.DefaultCommentaryPaneExtent
 import io.github.kdroidfilter.seforimapp.framework.desktop.DockSizes
 import io.github.kdroidfilter.seforimapp.framework.desktop.OpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
@@ -140,7 +141,7 @@ enum class ReaderPane(
     Comments(
         "comments",
         Res.string.commentaries,
-        SatellitePlacement.Docked(DockSide.Bottom, extent = 220.dp, weight = 2f),
+        SatellitePlacement.Docked(DockSide.Bottom, extent = DefaultCommentaryPaneExtent, weight = 2f),
         toggle = BookContentEvent.ToggleCommentaries,
         navigation = false,
     ),

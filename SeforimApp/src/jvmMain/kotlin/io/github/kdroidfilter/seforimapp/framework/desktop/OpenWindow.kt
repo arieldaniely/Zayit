@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import dev.nucleusframework.application.NucleusWindow
 import dev.nucleusframework.application.NucleusWindowBounds
 import dev.nucleusframework.window.ExperimentalNucleusApi
+import dev.nucleusframework.window.tao.DockSide
 import dev.nucleusframework.window.tao.SatelliteWorkspace
 import io.github.kdroidfilter.seforim.tabs.TabsViewModel
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.SimpleTabViewModelOwner
@@ -34,7 +35,11 @@ class OpenWindow internal constructor(
     val windowState: WindowState,
 ) {
     private val navigationPanes = SatelliteWorkspace()
-    private val linePanes = SatelliteWorkspace()
+    private val linePanes =
+        SatelliteWorkspace().apply {
+            setDockExtent(DockSide.Left, DefaultCommentaryPaneExtent)
+            setDockExtent(DockSide.Right, DefaultCommentaryPaneExtent)
+        }
     internal val tabOwners = mutableMapOf<String, SimpleTabViewModelOwner>()
     internal val tabThumbnails = androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>()
     internal var pointerOnStrip by mutableStateOf(false)

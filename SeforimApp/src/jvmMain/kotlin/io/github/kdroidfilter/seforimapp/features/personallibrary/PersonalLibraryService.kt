@@ -5,8 +5,12 @@ import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimlibrary.dao.repository.SeforimRepository
 import io.github.kdroidfilter.seforimlibrary.search.CompositeSearchEngine
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +29,13 @@ class PersonalLibraryService(
 ) {
     private val _state = MutableStateFlow(PersonalLibraryUiState(configuration = manager.store.load()))
     val state: StateFlow<PersonalLibraryUiState> = _state.asStateFlow()
+
+    @Volatile
+    private var incrementalSemanticJob: Job? = null
+
+    fun cancelIncrementalSemanticIndex() {
+        incrementalSemanticJob?.cancel()
+    }
 
     fun configuration(): PersonalLibraryConfiguration = _state.value.configuration
 
@@ -97,7 +108,7 @@ class PersonalLibraryService(
                     it.copy(
                         configuration = manager.store.load(),
                         isWorking = false,
-                        error = error.message ?: error::class.simpleName,
+                        error = if (error is CancellationException) null else error.message ?: error::class.simpleName,
                         progress = 0f,
                     )
                 }
@@ -115,16 +126,25 @@ class PersonalLibraryService(
         val output = artifacts.newSemanticDirectory()
         var saved = false
         try {
-            val indexed = buildPersonalSemanticIndex(
-                artifacts.databasePath,
-                Path.of("${getDatabasePath()}.semantic/model"),
-                output,
-                embed = { model.embedClean(it, io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder.Role.PASSAGE) },
-                onProgress = { progress -> _state.update { it.copy(semanticWorking = true, progress = progress) } },
-                previousIndex = previous.semanticDirectory?.let(Path::of),
-                previousDatabase = previousDatabase,
-                allowEmpty = true,
-            )
+            val indexed =
+                coroutineScope {
+                    val job =
+                        async(start = CoroutineStart.LAZY) {
+                            buildPersonalSemanticIndex(
+                                artifacts.databasePath,
+                                Path.of("${getDatabasePath()}.semantic/model"),
+                                output,
+                                embed = { model.embedClean(it, io.github.kdroidfilter.seforimlibrary.search.SeforimEmbedder.Role.PASSAGE) },
+                                onProgress = { progress -> _state.update { it.copy(progress = progress) } },
+                                previousIndex = previous.semanticDirectory?.let(Path::of),
+                                previousDatabase = previousDatabase,
+                                allowEmpty = true,
+                            )
+                        }
+                    incrementalSemanticJob = job
+                    _state.update { it.copy(semanticWorking = true, progress = 0f) }
+                    job.await()
+                }
             val updated =
                 imported.copy(
                     semanticGeneration = artifacts.generation.takeIf { indexed > 0 },
@@ -140,6 +160,7 @@ class PersonalLibraryService(
             ) {
                 deletePersonalSemanticBuild(output)
             }
+            incrementalSemanticJob = null
             _state.update { it.copy(semanticWorking = false) }
         }
     }

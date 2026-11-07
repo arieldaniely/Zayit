@@ -85,6 +85,7 @@ class PersonalLibraryViewModel(
 
     fun cancelSemanticIndex() {
         semanticJob?.cancel()
+        service.cancelIncrementalSemanticIndex()
     }
 
     fun disableSemanticIndex() {

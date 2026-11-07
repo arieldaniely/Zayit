@@ -21,6 +21,8 @@
     <string name="home_widget_name_earth">כדור הארץ</string>
     <string name="home_widget_name_temple">חורבן הבית</string>
     <string name="home_widget_name_sky">השמיים</string>
+    <string name="home_sky_show_moon">הצגת מופע הירח</string>
+    <string name="home_sky_show_sky">הצגת השמיים</string>
     <string name="home_solar_options_window">בחלון המלא</string>
     <string name="home_solar_options_speed">מהירות ההפעלה</string>
     <string name="home_solar_speed_one_day">יום בשנייה</string>

@@ -1278,6 +1278,7 @@ fun BookContentView(
                     onEnterPrev = { navigateToMatch(false, scope) },
                     onClose = { appSettings.closeFindBar(tabId) },
                     onActivate = ::activateCurrentMatch,
+                    autoFocus = isTabSelected && isSelected,
                     focusRequest = findFocusRequest,
                     matchCount = results?.matches?.occurrences,
                     matchPosition = liveMatch?.position,

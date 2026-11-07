@@ -38,16 +38,18 @@ sealed interface BreadcrumbNode {
 
     data class BookNode(
         val book: Book,
+        val label: String = book.title,
     ) : BreadcrumbNode {
         override val key: String get() = "b${book.id}"
-        override val title: String get() = book.title
+        override val title: String get() = label
     }
 
     data class TocNode(
         val entry: TocEntry,
+        val sectionLabel: String? = null,
     ) : BreadcrumbNode {
-        override val key: String get() = "t${entry.id}"
-        override val title: String get() = entry.text
+        override val key: String get() = if (sectionLabel == null) "t${entry.id}" else "section${entry.id}"
+        override val title: String get() = sectionLabel ?: entry.text
     }
 }
 
@@ -79,6 +81,7 @@ class BreadcrumbNavigator(
     private val onReturnFocus: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
     private val rootSiblings: (() -> List<BreadcrumbNode>)? = null,
+    private val openBookContentsOnClick: Boolean = false,
     private val onNavigate: (BreadcrumbNode) -> Unit,
 ) {
     private var contextItems: List<BreadcrumbNode> = initialPath
@@ -122,7 +125,8 @@ class BreadcrumbNavigator(
             return
         }
         val index = items.indexOfFirst { it.key == key }
-        if (index >= 0) showSiblings(index)
+        if (index < 0) return
+        if (openBookContentsOnClick && items[index] is BreadcrumbNode.BookNode) showPopup(index) else showSiblings(index)
     }
 
     /** The popup stays anchored to the clicked segment, with that segment selected among its peers. */
@@ -257,7 +261,7 @@ class BreadcrumbNavigator(
 
     /** Headings without a line of their own lead nowhere: the bar stays as it is. */
     private fun navigate(node: BreadcrumbNode) {
-        if (node is BreadcrumbNode.TocNode && node.entry.lineId == null) return
+        if (!openBookContentsOnClick && node is BreadcrumbNode.TocNode && node.entry.lineId == null) return
         reset(returnFocus = true)
         onNavigate(node)
     }
@@ -294,7 +298,8 @@ internal sealed interface ExpandResult {
 }
 
 /** Books open on click; folders (categories, TOC headings) drill down. */
-private fun BreadcrumbNode.navigateOnClick(): Boolean = this is BreadcrumbNode.BookNode
+private fun BreadcrumbNode.navigateOnClick(): Boolean =
+    this is BreadcrumbNode.BookNode || (this is BreadcrumbNode.TocNode && sectionLabel != null)
 
 /**
  * Same algorithm as IntelliJ's NavBar autoExpand: a chosen leaf (or a book) is navigated to;

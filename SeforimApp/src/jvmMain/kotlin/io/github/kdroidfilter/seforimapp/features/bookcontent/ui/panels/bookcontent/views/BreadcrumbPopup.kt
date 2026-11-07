@@ -232,7 +232,7 @@ private fun BreadcrumbNode.isFolder(): Boolean =
         is BreadcrumbNode.ChoiceNode -> hasChildren
         is BreadcrumbNode.CategoryNode -> true
         is BreadcrumbNode.BookNode -> false
-        is BreadcrumbNode.TocNode -> entry.hasChildren
+        is BreadcrumbNode.TocNode -> sectionLabel == null && entry.hasChildren
     }
 
 private val RowShape = RoundedCornerShape(5.dp)

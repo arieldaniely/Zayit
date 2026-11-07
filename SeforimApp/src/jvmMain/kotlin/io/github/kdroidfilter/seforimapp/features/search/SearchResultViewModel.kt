@@ -1183,6 +1183,7 @@ class SearchResultViewModel(
                         _uiState.value.copy(
                             scopeCategoryPath = initialScopePath,
                             scopeBook = resolvedScopeBook,
+                            scopeTocId = fetchTocId,
                         )
                     // Prepare TOC tree for the scoped book so the panel is ready without recomputation
                     resolvedScopeBook?.let { book ->
@@ -1197,6 +1198,10 @@ class SearchResultViewModel(
 
                     // Phase 1: Compute facets instantly for immediate tree display
                     val baseBookOnly = !_uiState.value.globalExtended
+                    val facetsLineIds =
+                        fetchTocId?.let { tocId ->
+                            repository.getTocEntry(tocId)?.let { collectLineIdsForTocSubtree(tocId, it.bookId) }.orEmpty()
+                        }
                     val facetsBookIds: Collection<Long>? =
                         when {
                             fetchTocId != null -> {
@@ -1220,13 +1225,16 @@ class SearchResultViewModel(
                         }
 
                     var facets =
-                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART) {
+                        if (_uiState.value.mode == io.github.kdroidfilter.seforimlibrary.search.SearchMode.SMART ||
+                            facetsLineIds?.isEmpty() == true
+                        ) {
                             null
                         } else {
                             lucene.computeFacets(
                                 query = q,
                                 near = DEFAULT_NEAR,
                                 bookIds = facetsBookIds,
+                                lineIds = facetsLineIds,
                                 baseBookOnly = baseBookOnly,
                             )
                         }
@@ -1241,6 +1249,7 @@ class SearchResultViewModel(
                                 query = q,
                                 near = DEFAULT_NEAR,
                                 bookIds = facetsBookIds,
+                                lineIds = facetsLineIds,
                                 baseBookOnly = false,
                             )
                     }
@@ -1412,7 +1421,7 @@ class SearchResultViewModel(
                 lucene.openSession(
                     query = q,
                     near = DEFAULT_NEAR,
-                    bookIds = if (tocLineIds == null) listOf(bookId) else null,
+                    bookIds = listOf(bookId),
                     lineIds = tocLineIds,
                     baseBookOnly = baseBookOnly,
                 )
@@ -1480,8 +1489,9 @@ class SearchResultViewModel(
                     if (persisted.scopeAuthorId != 0L && toc.bookId !in authorScopeBooks(persisted).orEmpty()) return null
                     ensureTocCountingCaches(toc.bookId)
                     val lineIds = collectLineIdsForTocSubtree(toc.id, toc.bookId)
+                    if (lineIds.isEmpty()) return null
                     tocAllowedLineIds = lineIds
-                    lucene.openSession(query, DEFAULT_NEAR, lineIds = lineIds, baseBookOnly = baseBookOnly)
+                    lucene.openSession(query, DEFAULT_NEAR, bookIds = listOf(toc.bookId), lineIds = lineIds, baseBookOnly = baseBookOnly)
                 }
 
                 persistedSearchState().scopeAuthorId != 0L -> {
@@ -1763,57 +1773,34 @@ class SearchResultViewModel(
 
                 try {
                     val baseBookOnly = !_uiState.value.globalExtended
+                    val authorBookIds = authorScopeBooks(persistedSearchState())
 
-                    // Determine filter parameters
-                    val bookIdsToFilter: Collection<Long>? =
+                    val bookIdsToFilter =
                         when {
-                            tocId != null -> null
-
-                            // Will use lineIds
+                            authorBookIds != null -> authorBookIds
                             bookId != null -> listOf(bookId)
-
                             categoryId != null -> collectBookIdsUnderCategory(categoryId)
-
-                            else -> null // Use baseBookOnly parameter instead
+                            else -> null
                         }
+                    val lineIdsToFilter =
+                        tocId?.let { id -> bookId?.let { collectLineIdsForTocSubtree(id, it) }.orEmpty() }
 
-                    val lineIdsToFilter: Collection<Long>? =
-                        if (tocId != null && bookId != null) {
-                            collectLineIdsForTocSubtree(tocId, bookId)
-                        } else {
-                            null
-                        }
-
-                    // Close existing session
                     lazyLoadMutex.withLock {
                         currentSession?.close()
                         currentSession = null
                     }
 
-                    // Open search session with filter (use baseBookOnly for base-book-only search)
                     val session =
-                        when {
-                            lineIdsToFilter != null -> {
-                                lucene.openSession(
-                                    q,
-                                    DEFAULT_NEAR,
-                                    lineIds = lineIdsToFilter,
-                                    baseBookOnly = baseBookOnly,
-                                )
-                            }
-
-                            bookIdsToFilter != null -> {
-                                lucene.openSession(
-                                    q,
-                                    DEFAULT_NEAR,
-                                    bookIds = bookIdsToFilter,
-                                    baseBookOnly = baseBookOnly,
-                                )
-                            }
-
-                            else -> {
-                                lucene.openSession(q, DEFAULT_NEAR, baseBookOnly = baseBookOnly)
-                            }
+                        if (bookIdsToFilter?.isEmpty() == true || lineIdsToFilter?.isEmpty() == true) {
+                            null
+                        } else {
+                            lucene.openSession(
+                                q,
+                                DEFAULT_NEAR,
+                                bookIds = bookIdsToFilter,
+                                lineIds = lineIdsToFilter,
+                                baseBookOnly = baseBookOnly,
+                            )
                         }
 
                     if (session == null) {

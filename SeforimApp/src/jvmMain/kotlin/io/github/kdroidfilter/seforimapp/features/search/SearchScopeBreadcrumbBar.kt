@@ -8,7 +8,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
@@ -17,9 +16,10 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.categoryA
 import io.github.kdroidfilter.seforimapp.features.search.domain.TocTree
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimlibrary.core.models.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.Text
 import seforimapp.seforimapp.generated.resources.*
 
 @Composable
@@ -34,10 +34,64 @@ internal fun SearchScopeBreadcrumbBar(
     onResetScopeFilters: () -> Unit = {},
     onOriginScopeChange: (SearchScope) -> Unit = {},
 ) {
+    val graph = LocalAppGraph.current
+    val origin = state.scopeOrigin
+    val scoped = origin is SearchScope.Author || origin is SearchScope.Favorites
+    val visibility by graph.libraryVisibility.selection.collectAsState()
+    val favoritesRevision by graph.favoritesStore.revision.collectAsState()
+    val scopeBooks by produceState<Set<Long>?>(null, origin, visibility, favoritesRevision) {
+        value =
+            withContext(Dispatchers.IO) {
+                when (origin) {
+                    is SearchScope.Author ->
+                        graph.repository
+                            .getAuthorDetails(origin.authorId)
+                            ?.books
+                            .orEmpty()
+                            .map { it.id }
+                            .toSet()
+                    is SearchScope.Favorites ->
+                        graph.favoritesStore
+                            .query()
+                            .filter { origin.folderId == null || origin.folderId in it.folderIds }
+                            .map { it.bookId }
+                            .toSet()
+                    else -> null
+                }
+            }
+    }
+    val booksByCategory =
+        remember(navigation.booksInCategory, scopeBooks, scoped) {
+            val books = navigation.booksInCategory
+            val inScope = if (scoped) books.filterTo(mutableSetOf()) { it.id in scopeBooks.orEmpty() } else books
+            CatalogBreadcrumbChildrenProvider.groupBooks(inScope)
+        }
+    val scopeCategories =
+        remember(booksByCategory, navigation.categoriesById, scoped) {
+            if (!scoped) {
+                null
+            } else {
+                booksByCategory.keys
+                    .flatMap { categoryAncestry(it, navigation.categoriesById) }
+                    .map { it.id }
+                    .toSet()
+            }
+        }
+    val roots = navigation.rootCategories.filter { scopeCategories == null || it.id in scopeCategories }
+    val scopeLabel =
+        stringResource(
+            when {
+                scoped -> Res.string.search_scope_kind_books
+                state.globalExtended -> Res.string.history_search_all
+                else -> Res.string.history_search_base
+            },
+        )
+    val root = BreadcrumbNode.ChoiceNode("catalog:$scopeLabel", scopeLabel)
     val path =
-        remember(state.scopeCategoryPath, state.scopeBook, state.scopeTocId, navigation.categoriesById, tocTree) {
+        remember(root, state.scopeCategoryPath, state.scopeBook, state.scopeTocId, navigation.categoriesById, tocTree) {
             val book = state.scopeBook
             buildList {
+                add(root)
                 val categories =
                     book
                         ?.let { categoryAncestry(it.categoryId, navigation.categoriesById) }
@@ -46,22 +100,43 @@ internal fun SearchScopeBreadcrumbBar(
                 if (book != null) {
                     add(BreadcrumbNode.BookNode(book))
                     val toc = buildTocPath(tocTree, state.scopeTocId)
-                    addAll((if (toc.firstOrNull()?.text == book.title) toc.drop(1) else toc).map(BreadcrumbNode::TocNode))
+                    val visibleToc = if (toc.size > 1 && toc.first().text == book.title) toc.drop(1) else toc
+                    addAll(visibleToc.map(BreadcrumbNode::TocNode))
                 }
             }
         }
-    val repository = LocalAppGraph.current.repository
-    val booksByCategory = remember(navigation.booksInCategory) { CatalogBreadcrumbChildrenProvider.groupBooks(navigation.booksInCategory) }
+    val repository = graph.repository
     val provider =
-        remember(navigation.categoryChildren, booksByCategory, repository) {
+        remember(navigation.categoryChildren, booksByCategory, scopeCategories, repository) {
             CatalogBreadcrumbChildrenProvider(
-                navigation.categoryChildren,
+                navigation.categoryChildren.mapValues { (_, categories) ->
+                    categories.filter { scopeCategories == null || it.id in scopeCategories }
+                },
                 booksByCategory,
                 repository::getBookRootToc,
                 repository::getTocChildren,
             )
         }
-    val currentProvider by rememberUpdatedState(provider)
+    val wholeBook = stringResource(Res.string.search_scope_whole_book)
+    val wholeSection = stringResource(Res.string.search_scope_whole_section)
+    val children: suspend (BreadcrumbNode) -> List<BreadcrumbNode> = { node ->
+        when (node) {
+            is BreadcrumbNode.ChoiceNode -> roots.map(BreadcrumbNode::CategoryNode)
+            is BreadcrumbNode.BookNode ->
+                buildList {
+                    add(BreadcrumbNode.BookNode(node.book, wholeBook))
+                    addAll(provider.children(node))
+                    addAll(booksByCategory[node.book.categoryId].orEmpty().filter { it.id != node.book.id }.map(BreadcrumbNode::BookNode))
+                }
+            is BreadcrumbNode.TocNode ->
+                provider.children(node).let { entries ->
+                    if (entries.isEmpty()) entries else listOf(BreadcrumbNode.TocNode(node.entry, wholeSection)) + entries
+                }
+            else -> provider.children(node)
+        }
+    }
+    val currentChildren by rememberUpdatedState(children)
+    val resetScope by rememberUpdatedState(onResetScopeFilters)
     val categorySelect by rememberUpdatedState(onCategorySelect)
     val bookSelect by rememberUpdatedState(onBookSelect)
     val tocSelect by rememberUpdatedState(onTocSelect)
@@ -70,12 +145,13 @@ internal fun SearchScopeBreadcrumbBar(
         remember(scope) {
             BreadcrumbNavigator(
                 scope = scope,
-                childrenProvider = { currentProvider.children(it) },
+                childrenProvider = { currentChildren(it) },
+                openBookContentsOnClick = true,
                 initialPath = path,
                 onReturnFocus = {},
                 onNavigate = {
                     when (it) {
-                        is BreadcrumbNode.ChoiceNode -> Unit
+                        is BreadcrumbNode.ChoiceNode -> resetScope()
                         is BreadcrumbNode.CategoryNode -> categorySelect(it.category)
                         is BreadcrumbNode.BookNode -> bookSelect(it.book)
                         is BreadcrumbNode.TocNode -> tocSelect(it.entry)
@@ -101,20 +177,14 @@ internal fun SearchScopeBreadcrumbBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SearchScopeOriginControls(state.scopeOrigin, state.scopeOriginName, onOriginScopeChange)
-            val hasNamedOrigin = state.scopeOrigin is SearchScope.Author || state.scopeOrigin is SearchScope.Favorites
-            if (path.isNotEmpty()) {
-                if (hasNamedOrigin) BreadcrumbSeparator()
-                BreadcrumbBar(navigator, Modifier.weight(1f))
-            } else if (!hasNamedOrigin) {
-                val label = if (state.globalExtended) Res.string.history_search_all else Res.string.history_search_base
-                Text(stringResource(label), fontSize = 12.sp)
-            }
+            if (scoped) BreadcrumbSeparator()
+            BreadcrumbBar(navigator, Modifier.weight(1f))
         }
     }
 }
 
 private fun buildTocPath(
-    tocTree: io.github.kdroidfilter.seforimapp.features.search.domain.TocTree?,
+    tocTree: TocTree?,
     selectedTocId: Long?,
 ): List<TocEntry> {
     if (tocTree == null || selectedTocId == null) return emptyList()

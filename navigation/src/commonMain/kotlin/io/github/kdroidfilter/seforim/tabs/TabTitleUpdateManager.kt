@@ -14,6 +14,7 @@ enum class TabType {
     FAVORITES,
     AUTHOR,
     NOTES,
+    SIDDUR,
 }
 
 /**

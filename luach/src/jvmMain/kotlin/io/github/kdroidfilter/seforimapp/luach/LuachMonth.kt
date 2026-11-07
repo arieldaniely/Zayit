@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.HebrewDateFormatter
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
+import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
+import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.isoDayNumber
@@ -267,6 +269,7 @@ internal data class CalendarDay(
     /** The festival or Rosh Chodesh of the day, blank on an ordinary one. */
     val tag: String,
     val isShabbat: Boolean,
+    val israeliOccasion: IsraeliOccasion?,
 )
 
 @Immutable
@@ -309,6 +312,7 @@ internal fun calendarMonth(
                         hebrewDay = hebrewFormatter.formatHebrewNumber(day.jewishDayOfMonth),
                         gregorianDay = gregorian.day,
                         tag = day.tag(),
+                        israeliOccasion = israeliOccasion(day),
                         isShabbat = gregorian.dayOfWeek == DayOfWeek.SATURDAY,
                     ),
                 )
@@ -347,6 +351,7 @@ internal fun civilMonth(
                         hebrewDay = hebrewFormatter.formatHebrewNumber(day.jewishDayOfMonth),
                         gregorianDay = gregorian.dayOfMonth,
                         tag = day.tag(),
+                        israeliOccasion = israeliOccasion(day),
                         isShabbat = gregorian.dayOfWeek == java.time.DayOfWeek.SATURDAY,
                     ),
                 )
@@ -423,6 +428,7 @@ private fun StepButton(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayCell(
     day: CalendarDay?,
@@ -496,15 +502,18 @@ private fun DayCell(
                     other()
                 }
             }
-            if (showTag && day.tag.isNotBlank()) {
-                Text(
-                    text = day.tag,
-                    fontSize = 9.sp,
-                    lineHeight = 11.sp,
-                    color = accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            val tag = day.israeliOccasion?.localizedName() ?: day.tag
+            if ((showTag || day.israeliOccasion != null) && tag.isNotBlank()) {
+                Tooltip(tooltip = { Text(tag) }) {
+                    Text(
+                        text = tag,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        color = accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

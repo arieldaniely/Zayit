@@ -407,12 +407,12 @@ fun NucleusApplicationScope.MainAppWindow(
 
             MainTitleBar()
 
-            // Keep the screen awake while a book is open in the current tab and this window is
+            // Keep the screen awake while a book or the siddur is open in the current tab and this window is
             // focused — opt-out via the General settings (enabled by default).
             val keepAwakeEnabled by AppSettings.keepScreenAwakeOnBookFlow.collectAsState()
             val keepAwakeForTab =
                 keepAwakeEnabled &&
-                    selectedTab?.destination is TabsDestination.BookContent
+                    selectedTab?.destination.let { it is TabsDestination.BookContent || it is TabsDestination.Siddur }
             LaunchedEffect(keepAwakeForTab, nucleusWin) {
                 nucleusWin.focusFlow.collect { focused ->
                     if (keepAwakeForTab && focused) {

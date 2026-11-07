@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.luach
 
+import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
 import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlin.test.Test
@@ -7,6 +8,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class CalendarMonthTest {
+    @Test
+    fun bothCalendarModesTagTheObservedDates() {
+        val independence = LocalDate.of(2024, 5, 14)
+        val expected = mapOf(
+            independence.minusDays(1) to IsraeliOccasion.YOM_HAZIKARON,
+            independence to IsraeliOccasion.YOM_HAATZMAUT,
+        )
+        for (month in listOf(calendarMonth(independence, inIsrael = true), civilMonth(independence, inIsrael = false))) {
+            val tagged = month.weeks
+                .flatten()
+                .filterNotNull()
+                .mapNotNull { day ->
+                    day.israeliOccasion?.takeUnless { it == IsraeliOccasion.YOM_YERUSHALAYIM }?.let { day.date to it }
+                }.toMap()
+            assertEquals(expected, tagged)
+        }
+    }
+
     @Test
     fun yearPickerIncludesBothAdarsOnlyInLeapYears() {
         assertEquals(13, calendarYearMonths(5787, false).size)

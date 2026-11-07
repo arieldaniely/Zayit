@@ -152,6 +152,10 @@ object AppSettings {
     private const val KEY_USER_FIRST_NAME = "user_first_name"
     private const val KEY_USER_LAST_NAME = "user_last_name"
     private const val KEY_USER_COMMUNITY = "user_community" // stores a stable code (e.g., "SEPHARADE")
+        private const val KEY_SIDDUR_NUSACH = "siddur_nusach"
+        private const val KEY_SIDDUR_ISRAELI_PRAYER_CUSTOM = "siddur_israeli_prayer_custom"
+        private const val KEY_SIDDUR_MINYAN = "siddur_minyan"
+        private const val KEY_SIDDUR_BEIT_AVEL = "siddur_beit_avel"
     private const val KEY_SHARED_STUDY_DEVICE_ID = "shared_study_device_id"
     private const val KEY_SHARED_STUDY_DISPLAY_NAME = "shared_study_display_name"
 
@@ -695,6 +699,46 @@ object AppSettings {
 
     private val _userLastNameFlow = MutableStateFlow(getUserLastName() ?: "")
     val userLastNameFlow: StateFlow<String> = _userLastNameFlow.asStateFlow()
+
+    // Siddur: the nusach (null follows the community), and whether the user davens with a minyan
+    private val _siddurNusachFlow = MutableStateFlow(getSiddurNusachCode())
+    val siddurNusachFlow: StateFlow<String?> = _siddurNusachFlow.asStateFlow()
+
+    fun getSiddurNusachCode(): String? = settings[KEY_SIDDUR_NUSACH, ""].ifBlank { null }
+
+    fun setSiddurNusachCode(value: String?) {
+        settings[KEY_SIDDUR_NUSACH] = value.orEmpty()
+        _siddurNusachFlow.value = getSiddurNusachCode()
+    }
+
+    private val _siddurIsraeliPrayerCustomFlow =
+        MutableStateFlow(settings[KEY_SIDDUR_ISRAELI_PRAYER_CUSTOM, ""])
+    val siddurIsraeliPrayerCustomFlow: StateFlow<String> = _siddurIsraeliPrayerCustomFlow.asStateFlow()
+
+    fun setSiddurIsraeliPrayerCustom(value: String) {
+        settings[KEY_SIDDUR_ISRAELI_PRAYER_CUSTOM] = value
+        _siddurIsraeliPrayerCustomFlow.value = value
+    }
+
+    private val _siddurMinyanFlow = MutableStateFlow(isSiddurMinyan())
+    val siddurMinyanFlow: StateFlow<Boolean> = _siddurMinyanFlow.asStateFlow()
+
+    fun isSiddurMinyan(): Boolean = settings[KEY_SIDDUR_MINYAN, true]
+
+    fun setSiddurMinyan(value: Boolean) {
+        settings[KEY_SIDDUR_MINYAN] = value
+        _siddurMinyanFlow.value = value
+    }
+
+    private val _siddurBeitAvelFlow = MutableStateFlow(isSiddurBeitAvel())
+    val siddurBeitAvelFlow: StateFlow<Boolean> = _siddurBeitAvelFlow.asStateFlow()
+
+    fun isSiddurBeitAvel(): Boolean = settings[KEY_SIDDUR_BEIT_AVEL, false]
+
+    fun setSiddurBeitAvel(value: Boolean) {
+        settings[KEY_SIDDUR_BEIT_AVEL] = value
+        _siddurBeitAvelFlow.value = value
+    }
 
     private val _userCommunityCodeFlow = MutableStateFlow(getUserCommunityCode())
     val userCommunityCodeFlow: StateFlow<String?> = _userCommunityCodeFlow.asStateFlow()

@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.github.kdroidfilter.seforimapp.features.home.widgets.availableTools
+import io.github.kdroidfilter.seforimapp.features.siddur.openSiddurTab
+import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.PopupMenu
@@ -18,6 +20,7 @@ import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.menu_tools
 import seforimapp.seforimapp.generated.resources.shared_study
+import seforimapp.seforimapp.generated.resources.siddur_title
 
 /**
  * The app's Tools menu in the title bar, where there's no native menu bar (macOS has its own Tools menu): the siddur,
@@ -27,6 +30,8 @@ import seforimapp.seforimapp.generated.resources.shared_study
 fun ToolsMenuButton() {
     val appGraph = LocalAppGraph.current
     val toolWindows = appGraph.toolWindows
+    val tabs = LocalOpenWindow.current.tabsViewModel
+    val siddur = stringResource(Res.string.siddur_title)
     var sharedStudyVisible by remember { mutableStateOf(false) }
     val sharedStudyLabel = stringResource(seforimapp.seforimapp.generated.resources.Res.string.shared_study)
     if (sharedStudyVisible) {
@@ -61,6 +66,13 @@ fun ToolsMenuButton() {
                         sharedStudyVisible = true
                     },
                 ) { Text(sharedStudyLabel) }
+                selectableItem(
+                    selected = false,
+                    onClick = {
+                        visible = false
+                        openSiddurTab(tabs)
+                    },
+                ) { Text(siddur) }
                 tools.forEach { (tool, title) ->
                     selectableItem(
                         selected = false,

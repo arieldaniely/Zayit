@@ -48,6 +48,7 @@ class TabsViewModel(
                 is TabsDestination.History -> false
                 is TabsDestination.Favorites -> false
                 is TabsDestination.Notes -> false
+                is TabsDestination.Siddur -> false
                 is TabsDestination.Author -> dest.authorId != 0L && dest.authorId != -1L
                 is TabsDestination.Search -> dest.searchQuery.isNotBlank()
                 is TabsDestination.BookContent -> dest.bookId != -1L && dest.bookId != 0L
@@ -514,6 +515,7 @@ class TabsViewModel(
             is TabsDestination.History -> TabType.HISTORY
             is TabsDestination.Favorites -> TabType.FAVORITES
             is TabsDestination.Notes -> TabType.NOTES
+            is TabsDestination.Siddur -> TabType.SIDDUR
             is TabsDestination.Author -> TabType.AUTHOR
             is TabsDestination.Search -> TabType.SEARCH
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) TabType.BOOK else TabType.SEARCH
@@ -526,6 +528,7 @@ class TabsViewModel(
             is TabsDestination.History -> ""
             is TabsDestination.Favorites -> ""
             is TabsDestination.Notes -> ""
+            is TabsDestination.Siddur -> ""
             is TabsDestination.Author -> ""
             is TabsDestination.Search -> destination.searchQuery
             is TabsDestination.BookContent -> if (destination.bookId.isDatabaseId()) "${destination.bookId}" else ""
@@ -567,5 +570,6 @@ internal fun TabsDestination.withTabId(tabId: String): TabsDestination =
         is TabsDestination.History -> copy(tabId = tabId)
         is TabsDestination.Favorites -> copy(tabId = tabId)
         is TabsDestination.Notes -> copy(tabId = tabId)
+        is TabsDestination.Siddur -> copy(tabId = tabId)
         is TabsDestination.Author -> copy(tabId = tabId)
     }

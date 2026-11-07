@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -57,7 +58,11 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberAccentCol
 import io.github.kdroidfilter.seforimapp.features.home.widgets.rememberOffMain
 import io.github.kdroidfilter.seforimapp.features.home.widgets.shownDateHere
 import io.github.kdroidfilter.seforimapp.features.home.widgets.skyTimeMillisHere
+import io.github.kdroidfilter.seforimapp.features.siddur.israeliPrayerCustomOf
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.luach.localizedName
+import io.github.kdroidfilter.seforimapp.siddur.SiddurPart
+import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Line
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
@@ -72,6 +77,7 @@ import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.CheckboxRow
 import org.jetbrains.jewel.ui.component.Icon
 import org.jetbrains.jewel.ui.component.IconButton
+import org.jetbrains.jewel.ui.component.OutlinedButton
 import org.jetbrains.jewel.ui.component.Text
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
@@ -83,6 +89,9 @@ import seforimapp.seforimapp.generated.resources.home_molad_label
 import seforimapp.seforimapp.generated.resources.home_molad_moment
 import seforimapp.seforimapp.generated.resources.home_next_zman_heading
 import seforimapp.seforimapp.generated.resources.home_tefila_heading
+import seforimapp.seforimapp.generated.resources.siddur_open_siddur
+import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_blessed
+import seforimapp.seforimapp.generated.resources.siddur_israeli_hallel_unblessed
 import seforimapp.seforimapp.generated.resources.home_widget_name_events
 import seforimapp.seforimapp.generated.resources.home_widget_name_limud
 import seforimapp.seforimapp.generated.resources.home_widget_name_molad
@@ -430,7 +439,13 @@ private fun EventRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(event.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                event.israeliOccasion?.localizedName() ?: event.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 "${event.date.hebrewWeekday()} · ${event.hebrewDate} · ⁦${event.date.dayOfMonth}.${event.date.monthValue}⁩",
                 fontSize = 11.sp,
@@ -475,7 +490,17 @@ internal object TefilaWidget : HomeWidget {
         val now = rememberMinute()
         val moment = state.skyTimeMillisHere() ?: now.time
         val day = if (tzais != null && moment >= tzais.time) civilDay.plusDays(1) else civilDay
-        val lines = remember(day, state.inIsrael) { tefilaOfDay(day, state.inIsrael) }
+        val customCode by LocalAppGraph.current.appSettings.siddurIsraeliPrayerCustomFlow.collectAsState()
+        val custom = israeliPrayerCustomOf(customCode)
+        val occasion = remember(day) { israeliOccasion(day.toKotlinLocalDate()) }
+        val israeliHallel = if (occasion != null && custom.saysHallel(occasion, SiddurPart.SHACHARIT)) {
+            stringResource(
+                if (custom.festive) Res.string.siddur_israeli_hallel_blessed else Res.string.siddur_israeli_hallel_unblessed,
+            )
+        } else {
+            null
+        }
+        val lines = remember(day, state.inIsrael, israeliHallel) { tefilaOfDay(day, state.inIsrael, israeliHallel) }
         val hebrewDate =
             remember(day, state.inIsrael) {
                 hebrewFormatter.format(JewishCalendar(day.toKotlinLocalDate(), state.inIsrael))
@@ -493,6 +518,18 @@ internal object TefilaWidget : HomeWidget {
                     )
                     Text(hebrewDate, fontSize = 11.sp, color = JewelTheme.globalColors.text.info, maxLines = 1)
                     Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = {
+                        val tabId = UUID.randomUUID().toString()
+                        val destination = if (occasion?.hasThanksgivingPrayer == true) {
+                            val part = if (day != civilDay) SiddurPart.MAARIV else SiddurPart.SHACHARIT
+                            TabsDestination.Siddur(tabId, part = part.name, epochDay = day.toEpochDay())
+                        } else {
+                            TabsDestination.Siddur(tabId)
+                        }
+                        state.openTab(destination)
+                    }) {
+                        Text(stringResource(Res.string.siddur_open_siddur))
+                    }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                     // The lines share the card's height, but never further apart than reads as one list
@@ -715,7 +752,7 @@ internal fun rememberOpenInLibrary(
 }
 
 /** The lines [place] starts and ends on in [book]: its end only when it says where it is, for the book to mark it. */
-private suspend fun SeforimRepository.linesOf(
+internal suspend fun SeforimRepository.linesOf(
     book: Book,
     place: LibraryPlace,
 ): Pair<Long?, Long?> {

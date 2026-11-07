@@ -7,4 +7,7 @@
     <string name="luach_next_month">החודש הבא</string>
     <string name="luach_swap">החלפה בין לוח עברי ללוח לועזי</string>
     <string name="luach_today">חזרה להיום</string>
+    <string name="luach_yom_hazikaron">יום הזיכרון</string>
+    <string name="luach_yom_haatzmaut">יום העצמאות</string>
+    <string name="luach_yom_yerushalayim">יום ירושלים</string>
 </resources>

@@ -30,6 +30,7 @@ import io.github.kdroidfilter.seforimapp.features.home.widgets.availableTools
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowEvents
 import io.github.kdroidfilter.seforimapp.features.settings.SettingsWindowViewModel
 import io.github.kdroidfilter.seforimapp.features.settings.navigation.SettingsDestination
+import io.github.kdroidfilter.seforimapp.features.siddur.openSiddurTab
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import org.jetbrains.compose.resources.stringResource
 import seforimapp.seforimapp.generated.resources.*
@@ -59,6 +60,7 @@ fun AppNativeMenuBar(
             onDismiss = { sharedStudyVisible = false },
         )
     }
+    val siddur = stringResource(Res.string.siddur_title)
     val tools = availableTools.map { it.id to stringResource(it.title) }
     val toolWindows = LocalAppGraph.current.toolWindows
 
@@ -327,6 +329,7 @@ fun AppNativeMenuBar(
         }
 
         Menu(toolsTitle) {
+            Item(text = siddur) { openSiddurTab(tabsViewModel) }
             Item(text = sharedStudyLabel) { sharedStudyVisible = true }
             tools.forEach { (id, title) ->
                 Item(text = title) { toolWindows.open(id) }

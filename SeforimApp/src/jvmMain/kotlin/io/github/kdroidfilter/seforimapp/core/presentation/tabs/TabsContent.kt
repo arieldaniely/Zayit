@@ -68,6 +68,7 @@ import io.github.kdroidfilter.seforimapp.features.search.SearchResultInBookShell
 import io.github.kdroidfilter.seforimapp.features.search.SearchResultViewModel
 import io.github.kdroidfilter.seforimapp.features.search.SearchShellActions
 import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
+import io.github.kdroidfilter.seforimapp.features.siddur.SiddurTabContent
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.session.SessionManager
 import io.github.santimattius.structured.annotations.StructuredScope
@@ -96,6 +97,7 @@ private fun TabsDestination.typeKey(): String =
         is TabsDestination.Favorites -> "favorites"
         is TabsDestination.Notes -> "notes"
         is TabsDestination.Author -> "author"
+        is TabsDestination.Siddur -> "siddur"
     }
 
 private fun saveableKeyFor(destination: TabsDestination): String = "${destination.tabId}:${destination.typeKey()}"
@@ -103,6 +105,7 @@ private fun saveableKeyFor(destination: TabsDestination): String = "${destinatio
 private fun saveableKeysFor(tabId: String): List<String> =
     listOf(
         "$tabId:home",
+        "$tabId:siddur",
         "$tabId:history",
         "$tabId:favorites",
         "$tabId:search",
@@ -401,6 +404,10 @@ fun TabsContent() {
 
                                 is TabsDestination.Notes -> {
                                     NotesTabContent(tabId = tabId)
+                                }
+
+                                is TabsDestination.Siddur -> {
+                                    SiddurTabContent(tabId, destination.part, destination.epochDay, destination.heading)
                                 }
 
                                 is TabsDestination.Author -> {

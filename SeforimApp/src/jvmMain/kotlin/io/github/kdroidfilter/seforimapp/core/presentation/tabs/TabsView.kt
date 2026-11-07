@@ -64,6 +64,7 @@ import io.github.kdroidfilter.seforimapp.framework.desktop.LocalOpenWindow
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.Bookmark
+import io.github.kdroidfilter.seforimapp.icons.JournalBookmark
 import io.github.kdroidfilter.seforimapp.icons.BookmarkFilled
 import io.github.kdroidfilter.seforimapp.icons.CloseAll
 import io.github.kdroidfilter.seforimapp.icons.Link
@@ -94,6 +95,7 @@ import org.jetbrains.jewel.ui.theme.menuStyle
 import org.jetbrains.jewel.ui.theme.tooltipStyle
 import seforimapp.seforimapp.generated.resources.*
 import seforimapp.seforimapp.generated.resources.notes_title
+import seforimapp.seforimapp.generated.resources.siddur_title
 import sh.calvin.reorderable.ReorderableRow
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -188,6 +190,8 @@ private fun DefaultTabShowcase(
                                             iconProvider.getPainter(Stateful(tabState)).value
                                         } else if (tabItem.tabType == TabType.NOTES) {
                                             rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen)
+                                        } else if (tabItem.tabType == TabType.SIDDUR) {
+                                            rememberVectorPainter(JournalBookmark)
                                         } else if (tabItem.tabType == TabType.FAVORITES) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Nodes.Favorite)
                                             iconProvider.getPainter(Stateful(tabState)).value
@@ -207,6 +211,7 @@ private fun DefaultTabShowcase(
                                     val label =
                                         when {
                                             tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
+                                            tabItem.tabType == TabType.SIDDUR -> stringResource(Res.string.siddur_title)
                                             tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                             else -> tabItem.title
                                         }
@@ -226,6 +231,7 @@ private fun DefaultTabShowcase(
                             val appTitle = stringResource(Res.string.app_name)
                             when {
                                 tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
+                                tabItem.tabType == TabType.SIDDUR -> stringResource(Res.string.siddur_title)
                                 tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                 else -> tabItem.title
                             }
@@ -273,6 +279,8 @@ private fun DefaultTabShowcase(
                                             iconProvider.getPainter(Stateful(tabState)).value
                                         } else if (tabItem.tabType == TabType.NOTES) {
                                             rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen)
+                                        } else if (tabItem.tabType == TabType.SIDDUR) {
+                                            rememberVectorPainter(JournalBookmark)
                                         } else if (tabItem.tabType == TabType.FAVORITES) {
                                             val iconProvider = rememberResourcePainterProvider(AllIconsKeys.Nodes.Favorite)
                                             iconProvider.getPainter(Stateful(tabState)).value
@@ -292,6 +300,7 @@ private fun DefaultTabShowcase(
                                     val label =
                                         when {
                                             tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
+                                            tabItem.tabType == TabType.SIDDUR -> stringResource(Res.string.siddur_title)
                                             tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                             else -> tabItem.title
                                         }
@@ -311,6 +320,7 @@ private fun DefaultTabShowcase(
                             val appTitle = stringResource(Res.string.app_name)
                             when {
                                 tabItem.tabType == TabType.NOTES -> stringResource(Res.string.notes_title)
+                                tabItem.tabType == TabType.SIDDUR -> stringResource(Res.string.siddur_title)
                                 tabItem.title.isEmpty() -> stringResource(Res.string.home_tab_with_app, appTitle)
                                 else -> tabItem.title
                             }

@@ -1118,7 +1118,16 @@
     <string name="db_install_incomplete_bundle">קבצי מסד הנתונים שנבחרו אינם שלמים: חסר חלק או שאחד החלקים לא הורד עד הסוף. ודאו שכל קבצי ‎.part נמצאים באותה תיקייה ונסו שוב.</string>
 
     <string name="siddur_title">סידור חכם</string>
+    <string name="siddur_reading_torah">קריאת התורה</string>
+    <string name="siddur_reading_haftarah">הפטרה</string>
+    <string name="siddur_reading_megillah">קריאת המגילה</string>
+    <string name="siddur_reading_maftir">מפטיר</string>
+    <string name="siddur_reading_unavailable">הקטע אינו זמין במאגר הספרים</string>
+    <string name="siddur_mincha_erev_yom_kippur">מנחה לערב יום כיפור</string>
+    <string name="siddur_mincha_erev_rosh_hashana">מנחה לערב ראש השנה</string>
+    <string name="siddur_hl_viduy_erev_yom_kippur">וידוי של ערב יום כיפור</string>
     <string name="siddur_part_shacharit">שחרית</string>
+    <string name="siddur_part_selichot">סליחות</string>
     <string name="siddur_part_mincha">מנחה</string>
     <string name="siddur_part_maariv">ערבית</string>
     <string name="siddur_part_sfirat_haomer">ספירת העומר</string>
@@ -1139,7 +1148,15 @@
     <string name="siddur_nusach_ashkenaz">נוסח אשכנז</string>
     <string name="siddur_nusach_sefard">נוסח ספרד</string>
     <string name="siddur_nusach_edot">עדות המזרח</string>
-    <string name="siddur_nusach_missing">נוסח זה עדיין אינו זמין, ומוצג נוסח אשכנז</string>
+    <string name="siddur_israeli_custom">מנהגי תפילה למועדי אייר</string>
+    <string name="siddur_israeli_no_tachanun">השמטת תחנון בלבד</string>
+    <string name="siddur_israeli_unblessed">הלל בשחרית בלי ברכות</string>
+    <string name="siddur_israeli_daytime">הלל בברכה בשחרית</string>
+    <string name="siddur_israeli_day_and_night">הלל בברכה גם בליל העצמאות</string>
+    <string name="siddur_israeli_hallel_unblessed">הלל שלם בלי ברכות</string>
+    <string name="siddur_israeli_hallel_blessed">הלל שלם בברכה</string>
+    <string name="siddur_reading_unblessed_haftarah">הפטרה בלי ברכות</string>
+    <string name="siddur_nusach_missing">מקורות הנוסח הזה אינם זמינים במאגר הספרים</string>
     <string name="siddur_minyan">במניין</string>
     <string name="siddur_show_all">הצג גם את מה שאין אומרים היום</string>
     <string name="siddur_today">היום</string>

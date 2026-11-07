@@ -383,6 +383,13 @@ internal fun PopupRow(
                     modifier = Modifier.size(15.dp),
                     colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
                 )
+            TabType.SIDDUR ->
+                Image(
+                    painter = rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.JournalBookmark),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    colorFilter = ColorFilter.tint(JewelTheme.globalColors.text.normal),
+                )
             TabType.NOTES ->
                 Image(
                     painter = rememberVectorPainter(io.github.kdroidfilter.seforimapp.icons.NotebookPen),

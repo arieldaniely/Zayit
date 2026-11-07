@@ -67,6 +67,9 @@ import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.HebrewDateFormatter
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.HebrewMonth
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
 import io.github.kdroidfilter.seforimapp.luach.LuachDateButton
+import io.github.kdroidfilter.seforimapp.luach.localizedName
+import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
+import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toKotlinLocalDate
@@ -165,6 +168,7 @@ internal enum class SolarEventCategory(
     YomTov(0xFFD166, major = true),
     Rabbinic(0x7FDBFF, major = true),
     Fast(0xFF8A80, major = true),
+    Israeli(0x9CB8FF, major = true),
     RoshChodesh(0xB8B8B8, major = false),
 }
 
@@ -177,6 +181,7 @@ internal data class SolarEvent(
     val end: LocalDate,
     /** Always named on the orbit (the landmarks of the year); the others only on hover. */
     val pinned: Boolean = false,
+    val israeliOccasion: IsraeliOccasion? = null,
 )
 
 private val PinnedFamilies =
@@ -246,6 +251,9 @@ internal fun computeHebrewYearEvents(
 
     repeat(calendar.daysInJewishYear) {
         val date = calendar.gregorianLocalDate.toJavaLocalDate()
+        israeliOccasion(calendar)?.let {
+            events += SolarEvent("", SolarEventCategory.Israeli, date, date, israeliOccasion = it)
+        }
         val family = holidayFamily(calendar.yomTovIndex)
         holiday.step(family, date) {
             // "א׳ חנוכה" → "חנוכה": one label for the eight days
@@ -675,7 +683,12 @@ private fun DisplayedDateCaption(
     val hebrewDate = remember(date) { formatter.format(JewishCalendar(date.toKotlinLocalDate())) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         event?.let {
-            Text(it.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF000000.toInt() or it.category.colorRgb))
+            Text(
+                it.israeliOccasion?.localizedName() ?: it.name,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF000000.toInt() or it.category.colorRgb),
+            )
         }
         if (showDate) Text(hebrewDate, fontSize = 11.sp, color = Color.White.copy(alpha = 0.60f), maxLines = 1)
         if (kiddushLevanaNow) {
@@ -758,7 +771,7 @@ private fun SolarEventMarkers(
                 val event = events[i]
                 val emphasized = event == shown
                 BasicText(
-                    text = event.name,
+                    text = event.israeliOccasion?.localizedName() ?: event.name,
                     style =
                         TextStyle(
                             color = Color(0xFF000000.toInt() or event.category.colorRgb),

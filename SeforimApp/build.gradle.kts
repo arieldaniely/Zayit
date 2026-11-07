@@ -143,6 +143,7 @@ kotlin {
 //        }
 
         jvmMain.dependencies {
+            implementation("io.github.arieldaniely:seforim-open-siddur:0.1.0")
             implementation(libs.commonmark)
             implementation(libs.hebrew.numerals)
             api(project(":jewel"))

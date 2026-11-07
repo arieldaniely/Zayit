@@ -306,6 +306,15 @@
     },
     "resources": [
         {
+            "glob": "open-siddur/amud-annotations.tsv"
+        },
+        {
+            "glob": "open-siddur/amud-inline.tsv"
+        },
+        {
+            "glob": "open-siddur/readings.tsv.gz"
+        },
+        {
             "glob": "META-INF/services/javax.imageio.spi.*"
         },
         {

@@ -3,6 +3,8 @@ package io.github.kdroidfilter.seforimapp.features.home.widgets.luach
 import androidx.compose.runtime.Immutable
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.HebrewDateFormatter
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar
+import io.github.kdroidfilter.seforimapp.siddur.IsraeliOccasion
+import io.github.kdroidfilter.seforimapp.siddur.israeliOccasion
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.JewishCalendar.Parsha
 import io.github.kdroidfilter.kosherkotlin.hebrewcalendar.TefilaRules
 import io.github.kdroidfilter.seforimapp.earthwidget.EarthWidgetLocation
@@ -184,6 +186,7 @@ internal data class TefilaLine(
 internal fun tefilaOfDay(
     date: LocalDate,
     inIsrael: Boolean,
+    israeliHallelLabel: String? = null,
 ): List<TefilaLine> {
     val day = JewishCalendar(date.toKotlinLocalDate(), inIsrael)
     val rules = TefilaRules()
@@ -198,8 +201,10 @@ internal fun tefilaOfDay(
             }
         add(TefilaLine("גבורות", gevuros))
         add(TefilaLine("ברכת השנים", if (rules.isVeseinTalUmatarRecited(day)) "ותן טל ומטר לברכה" else "ותן ברכה"))
-        add(TefilaLine("תחנון", if (rules.isTachanunRecitedShacharis(day)) "אומרים" else "אין אומרים"))
+        val tachanun = israeliOccasion(day)?.hasThanksgivingPrayer != true && rules.isTachanunRecitedShacharis(day)
+        add(TefilaLine("תחנון", if (tachanun) "אומרים" else "אין אומרים"))
         when {
+            israeliHallelLabel != null -> add(TefilaLine("הלל", israeliHallelLabel, special = true))
             rules.isHallelShalemRecited(day) -> add(TefilaLine("הלל", "הלל שלם", special = true))
             rules.isHallelRecited(day) -> add(TefilaLine("הלל", "חצי הלל", special = true))
         }
@@ -215,6 +220,7 @@ internal data class LuachEvent(
     val name: String,
     val hebrewDate: String,
     val times: List<Pair<String, Date?>>,
+    val israeliOccasion: IsraeliOccasion? = null,
 )
 
 /** The coming Shabbatot, festivals, fasts and Rashei Chodashim, from [from] on. */
@@ -233,8 +239,9 @@ internal fun upcomingEvents(
         if (events.size >= limit) break
         val date = from.plusDays(offset)
         val day = calendarOf(date)
+        val occasion = israeliOccasion(day)
         val isShabbat = date.dayOfWeek == DayOfWeek.SATURDAY
-        if (!isShabbat && !day.isYomTov && !day.isTaanis && !day.isRoshChodesh) continue
+        if (occasion == null && !isShabbat && !day.isYomTov && !day.isTaanis && !day.isRoshChodesh) continue
 
         val times =
             when {
@@ -277,7 +284,7 @@ internal fun upcomingEvents(
                 }
         // The year is the one being read; leaving it out keeps the line to one
         val hebrewDate = "${hebrewFormatter.formatHebrewNumber(day.jewishDayOfMonth)} ${hebrewFormatter.formatMonth(day)}"
-        events += LuachEvent(date, name, hebrewDate, times)
+        events += LuachEvent(date, name, hebrewDate, times, occasion)
     }
     return events
 }

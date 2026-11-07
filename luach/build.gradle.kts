@@ -21,6 +21,7 @@ kotlin {
 
         jvmMain.dependencies {
             api(project(":jewel"))
+            api("io.github.arieldaniely:seforim-open-siddur:0.1.0")
             implementation(compose.desktop.currentOs) {
                 exclude(group = "org.jetbrains.compose.material")
             }

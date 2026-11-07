@@ -122,6 +122,30 @@ class LibraryVisibilityTest {
             }
         }
 
+    @Test
+    fun `hiding an author removes their books and prunes empty branches`() =
+        runTest {
+            withDatabase { database ->
+                val authors =
+                    listOf(
+                        LibraryAuthor(1, "Author one", null, setOf(100, 101, 201)),
+                        LibraryAuthor(2, "Author two", null, setOf(101)),
+                    )
+                val visibility = LibraryVisibility(database, { authors }) { catalog }
+                visibility.setHidden(LibraryEntryKind.AUTHOR, listOf(1), true)
+
+                val snapshot = visibility.snapshot()
+                assertEquals(setOf(100L, 101L, 201L), snapshot.hiddenBookIds)
+                assertEquals(setOf(1L, 2L), snapshot.hiddenAuthorIds)
+                assertEquals(setOf(10L, 11L), snapshot.hiddenCategoryIds)
+                assertEquals(setOf(200L), snapshot.allowedBookIds)
+
+                visibility.setHidden(LibraryEntryKind.AUTHOR, listOf(1), false)
+                assertTrue(visibility.snapshot().isCategoryVisible(11))
+                assertTrue(visibility.snapshot().isAuthorVisible(2))
+            }
+        }
+
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun `settings can hide and restore books filtered by author`() {

@@ -19,6 +19,7 @@ import io.github.kdroidfilter.seforimapp.core.annotations.HighlightStore
 import io.github.kdroidfilter.seforimapp.core.annotations.NoteStore
 import io.github.kdroidfilter.seforimapp.core.catalog.CatalogAccess
 import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibility
+import io.github.kdroidfilter.seforimapp.core.catalog.readLibraryAuthors
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoritesStore
 import io.github.kdroidfilter.seforimapp.core.history.HistoryStore
 import io.github.kdroidfilter.seforimapp.core.history.upgradeHistorySchema
@@ -118,7 +119,8 @@ object AppCoreBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun provideLibraryVisibility(database: UserSettingsDb): LibraryVisibility = LibraryVisibility(database) { CatalogCache.getCatalog() }
+    fun provideLibraryVisibility(database: UserSettingsDb): LibraryVisibility =
+        LibraryVisibility(database, ::readLibraryAuthors) { CatalogCache.getCatalog() }
 
     @Provides
     @SingleIn(AppScope::class)

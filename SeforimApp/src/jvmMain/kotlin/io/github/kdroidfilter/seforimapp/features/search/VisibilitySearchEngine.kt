@@ -16,7 +16,7 @@ internal class VisibilitySearchEngine(
         bookIds: Collection<Long>?,
         bookFilter: Long?,
     ): Collection<Long>? {
-        val allowed = allowedBookIds ?: return bookIds
+        val allowed = allowedBookIds ?: return bookIds?.filter(::isBookVisible)
         val requested = bookIds ?: bookFilter?.let(::listOf)
         return requested?.filter(allowed::contains) ?: allowed
     }
@@ -35,7 +35,7 @@ internal class VisibilitySearchEngine(
         if (bookFilter != null && !snapshot.isBookVisible(bookFilter)) return null
         if (categoryFilter != null && !snapshot.isCategoryVisible(categoryFilter)) return null
         val ids = snapshot.visibleIds(bookIds, bookFilter)
-        if (snapshot.allowedBookIds != null && ids.isNullOrEmpty()) return null
+        if (ids?.isEmpty() == true) return null
         return delegate.openSession(query, near, bookFilter, categoryFilter, ids, lineIds, baseBookOnly, mode)
     }
 
@@ -53,7 +53,7 @@ internal class VisibilitySearchEngine(
         if (bookFilter != null && !snapshot.isBookVisible(bookFilter)) return null
         if (categoryFilter != null && !snapshot.isCategoryVisible(categoryFilter)) return null
         val ids = snapshot.visibleIds(bookIds, bookFilter)
-        if (snapshot.allowedBookIds != null && ids.isNullOrEmpty()) return null
+        if (ids?.isEmpty() == true) return null
         return delegate.computeFacets(query, near, bookFilter, categoryFilter, ids, lineIds, baseBookOnly, mode)
     }
 

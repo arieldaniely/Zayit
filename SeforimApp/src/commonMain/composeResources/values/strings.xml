@@ -11,8 +11,8 @@
     <string name="clock_prayer">סוף זמן תפילה</string>
     <string name="clock_mincha_ketana">מנחה קטנה</string>
     <string name="clock_plag">פלג המנחה</string>
-    <string name="settings_library_visibility_title">הסתרת ספרים וקטגוריות</string>
-    <string name="settings_library_visibility_description">סמנו פריטים להסתרה מהקטלוג ומהחיפוש. הסתרת קטגוריה מסתירה גם את כל הספרים ותתי־הקטגוריות שבתוכה. אפשר להחזיר פריטים שהוסתרו בכל עת.</string>
+    <string name="settings_library_visibility_title">הסתרת ספרים, קטגוריות ומחברים</string>
+    <string name="settings_library_visibility_description">סמנו פריטים להסתרה מהקטלוג ומהחיפוש. הסתרת קטגוריה או מחבר מסתירה גם את הספרים המשויכים אליהם. אפשר להחזיר פריטים שהוסתרו בכל עת.</string>
     <string name="settings_library_visibility_books">ספרים</string>
     <string name="settings_library_visibility_categories">קטגוריות</string>
     <string name="settings_library_visibility_name_filter">סינון לפי שם</string>
@@ -22,7 +22,8 @@
     <string name="settings_library_visibility_show_results">הצגת תוצאות</string>
     <string name="settings_library_visibility_restore_all">ביטול כל ההסתרות</string>
     <string name="settings_library_visibility_count">%1$d פריטים</string>
-    <string name="settings_library_visibility_inherited">מוסתר בגלל קטגוריית האב</string>
+    <string name="settings_library_visibility_book_inherited">מוסתר בגלל קטגוריה או מחבר</string>
+    <string name="settings_library_visibility_empty_group">מוסתר כי אין בו ספרים גלויים או כי קטגוריית האב מוסתרת</string>
     <string name="settings_library_visibility_empty">לא נמצאו פריטים מתאימים.</string>
     <string name="settings_library_visibility_error">לא ניתן לשמור את השינוי. נסו שוב.</string>
     <string name="font_system_family">%1$s (מותקן במחשב)</string>

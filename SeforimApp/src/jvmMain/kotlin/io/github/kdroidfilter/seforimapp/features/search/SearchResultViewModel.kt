@@ -566,11 +566,13 @@ class SearchResultViewModel(
 
     /** The book or author the executed query names, for the panel beside the results; null mostly. */
     val entityFlow: StateFlow<SearchEntity?> =
-        uiState
-            .map { it.executedQuery.trim().ifEmpty { it.query.trim() } }
-            .distinctUntilChanged()
-            .mapLatest { q -> if (q.isEmpty()) null else runSuspendCatching { entityFinder.find(q) }.getOrNull() }
-            .flowOn(Dispatchers.IO)
+        combine(
+            uiState.map { it.executedQuery.trim().ifEmpty { it.query.trim() } }.distinctUntilChanged(),
+            libraryVisibility.selection,
+        ) { query, _ -> query }
+            .mapLatest { query ->
+                if (query.isEmpty()) null else runSuspendCatching { entityFinder.find(query, libraryVisibility.snapshot()) }.getOrNull()
+            }.flowOn(Dispatchers.IO)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
@@ -1457,6 +1459,7 @@ class SearchResultViewModel(
 
     private suspend fun authorScopeBooks(state: SearchPersistedState): List<Long>? {
         if (state.scopeAuthorId == 0L) return null
+        if (!libraryVisibility.snapshot().isAuthorVisible(state.scopeAuthorId)) return emptyList()
         val authored =
             repository
                 .getAuthorDetails(state.scopeAuthorId)

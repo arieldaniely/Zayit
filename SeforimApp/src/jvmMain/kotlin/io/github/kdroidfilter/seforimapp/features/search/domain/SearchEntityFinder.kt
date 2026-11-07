@@ -1,5 +1,6 @@
 package io.github.kdroidfilter.seforimapp.features.search.domain
 
+import io.github.kdroidfilter.seforimapp.core.catalog.LibraryVisibilitySnapshot
 import io.github.kdroidfilter.seforimapp.framework.search.LuceneLookupSearchService
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.dao.repository.AuthorDetails
@@ -43,23 +44,30 @@ class SearchEntityFinder(
     private val repository: SeforimRepository,
     private val books: BookDetailsLoader,
 ) {
-    suspend fun find(query: String): SearchEntity? {
+    suspend fun find(
+        query: String,
+        visibility: LibraryVisibilitySnapshot,
+    ): SearchEntity? {
         val key = query.searchKey()
         if (key.isEmpty()) return null
-        val hits = lookup.suggestBooks(query, BOOK_CANDIDATES)
+        val hits = lookup.suggestBooks(query, BOOK_CANDIDATES).filter { visibility.isBookVisible(it.id) }
         hits.firstOrNull { it.title.searchKey() == key }?.let { return books.load(it.id) }
-        authorNamed(query, key)?.let { return SearchEntity.AuthorEntity(it) }
+        authorNamed(query, key, visibility)?.let { return SearchEntity.AuthorEntity(it) }
         return hits.firstOrNull { it.exactAcronym }?.let { books.load(it.id) }
     }
 
     private suspend fun authorNamed(
         query: String,
         key: String,
+        visibility: LibraryVisibilitySnapshot,
     ): AuthorDetails? {
         for (hit in lookup.suggestAuthors(query, AUTHOR_CANDIDATES)) {
+            if (!visibility.isAuthorVisible(hit.id)) continue
             val details = repository.getAuthorDetails(hit.id) ?: continue
             val names = listOf(details.name, AuthorNames.display(details.name)) + details.aliases
-            if (names.any { it.searchKey() == key }) return details
+            if (names.any { it.searchKey() == key }) {
+                return details.copy(books = details.books.filter { visibility.isBookVisible(it.id) })
+            }
         }
         return null
     }

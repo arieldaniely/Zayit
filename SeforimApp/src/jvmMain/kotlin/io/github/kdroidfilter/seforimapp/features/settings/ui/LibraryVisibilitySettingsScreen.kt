@@ -112,8 +112,18 @@ private fun LibraryVisibilityControls(
     val author = rememberTextFieldState()
     val nameQuery = name.text.toString()
     val authorQuery = author.text.toString()
-    val directlyHidden = if (kind == LibraryEntryKind.BOOK) selection.bookIds else selection.categoryIds
-    val effectivelyHidden = if (kind == LibraryEntryKind.BOOK) snapshot.hiddenBookIds else snapshot.hiddenCategoryIds
+    val directlyHidden =
+        when (kind) {
+            LibraryEntryKind.BOOK -> selection.bookIds
+            LibraryEntryKind.CATEGORY -> selection.categoryIds
+            LibraryEntryKind.AUTHOR -> selection.authorIds
+        }
+    val effectivelyHidden =
+        when (kind) {
+            LibraryEntryKind.BOOK -> snapshot.hiddenBookIds
+            LibraryEntryKind.CATEGORY -> snapshot.hiddenCategoryIds
+            LibraryEntryKind.AUTHOR -> snapshot.hiddenAuthorIds
+        }
     val matches = remember(entries, kind, nameQuery, authorQuery) { filterLibraryEntries(entries.orEmpty(), kind, nameQuery, authorQuery) }
     val rows =
         remember(matches, hiddenOnly, directlyHidden, effectivelyHidden) {
@@ -132,27 +142,30 @@ private fun LibraryVisibilityControls(
         Text(stringResource(Res.string.settings_library_visibility_description), color = JewelTheme.globalColors.text.info)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val kinds = listOf(LibraryEntryKind.BOOK, LibraryEntryKind.CATEGORY, LibraryEntryKind.AUTHOR)
             ListComboBox(
                 items =
                     listOf(
                         stringResource(Res.string.settings_library_visibility_books),
                         stringResource(Res.string.settings_library_visibility_categories),
+                        stringResource(Res.string.search_scope_kind_authors),
                     ),
-                selectedIndex = if (kind == LibraryEntryKind.BOOK) 0 else 1,
-                onSelectedItemChange = { kind = if (it == 0) LibraryEntryKind.BOOK else LibraryEntryKind.CATEGORY },
-                modifier = Modifier.width(108.dp),
+                selectedIndex = kinds.indexOf(kind),
+                onSelectedItemChange = { kind = kinds[it] },
+                modifier = Modifier.width(124.dp),
             )
             TextField(
                 state = name,
                 placeholder = { Text(nameLabel) },
                 modifier = Modifier.weight(1f).semantics { contentDescription = nameLabel },
             )
-            TextField(
-                state = author,
-                placeholder = { Text(authorLabel) },
-                enabled = kind == LibraryEntryKind.BOOK,
-                modifier = Modifier.weight(1f).semantics { contentDescription = authorLabel },
-            )
+            if (kind == LibraryEntryKind.BOOK) {
+                TextField(
+                    state = author,
+                    placeholder = { Text(authorLabel) },
+                    modifier = Modifier.weight(1f).semantics { contentDescription = authorLabel },
+                )
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = hiddenOnly, onCheckedChange = { hiddenOnly = it })
@@ -225,12 +238,25 @@ private fun LibraryVisibilityRow(
     ) {
         Checkbox(checked = hidden, enabled = enabled, onCheckedChange = onHiddenChange)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.title, fontWeight = FontWeight.Medium)
+            Text(
+                entry.title,
+                fontWeight = FontWeight.Medium,
+                color = if (hidden) JewelTheme.globalColors.text.info else JewelTheme.globalColors.text.normal,
+            )
             if (details.isNotBlank()) {
                 Text(details, color = JewelTheme.globalColors.text.info, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (inherited) {
-                Text(stringResource(Res.string.settings_library_visibility_inherited), color = JewelTheme.globalColors.text.info)
+                Text(
+                    stringResource(
+                        if (entry.kind == LibraryEntryKind.BOOK) {
+                            Res.string.settings_library_visibility_book_inherited
+                        } else {
+                            Res.string.settings_library_visibility_empty_group
+                        },
+                    ),
+                    color = JewelTheme.globalColors.text.info,
+                )
             }
         }
     }

@@ -171,11 +171,12 @@ class SearchHomeViewModel(
         libraryVisibility?.let { visibility ->
             combine(_uiState, visibility.selection, CatalogCache.revision) { state, _, _ ->
                 val snapshot = visibility.snapshot()
-                if (snapshot.allowedBookIds == null) {
+                if (snapshot.hiddenBookIds.isEmpty() && snapshot.hiddenCategoryIds.isEmpty() && snapshot.hiddenAuthorIds.isEmpty()) {
                     state
                 } else {
                     state.copy(
                         categorySuggestions = state.categorySuggestions.filter { snapshot.isCategoryVisible(it.category.id) },
+                        authorSuggestions = state.authorSuggestions.filter { snapshot.isAuthorVisible(it.id) },
                         bookSuggestions = state.bookSuggestions.filter { snapshot.isBookVisible(it.book.id) },
                         jumpSuggestions = state.jumpSuggestions.filter { snapshot.isBookVisible(it.book.id) },
                         tocSuggestions = state.tocSuggestions.filter { snapshot.isBookVisible(it.toc.bookId) },

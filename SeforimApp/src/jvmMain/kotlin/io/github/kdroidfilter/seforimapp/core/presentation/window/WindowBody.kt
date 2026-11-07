@@ -20,13 +20,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import dev.nucleusframework.window.tao.DockLayout
 import dev.nucleusframework.window.tao.DockSide
 import dev.nucleusframework.window.tao.SatellitePlacement
@@ -92,6 +92,8 @@ fun WindowBody(openWindow: OpenWindow) {
         }
     }
 
+    val titleBarStyle = LocalTitleBarStyle.current
+    val previewStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(content = JewelTheme.globalColors.outlines.focused))
     Row(
         Modifier
             .fillMaxSize()
@@ -101,39 +103,39 @@ fun WindowBody(openWindow: OpenWindow) {
         if (readerDestination != null) {
             key(readerDestination.tabId) { ReaderBar(openWindow, readerDestination, start = true) }
         }
-        DockLayout(
-            workspace = openWindow.panesOf(navigation = true),
-            modifier =
-                Modifier
-                    .weight(
-                        1f,
-                    ).fillMaxHeight()
-                    .dockPreviewGlow(openWindow.panesOf(true))
-                    .onSizeChanged { outerWidth = it.width },
-            layeredSides = NavigationLayeredSides,
-            splitter = { ReaderSplitter() },
-            panel = { panel -> PaneCard { panel() } },
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                DockLayout(
-                    workspace = lineWorkspace,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .dockPreviewGlow(lineWorkspace)
-                            .onSizeChanged { innerSize = it },
-                    sideOrder = LineSideOrder,
-                    splitter = { ReaderSplitter() },
-                    panel = { panel -> DockedPaneCard(bottomOpen) { panel() } },
-                ) {
-                    // A book's text first lays out once its panes are in place, as with the split panes.
-                    CompositionLocalProvider(LocalBookTextReady provides { tabId -> openWindow.panesReadyFor == tabId }) {
-                        TabsContent()
+        CompositionLocalProvider(LocalTitleBarStyle provides previewStyle) {
+            DockLayout(
+                workspace = openWindow.panesOf(navigation = true),
+                modifier =
+                    Modifier
+                        .weight(
+                            1f,
+                        ).fillMaxHeight()
+                        .onSizeChanged { outerWidth = it.width },
+                layeredSides = NavigationLayeredSides,
+                splitter = { ReaderSplitter() },
+                panel = { panel -> PaneCard { panel() } },
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    DockLayout(
+                        workspace = lineWorkspace,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .onSizeChanged { innerSize = it },
+                        sideOrder = LineSideOrder,
+                        splitter = { ReaderSplitter() },
+                        panel = { panel -> DockedPaneCard(bottomOpen) { panel() } },
+                    ) {
+                        // A book's text first lays out once its panes are in place, as with the split panes.
+                        CompositionLocalProvider(LocalBookTextReady provides { tabId -> openWindow.panesReadyFor == tabId }) {
+                            TabsContent()
+                        }
                     }
-                }
-                if (readerDestination != null) {
-                    key(readerDestination.tabId) { ReaderBreadcrumb(openWindow, readerDestination) }
+                    if (readerDestination != null) {
+                        key(readerDestination.tabId) { ReaderBreadcrumb(openWindow, readerDestination) }
+                    }
                 }
             }
         }
@@ -216,41 +218,3 @@ private fun ReaderBar(
 
 @Composable
 internal fun canvasBackground() = JewelTheme.globalColors.toolwindowBackground
-
-/** Only the requested glow overrides the framework's preview appearance; Nucleus handles all drop targets. */
-@Composable
-private fun Modifier.dockPreviewGlow(workspace: dev.nucleusframework.window.tao.SatelliteWorkspace): Modifier {
-    val accent = JewelTheme.globalColors.outlines.focused
-    return this.then(
-        Modifier.drawWithContent {
-            drawContent()
-            workspace.dockPreview?.let { target ->
-                val rect =
-                    when (target.side) {
-                        DockSide.Left ->
-                            androidx.compose.ui.geometry
-                                .Rect(0f, 0f, size.width * 0.3f, size.height)
-                        DockSide.Right ->
-                            androidx.compose.ui.geometry
-                                .Rect(size.width * 0.7f, 0f, size.width, size.height)
-                        DockSide.Bottom ->
-                            androidx.compose.ui.geometry
-                                .Rect(0f, size.height * 0.65f, size.width, size.height)
-                        DockSide.Top ->
-                            androidx.compose.ui.geometry
-                                .Rect(0f, 0f, size.width, size.height * 0.35f)
-                    }
-                listOf(18f to 0.05f, 10f to 0.1f, 5f to 0.22f, 1.5f to 0.9f).forEach { (width, alpha) ->
-                    drawRect(
-                        accent.copy(alpha = alpha),
-                        rect.topLeft,
-                        rect.size,
-                        style =
-                            androidx.compose.ui.graphics.drawscope
-                                .Stroke(width.dp.toPx()),
-                    )
-                }
-            }
-        },
-    )
-}

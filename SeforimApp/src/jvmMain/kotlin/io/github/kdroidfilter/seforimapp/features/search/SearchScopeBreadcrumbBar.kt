@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.core.presentation.components.HorizontalDivider
 import io.github.kdroidfilter.seforimapp.features.bookcontent.state.NavigationState
@@ -74,6 +75,7 @@ internal fun SearchScopeBreadcrumbBar(
                 onReturnFocus = {},
                 onNavigate = {
                     when (it) {
+                        is BreadcrumbNode.ChoiceNode -> Unit
                         is BreadcrumbNode.CategoryNode -> categorySelect(it.category)
                         is BreadcrumbNode.BookNode -> bookSelect(it.book)
                         is BreadcrumbNode.TocNode -> tocSelect(it.entry)
@@ -97,12 +99,15 @@ internal fun SearchScopeBreadcrumbBar(
         Row(
             Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SearchScopeOriginControls(state.scopeOrigin, state.scopeOriginName, onOriginScopeChange)
+            val hasNamedOrigin = state.scopeOrigin is SearchScope.Author || state.scopeOrigin is SearchScope.Favorites
             if (path.isNotEmpty()) {
-                Text(stringResource(Res.string.breadcrumb_separator))
+                if (hasNamedOrigin) BreadcrumbSeparator()
                 BreadcrumbBar(navigator, Modifier.weight(1f))
+            } else if (!hasNamedOrigin) {
+                val label = if (state.globalExtended) Res.string.history_search_all else Res.string.history_search_base
+                Text(stringResource(label), fontSize = 12.sp)
             }
         }
     }

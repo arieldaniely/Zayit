@@ -1,45 +1,41 @@
 package io.github.kdroidfilter.seforimapp.features.search
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import io.github.kdroidfilter.seforim.tabs.SearchScope
 import io.github.kdroidfilter.seforimapp.core.favorites.FavoriteFolder
 import io.github.kdroidfilter.seforimapp.features.author.AUTHOR_ERAS
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbNode.ChoiceNode
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbPopup
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbPopupModel
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbSegment
+import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.BreadcrumbSeparator
 import io.github.kdroidfilter.seforimapp.features.search.domain.AuthorNames
-import io.github.kdroidfilter.seforimapp.framework.database.getDatabasePath
 import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
+import io.github.kdroidfilter.seforimapp.icons.Bookmark
 import io.github.kdroidfilter.seforimapp.icons.Feather
-import io.github.kdroidfilter.seforimapp.icons.JournalBookmark
+import io.github.kdroidfilter.seforimapp.icons.Library
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.jewel.foundation.theme.JewelTheme
-import org.jetbrains.jewel.ui.component.*
-import org.jetbrains.jewel.ui.icons.AllIconsKeys
+import org.jetbrains.jewel.ui.component.Icon
 import seforimapp.seforimapp.generated.resources.*
-import java.nio.file.Path
-import java.sql.DriverManager
 
 private data class ScopeAuthor(
     val id: Long,
     val name: String,
     val era: String?,
 )
+
+private enum class ScopePopup { Kind, Era, Author, Favorites }
 
 @Composable
 internal fun SearchScopeOriginControls(
@@ -48,139 +44,154 @@ internal fun SearchScopeOriginControls(
     onChange: (SearchScope) -> Unit,
 ) {
     val graph = LocalAppGraph.current
-    var stage by remember { mutableIntStateOf(-1) }
+    val visibility by graph.libraryVisibility.selection.collectAsState()
+    val favoritesRevision by graph.favoritesStore.revision.collectAsState()
+    var anchor by remember { mutableStateOf<ScopePopup?>(null) }
+    var popup by remember { mutableStateOf(ScopePopup.Kind) }
     var era by remember { mutableStateOf<String?>(null) }
-    var authors by remember { mutableStateOf<List<ScopeAuthor>>(emptyList()) }
-    var folders by remember { mutableStateOf<List<FavoriteFolder>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    val query = rememberTextFieldState()
-    LaunchedEffect(stage, origin) {
-        query.clearText()
-        if (stage < 0 && origin !is SearchScope.Author) return@LaunchedEffect
-        loading = true
-        try {
+    val showAuthors = origin is SearchScope.Author || popup == ScopePopup.Era || popup == ScopePopup.Author
+    val authors by produceState(emptyList<ScopeAuthor>(), showAuthors, visibility) {
+        if (!showAuthors) return@produceState
+        value =
             withContext(Dispatchers.IO) {
-                val eras =
-                    runCatching {
-                        DriverManager.getConnection("jdbc:sqlite:${Path.of(getDatabasePath()).toUri()}?mode=ro").use { connection ->
-                            connection.createStatement().use { statement ->
-                                statement.executeQuery("SELECT id,era FROM author").use { rows ->
-                                    buildMap { while (rows.next()) put(rows.getLong(1), rows.getString(2)) }
-                                }
-                            }
-                        }
-                    }.getOrDefault(emptyMap())
-                authors = graph.repository.getAuthorsForLookup().map { ScopeAuthor(it.id, AuthorNames.display(it.name), eras[it.id]) }
-                folders = graph.favoritesStore.folders()
+                val snapshot = graph.libraryVisibility.snapshot()
+                val eras = graph.libraryVisibility.authors().associate { it.id to it.era }
+                graph.repository
+                    .getAuthorsForLookup()
+                    .filter { snapshot.isAuthorVisible(it.id) }
+                    .map { ScopeAuthor(it.id, AuthorNames.display(it.name), eras[it.id]) }
             }
-        } finally {
-            loading = false
-        }
+    }
+    val showFolders = anchor != null && popup == ScopePopup.Favorites
+    val folders by produceState(emptyList<FavoriteFolder>(), showFolders, favoritesRevision) {
+        if (showFolders) value = graph.favoritesStore.folders()
     }
     val selectedAuthor = (origin as? SearchScope.Author)?.let { selected -> authors.firstOrNull { it.id == selected.authorId } }
-    val kind =
+    val currentFolder = (origin as? SearchScope.Favorites)?.folderId
+    val booksLabel = stringResource(Res.string.search_scope_kind_books)
+    val authorsLabel = stringResource(Res.string.search_scope_kind_authors)
+    val favoritesLabel = stringResource(Res.string.search_scope_kind_favorites)
+    val unknownEra = stringResource(Res.string.search_scope_era_unknown)
+    val allFavorites = stringResource(Res.string.favorites_title)
+    val (kind, icon) =
         when (origin) {
-            is SearchScope.Author -> Res.string.search_scope_kind_authors
-            is SearchScope.Favorites -> Res.string.search_scope_kind_favorites
-            else -> Res.string.search_scope_kind_books
+            is SearchScope.Author -> authorsLabel to Feather
+            is SearchScope.Favorites -> favoritesLabel to Bookmark
+            else -> booksLabel to Library
         }
 
+    fun open(part: ScopePopup) {
+        anchor = part
+        popup = part
+    }
+
     fun choose(scope: SearchScope) {
-        stage = -1
+        anchor = null
         onChange(scope)
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box {
-            val iconModifier = Modifier.size(20.dp).clickable { stage = 0 }
-            when (origin) {
-                is SearchScope.Author -> Icon(Feather, stringResource(kind), iconModifier)
-                is SearchScope.Favorites -> Icon(AllIconsKeys.Nodes.Favorite, stringResource(kind), iconModifier)
-                else -> Icon(JournalBookmark, stringResource(kind), iconModifier)
-            }
-            if (stage >= 0) {
-                Popup(
-                    alignment = Alignment.TopStart,
-                    offset = IntOffset(0, 28),
-                    onDismissRequest = { stage = -1 },
-                    properties = PopupProperties(focusable = true),
-                ) {
-                    Column(
-                        Modifier
-                            .width(280.dp)
-                            .heightIn(max = 360.dp)
-                            .background(JewelTheme.globalColors.panelBackground, RoundedCornerShape(8.dp))
-                            .border(1.dp, JewelTheme.globalColors.borders.normal, RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        if (stage != 0) Link(stringResource(Res.string.search_scope_back), onClick = { stage = 0 })
-                        if (loading) CircularProgressIndicator(Modifier.size(18.dp))
-                        if (stage == 2) TextField(query, placeholder = { Text(stringResource(Res.string.search_scope_author_query)) })
-                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                            when (stage) {
-                                0 -> {
-                                    ScopeChoice(stringResource(Res.string.search_scope_kind_books)) { choose(SearchScope.Global) }
-                                    ScopeChoice(stringResource(Res.string.search_scope_kind_authors)) { stage = 1 }
-                                    ScopeChoice(stringResource(Res.string.search_scope_kind_favorites)) { stage = 3 }
-                                }
-                                1 -> {
-                                    val groups = AUTHOR_ERAS.keys.filter { code -> authors.any { it.era == code } } + listOf<String?>(null)
-                                    groups.forEach { code ->
-                                        ScopeChoice(AUTHOR_ERAS[code] ?: stringResource(Res.string.search_scope_era_unknown)) {
-                                            era = code
-                                            stage = 2
-                                        }
-                                    }
-                                }
-                                2 ->
-                                    authors
-                                        .filter {
-                                            (if (era == null) it.era !in AUTHOR_ERAS else it.era == era) &&
-                                                it.name.contains(query.text, ignoreCase = true)
-                                        }.sortedBy { it.name }
-                                        .forEach { author ->
-                                            ScopeChoice(author.name) { choose(SearchScope.Author(author.id)) }
-                                        }
-                                3 -> {
-                                    ScopeChoice(stringResource(Res.string.favorites_title)) { choose(SearchScope.Favorites(null)) }
-                                    folders.forEach { folder -> ScopeChoice(folder.name) { choose(SearchScope.Favorites(folder.id)) } }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+
+    val choices =
+        when (popup) {
+            ScopePopup.Kind ->
+                listOf(
+                    ChoiceNode("books", booksLabel, Library),
+                    ChoiceNode("authors", authorsLabel, Feather, hasChildren = true),
+                    ChoiceNode("favorites", favoritesLabel, Bookmark, hasChildren = true),
+                )
+            ScopePopup.Era ->
+                authors
+                    .map { it.era?.takeIf(AUTHOR_ERAS::containsKey) }
+                    .distinct()
+                    .sortedBy { code -> AUTHOR_ERAS.keys.indexOf(code).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+                    .map { ChoiceNode(it.orEmpty(), AUTHOR_ERAS[it] ?: unknownEra, hasChildren = true) }
+            ScopePopup.Author ->
+                authors
+                    .filter { it.era?.takeIf(AUTHOR_ERAS::containsKey) == era }
+                    .sortedBy { it.name }
+                    .map { ChoiceNode(it.id.toString(), it.name, Feather) }
+            ScopePopup.Favorites ->
+                listOf(ChoiceNode("", allFavorites, Bookmark)) + folders.map { ChoiceNode(it.id.toString(), it.name, Bookmark) }
         }
-        if (origin is SearchScope.Author) {
-            Text(
-                AUTHOR_ERAS[selectedAuthor?.era] ?: stringResource(Res.string.search_scope_era_unknown),
-                Modifier.clickable { stage = 1 },
-            )
-            Text(stringResource(Res.string.breadcrumb_separator))
-            Text(
-                selectedAuthor?.name ?: originName?.let(AuthorNames::display) ?: stringResource(Res.string.search_scope_kind_authors),
-                Modifier.widthIn(max = 180.dp).clickable {
-                    era = selectedAuthor?.era
-                    stage = 2
+    val selectedKey =
+        when (popup) {
+            ScopePopup.Kind ->
+                when (origin) {
+                    is SearchScope.Author -> "authors"
+                    is SearchScope.Favorites -> "favorites"
+                    else -> "books"
+                }
+            ScopePopup.Era -> selectedAuthor?.era.orEmpty()
+            ScopePopup.Author -> selectedAuthor?.id?.toString()
+            ScopePopup.Favorites -> currentFolder?.toString().orEmpty()
+        }
+    val onChoose: (ChoiceNode) -> Unit = { node ->
+        when (popup) {
+            ScopePopup.Kind ->
+                when (node.key) {
+                    "books" -> choose(SearchScope.Global)
+                    "authors" -> popup = ScopePopup.Era
+                    "favorites" -> popup = ScopePopup.Favorites
+                }
+            ScopePopup.Era -> {
+                era = node.key.ifEmpty { null }
+                popup = ScopePopup.Author
+            }
+            ScopePopup.Author -> choose(SearchScope.Author(node.key.toLong()))
+            ScopePopup.Favorites -> choose(SearchScope.Favorites(node.key.toLongOrNull()))
+        }
+    }
+    val popupContent: @Composable (ScopePopup) -> Unit = { part ->
+        if (anchor == part) {
+            BreadcrumbPopup(
+                model = BreadcrumbPopupModel(0, choices, choices.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)),
+                onChoose = { onChoose(it as ChoiceNode) },
+                onShift = { shift ->
+                    val parts =
+                        when (origin) {
+                            is SearchScope.Author -> listOf(ScopePopup.Kind, ScopePopup.Era, ScopePopup.Author)
+                            is SearchScope.Favorites -> listOf(ScopePopup.Kind, ScopePopup.Favorites)
+                            else -> listOf(ScopePopup.Kind)
+                        }
+                    parts.getOrNull(parts.indexOf(part) + shift)?.let(::open)
                 },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                onDismiss = { anchor = null },
+                onCancel = { anchor = null },
             )
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.height(16.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = kind, modifier = Modifier.size(16.dp).clickable { open(ScopePopup.Kind) })
+            popupContent(ScopePopup.Kind)
+        }
+        BreadcrumbSeparator()
+        if (origin is SearchScope.Author) {
+            ScopeSegment(AUTHOR_ERAS[selectedAuthor?.era] ?: unknownEra, onClick = { open(ScopePopup.Era) }) {
+                popupContent(ScopePopup.Era)
+            }
+            BreadcrumbSeparator()
+            ScopeSegment(
+                selectedAuthor?.name ?: originName?.let(AuthorNames::display) ?: authorsLabel,
+                onClick = {
+                    era = selectedAuthor?.era?.takeIf(AUTHOR_ERAS::containsKey)
+                    open(ScopePopup.Author)
+                },
+            ) { popupContent(ScopePopup.Author) }
         } else if (origin is SearchScope.Favorites) {
-            Text(
-                originName ?: stringResource(Res.string.favorites_title),
-                Modifier.widthIn(max = 180.dp).clickable { stage = 3 },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            ScopeSegment(originName ?: allFavorites, onClick = { open(ScopePopup.Favorites) }) { popupContent(ScopePopup.Favorites) }
         }
     }
 }
 
 @Composable
-private fun ScopeChoice(
-    label: String,
+private fun ScopeSegment(
+    title: String,
     onClick: () -> Unit,
+    popup: @Composable () -> Unit,
 ) {
-    Text(label, Modifier.fillMaxWidth().clickable(onClick = onClick).padding(8.dp))
+    Box(Modifier.widthIn(max = 180.dp)) {
+        BreadcrumbSegment(title, isLast = false, isSelected = false, isInactive = false, onClick = onClick, onDoubleClick = onClick)
+        popup()
+    }
 }

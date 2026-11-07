@@ -68,6 +68,7 @@ class SearchScopeOriginControlsTest {
             }
             onNodeWithContentDescription("ספרים").performClick()
             onNodeWithText("מחברים").performClick()
+            waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("מחברים נוספים").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("מחברים נוספים").performClick()
             waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("הרב מחבר בדיקה").fetchSemanticsNodes().isNotEmpty() }
             onNodeWithText("הרב מחבר בדיקה").performClick()

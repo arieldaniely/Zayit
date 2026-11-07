@@ -32,8 +32,11 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.usecases.categoryA
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
+import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Text
+import seforimapp.seforimapp.generated.resources.Res
+import seforimapp.seforimapp.generated.resources.breadcrumb_separator
 
 /**
  * The path of the open book (categories, book, TOC headings), working as IntelliJ's navigation bar:
@@ -80,6 +83,7 @@ fun BreadcrumbView(
                 onReturnFocus = { currentOnEvent(BookContentEvent.FocusText) },
                 onNavigate = { node ->
                     when (node) {
+                        is BreadcrumbNode.ChoiceNode -> Unit
                         is BreadcrumbNode.CategoryNode -> currentOnEvent(BookContentEvent.RevealCategory(node.category))
                         is BreadcrumbNode.BookNode ->
                             if (node.book.id != currentBookId) currentOnEvent(BookContentEvent.BookSelected(node.book))
@@ -114,7 +118,7 @@ internal fun BreadcrumbBar(
     ) {
         items.forEachIndexed { index, node ->
             if (index > 0) {
-                Text(text = " > ", modifier = Modifier.padding(horizontal = 4.dp), fontSize = 12.sp)
+                BreadcrumbSeparator()
             }
             key(node.key) {
                 Box {
@@ -143,7 +147,12 @@ internal fun BreadcrumbBar(
 }
 
 @Composable
-private fun BreadcrumbSegment(
+internal fun BreadcrumbSeparator() {
+    Text(stringResource(Res.string.breadcrumb_separator), modifier = Modifier.padding(horizontal = 4.dp), fontSize = 12.sp)
+}
+
+@Composable
+internal fun BreadcrumbSegment(
     title: String,
     isLast: Boolean,
     isSelected: Boolean,

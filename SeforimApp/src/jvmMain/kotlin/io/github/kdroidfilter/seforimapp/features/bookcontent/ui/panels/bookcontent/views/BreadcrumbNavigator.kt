@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.kdroidfilter.seforimlibrary.core.models.Book
 import io.github.kdroidfilter.seforimlibrary.core.models.Category
 import io.github.kdroidfilter.seforimlibrary.core.models.TocEntry
@@ -20,6 +21,13 @@ sealed interface BreadcrumbNode {
     /** Identity across reloads (models are compared by id, not by their whole content). */
     val key: String
     val title: String
+
+    data class ChoiceNode(
+        override val key: String,
+        override val title: String,
+        val icon: ImageVector? = null,
+        val hasChildren: Boolean = false,
+    ) : BreadcrumbNode
 
     data class CategoryNode(
         val category: Category,
@@ -330,6 +338,7 @@ class CatalogBreadcrumbChildrenProvider(
 ) : BreadcrumbChildrenProvider {
     override suspend fun children(node: BreadcrumbNode): List<BreadcrumbNode> =
         when (node) {
+            is BreadcrumbNode.ChoiceNode -> emptyList()
             is BreadcrumbNode.CategoryNode -> {
                 val id = node.category.id
                 booksByCategory[id].orEmpty().map(BreadcrumbNode::BookNode) +

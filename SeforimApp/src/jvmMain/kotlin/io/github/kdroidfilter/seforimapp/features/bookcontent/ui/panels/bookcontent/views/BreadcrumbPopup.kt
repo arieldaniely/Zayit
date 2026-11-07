@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -106,8 +107,11 @@ private fun BreadcrumbPopupContent(
     val selectedIndex = filtered.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: 0
 
     val listState = rememberLazyListState()
-    LaunchedEffect(model) { listState.scrollToItem((model.initialSelectedIndex - VISIBLE_CONTEXT_ROWS).coerceAtLeast(0)) }
+    LaunchedEffect(model) {
+        listState.requestScrollToItem((model.initialSelectedIndex - VISIBLE_CONTEXT_ROWS).coerceAtLeast(0))
+    }
     LaunchedEffect(selectedIndex, filtered) {
+        withFrameNanos {}
         if (listState.layoutInfo.visibleItemsInfo.isNotEmpty()) listState.revealItem(selectedIndex)
     }
 
@@ -197,6 +201,12 @@ private fun BreadcrumbPopupRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         when (node) {
+            is BreadcrumbNode.ChoiceNode ->
+                if (node.icon != null) {
+                    Icon(node.icon, contentDescription = null, modifier = Modifier.size(16.dp))
+                } else {
+                    Icon(AllIconsKeys.Nodes.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
             is BreadcrumbNode.CategoryNode ->
                 Icon(key = AllIconsKeys.Nodes.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
             is BreadcrumbNode.BookNode ->
@@ -219,6 +229,7 @@ private fun BreadcrumbPopupRow(
 
 private fun BreadcrumbNode.isFolder(): Boolean =
     when (this) {
+        is BreadcrumbNode.ChoiceNode -> hasChildren
         is BreadcrumbNode.CategoryNode -> true
         is BreadcrumbNode.BookNode -> false
         is BreadcrumbNode.TocNode -> entry.hasChildren

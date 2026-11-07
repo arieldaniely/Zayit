@@ -34,6 +34,9 @@ internal fun testAppGraph(): io.github.kdroidfilter.seforimapp.framework.di.AppG
     val database =
         io.github.kdroidfilter.seforimapp.db
             .UserSettingsDb(driver)
+    io.mockk.every { graph.libraryVisibility } returns
+        io.github.kdroidfilter.seforimapp.core.catalog
+            .LibraryVisibility(database) { null }
     io.mockk.every { graph.historyStore } returns
         io.github.kdroidfilter.seforimapp.core.history
             .HistoryStore(database)

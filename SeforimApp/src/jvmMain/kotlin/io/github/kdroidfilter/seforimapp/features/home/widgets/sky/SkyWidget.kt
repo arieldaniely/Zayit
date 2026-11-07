@@ -17,7 +17,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.earthwidget.SkyWidgetView
-import io.github.kdroidfilter.seforimapp.earthwidget.isMoonAboveHorizon
+import io.github.kdroidfilter.seforimapp.earthwidget.shouldShowMoonOnly
 import io.github.kdroidfilter.seforimapp.features.home.widgets.CellSpan
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HOME_GRID_COLUMNS
 import io.github.kdroidfilter.seforimapp.features.home.widgets.HomeWidget
@@ -59,7 +59,7 @@ internal object SkyWidget : HomeWidget {
                 val location = state.location
                 val automaticMode =
                     remember(location, moment) {
-                        if (isMoonAboveHorizon(location.latitude, location.longitude, moment)) SkyMode.Sky else SkyMode.Moon
+                        if (shouldShowMoonOnly(location.latitude, location.longitude, moment)) SkyMode.Moon else SkyMode.Sky
                     }
                 var mode by remember(automaticMode) { mutableStateOf(automaticMode) }
                 val nextMode = if (mode == SkyMode.Moon) SkyMode.Sky else SkyMode.Moon

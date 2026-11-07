@@ -445,8 +445,16 @@ private fun DrawScope.drawPass(
     pass.hours.forEach { d -> camera.project(d)?.let { drawCircle(color.copy(alpha = 0.8f), radius = 2.dp.toPx(), center = it) } }
 }
 
-/** Whether the Moon's centre is above the apparent horizon at the selected time and place. */
-fun isMoonAboveHorizon(
+/** Use the lunar disc view only after civil twilight, while the Moon is below the apparent horizon. */
+fun shouldShowMoonOnly(
+    latitude: Double,
+    longitude: Double,
+    timeMillis: Long,
+): Boolean =
+    computeSolarPositionNoaaUtc(Date(timeMillis), latitude, longitude).elevationDegrees <= NIGHT_SUN_ELEVATION_DEG &&
+        !isMoonAboveHorizon(latitude, longitude, timeMillis)
+
+internal fun isMoonAboveHorizon(
     latitude: Double,
     longitude: Double,
     timeMillis: Long,

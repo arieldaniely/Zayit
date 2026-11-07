@@ -21,8 +21,10 @@ import io.github.kdroidfilter.seforimapp.features.bookcontent.state.BookContentS
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.panels.bookcontent.views.isChumash
 import io.github.kdroidfilter.seforimapp.features.pdf.TalmudPdfService
 import io.github.kdroidfilter.seforimapp.framework.database.CatalogCache
+import io.github.kdroidfilter.seforimapp.framework.di.LocalAppGraph
 import io.github.kdroidfilter.seforimapp.framework.platform.PlatformInfo
 import io.github.kdroidfilter.seforimapp.icons.*
+import io.github.kdroidfilter.seforimlibrary.core.models.LinkLoadLevel
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import seforimapp.seforimapp.generated.resources.*
@@ -100,6 +102,17 @@ fun EndVerticalBar(
     val noBookSelected = selectedBook == null
     val selectedLine = uiState.content.primaryLine
     val providers = uiState.providers
+    val repository = LocalAppGraph.current.repository
+    val selectedLineIds = uiState.content.selectedLineIds
+    val mentionsAvailable by produceState<Boolean?>(null, selectedLineIds, linkLoadLevel, repository) {
+        value = null
+        if (selectedLineIds.isNotEmpty()) {
+            value =
+                runSuspendCatching {
+                    repository.getReferencesForLines(selectedLineIds, LinkLoadLevel.fromValue(linkLoadLevel)).isNotEmpty()
+                }.getOrNull()
+        }
+    }
 
     val lineAvailability by produceState(
         initialValue = LineResourceAvailability(),
@@ -124,17 +137,12 @@ fun EndVerticalBar(
             runSuspendCatching {
                 providers.getAvailableSourcesForLine(selectedLine.id)
             }.getOrNull()?.isNotEmpty()
-        val mentionsAvailable =
-            runSuspendCatching {
-                providers.getAvailableMentionsForLine(selectedLine.id)
-            }.getOrNull()?.isNotEmpty()
 
         value =
             LineResourceAvailability(
                 targumAvailable = targumAvailable,
                 commentariesAvailable = commentariesAvailable,
                 sourcesAvailable = sourcesAvailable,
-                mentionsAvailable = mentionsAvailable,
             )
     }
 
@@ -279,7 +287,7 @@ fun EndVerticalBar(
                         lineAvailability.sourcesAvailable == false &&
                         !uiState.content.showSources
 
-                val mentionsDisabledForLine = false
+                val mentionsDisabledForLine = mentionsAvailable == false && !uiState.content.showMentions
 
                 val targumTooltip =
                     when {
@@ -326,7 +334,7 @@ fun EndVerticalBar(
                         icon = Quote,
                         iconDescription = stringResource(Res.string.show_mentions),
                         label = stringResource(Res.string.show_mentions),
-                        enabled = selectedLine != null,
+                        enabled = selectedLine != null && !mentionsDisabledForLine,
                         shortcutHint = if (PlatformInfo.isMacOS) "K+⇧+⌥+⌘" else "K+Shift+Alt+Ctrl",
                     )
                 }
@@ -380,7 +388,6 @@ private data class LineResourceAvailability(
     val targumAvailable: Boolean? = null,
     val commentariesAvailable: Boolean? = null,
     val sourcesAvailable: Boolean? = null,
-    val mentionsAvailable: Boolean? = null,
 )
 
 private data class PdfAvailability(

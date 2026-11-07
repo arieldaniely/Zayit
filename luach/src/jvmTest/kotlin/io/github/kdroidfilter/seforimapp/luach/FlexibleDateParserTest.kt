@@ -52,6 +52,17 @@ class FlexibleDateParserTest {
         assertNull(parseFlexibleDate("\u05D0 \u05D0\u05D3\u05E8 \u05D1 \u05EA\u05E9\u05E4\u05D4", CalendarMode.HEBREW, referenceDate))
     }
 
+    @Test
+    fun `rejects a malformed explicit Hebrew year remainder`() {
+        assertNull(
+            parseFlexibleDate(
+                "\u05D0 \u05E0\u05D9\u05E1\u05DF \u05D4\u05F3\u05EA\u05E9\u05E4\u05F4\u05D6,",
+                CalendarMode.HEBREW,
+                referenceDate,
+            ),
+        )
+    }
+
     private fun assertHebrewDate(
         input: String,
         year: Int,

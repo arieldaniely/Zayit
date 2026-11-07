@@ -213,7 +213,8 @@ private fun parseHebrewNumber(
     val thousandsSeparator = trimmed.indexOfFirst { it == '\'' || it == '\u05F3' }
     if (isYear && thousandsSeparator > 0) {
         val thousands = sumHebrewDigits(trimmed.substring(0, thousandsSeparator)) ?: return null
-        val remainder = sumHebrewDigits(trimmed.substring(thousandsSeparator + 1)) ?: 0
+        val remainderText = trimmed.substring(thousandsSeparator + 1)
+        val remainder = if (remainderText.isEmpty()) 0 else sumHebrewDigits(remainderText) ?: return null
         return thousands * 1000 + remainder
     }
     val letters = trimmed.filterNot { it == '"' || it == '\u05F4' || it == '\'' || it == '\u05F3' }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -17,10 +18,12 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
@@ -45,6 +48,10 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.ui.component.Text
 import seforimapp.earthwidget.generated.resources.Res
 import seforimapp.earthwidget.generated.resources.earthwidget_sky_chatzos
+import seforimapp.earthwidget.generated.resources.earthwidget_sky_moon_below_horizon
+import seforimapp.earthwidget.generated.resources.earthwidget_sky_moon_peak
+import seforimapp.earthwidget.generated.resources.earthwidget_sky_moonrise
+import seforimapp.earthwidget.generated.resources.earthwidget_sky_moonset
 import seforimapp.earthwidget.generated.resources.earthwidget_sky_sunrise
 import seforimapp.earthwidget.generated.resources.earthwidget_sky_sunset
 import java.text.SimpleDateFormat
@@ -55,8 +62,9 @@ import kotlin.math.sqrt
 
 private const val DEFAULT_PITCH_DEG = 12f
 
-/** Field of view when facing the Moon: close enough for it to fill about 40% of the card's height. */
-private const val MOON_FOCUS_FOV_DEG = 24f
+/** Field of view when facing the Moon, with enough sky to see its surroundings. */
+private const val MOON_FOCUS_FOV_DEG = 40f
+private const val NIGHT_SUN_ELEVATION_DEG = -6.0
 
 /** Where the view looks, and how wide. */
 private data class SkyAim(
@@ -69,6 +77,7 @@ private data class SkyAim(
 private const val CARD_WIDTH_DP = 265f
 
 private val SunPathColor = Color(0xFFFFD27A)
+private val MoonPathColor = Color(0xFFB0C9ED)
 
 /** Stars of the HYG catalogue (to magnitude 4): equatorial unit vectors, magnitudes, colours. */
 private class StarCatalog(
@@ -198,6 +207,27 @@ private fun DrawScope.drawSun(
                 radius * 2f,
                 radius * 2f * squash,
             ),
+    )
+}
+
+private fun DrawScope.drawMoonGlow(
+    state: SkyViewState,
+    camera: SkyCamera,
+    illumination: Float,
+) {
+    val at = camera.project(state.moon) ?: return
+    val radius = kotlin.math.tan(MOON_ANGULAR_RADIUS_DEG * DEG_TO_RAD_F) / camera.tanHalfV * size.height / 2f
+    val glowRadius = radius * 2.5f
+    drawCircle(
+        Brush.radialGradient(
+            0f to MoonPathColor.copy(alpha = 0.04f + illumination * 0.13f),
+            1f to Color.Transparent,
+            center = at,
+            radius = glowRadius,
+        ),
+        radius = glowRadius,
+        center = at,
+        blendMode = BlendMode.Plus,
     )
 }
 
@@ -338,6 +368,9 @@ private class SkyLabelSpec(
 private val SunPathNames =
     listOf(Res.string.earthwidget_sky_sunrise, Res.string.earthwidget_sky_chatzos, Res.string.earthwidget_sky_sunset)
 
+private val MoonPathNames =
+    listOf(Res.string.earthwidget_sky_moonrise, Res.string.earthwidget_sky_moon_peak, Res.string.earthwidget_sky_moonset)
+
 private fun SkyCamera.spot(
     d: Direction,
     yawDeg: Float,
@@ -476,20 +509,25 @@ fun SkyWidgetView(
     val sun = skyDirection(sunPos.azimuthDegreesFromNorth, sunPos.elevationDegrees + refractionDeg(sunPos.elevationDegrees))
     val moon = skyDirection(moonPos.azimuthFromNorthDeg, moonPos.elevationDeg + refractionDeg(moonPos.elevationDeg))
 
-    // Today's path of the Sun (while it or its glow is up) and the Moon's while it is up; refreshed every 10 min
-    // Played frame by frame, minutes go by at each frame: by day then
+    // The Sun's path by day and the Moon's own pass at night, including its next rise while it is down.
+    val night = sunPos.elevationDegrees <= NIGHT_SUN_ELEVATION_DEG
     val passKey = instant / if (glide) 600_000L else DAY_MS
     val sunRising = sunSoon.elevationDegrees > sunPos.elevationDegrees
-    val sunPass =
-        remember(latitude, longitude, passKey, sunPos.elevationDegrees > -10.0) {
-            if (sunPos.elevationDegrees <= -10.0) {
-                null
+    val pass =
+        remember(latitude, longitude, passKey, night, sunRising) {
+            if (night) {
+                skyPass(instant, horizon = 0.0, upcoming = true) { t ->
+                    val position = computeMoonHorizontalPosition(computeJulianDayUtc(Date(t)), latitude, longitude)
+                    position.azimuthFromNorthDeg to (position.elevationDeg + refractionDeg(position.elevationDeg))
+                }
             } else {
                 skyPass(instant, horizon = -0.833, upcoming = sunRising) { t ->
                     computeSolarPositionNoaaUtc(Date(t), latitude, longitude).let { it.azimuthDegreesFromNorth to it.elevationDegrees }
                 }
             }
         }
+    val pathColor = if (night) MoonPathColor else SunPathColor
+    val pathNames = if (night) MoonPathNames else SunPathNames
     val clock = remember(timeZone) { SimpleDateFormat("HH:mm").apply { this.timeZone = timeZone } }
 
     // The Sun while any of its light is left in the sky (down to 18° under: alos, netz, shkia, tzeis all look at
@@ -500,7 +538,7 @@ fun SkyWidgetView(
     ): SkyAim {
         val moonElevation = moonPos.elevationDeg + refractionDeg(moonPos.elevationDeg)
         return when {
-            sunPos.elevationDegrees <= -6.0 && moonElevation > 0.0 ->
+            sunPos.elevationDegrees <= NIGHT_SUN_ELEVATION_DEG && moonElevation > 0.0 ->
                 SkyAim(moonPos.azimuthFromNorthDeg.toFloat(), moonElevation.toFloat().coerceAtLeast(4f), MOON_FOCUS_FOV_DEG)
             sunPos.elevationDegrees > -18.0 -> {
                 val el = sunPos.elevationDegrees.toFloat()
@@ -575,14 +613,26 @@ fun SkyWidgetView(
         Canvas(Modifier.fillMaxSize()) {
             drawRect(skyBrush(overlay, light))
             catalog?.let { drawStars(it, overlay, camera, light) }
-            moonMap?.let { (image, shader) ->
-                drawRect(moonBrush(overlay, camera, image, shader, moonIllumination), blendMode = BlendMode.Plus)
+            if (moon.y > 0f) {
+                if (night) drawMoonGlow(overlay, camera, moonIllumination)
+                moonMap?.let { (image, shader) ->
+                    drawRect(moonBrush(overlay, camera, image, shader, moonIllumination), blendMode = BlendMode.Plus)
+                }
             }
-            drawSun(overlay, camera, sunPos.elevationDegrees)
+            if (!night) drawSun(overlay, camera, sunPos.elevationDegrees)
         }
         Canvas(Modifier.fillMaxSize()) {
-            sunPass?.let { drawPass(it, instant, camera, SunPathColor) }
+            pass?.let { drawPass(it, instant, camera, pathColor) }
             drawRect(groundBrush(overlay, light))
+        }
+
+        if (night && moon.y <= 0f) {
+            Text(
+                stringResource(Res.string.earthwidget_sky_moon_below_horizon),
+                color = MoonPathColor,
+                fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
+            )
         }
 
         // Labels are designed at the card's size; a larger view scales them up
@@ -596,9 +646,7 @@ fun SkyWidgetView(
             val band = heightPx - with(ui) { 12.dp.toPx() }
             val keep = with(ui) { 80.dp.toPx() }
             val labels = ArrayList<SkyLabelSpec>()
-            listOfNotNull(
-                sunPass?.let { it to (SunPathColor to SunPathNames) },
-            ).forEach { (pass, style) ->
+            pass?.let { pass ->
                 listOf(pass.rise to 0, pass.peak to 1, pass.set to 2).forEach { (point, which) ->
                     point?.let { (t, d) ->
                         camera.spot(d, overlay.yawDeg, w)?.let { spot ->
@@ -606,9 +654,9 @@ fun SkyWidgetView(
                             labels +=
                                 SkyLabelSpec(
                                     group = 1,
-                                    text = "${stringResource(style.second[which])} ${clock.format(Date(t))}",
+                                    text = "${stringResource(pathNames[which])} ${clock.format(Date(t))}",
                                     spot = Spot(Offset(spot.at.x, y), spot.side, spot.turn, above = spot.at.y + lift < top),
-                                    color = style.first,
+                                    color = pathColor,
                                 )
                         }
                     }

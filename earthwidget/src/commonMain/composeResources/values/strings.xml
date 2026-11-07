@@ -45,4 +45,8 @@
     <string name="earthwidget_sky_sunrise">זריחה</string>
     <string name="earthwidget_sky_sunset">שקיעה</string>
     <string name="earthwidget_sky_chatzos">חצות</string>
+    <string name="earthwidget_sky_moonrise">זריחת הירח</string>
+    <string name="earthwidget_sky_moon_peak">שיא גובה הירח</string>
+    <string name="earthwidget_sky_moonset">שקיעת הירח</string>
+    <string name="earthwidget_sky_moon_below_horizon">הירח מתחת לאופק</string>
 </resources>

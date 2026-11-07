@@ -136,7 +136,10 @@ half4 main(float2 p) {
     c = mix(c, float3(1.0), clamp(Y * exposure - 1.2, 0.0, 1.0) * 0.6);
     float lum = dot(c, float3(0.2126, 0.7152, 0.0722));
     c = mix(c, lum * float3(0.80, 0.88, 1.08), scotopic * 0.85);
-    return half4(half3(c), 1.0);
+    // Preserve a cool, visible night gradient when the physical scattering falls below display black.
+    float night = 1.0 - smoothstep(-0.28, -0.10, sun.y);
+    float3 nightSky = mix(float3(0.030, 0.048, 0.101), float3(0.091, 0.128, 0.205), exp(-d.y * 5.0));
+    return half4(half3(max(c, nightSky * night)), 1.0);
 }
 """
 
@@ -170,6 +173,8 @@ half4 main(float2 p) {
     float3 haze = mix(hazeAnti, hazeSun, toward * toward);
     // Aerial perspective: the skyline is far and takes the sky's colour; the foreground stays dark
     float3 c = mix(land, haze, 0.55 * exp(-(h - el) / 0.025));
+    float night = 1.0 - smoothstep(-0.28, -0.10, sun.y);
+    c = max(c, float3(0.037, 0.050, 0.076) * night);
     return half4(half3(c * a), a);
 }
 """
@@ -254,7 +259,8 @@ internal fun moonBrush(
                 child("moonTex", imageShader)
                 uniform("texSize", image.width.toFloat(), image.height.toFloat())
                 // Earthshine: brightest on a thin crescent, when the Earth seen from the Moon is nearly full
-                uniform("shine", 0.05f * (1f - illumination))
+                val night = ((-state.sun.y - 0.10f) / 0.18f).coerceIn(0f, 1f)
+                uniform("shine", (0.05f + night * 0.10f) * (1f - illumination))
             }.makeShader()
             .asComposeShader(),
     )

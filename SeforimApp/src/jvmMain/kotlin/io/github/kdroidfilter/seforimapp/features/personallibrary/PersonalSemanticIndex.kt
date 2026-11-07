@@ -39,7 +39,8 @@ internal suspend fun buildPersonalSemanticIndex(
     onProgress: (Float) -> Unit = {},
     previousIndex: Path? = null,
     previousDatabase: Path? = null,
-) {
+    allowEmpty: Boolean = false,
+): Long {
     require(!Files.exists(output))
     Files.createDirectories(output)
     var completed = false
@@ -151,7 +152,7 @@ internal suspend fun buildPersonalSemanticIndex(
                                 }
                         }
                         oldDocuments.values.forEach { check(writer.tryDeleteDocument(requireNotNull(reader), it) >= 0) }
-                        require(indexed > 0) { "No text to index" }
+                        require(allowEmpty || indexed > 0) { "No text to index" }
                         writer.commit()
                     } finally {
                         reader?.close()
@@ -175,6 +176,7 @@ internal suspend fun buildPersonalSemanticIndex(
             }
         Files.newOutputStream(shard.resolve("semantic.properties")).use { properties.store(it, null) }
         completed = true
+        return indexed
     } finally {
         // The caller supplies a new UUID directory. Never touch a previously published index.
         if (!completed) deletePersonalSemanticBuild(output)

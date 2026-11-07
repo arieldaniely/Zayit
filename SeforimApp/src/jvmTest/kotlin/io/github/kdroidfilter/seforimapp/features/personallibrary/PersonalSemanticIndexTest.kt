@@ -60,6 +60,36 @@ class PersonalSemanticIndexTest {
         }
 
     @Test
+    fun allowsAnEmptyIncrementalGenerationAfterRemovingTheLastLine() =
+        runTest {
+            val root = fixture()
+            try {
+                val database = root.resolve("personal.db")
+                val original = root.resolve("personal-semantic-original")
+                val updated = root.resolve("personal-semantic-empty")
+                val vector = FloatArray(256) { if (it == 0) 1f else 0f }
+                buildPersonalSemanticIndex(database, root, original, { vector })
+                val previousDatabase = Files.copy(database, root.resolve("previous.db"))
+                DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                    connection.createStatement().use { it.execute("DELETE FROM line") }
+                }
+                val indexed =
+                    buildPersonalSemanticIndex(
+                        database,
+                        root,
+                        updated,
+                        embed = { error("No lines to embed") },
+                        previousIndex = original,
+                        previousDatabase = previousDatabase,
+                        allowEmpty = true,
+                    )
+                assertEquals(0L, indexed)
+            } finally {
+                root.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
     fun buildsCompatibleVectorsWithStableNegativeIds() =
         runTest {
             val root = fixture()

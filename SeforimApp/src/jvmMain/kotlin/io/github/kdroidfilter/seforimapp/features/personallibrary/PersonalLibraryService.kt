@@ -115,7 +115,7 @@ class PersonalLibraryService(
         val output = artifacts.newSemanticDirectory()
         var saved = false
         try {
-            buildPersonalSemanticIndex(
+            val indexed = buildPersonalSemanticIndex(
                 artifacts.databasePath,
                 Path.of("${getDatabasePath()}.semantic/model"),
                 output,
@@ -123,10 +123,15 @@ class PersonalLibraryService(
                 onProgress = { progress -> _state.update { it.copy(semanticWorking = true, progress = progress) } },
                 previousIndex = previous.semanticDirectory?.let(Path::of),
                 previousDatabase = previousDatabase,
+                allowEmpty = true,
             )
-            val updated = imported.copy(semanticGeneration = artifacts.generation, semanticDirectory = output.toString())
+            val updated =
+                imported.copy(
+                    semanticGeneration = artifacts.generation.takeIf { indexed > 0 },
+                    semanticDirectory = output.toString().takeIf { indexed > 0 },
+                )
             manager.store.save(updated)
-            saved = true
+            saved = indexed > 0
             return updated
         } finally {
             if (!saved &&

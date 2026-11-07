@@ -32,9 +32,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.kdroidfilter.seforimapp.core.presentation.tabs.LocalTabSelected
 import io.github.kdroidfilter.seforimapp.core.settings.SettingCodec
+import io.github.kdroidfilter.seforimapp.earthwidget.ZmanimTimes
 import io.github.kdroidfilter.seforimapp.earthwidget.computeZmanimTimes
 import io.github.kdroidfilter.seforimapp.features.home.widgets.*
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
@@ -96,14 +98,14 @@ internal object ClockWidget : HomeWidget {
         val date = state.skyTimeMillis?.let { state.shownDateHere() } ?: Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val times =
             rememberOffMain(date, location, state.zmanimOpinion, state.inIsrael) {
-                computeZmanimTimes(date, location, state.zmanimOpinion, state.inIsrael) to
-                    computeZmanimTimes(date.plusDays(1), location, state.zmanimOpinion, state.inIsrael).alosHashachar
+                fun timesOn(day: LocalDate) = computeZmanimTimes(day, location, state.zmanimOpinion, state.inIsrael)
+                ClockZmanim(timesOn(date), timesOn(date.minusDays(1)).tzais, timesOn(date.plusDays(1)).alosHashachar)
             }
         val time = Instant.ofEpochMilli(state.skyTimeMillis ?: now).atZone(zone).toLocalTime()
         val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
         val accent = JewelTheme.globalColors.outlines.focused
-        val todayTimes = times?.first
-        val nextDawn = times?.second
+        val todayTimes = times?.today
+        val reference = state.skyTimeMillis ?: now
 
         fun localTime(moment: Date): LocalTime = moment.toInstant().atZone(zone).toLocalTime()
 
@@ -124,49 +126,30 @@ internal object ClockWidget : HomeWidget {
                 Res.string.clock_mincha_ketana to todayTimes?.minchaKetana,
                 Res.string.clock_plag to todayTimes?.plagHamincha,
             )
-        val bandColors = listOf(Color(0xFF4A9ADF), Color(0xFF28A17B), Color(0xFFD58E29), Color(0xFFAA76D3))
-        val bands =
+        val activePeriod =
             listOf(
-                Triple(Res.string.clock_shema_window, todayTimes?.alosHashachar, todayTimes?.sofZmanShmaGra),
-                Triple(Res.string.siddur_part_shacharit, todayTimes?.sunrise, todayTimes?.sofZmanTfilaGra),
-                Triple(Res.string.siddur_part_mincha, todayTimes?.minchaGedola, todayTimes?.sunset),
-                Triple(Res.string.siddur_part_maariv, todayTimes?.tzais, nextDawn),
-            ).mapIndexedNotNull { index, (label, start, end) ->
-                if (start == null || end == null || end <= start) return@mapIndexedNotNull null
-                val startTime = localTime(start)
-                val endTime = localTime(end)
+                PrayerPeriod(Res.string.siddur_part_shacharit, todayTimes?.sunrise, todayTimes?.sofZmanTfilaGra, Color(0xFF5C8377)),
+                PrayerPeriod(Res.string.siddur_part_mincha, todayTimes?.minchaGedola, todayTimes?.sunset, Color(0xFFA38553)),
+                PrayerPeriod(Res.string.siddur_part_maariv, todayTimes?.tzais, times?.nextDawn, Color(0xFF777EAA)),
+                PrayerPeriod(Res.string.siddur_part_maariv, times?.previousNightfall, todayTimes?.alosHashachar, Color(0xFF777EAA)),
+            ).firstOrNull { it.includes(reference) }
+        val band =
+            activePeriod?.let { period ->
+                val start = requireNotNull(period.start).toInstant().atZone(zone)
+                val end = requireNotNull(period.end).toInstant().atZone(zone)
                 PrayerBand(
                     label =
                         stringResource(
                             Res.string.clock_prayer_range,
-                            stringResource(label),
-                            startTime.format(formatter),
-                            endTime.format(formatter),
+                            stringResource(period.label),
+                            start.format(formatter),
+                            end.format(formatter),
                         ),
-                    color = bandColors[index],
-                    start = clockHandDegrees(startTime).first,
-                    sweep = (Duration.between(start.toInstant(), end.toInstant()).toMinutes() / 2f).coerceAtMost(360f),
+                    color = period.color,
+                    start = clockHandDegrees(start.toLocalTime()).first,
+                    sweep = (Duration.between(start.toLocalDateTime(), end.toLocalDateTime()).toMinutes() / 2f).coerceIn(0f, 360f),
                 )
             }
-        val markers =
-            entries.mapIndexedNotNull { index, (label, moment) ->
-                if (moment == null) return@mapIndexedNotNull null
-                val at = localTime(moment)
-                ClockMarker(
-                    label = stringResource(Res.string.clock_zman_label, stringResource(label), at.format(formatter)),
-                    color =
-                        bandColors[
-                            when (index) {
-                                1, 6 -> 0
-                                0, 7 -> 1
-                                5 -> 3
-                                else -> 2
-                            },
-                        ],
-                    angle = clockHandDegrees(at).first,
-                )
-            }
-        val reference = state.skyTimeMillis ?: now
         val next = entries.mapNotNull { it.second }.filter { it.time > reference }.minByOrNull(Date::getTime)
         PanelCard(modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -210,8 +193,7 @@ internal object ClockWidget : HomeWidget {
                     AnalogDial(
                         time = time,
                         style = state[ClockSettings.style],
-                        markers = markers,
-                        bands = bands,
+                        band = band,
                         onSelect = ::selectTime,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
@@ -256,27 +238,45 @@ private data class PrayerBand(
     val sweep: Float,
 )
 
-private data class ClockMarker(
-    val label: String,
-    val color: Color,
-    val angle: Float,
+private data class ClockZmanim(
+    val today: ZmanimTimes,
+    val previousNightfall: Date?,
+    val nextDawn: Date?,
 )
 
-private const val DIAL_RADIUS = 0.46f
-private const val FACE_RADIUS = 0.66f
+private data class PrayerPeriod(
+    val label: StringResource,
+    val start: Date?,
+    val end: Date?,
+    val color: Color,
+) {
+    fun includes(moment: Long): Boolean = start != null && end != null && moment >= start.time && moment < end.time
+}
 
-private fun bandRadius(index: Int): Float = 0.93f - index * 0.074f
+private const val DIAL_RADIUS = 0.46f
+private const val FACE_RADIUS = 0.82f
+private const val PRAYER_RING_RADIUS = 0.91f
 
 private fun clockAngle(offset: Offset): Float = Math.toDegrees(atan2(offset.x, -offset.y).toDouble()).toFloat().mod(360f)
 
-private fun angleDifference(from: Float, to: Float): Float = (to - from + 180f).mod(360f) - 180f
+private fun angleDifference(
+    from: Float,
+    to: Float,
+): Float = (to - from + 180f).mod(360f) - 180f
 
-private fun dialPoint(degrees: Float, distance: Float): Offset {
+private fun dialPoint(
+    degrees: Float,
+    distance: Float,
+): Offset {
     val radians = Math.toRadians((degrees - 90f).toDouble())
     return Offset(cos(radians).toFloat(), sin(radians).toFloat()) * distance
 }
 
-private fun distanceToHand(offset: Offset, degrees: Float, length: Float): Float {
+private fun distanceToHand(
+    offset: Offset,
+    degrees: Float,
+    length: Float,
+): Float {
     val direction = dialPoint(degrees, 1f)
     val along = (offset.x * direction.x + offset.y * direction.y).coerceIn(0f, length)
     return (offset - direction * along).getDistance()
@@ -295,8 +295,7 @@ internal fun timeFromDialOffset(
 private fun AnalogDial(
     time: LocalTime,
     style: Int,
-    markers: List<ClockMarker>,
-    bands: List<PrayerBand>,
+    band: PrayerBand?,
     onSelect: (LocalTime) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -307,7 +306,7 @@ private fun AnalogDial(
     val measurer = rememberTextMeasurer()
     val currentTime by rememberUpdatedState(time)
     val currentOnSelect by rememberUpdatedState(onSelect)
-    var hover by remember(markers, bands) { mutableStateOf<String?>(null) }
+    var hovered by remember(band) { mutableStateOf(false) }
     val label = stringResource(Res.string.clock_time_description, time.format(DateTimeFormatter.ofPattern("HH:mm")))
     Box(modifier) {
         Canvas(
@@ -346,11 +345,12 @@ private fun AnalogDial(
                                 val angle = clockAngle(position)
                                 turn += angleDifference(lastAngle, angle)
                                 lastAngle = angle
-                                val picked = if (minutesPerTurn == null) {
-                                    timeFromDialOffset(position, startTime)
-                                } else {
-                                    startTime.plusMinutes((turn * minutesPerTurn / 360f).roundToInt().toLong())
-                                }
+                                val picked =
+                                    if (minutesPerTurn == null) {
+                                        timeFromDialOffset(position, startTime)
+                                    } else {
+                                        startTime.plusMinutes((turn * minutesPerTurn / 360f).roundToInt().toLong())
+                                    }
                                 currentOnSelect(picked)
                                 change.consume()
                             }
@@ -362,41 +362,32 @@ private fun AnalogDial(
                     val offset = event.changes.first().position - Offset(size.width / 2f, size.height / 2f)
                     val distance = offset.getDistance() / radius
                     val angle = clockAngle(offset)
-                    val marker =
-                        if (abs(distance - 1f) <= 0.05f) {
-                            markers
-                                .minByOrNull { abs(angleDifference(angle, it.angle)) }
-                                ?.takeIf { abs(angleDifference(angle, it.angle)) <= 7f }
-                        } else {
-                            null
-                        }
-                    val band =
-                        bands.withIndex().firstOrNull { (index, band) ->
-                            abs(distance - bandRadius(index)) < 0.039f && (angle - band.start).mod(360f) <= band.sweep
-                        }
-                    hover = marker?.label ?: band?.value?.label
-                }.onPointerEvent(PointerEventType.Exit) { hover = null },
+                    hovered =
+                        band != null &&
+                        abs(distance - PRAYER_RING_RADIUS) < 0.055f &&
+                        (angle - band.start).mod(360f) <= band.sweep
+                }.onPointerEvent(PointerEventType.Exit) { hovered = false },
         ) {
             val radius = minOf(size.width, size.height) * DIAL_RADIUS
             val face = radius * FACE_RADIUS
             val centre = center
 
-            fun point(degrees: Float, distance: Float): Offset = centre + dialPoint(degrees, distance)
+            fun point(
+                degrees: Float,
+                distance: Float,
+            ): Offset = centre + dialPoint(degrees, distance)
 
-            bands.forEachIndexed { index, band ->
-                val ring = radius * bandRadius(index)
+            if (band != null) {
+                val ring = radius * PRAYER_RING_RADIUS
                 drawArc(
-                    band.color.copy(alpha = if (hover == band.label) 1f else 0.85f),
+                    band.color.copy(alpha = if (hovered) 0.8f else 0.52f),
                     startAngle = band.start - 90f,
                     sweepAngle = band.sweep,
                     useCenter = false,
                     topLeft = centre - Offset(ring, ring),
                     size = Size(ring * 2, ring * 2),
-                    style = Stroke((radius * 0.05f).coerceAtLeast(2.dp.toPx()), cap = StrokeCap.Round),
+                    style = Stroke(2.dp.toPx(), cap = StrokeCap.Round),
                 )
-            }
-            markers.forEach { marker ->
-                drawCircle(marker.color, (radius * 0.026f).coerceAtLeast(2.dp.toPx()), point(marker.angle, radius))
             }
             when (style) {
                 1 -> drawCircle(accent.copy(alpha = 0.10f), face, centre)
@@ -446,9 +437,9 @@ private fun AnalogDial(
             drawLine(accent, centre, point(minute, face * 0.69f), handWidth.toPx(), StrokeCap.Round)
             drawCircle(accent, 3.5.dp.toPx(), centre)
         }
-        hover?.let { hovered ->
+        if (hovered && band != null) {
             Text(
-                hovered,
+                band.label,
                 modifier = Modifier.align(Alignment.TopCenter).background(background, RoundedCornerShape(6.dp)).padding(4.dp),
                 fontSize = 12.sp,
                 color = foreground,

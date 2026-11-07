@@ -5,6 +5,9 @@
     <string name="clock_style_roman">ספרות רומיות</string>
     <string name="clock_live_time">חזרה לעכשיו</string>
     <string name="clock_switch_half_day">העברה ב־12 שעות</string>
+    <string name="clock_shema_window">קריאת שמע של שחרית</string>
+    <string name="clock_prayer_range">%1$s · %2$s עד %3$s</string>
+    <string name="clock_zman_label">%1$s · %2$s</string>
     <string name="clock_dawn">עלות השחר</string>
     <string name="clock_prayer">סוף זמן תפילה</string>
     <string name="clock_mincha_ketana">מנחה קטנה</string>

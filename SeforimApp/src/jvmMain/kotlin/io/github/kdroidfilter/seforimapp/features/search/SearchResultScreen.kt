@@ -484,7 +484,7 @@ private fun SearchResultContentMvi(
     Box(modifier.fillMaxSize().onPreviewKeyEvent(keyHandler)) {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 4.dp, vertical = 3.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 // Top persistent search toolbar
@@ -580,7 +580,7 @@ private fun SearchResultContentMvi(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 // Inline progress above replaces the old loading row/spinner
 
@@ -617,7 +617,7 @@ private fun SearchResultContentMvi(
                                                 showTop = listState.canScrollBackward,
                                                 showBottom = listState.canScrollForward,
                                             ),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     // One card per book group; primary line's id is unique per group
                                     itemsIndexed(items = groups, key = { _, g -> g.primary.lineId }) { _, group ->

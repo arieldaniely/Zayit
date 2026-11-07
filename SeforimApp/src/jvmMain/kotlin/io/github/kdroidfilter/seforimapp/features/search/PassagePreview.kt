@@ -170,6 +170,5 @@ private fun categoriesAndPlace(
 /** The page's panes, as the book's (PaneCard): a small gap around, rounded, on the panel's background, no border. */
 @Composable
 private fun Modifier.card(): Modifier =
-    padding(vertical = 6.dp, horizontal = 4.dp)
-        .clip(RoundedCornerShape(12.dp))
+    clip(RoundedCornerShape(12.dp))
         .background(JewelTheme.globalColors.panelBackground)

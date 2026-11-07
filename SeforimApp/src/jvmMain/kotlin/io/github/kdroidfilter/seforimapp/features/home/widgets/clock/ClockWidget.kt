@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,21 +56,6 @@ internal object ClockWidget : HomeWidget {
     override val minSpan = CellSpan(5, 5)
     override val maxSpan = CellSpan(8, 8)
     override val settings get() = ClockSettings
-
-    @Composable
-    override fun menuItems(state: HomeWidgetsState): List<WidgetMenuItem> =
-        listOf(
-            WidgetMenuItem(
-                stringResource(Res.string.clock_style),
-                children =
-                    clockStyles.mapIndexed { index, label ->
-                        WidgetMenuItem(stringResource(label), checked = state[ClockSettings.style] == index) {
-                            state[ClockSettings.style] =
-                                index
-                        }
-                    },
-            ),
-        )
 
     @Composable
     override fun Options(state: HomeWidgetsState) {
@@ -162,6 +148,12 @@ internal object ClockWidget : HomeWidget {
                                 Icon(AllIconsKeys.Actions.Refresh, contentDescription = liveLabel, modifier = Modifier.size(14.dp))
                             }
                         }
+                        val settingsLabel = stringResource(Res.string.home_widgets_options)
+                        Tooltip({ Text(settingsLabel) }) {
+                            IconButton(onClick = { state.optionsOpen = ClockWidget }, modifier = Modifier.size(24.dp)) {
+                                Icon(AllIconsKeys.General.Settings, contentDescription = settingsLabel, modifier = Modifier.size(16.dp))
+                            }
+                        }
                     }
                     state.cityLabel?.let { Text(it, fontSize = 12.sp, color = JewelTheme.globalColors.text.info) }
                     AnalogDial(
@@ -206,6 +198,7 @@ internal fun clockHandDegrees(time: LocalTime): Pair<Float, Float> =
     ((time.hour % 12 + time.minute / 60f) * 30f) to ((time.minute + time.second / 60f) * 6f)
 
 private const val DIAL_RADIUS = 0.46f
+private const val FACE_RADIUS = 0.66f
 
 private fun clockAngle(offset: Offset): Float = Math.toDegrees(atan2(offset.x, -offset.y).toDouble()).toFloat().mod(360f)
 
@@ -259,8 +252,9 @@ private fun AnalogDial(
                         if (offset.getDistance() > radius || offset.getDistance() < 2.dp.toPx()) return@awaitEachGesture
                         val startTime = currentTime
                         val (hour, minute) = clockHandDegrees(startTime)
-                        val hourDistance = distanceToHand(offset, hour, radius * 0.46f)
-                        val minuteDistance = distanceToHand(offset, minute, radius * 0.64f)
+                        val face = radius * FACE_RADIUS
+                        val hourDistance = distanceToHand(offset, hour, face * 0.47f)
+                        val minuteDistance = distanceToHand(offset, minute, face * 0.69f)
                         val minutesPerTurn =
                             when {
                                 minOf(hourDistance, minuteDistance) > 5.dp.toPx() -> null
@@ -295,37 +289,62 @@ private fun AnalogDial(
                 },
         ) {
             val radius = minOf(size.width, size.height) * DIAL_RADIUS
+            val face = radius * FACE_RADIUS
             val centre = center
 
             fun point(degrees: Float, distance: Float): Offset = centre + dialPoint(degrees, distance)
 
-            drawCircle(muted.copy(alpha = 0.2f), radius, centre, style = Stroke(1.dp.toPx()))
-            repeat(60) { tick ->
-                val major = tick % 5 == 0
-                drawLine(
-                    if (major) foreground else muted.copy(alpha = 0.4f),
-                    point(tick * 6f, radius * if (major) 0.88f else 0.94f),
-                    point(tick * 6f, radius),
-                    strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx(),
-                    cap = StrokeCap.Round,
-                )
-            }
-            if (style != 1) {
-                (1..12).forEach { number ->
-                    val label = if (style == 2) ROMAN_NUMBERS[number - 1] else number.toString()
-                    val text = measurer.measure(label, TextStyle(color = foreground, fontSize = 12.sp))
-                    val at = point(number * 30f, radius * 0.73f)
-                    drawText(text, topLeft = at - Offset(text.size.width / 2f, text.size.height / 2f))
-                }
-            }
             markers.forEachIndexed { index, marker ->
                 val angle = clockHandDegrees(marker).first
                 drawCircle(accent.copy(alpha = 0.8f), 3.dp.toPx(), point(angle, radius * (if (index % 2 == 0) 1.04f else 0.98f)))
             }
+            when (style) {
+                1 -> drawCircle(accent.copy(alpha = 0.10f), face, centre)
+                2 -> {
+                    drawCircle(accent.copy(alpha = 0.13f), face, centre)
+                    drawCircle(accent.copy(alpha = 0.75f), face, centre, style = Stroke(2.dp.toPx()))
+                    drawCircle(accent.copy(alpha = 0.30f), face * 0.92f, centre, style = Stroke(1.dp.toPx()))
+                }
+                else -> drawCircle(muted.copy(alpha = 0.28f), face, centre, style = Stroke(1.dp.toPx()))
+            }
+            if (style == 0) {
+                repeat(60) { tick ->
+                    val major = tick % 5 == 0
+                    drawLine(
+                        if (major) foreground else muted.copy(alpha = 0.4f),
+                        point(tick * 6f, face * if (major) 0.85f else 0.94f),
+                        point(tick * 6f, face * 0.98f),
+                        strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+            }
+            val numberSize = (face.toDp().value / 5f).coerceIn(7f, 16f).sp
+            (1..12).forEach { number ->
+                val degrees = number * 30f
+                if (style == 1) {
+                    drawCircle(foreground, (if (number % 3 == 0) 2.5.dp else 1.dp).toPx(), point(degrees, face * 0.83f))
+                } else {
+                    val roman = style == 2
+                    val text =
+                        measurer.measure(
+                            if (roman) ROMAN_NUMBERS[number - 1] else number.toString(),
+                            TextStyle(
+                                color = foreground,
+                                fontSize = numberSize,
+                                fontFamily = if (roman) FontFamily.Serif else FontFamily.Default,
+                                fontWeight = if (roman) FontWeight.Bold else FontWeight.Medium,
+                            ),
+                        )
+                    val at = point(degrees, face * if (roman) 0.75f else 0.69f)
+                    drawText(text, topLeft = at - Offset(text.size.width / 2f, text.size.height / 2f))
+                }
+            }
             val (hour, minute) = clockHandDegrees(time)
-            drawLine(foreground, centre, point(hour, radius * 0.46f), 5.dp.toPx(), StrokeCap.Round)
-            drawLine(accent, centre, point(minute, radius * 0.64f), 3.dp.toPx(), StrokeCap.Round)
-            drawCircle(accent, 5.dp.toPx(), centre)
+            val handWidth = if (style == 1) 4.dp else 3.dp
+            drawLine(foreground, centre, point(hour, face * 0.47f), (handWidth + 1.dp).toPx(), StrokeCap.Round)
+            drawLine(accent, centre, point(minute, face * 0.69f), handWidth.toPx(), StrokeCap.Round)
+            drawCircle(accent, 3.5.dp.toPx(), centre)
         }
     }
 }

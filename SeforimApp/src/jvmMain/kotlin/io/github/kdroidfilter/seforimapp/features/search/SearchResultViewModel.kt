@@ -123,12 +123,16 @@ class SearchResultViewModel(
     private fun persistedSearchState(): SearchPersistedState =
         (persistedStore.get(tabId)?.search ?: SearchPersistedState()).withScopeCoverage()
 
-    private fun updatePersistedSearch(transform: (SearchPersistedState) -> SearchPersistedState) {
+    private fun updatePersistedSearch(
+        preserveOrigin: Boolean = true,
+        transform: (SearchPersistedState) -> SearchPersistedState,
+    ) {
         persistedStore.update(tabId) { current ->
             val previous = current.search ?: SearchPersistedState()
             val changed = transform(previous)
             val next =
                 when {
+                    !preserveOrigin -> changed
                     previous.datasetScope == "favorites" ->
                         changed.copy(datasetScope = "favorites", scopeFavoriteFolderId = previous.scopeFavoriteFolderId)
                     previous.scopeAuthorId != 0L ->
@@ -831,7 +835,7 @@ class SearchResultViewModel(
                 ?: SearchScope.Global
         val globalExtended = savedStateHandle.get<Boolean>(StateKeys.SEARCH_GLOBAL_EXTENDED) ?: false
         if (scope == SearchScope.Global && !globalExtended) return
-        updatePersistedSearch { it.withScope(scope).copy(globalExtended = globalExtended) }
+        updatePersistedSearch(preserveOrigin = false) { it.withScope(scope).copy(globalExtended = globalExtended) }
     }
 
     init {
@@ -869,15 +873,7 @@ class SearchResultViewModel(
                 scopeOrigin = persisted.originScope,
             )
 
-        viewModelScope.launch {
-            val name =
-                when (val origin = persisted.originScope) {
-                    is SearchScope.Author -> repository.getAuthorDetails(origin.authorId)?.name
-                    is SearchScope.Favorites -> favoritesStore.folders().firstOrNull { it.id == origin.folderId }?.name
-                    else -> null
-                }
-            _uiState.update { it.copy(scopeOriginName = name) }
-        }
+        updateScopeOrigin(persisted.originScope)
 
         viewModelScope.launch {
             val ready = withContext(Dispatchers.IO) { SemanticAssetsManager.validatedReady() }
@@ -1129,9 +1125,6 @@ class SearchResultViewModel(
         currentJob =
             viewModelScope.launch(Dispatchers.Default) {
                 val persisted = persistedSearchState()
-                if (persisted.datasetScope == "favorites") {
-                    favoriteLineIds = favoriteScopeLines(favoritesStore, repository, persisted.scopeFavoriteFolderId)
-                }
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = true,
@@ -1153,7 +1146,9 @@ class SearchResultViewModel(
                     _tocCounts.value = emptyMap()
                 }
                 try {
-                    val persisted = persistedSearchState()
+                    if (persisted.datasetScope == "favorites") {
+                        favoriteLineIds = favoriteScopeLines(favoritesStore, repository, persisted.scopeFavoriteFolderId)
+                    }
                     val fetchCategoryId = persisted.fetchCategoryId.takeIf { it != 0L } ?: persisted.filterCategoryId.takeIf { it != 0L }
                     val fetchBookId = persisted.fetchBookId.takeIf { it != 0L } ?: persisted.filterBookId.takeIf { it != 0L }
                     val fetchTocId = persisted.fetchTocId.takeIf { it != 0L } ?: persisted.filterTocId.takeIf { it != 0L }
@@ -1996,9 +1991,10 @@ class SearchResultViewModel(
         _selectedCategoryIds.value = emptySet()
         _selectedBookIds.value = emptySet()
         _selectedTocIds.value = emptySet()
-        updatePersistedSearch {
+        updatePersistedSearch(preserveOrigin = false) {
             it.withScope(scope).copy(selectedCategoryIds = emptySet(), selectedBookIds = emptySet(), selectedTocIds = emptySet())
         }
+        updateScopeOrigin(persistedSearchState().originScope)
         executeSearch()
     }
 
@@ -2077,9 +2073,16 @@ class SearchResultViewModel(
     }
 
     fun changeOriginScope(scope: SearchScope) {
-        updatePersistedSearch { it.withScope(scope).copy(globalExtended = true, snapshot = null, breadcrumbs = emptyMap()) }
-        _uiState.update { it.copy(scopeOrigin = scope, scopeOriginName = null, globalExtended = true) }
+        updatePersistedSearch(preserveOrigin = false) {
+            it.withScope(scope).copy(globalExtended = true, snapshot = null, breadcrumbs = emptyMap())
+        }
         resetScopeFilters()
+    }
+
+    private fun updateScopeOrigin(scope: SearchScope) {
+        _uiState.update {
+            if (it.scopeOrigin == scope) it else it.copy(scopeOrigin = scope, scopeOriginName = null)
+        }
         viewModelScope.launch {
             val name =
                 when (scope) {
@@ -2097,6 +2100,7 @@ class SearchResultViewModel(
         _selectedTocIds.value = emptySet()
         updatePersistedSearch {
             it.copy(
+                datasetScope = "global",
                 filterCategoryId = 0L,
                 filterBookId = 0L,
                 filterTocId = 0L,
@@ -2108,6 +2112,7 @@ class SearchResultViewModel(
                 selectedTocIds = emptySet(),
             )
         }
+        updateScopeOrigin(persistedSearchState().originScope)
         _uiState.update { it.copy(scopeCategoryPath = emptyList(), scopeBook = null, scopeTocId = null) }
         executeSearch()
     }

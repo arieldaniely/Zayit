@@ -933,8 +933,9 @@ private fun TocSuggestionsPanel(
                         onClick = open.onClick,
                         kind = SuggestionKind.PLACE,
                         highlighted = index == focusedIndex,
-                        actions = listOf(open, searchInside) +
-                            if (ts.toc.hasChildren) listOf(browseChildren) else emptyList(),
+                        actions =
+                            listOf(open, searchInside) +
+                                if (ts.toc.hasChildren) listOf(browseChildren) else emptyList(),
                     )
                 }
                 if (textSearchLabel != null) {

@@ -1,0 +1,7 @@
+// Apply with -I when the workspace lives under OneDrive.
+def outputRoot = new File(System.getProperty('java.io.tmpdir'), "zayita-build-${UUID.randomUUID()}")
+
+gradle.beforeProject { project ->
+    def name = (project.rootProject.name + project.path).replace(':', '_')
+    project.layout.buildDirectory.set(new File(outputRoot, name))
+}

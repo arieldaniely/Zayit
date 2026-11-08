@@ -80,13 +80,13 @@ class ModeBoundSearchEngineTest {
         }
 
     @Test
-    fun `unsupported line scope reports flexible rather than smart`() {
+    fun `line scope keeps smart mode when the bundle is ready`() {
         val delegate = RecordingEngine()
         var fallback = false
         val engine = ModeBoundSearchEngine(delegate, { SearchMode.SMART }, { fallback = true }, { true })
         engine.openSession("query", lineIds = listOf(1L))?.close()
-        assertEquals(SearchMode.FLEXIBLE, delegate.requestedMode)
-        assertEquals(true, fallback)
+        assertEquals(SearchMode.SMART, delegate.requestedMode)
+        assertEquals(false, fallback)
     }
 
     @Test

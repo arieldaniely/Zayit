@@ -118,24 +118,23 @@ internal fun SearchScopeBreadcrumbBar(
             )
         }
     val wholeBook = stringResource(Res.string.search_scope_whole_book)
-    val wholeSection = stringResource(Res.string.search_scope_whole_section)
     val children: suspend (BreadcrumbNode) -> List<BreadcrumbNode> = { node ->
         when (node) {
             is BreadcrumbNode.ChoiceNode -> roots.map(BreadcrumbNode::CategoryNode)
-            is BreadcrumbNode.BookNode ->
-                buildList {
-                    add(BreadcrumbNode.BookNode(node.book, wholeBook))
-                    addAll(provider.children(node))
-                    addAll(booksByCategory[node.book.categoryId].orEmpty().filter { it.id != node.book.id }.map(BreadcrumbNode::BookNode))
-                }
-            is BreadcrumbNode.TocNode ->
-                provider.children(node).let { entries ->
-                    if (entries.isEmpty()) entries else listOf(BreadcrumbNode.TocNode(node.entry, wholeSection)) + entries
-                }
             else -> provider.children(node)
         }
     }
     val currentChildren by rememberUpdatedState(children)
+    val bookCatalog by rememberUpdatedState<(Book) -> List<BreadcrumbNode>> { book ->
+        buildList {
+            add(BreadcrumbNode.BookNode(book, wholeBook))
+            booksByCategory[book.categoryId].orEmpty().filter { it.id != book.id }.mapTo(this, BreadcrumbNode::BookNode)
+            navigation.categoryChildren[book.categoryId]
+                .orEmpty()
+                .filter { scopeCategories == null || it.id in scopeCategories }
+                .mapTo(this, BreadcrumbNode::CategoryNode)
+        }
+    }
     val resetScope by rememberUpdatedState(onResetScopeFilters)
     val categorySelect by rememberUpdatedState(onCategorySelect)
     val bookSelect by rememberUpdatedState(onBookSelect)
@@ -146,7 +145,8 @@ internal fun SearchScopeBreadcrumbBar(
             BreadcrumbNavigator(
                 scope = scope,
                 childrenProvider = { currentChildren(it) },
-                openBookContentsOnClick = true,
+                selectBranches = true,
+                bookCatalog = { bookCatalog(it) },
                 initialPath = path,
                 onReturnFocus = {},
                 onNavigate = {

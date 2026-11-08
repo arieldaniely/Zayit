@@ -26,9 +26,7 @@ internal class ModeBoundSearchEngine(
         val requested = selectedMode()
         val effectiveBaseOnly = scopedBaseBooksOnly(baseBookOnly, bookFilter, categoryFilter, bookIds, lineIds)
         val effective =
-            if (requested == SearchMode.SMART &&
-                (!semanticReady() || categoryFilter != null || lineIds != null)
-            ) {
+            if (requested == SearchMode.SMART && (!semanticReady() || categoryFilter != null)) {
                 onFallback()
                 SearchMode.FLEXIBLE
             } else {

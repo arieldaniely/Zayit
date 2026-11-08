@@ -123,7 +123,7 @@ class BreadcrumbNavigatorTest {
         }
 
     @Test
-    fun `search can open a book segment to select one of its sections`() =
+    fun `search opens a book with separate catalog and section choices`() =
         runTest {
             val navigated = mutableListOf<BreadcrumbNode>()
             val nav =
@@ -131,15 +131,36 @@ class BreadcrumbNavigatorTest {
                     backgroundScope,
                     provider,
                     initialPath = listOf(mishna, zeraim, brachot),
-                    openBookContentsOnClick = true,
+                    selectBranches = true,
+                    bookCatalog = { listOf(brachot, peah) },
                 ) { navigated += it }
             nav.onSegmentClick(brachot.key)
             runCurrent()
             assertEquals(listOf(perek1, perek2), nav.popup?.items)
+            assertEquals(listOf(brachot, peah), nav.popup?.catalogItems)
 
             nav.choose(perek2)
             runCurrent()
             assertEquals(listOf<BreadcrumbNode>(perek2), navigated)
+        }
+
+    @Test
+    fun `search selects a category directly and browses its children separately`() =
+        runTest {
+            val navigated = mutableListOf<BreadcrumbNode>()
+            val nav =
+                BreadcrumbNavigator(backgroundScope, provider, initialPath = path, selectBranches = true) { navigated += it }
+            nav.onSegmentClick(zeraim.key)
+            runCurrent()
+            nav.browse(kodashim)
+            runCurrent()
+            assertEquals(listOf<BreadcrumbNode>(single), nav.popup?.items)
+            assertEquals(emptyList(), navigated)
+
+            nav.choose(single)
+            runCurrent()
+            assertEquals(listOf<BreadcrumbNode>(single), navigated)
+            assertNull(nav.popup)
         }
 
     @Test

@@ -8,6 +8,7 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,10 +35,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -54,6 +57,8 @@ import io.github.kdroidfilter.seforimapp.core.presentation.components.PopupShape
 import io.github.kdroidfilter.seforimapp.features.bookcontent.ui.components.revealItem
 import io.github.kdroidfilter.seforimapp.icons.Book_2
 import io.github.kdroidfilter.seforimapp.icons.JournalText
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.jewel.foundation.theme.JewelTheme
 import org.jetbrains.jewel.ui.component.Icon
@@ -62,6 +67,9 @@ import org.jetbrains.jewel.ui.component.VerticallyScrollableContainer
 import org.jetbrains.jewel.ui.icons.AllIconsKeys
 import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.search_placeholder
+import seforimapp.seforimapp.generated.resources.search_scope_browse_children
+import seforimapp.seforimapp.generated.resources.search_scope_catalog
+import seforimapp.seforimapp.generated.resources.search_scope_sections
 
 // Outside clicks dismiss the popup but still reach the bar, so another segment can be clicked directly
 @OptIn(ExperimentalComposeUiApi::class)
@@ -69,8 +77,8 @@ private val BreadcrumbPopupProperties =
     PopupProperties(focusable = true, dismissOnClickOutside = true)
 
 /**
- * The child popup of a breadcrumb segment: a filterable flat list, as IntelliJ's navigation bar.
- * Up/Down move, Enter chooses, Left/Right move to the neighboring segment, Escape closes.
+ * A filterable breadcrumb popup. Book scopes can show catalog and section choices side by side.
+ * Up/Down move, Enter chooses, Shift+Enter browses, Left/Right change pane or segment, Escape closes.
  */
 @Composable
 internal fun BreadcrumbPopup(
@@ -79,13 +87,14 @@ internal fun BreadcrumbPopup(
     onShift: (Int) -> Unit,
     onDismiss: () -> Unit,
     onCancel: () -> Unit,
+    onBrowse: ((BreadcrumbNode) -> Unit)? = null,
 ) {
     Popup(
         popupPositionProvider = AboveAnchorStartPositionProvider,
         onDismissRequest = onDismiss,
         properties = BreadcrumbPopupProperties,
     ) {
-        BreadcrumbPopupContent(model = model, onChoose = onChoose, onShift = onShift, onCancel = onCancel)
+        BreadcrumbPopupContent(model, onChoose, onShift, onCancel, onBrowse)
     }
 }
 
@@ -95,25 +104,33 @@ private fun BreadcrumbPopupContent(
     onChoose: (BreadcrumbNode) -> Unit,
     onShift: (Int) -> Unit,
     onCancel: () -> Unit,
+    onBrowse: ((BreadcrumbNode) -> Unit)?,
 ) {
     var query by remember(model) { mutableStateOf("") }
-    var selectedKey by remember(model) { mutableStateOf(model.items.getOrNull(model.initialSelectedIndex)?.key) }
-    val filtered =
+    val initialKey = (model.items.getOrNull(model.initialSelectedIndex) ?: model.catalogItems?.firstOrNull())?.key
+    var selectedKey by remember(model) { mutableStateOf(initialKey) }
+    val (catalog, contents) =
         remember(model, query) {
             val needle = query.trim()
-            if (needle.isEmpty()) model.items else model.items.filter { it.title.contains(needle, ignoreCase = true) }
-        }
-    // Keep the selection when it survives the filter, otherwise fall back to the first match
-    val selectedIndex = filtered.indexOfFirst { it.key == selectedKey }.takeIf { it >= 0 } ?: 0
 
-    val listState = rememberLazyListState()
-    LaunchedEffect(model) {
-        listState.requestScrollToItem((model.initialSelectedIndex - VISIBLE_CONTEXT_ROWS).coerceAtLeast(0))
-    }
-    LaunchedEffect(selectedIndex, filtered) {
-        withFrameNanos {}
-        if (listState.layoutInfo.visibleItemsInfo.isNotEmpty()) listState.revealItem(selectedIndex)
-    }
+            fun matches(node: BreadcrumbNode) = node.title.contains(needle, ignoreCase = true)
+
+            val catalogMatches =
+                model.catalogItems
+                    .orEmpty()
+                    .filter(::matches)
+                    .toImmutableList()
+            catalogMatches to model.items.filter(::matches).toImmutableList()
+        }
+    val selected =
+        catalog.firstOrNull { it.key == selectedKey }
+            ?: contents.firstOrNull { it.key == selectedKey }
+            ?: catalog.firstOrNull()
+            ?: contents.firstOrNull()
+    val inCatalog = selected != null && selected in catalog
+    val activePane = if (inCatalog) catalog else contents
+    val selectedIndex = activePane.indexOfFirst { it.key == selected?.key }.coerceAtLeast(0)
+    val split = model.catalogItems != null
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -122,7 +139,7 @@ private fun BreadcrumbPopupContent(
     Column(
         modifier =
             Modifier
-                .widthIn(min = 220.dp, max = 360.dp)
+                .widthIn(min = if (split) 420.dp else 220.dp, max = if (split) 560.dp else 360.dp)
                 .background(JewelTheme.globalColors.panelBackground, PopupShape)
                 .border(1.dp, JewelTheme.globalColors.borders.normal, PopupShape)
                 .padding(6.dp)
@@ -130,11 +147,11 @@ private fun BreadcrumbPopupContent(
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
                         Key.DirectionDown -> {
-                            filtered.getOrNull((selectedIndex + 1).coerceAtMost(filtered.lastIndex))?.let { selectedKey = it.key }
+                            activePane.getOrNull((selectedIndex + 1).coerceAtMost(activePane.lastIndex))?.let { selectedKey = it.key }
                             true
                         }
                         Key.DirectionUp -> {
-                            filtered.getOrNull((selectedIndex - 1).coerceAtLeast(0))?.let { selectedKey = it.key }
+                            activePane.getOrNull((selectedIndex - 1).coerceAtLeast(0))?.let { selectedKey = it.key }
                             true
                         }
                         Key.Escape -> {
@@ -142,14 +159,28 @@ private fun BreadcrumbPopupContent(
                             true
                         }
                         Key.Enter, Key.NumPadEnter -> {
-                            filtered.getOrNull(selectedIndex)?.let(onChoose)
+                            if (event.isShiftPressed && onBrowse != null) {
+                                selected?.takeIf { it.isFolder() }?.let(onBrowse)
+                            } else {
+                                selected?.let(onChoose)
+                            }
                             true
                         }
                         // Arrows follow the visual direction; they only move the caret once a filter is typed
                         Key.DirectionLeft, Key.DirectionRight -> {
                             if (query.isNotEmpty()) return@onPreviewKeyEvent false
                             val towardsEnd = (event.key == Key.DirectionLeft) == isRtl
-                            onShift(if (towardsEnd) 1 else -1)
+                            val otherPane =
+                                when {
+                                    towardsEnd && inCatalog -> contents
+                                    !towardsEnd && !inCatalog -> catalog
+                                    else -> emptyList()
+                                }
+                            if (otherPane.isEmpty()) {
+                                onShift(if (towardsEnd) 1 else -1)
+                            } else {
+                                selectedKey = otherPane[selectedIndex.coerceAtMost(otherPane.lastIndex)].key
+                            }
                             true
                         }
                         else -> false
@@ -163,19 +194,65 @@ private fun BreadcrumbPopupContent(
             placeholder = stringResource(Res.string.search_placeholder),
             focusRequester = focusRequester,
         )
-        VerticallyScrollableContainer(
-            scrollState = listState as ScrollableState,
-            modifier = Modifier.heightIn(max = 380.dp),
-        ) {
-            // Room for the scrollbar, so that it never covers the rows
-            LazyColumn(state = listState, modifier = Modifier.padding(end = 11.dp)) {
-                itemsIndexed(filtered, key = { _, node -> node.key }) { index, node ->
-                    BreadcrumbPopupRow(
-                        node = node,
-                        isSelected = index == selectedIndex,
-                        onClick = { onChoose(node) },
-                    )
+        if (split) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    BreadcrumbPaneTitle(stringResource(Res.string.search_scope_catalog))
+                    BreadcrumbPopupList(model, catalog, selected?.key, initialKey, onChoose, onBrowse)
                 }
+                Column(Modifier.weight(1f)) {
+                    BreadcrumbPaneTitle(stringResource(Res.string.search_scope_sections))
+                    BreadcrumbPopupList(model, contents, selected?.key, initialKey, onChoose, onBrowse)
+                }
+            }
+        } else {
+            BreadcrumbPopupList(model, contents, selected?.key, initialKey, onChoose, onBrowse)
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbPaneTitle(title: String) {
+    Text(
+        text = title,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+private fun BreadcrumbPopupList(
+    model: BreadcrumbPopupModel,
+    items: ImmutableList<BreadcrumbNode>,
+    selectedKey: String?,
+    initialKey: String?,
+    onChoose: (BreadcrumbNode) -> Unit,
+    onBrowse: ((BreadcrumbNode) -> Unit)?,
+) {
+    val listState = rememberLazyListState()
+    val selectedIndex = items.indexOfFirst { it.key == selectedKey }
+    LaunchedEffect(model) {
+        val initialIndex = items.indexOfFirst { it.key == initialKey }
+        listState.requestScrollToItem((initialIndex - VISIBLE_CONTEXT_ROWS).coerceAtLeast(0))
+    }
+    LaunchedEffect(selectedIndex, items) {
+        withFrameNanos {}
+        if (selectedIndex >= 0 && listState.layoutInfo.visibleItemsInfo.isNotEmpty()) listState.revealItem(selectedIndex)
+    }
+    VerticallyScrollableContainer(
+        scrollState = listState as ScrollableState,
+        modifier = Modifier.heightIn(max = 380.dp),
+    ) {
+        // Room for the scrollbar, so that it never covers the rows
+        LazyColumn(state = listState, modifier = Modifier.padding(end = 11.dp)) {
+            itemsIndexed(items, key = { _, node -> node.key }) { index, node ->
+                BreadcrumbPopupRow(
+                    node = node,
+                    isSelected = index == selectedIndex,
+                    onClick = { onChoose(node) },
+                    onBrowse = onBrowse?.let { { it(node) } },
+                )
             }
         }
     }
@@ -186,6 +263,7 @@ private fun BreadcrumbPopupRow(
     node: BreadcrumbNode,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onBrowse: (() -> Unit)?,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val background = highlightBackground(interactionSource, isSelected)
@@ -222,8 +300,24 @@ private fun BreadcrumbPopupRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // Folders drill down into a next popup
-        if (node.isFolder()) ChevronIcon(expanded = false, size = 10.dp, tint = JewelTheme.globalColors.text.info)
+        if (node.isFolder()) {
+            if (onBrowse == null) {
+                ChevronIcon(expanded = false, size = 10.dp, tint = JewelTheme.globalColors.text.info)
+            } else {
+                val label = stringResource(Res.string.search_scope_browse_children, node.title)
+                Box(
+                    modifier = Modifier.size(20.dp).clickable(onClickLabel = label, onClick = onBrowse),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ChevronIcon(
+                        expanded = false,
+                        modifier = Modifier.size(10.dp),
+                        tint = JewelTheme.globalColors.text.info,
+                        contentDescription = null,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -232,7 +326,7 @@ private fun BreadcrumbNode.isFolder(): Boolean =
         is BreadcrumbNode.ChoiceNode -> hasChildren
         is BreadcrumbNode.CategoryNode -> true
         is BreadcrumbNode.BookNode -> false
-        is BreadcrumbNode.TocNode -> sectionLabel == null && entry.hasChildren
+        is BreadcrumbNode.TocNode -> entry.hasChildren
     }
 
 private val RowShape = RoundedCornerShape(5.dp)

@@ -135,6 +135,7 @@ internal fun BreadcrumbBar(
                         BreadcrumbPopup(
                             model = popup,
                             onChoose = navigator::choose,
+                            onBrowse = if (navigator.selectBranches) navigator::browse else null,
                             onShift = navigator::shiftPopup,
                             onDismiss = navigator::dismiss,
                             onCancel = navigator::cancel,

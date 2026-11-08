@@ -28,6 +28,12 @@ git clone --recurse-submodules https://github.com/arieldaniely/Zayit.git
 ./gradlew :SeforimApp:run
 ```
 
+ב־Windows, אם Gradle נכשל במחיקת פלט קודם בתיקיית OneDrive, הסקריפט מעביר את פלט הבנייה לתיקייה זמנית.
+
+```powershell
+.\gradlew.bat -I .\scripts\gradle-local-output.gradle :SeforimApp:run --no-configuration-cache
+```
+
 האתר נמצא בתיקייה `website/`:
 
 ```bash

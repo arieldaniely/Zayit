@@ -46,10 +46,9 @@ sealed interface BreadcrumbNode {
 
     data class TocNode(
         val entry: TocEntry,
-        val sectionLabel: String? = null,
     ) : BreadcrumbNode {
-        override val key: String get() = if (sectionLabel == null) "t${entry.id}" else "section${entry.id}"
-        override val title: String get() = sectionLabel ?: entry.text
+        override val key: String get() = "t${entry.id}"
+        override val title: String get() = entry.text
     }
 }
 
@@ -64,6 +63,7 @@ data class BreadcrumbPopupModel(
     val items: List<BreadcrumbNode>,
     val initialSelectedIndex: Int,
     val pathPrefixSize: Int = anchorIndex + 1,
+    val catalogItems: List<BreadcrumbNode>? = null,
 )
 
 /**
@@ -81,7 +81,8 @@ class BreadcrumbNavigator(
     private val onReturnFocus: () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
     private val rootSiblings: (() -> List<BreadcrumbNode>)? = null,
-    private val openBookContentsOnClick: Boolean = false,
+    internal val selectBranches: Boolean = false,
+    private val bookCatalog: ((Book) -> List<BreadcrumbNode>)? = null,
     private val onNavigate: (BreadcrumbNode) -> Unit,
 ) {
     private var contextItems: List<BreadcrumbNode> = initialPath
@@ -126,7 +127,11 @@ class BreadcrumbNavigator(
         }
         val index = items.indexOfFirst { it.key == key }
         if (index < 0) return
-        if (openBookContentsOnClick && items[index] is BreadcrumbNode.BookNode) showPopup(index) else showSiblings(index)
+        openSegmentPopup(index)
+    }
+
+    private fun openSegmentPopup(index: Int) {
+        if (hasBookCatalog(items[index])) showPopup(index) else showSiblings(index)
     }
 
     /** The popup stays anchored to the clicked segment, with that segment selected among its peers. */
@@ -168,11 +173,11 @@ class BreadcrumbNavigator(
         val node = items.getOrNull(index) ?: return
         launch {
             val children = childrenProvider.children(node)
-            val anchor = if (children.isEmpty()) items.getOrNull(index - 1) else node
+            val anchor = if (children.isEmpty() && !hasBookCatalog(node)) items.getOrNull(index - 1) else node
             val popupItems = if (anchor == node) children else anchor?.let { childrenProvider.children(it) }.orEmpty()
             // The bar may have changed while loading: the anchor is found again by key
             val anchorIndex = items.indexOfFirst { it.key == anchor?.key }
-            if (popupItems.isEmpty() || anchorIndex < 0) {
+            if (anchorIndex < 0 || (popupItems.isEmpty() && !hasBookCatalog(anchor))) {
                 reset(returnFocus = false)
             } else {
                 openPopup(setOfNotNull(node.key, anchor?.key), anchorIndex, popupItems)
@@ -185,14 +190,14 @@ class BreadcrumbNavigator(
         val current = popup ?: return
         val from = current.anchorIndex
         if (current.pathPrefixSize == from) {
-            if (from + delta in items.indices) showSiblings(from + delta)
+            if (from + delta in items.indices) openSegmentPopup(from + delta)
             return
         }
         launch {
             var target = from + delta
             while (target in items.indices) {
                 val children = childrenProvider.children(items[target])
-                if (children.isNotEmpty()) {
+                if (children.isNotEmpty() || hasBookCatalog(items[target])) {
                     openPopup(setOf(items[target].key), target, children)
                     return@launch
                 }
@@ -204,6 +209,10 @@ class BreadcrumbNavigator(
     /** Handles a choice in the popup. */
     fun choose(node: BreadcrumbNode) {
         val prefixSize = popup?.pathPrefixSize ?: return
+        if (selectBranches) {
+            navigate(node)
+            return
+        }
         launch {
             when (val result = autoExpand(node, childrenProvider)) {
                 is ExpandResult.NavigateTo -> navigate(result.target)
@@ -214,6 +223,18 @@ class BreadcrumbNavigator(
                     popup = BreadcrumbPopupModel(newItems.lastIndex, result.children, initialSelectedIndex = 0)
                 }
             }
+        }
+    }
+
+    /** Opens the direct children of a selectable category or section. */
+    internal fun browse(node: BreadcrumbNode) {
+        val current = popup ?: return
+        val prefixSize = if (node in current.catalogItems.orEmpty()) current.anchorIndex else current.pathPrefixSize
+        launch {
+            val children = childrenProvider.children(node)
+            if (children.isEmpty()) return@launch
+            items = items.take(prefixSize) + node
+            openPopup(setOf(node.key), items.lastIndex, children)
         }
     }
 
@@ -241,14 +262,20 @@ class BreadcrumbNavigator(
         children: List<BreadcrumbNode>,
     ) {
         val next = items.getOrNull(anchorIndex + 1)
+        val book = items[anchorIndex] as? BreadcrumbNode.BookNode
+        val catalog = book?.let { bookCatalog?.invoke(it.book) }
+        val selectedIndex = children.indexOfFirst { it.key == next?.key }
         openedByKeys = openedBy
         popup =
             BreadcrumbPopupModel(
                 anchorIndex = anchorIndex,
                 items = children,
-                initialSelectedIndex = children.indexOfFirst { it.key == next?.key }.coerceAtLeast(0),
+                initialSelectedIndex = if (catalog == null) selectedIndex.coerceAtLeast(0) else selectedIndex,
+                catalogItems = catalog,
             )
     }
+
+    private fun hasBookCatalog(node: BreadcrumbNode?): Boolean = bookCatalog != null && node is BreadcrumbNode.BookNode
 
     private fun closePopup(returnFocus: Boolean) {
         job?.cancel()
@@ -261,7 +288,7 @@ class BreadcrumbNavigator(
 
     /** Headings without a line of their own lead nowhere: the bar stays as it is. */
     private fun navigate(node: BreadcrumbNode) {
-        if (!openBookContentsOnClick && node is BreadcrumbNode.TocNode && node.entry.lineId == null) return
+        if (!selectBranches && node is BreadcrumbNode.TocNode && node.entry.lineId == null) return
         reset(returnFocus = true)
         onNavigate(node)
     }
@@ -298,8 +325,7 @@ internal sealed interface ExpandResult {
 }
 
 /** Books open on click; folders (categories, TOC headings) drill down. */
-private fun BreadcrumbNode.navigateOnClick(): Boolean =
-    this is BreadcrumbNode.BookNode || (this is BreadcrumbNode.TocNode && sectionLabel != null)
+private fun BreadcrumbNode.navigateOnClick(): Boolean = this is BreadcrumbNode.BookNode
 
 /**
  * Same algorithm as IntelliJ's NavBar autoExpand: a chosen leaf (or a book) is navigated to;

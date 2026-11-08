@@ -388,6 +388,7 @@ internal fun UnifiedSearchBar(
     var skipNextReferenceQuery by remember { mutableStateOf(false) }
     var skipNextTocQuery by remember { mutableStateOf(false) }
     var tocEditedSinceBook by remember { mutableStateOf(false) }
+    var searchWithinToc by remember { mutableStateOf(false) }
     // Shared focus requester for the MAIN search bar so other UI (e.g., level changes)
     // can reliably return focus to it, allowing immediate Enter to submit.
     val mainSearchFocusRequester = remember { FocusRequester() }
@@ -407,7 +408,10 @@ internal fun UnifiedSearchBar(
         snapshotFlow { tocSearchState.text.toString() }.collect { qRaw ->
             // In a book, the typed text is also the search's query
             if (currentBookPicked) currentOnTextChange(qRaw)
-            if (skipNextTocQuery) {
+            if (searchWithinToc) {
+                skipNextTocQuery = false
+                tocEditedSinceBook = qRaw.isNotBlank()
+            } else if (skipNextTocQuery) {
                 skipNextTocQuery = false
                 tocEditedSinceBook = qRaw.isNotBlank()
             } else {
@@ -466,8 +470,16 @@ internal fun UnifiedSearchBar(
         focusRequester = mainSearchFocusRequester,
         autoFocus = autoFocus,
         // A picked TOC entry fills the field with its path: nothing to search then
-        textSearchEnabled = searchUi.selectedScopeToc == null,
+        textSearchEnabled = searchUi.selectedScopeToc == null || searchWithinToc,
         textSearchInBook = searchUi.selectedScopeBook?.title,
+        onSearchInsideToc = { suggestion ->
+            searchCallbacks.onPickToc(suggestion.toc)
+            searchWithinToc = true
+            skipNextTocQuery = true
+            tocSearchState.edit { replace(0, length, "") }
+            tocEditedSinceBook = false
+            focusAfterDelay(scope, 80, mainSearchFocusRequester)
+        },
         textSearchInAuthor = searchUi.selectedScopeAuthor?.name?.let(AuthorNames::display),
         textSearchInCategory = searchUi.selectedScopeCategory?.title ?: searchUi.selectedScopeFavorites?.name,
         favoritesSuggestions = searchUi.favoritesSuggestions,
@@ -531,6 +543,7 @@ internal fun UnifiedSearchBar(
         isTocLoading = searchUi.isTocLoading && isTocInTopBar,
         onPickBook = { picked ->
             searchCallbacks.onPickBook(picked.book, picked.isPdf)
+            searchWithinToc = false
             skipNextReferenceQuery = true
             referenceSearchState.edit { replace(0, length, "") }
             skipNextTocQuery = true
@@ -541,6 +554,7 @@ internal fun UnifiedSearchBar(
         },
         onPickToc = { picked ->
             searchCallbacks.onPickToc(picked.toc)
+            searchWithinToc = false
             val dedup = dedupAdjacent(picked.path)
             val stripped = stripBookPrefixFromTocPath(searchUi.selectedScopeBook, dedup)
             val display = stripped.joinToString(breadcrumbSeparatorTop)
@@ -549,6 +563,7 @@ internal fun UnifiedSearchBar(
             tocEditedSinceBook = true
         },
         onClearBook = {
+            searchWithinToc = false
             searchCallbacks.onReferenceQueryChanged("")
             searchCallbacks.onTocQueryChanged("")
             skipNextReferenceQuery = true
@@ -827,6 +842,8 @@ private fun SuggestionsPanel(
 private fun TocSuggestionsPanel(
     suggestions: List<Pair<TocSuggestion, List<String>>>,
     onPickToc: (TocSuggestion) -> Unit,
+    onSearchInsideToc: (TocSuggestion) -> Unit = {},
+    onBrowseToc: (TocSuggestion) -> Unit = {},
     textSearchLabel: String? = null,
     textSearchQuery: String? = null,
     onTextSearch: () -> Unit = {},
@@ -907,12 +924,17 @@ private fun TocSuggestionsPanel(
                 items(suggestions.size) { index ->
                     val (ts, parts) = suggestions[index]
                     val open = RowAction(KEY_ENTER, stringResource(Res.string.row_action_open)) { onPickToc(ts) }
+                    val searchInside =
+                        RowAction(KEY_TAB, stringResource(Res.string.row_action_search_inside)) { onSearchInsideToc(ts) }
+                    val browseChildren =
+                        RowAction(KEY_RIGHT, stringResource(Res.string.row_action_browse_children)) { onBrowseToc(ts) }
                     SuggestionRow(
                         parts = parts,
                         onClick = open.onClick,
                         kind = SuggestionKind.PLACE,
                         highlighted = index == focusedIndex,
-                        actions = listOf(open),
+                        actions = listOf(open, searchInside) +
+                            if (ts.toc.hasChildren) listOf(browseChildren) else emptyList(),
                     )
                 }
                 if (textSearchLabel != null) {
@@ -1005,6 +1027,22 @@ private fun tocSuggestionsForDisplay(
         val parts = stripBookPrefixFromTocPath(selectedBook, dedupAdjacent(ts.path))
         if (parts.isNotEmpty()) ts to parts else null
     }
+
+private fun tocDescendants(
+    parentId: Long,
+    suggestions: List<Pair<TocSuggestion, List<String>>>,
+): List<Pair<TocSuggestion, List<String>>> {
+    val childrenByParent = suggestions.groupBy { it.first.toc.parentId }
+    val descendantIds = mutableSetOf<Long>()
+    val pending = mutableListOf(parentId)
+    while (pending.isNotEmpty()) {
+        val current = pending.removeAt(pending.lastIndex)
+        childrenByParent[current].orEmpty().forEach { (suggestion, _) ->
+            if (descendantIds.add(suggestion.toc.id)) pending.add(suggestion.toc.id)
+        }
+    }
+    return suggestions.filter { it.first.toc.id in descendantIds }
+}
 
 /**
  * Strips the selected book's title if it redundantly appears as the first
@@ -1216,6 +1254,7 @@ internal fun SearchBar(
     tocSuggestions: List<TocSuggestion> = emptyList(),
     selectedBook: BookModel? = null,
     onPickToc: (TocSuggestion) -> Unit = {},
+    onSearchInsideToc: (TocSuggestion) -> Unit = {},
     onClearBook: (() -> Unit)? = null,
     canClearBookOnBackspace: () -> Boolean = { true },
     // Focus & popup control
@@ -1241,6 +1280,7 @@ internal fun SearchBar(
     // duplicate suggestions popup. Only the selected tab is allowed to show the overlay.
     val isTabSelected = LocalTabSelected.current
     val scope = rememberCoroutineScope()
+    var tocBrowseParentId by remember(selectedBook?.id) { mutableStateOf<Long?>(null) }
     // Hints from string resources
     val referenceHints =
         listOf(
@@ -1308,14 +1348,19 @@ internal fun SearchBar(
         remember(tocSuggestions, selectedBook) {
             tocSuggestionsForDisplay(selectedBook, tocSuggestions)
         }
-    val totalToc = visibleTocSuggestions.size
+    val browsedTocSuggestions =
+        remember(visibleTocSuggestions, tocBrowseParentId) {
+            tocBrowseParentId?.let { parentId -> tocDescendants(parentId, visibleTocSuggestions) }
+                ?: visibleTocSuggestions
+        }
+    val totalToc = browsedTocSuggestions.size
     // The text-search row: after the jumps at the book stage, after the TOC entries once a book is picked
     val textRow = textSearchEnabled && hasUserText
     val textRowCount = if (textRow) 1 else 0
     val totalTocRows = totalToc + textRowCount
     val isTocMode = selectedBook != null
     val showBookStageSuggestions = suggestionsVisible && totalCatBook > 0 && !isTocMode
-    val showTocSuggestions = (tocSuggestionsVisible || textRow) && totalTocRows > 0 && isTocMode
+    val showTocSuggestions = (tocSuggestionsVisible || tocBrowseParentId != null || textRow) && totalTocRows > 0 && isTocMode
     val showBookLoading = !isTocMode && isBookLoading && hasUserText && queryLength >= minBookPrefixLen
     val showTocLoading = isTocMode && isTocLoading && hasUserText && queryLength >= minTocPrefixLen
     val showBookEmptyState =
@@ -1789,8 +1834,18 @@ internal fun SearchBar(
                 Box(Modifier.width(widthDp)) {
                     if (isTocMode && (showTocSuggestions || showTocEmptyState || showTocLoading)) {
                         TocSuggestionsPanel(
-                            suggestions = visibleTocSuggestions,
+                            suggestions = browsedTocSuggestions,
                             onPickToc = ::openToc,
+                            onBrowseToc = { suggestion ->
+                                onPickToc(suggestion)
+                                tocBrowseParentId = suggestion.toc.id
+                                popupVisible = true
+                            },
+                            onSearchInsideToc = {
+                                tocBrowseParentId = null
+                                onSearchInsideToc(it)
+                                popupVisible = false
+                            },
                             textSearchLabel = if (textRow) textSearchLabel(state.text.toString().trim(), textSearchInBook) else null,
                             textSearchQuery = state.text.toString().trim(),
                             onTextSearch = { handleTextSearch() },
@@ -1843,6 +1898,7 @@ private class RowAction(
 
 private const val KEY_ENTER = "↵"
 private const val KEY_TAB = "Tab"
+private const val KEY_RIGHT = "→"
 private const val KEY_CTRL_ENTER = "Ctrl+↵"
 
 /** A row action as a quiet button: its label, then its key in grey; a neutral tint, darker on hover. */

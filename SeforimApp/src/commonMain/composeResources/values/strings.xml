@@ -1147,6 +1147,12 @@
     <string name="siddur_meein_land_of_israel_note">על פירות או יין שאינם מארץ ישראל אומרים ״הפירות״ ו״פרי הגפן״, ועל מזונות ״המחיה ועל הכלכלה״.</string>
     <string name="siddur_option_beit_avel">בבית האבל</string>
     <string name="siddur_option_first_lulav">נטילת לולב ראשונה</string>
+    <string name="siddur_lulav_ashkenaz_directions">מנענעים שלוש פעמים לכל כיוון. סדר הנענועים למנהג אשכנז: מזרח, דרום, מערב, צפון, מעלה ומטה.</string>
+    <string name="siddur_lulav_ari_directions">מנענעים שלוש פעמים לכל כיוון. סדר הנענועים לפי מנהג האר״י: דרום, צפון, מזרח, מעלה, מטה ומערב.</string>
+    <string name="siddur_lulav_shake">כאן מנענעים את הלולב. אין מנענעים בתיבת השם.</string>
+    <string name="siddur_lulav_shake_twice">מנענעים בכל אחת משתי האמירות. אין מנענעים בתיבת השם.</string>
+    <string name="siddur_lulav_congregation">הקהל מנענע ב״הודו״.</string>
+    <string name="siddur_lulav_leader">שליח הציבור מנענע ב״יאמר נא ישראל״.</string>
     <string name="siddur_option_seudat_mila">סעודת ברית מילה</string>
     <string name="siddur_nusach_ashkenaz">נוסח אשכנז</string>
     <string name="siddur_nusach_sefard">נוסח ספרד</string>
@@ -1171,6 +1177,7 @@
     <string name="siddur_omer_sefira">יום %1$d לעומר · %2$s</string>
     <string name="siddur_levana_window">זמן קידוש לבנה: מ%1$s עד %2$s</string>
     <string name="siddur_levana_open">אפשר לקדש את הלבנה עכשיו</string>
+    <string name="siddur_molad_announcement">המולד ביום %1$s בשעה %2$s ו־%3$d חלקים</string>
     <string name="siddur_chanuka_candles">הלילה מדליקים %1$d נרות</string>
     <string name="siddur_chanuka_candle">הלילה מדליקים נר אחד</string>
     <string name="siddur_hl_mashiv">משיב הרוח</string>

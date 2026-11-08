@@ -141,6 +141,13 @@ import seforimapp.seforimapp.generated.resources.Res
 import seforimapp.seforimapp.generated.resources.siddur_at_night
 import seforimapp.seforimapp.generated.resources.siddur_chanuka_candle
 import seforimapp.seforimapp.generated.resources.siddur_chanuka_candles
+import seforimapp.seforimapp.generated.resources.siddur_molad_announcement
+import seforimapp.seforimapp.generated.resources.siddur_lulav_ari_directions
+import seforimapp.seforimapp.generated.resources.siddur_lulav_ashkenaz_directions
+import seforimapp.seforimapp.generated.resources.siddur_lulav_congregation
+import seforimapp.seforimapp.generated.resources.siddur_lulav_leader
+import seforimapp.seforimapp.generated.resources.siddur_lulav_shake
+import seforimapp.seforimapp.generated.resources.siddur_lulav_shake_twice
 import seforimapp.seforimapp.generated.resources.siddur_choose_meal_food
 import seforimapp.seforimapp.generated.resources.siddur_hl_al_hanisim
 import seforimapp.seforimapp.generated.resources.siddur_hl_aneinu
@@ -369,10 +376,10 @@ fun SiddurTabContent(
             value = System.currentTimeMillis() / 60_000
         }
     }
+    val opinion = if (sephardi) ZmanimOpinion.OHR_HACHAIM else ZmanimOpinion.ITIM_LABINA
     val ofTheHour =
         remember(location, user.inIsrael, sephardi, prefs, minute) {
             val today = java.time.LocalDate.now(location.timeZone.toZoneId())
-            val opinion = if (sephardi) ZmanimOpinion.OHR_HACHAIM else ZmanimOpinion.ITIM_LABINA
             val zmanim = computeZmanimTimes(today, location, opinion, user.inIsrael)
             val (day, part) =
                 siddurOfTheHour(
@@ -417,14 +424,27 @@ fun SiddurTabContent(
         )
     }
     val civil = LocalDate.fromEpochDays(epochDay)
+    val afterHalachicMidnight = remember(civil, location, opinion, user.inIsrael, minute) {
+        val evening = civil.toJavaLocalDate()
+        val morning = evening.plusDays(1)
+        val today = java.time.LocalDate.now(location.timeZone.toZoneId())
+        if (today != evening && today != morning) {
+            false
+        } else {
+            val midnight = computeZmanimTimes(evening, location, opinion, user.inIsrael).chatzosLayla.instant()
+            val dawn = computeZmanimTimes(morning, location, opinion, user.inIsrael).alosHashachar.instant()
+            val now = Clock.System.now()
+            midnight != null && dawn != null && now >= midnight && now < dawn
+        }
+    }
     val options = optionsSaved.split(',').filter { it.isNotEmpty() }.toSet()
     val listState = rememberLazyListState(saved?.scrollIndex ?: 0, saved?.scrollOffset ?: 0)
 
     // The book with the day it is of: a scroll waits for the day asked for, not the one still shown
-    val loaded by produceState<LoadedSiddurBook?>(null, civil, prefs, optionsSaved, showAll) {
+    val loaded by produceState<LoadedSiddurBook?>(null, civil, prefs, optionsSaved, showAll, afterHalachicMidnight) {
         val next =
             withContext(Dispatchers.Default) {
-                val book = buildDayBook(civil, prefs, options, showAll, source)
+                val book = buildDayBook(civil, prefs, options, showAll, source, afterHalachicMidnight)
                 LoadedSiddurBook(civil, showAll, book, bookItems(book))
             }
         val previous = value
@@ -1105,11 +1125,23 @@ private fun SiddurText(
                         is BookItem.Text ->
                             when (item.line.kind) {
                                 SiddurLine.Kind.HEADING -> Heading(item.line, style)
-                                SiddurLine.Kind.NOTE -> Note(item.line.html, style, annotations)
+                                SiddurLine.Kind.NOTE -> {
+                                    val molad = item.line.moladAnnouncement
+                                    val text = when (val instruction = item.line.lulavInstruction) {
+                                        null -> if (molad == null) item.line.html else stringResource(
+                                            Res.string.siddur_molad_announcement,
+                                            molad.day,
+                                            java.time.LocalTime.of(molad.hour, molad.minute).toString(),
+                                            molad.parts,
+                                        )
+                                        else -> stringResource(lulavInstructionLabel(instruction))
+                                    }
+                                    Note(text, style, annotations)
+                                }
                                 SiddurLine.Kind.SLOT -> {
                                     val reading = item.line.reading
                                     if (reading != null) {
-                                        ReadingBlock(reading, source, style, annotations)
+                                        ReadingBlock(reading, source, style)
                                     } else {
                                         slot(item.section, item.line.html)
                                     }
@@ -1122,6 +1154,16 @@ private fun SiddurText(
         }
     }
 }
+
+private fun lulavInstructionLabel(instruction: LulavInstruction) =
+    when (instruction) {
+        LulavInstruction.ASHKENAZ_DIRECTIONS -> Res.string.siddur_lulav_ashkenaz_directions
+        LulavInstruction.ARI_DIRECTIONS -> Res.string.siddur_lulav_ari_directions
+        LulavInstruction.SHAKE -> Res.string.siddur_lulav_shake
+        LulavInstruction.SHAKE_TWICE -> Res.string.siddur_lulav_shake_twice
+        LulavInstruction.CONGREGATION -> Res.string.siddur_lulav_congregation
+        LulavInstruction.LEADER -> Res.string.siddur_lulav_leader
+    }
 
 /** A tefila's name; a festival's with the day: its holiday, and Shabbat when it is one too. */
 @Composable
@@ -1198,7 +1240,7 @@ private fun PartOptions(
     annotations: LineAnnotations,
 ) {
     // The lulav's option only in Sukkot
-    val shown = section.part.options.filter { it != "first_lulav" || "sukkot" in section.flags }
+    val shown = section.part.options.filter { it != "first_lulav" || "sukkot" in section.flags && "sat" !in section.flags }
     if (shown.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1495,7 +1537,6 @@ private fun ReadingBlock(
     reading: SiddurReading,
     source: LibrarySiddurSource,
     style: LineStyle,
-    annotations: LineAnnotations,
 ) {
     val heading =
         stringResource(
@@ -1512,8 +1553,8 @@ private fun ReadingBlock(
         )
     val title = if (reading.occasion.isBlank()) heading else "$heading · ${reading.occasion}"
     var open by remember(reading) { mutableStateOf(true) }
-    val verses by produceState<List<List<String>?>?>(null, reading, source, open) {
-        if (open) value = withContext(Dispatchers.IO) { reading.passages.map { source.passage(it) } }
+    val verses by produceState<List<List<String>?>?>(null, reading, source) {
+        value = withContext(Dispatchers.IO) { reading.passages.map { source.passage(it) } }
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(
@@ -1551,7 +1592,18 @@ private fun ReadingBlock(
                         color = JewelTheme.globalColors.text.info,
                     )
                 } else {
-                    lines.forEach { html -> Paragraph(SiddurLine(html), style, annotations) }
+                    lines.forEach { html ->
+                        val text = style.html(html)
+                        val annotated = remember(text, style.textSize) { buildAnnotatedFromHtml(text, style.textSize) }
+                        Text(
+                            annotated,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            fontFamily = style.fontFamily,
+                            fontSize = style.textSize.sp,
+                            lineHeight = (style.textSize * style.lineHeight).sp,
+                            textAlign = TextAlign.Justify,
+                        )
+                    }
                 }
             }
         }
